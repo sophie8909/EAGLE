@@ -7,6 +7,7 @@ updates; this module does not choose parents or survivors.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -86,7 +87,12 @@ from .opponents import (
     SAFE_ALLINBOT_CLASS_NAME,
     rooted_jar_path,
 )
-from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
+from evaluation.match_matrix import (
+    MatchSpecification,
+    MatrixOpponent,
+    build_match_matrix,
+    canonical_evaluation_maps,
+)
 
 
 @dataclass(frozen=True)
@@ -1589,7 +1595,8 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
             )
         opponent_by_id = {item.opponent_id: item for item in opponents}
         scoring_config = scoring_config_from_experiment(config)
-        for specification in specifications:
+
+        def run_specification(specification: MatchSpecification) -> MatchResult:
             opponent = opponent_by_id[specification.opponent_id]
             try:
                 result = run_microrts_match(
@@ -1636,7 +1643,7 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     failure_category="runtime_match_failure",
                     failure_reason=str(exc),
                 )
-            result = replace(
+            return replace(
                 result,
                 generation=candidate.generation,
                 opponent_id=opponent.opponent_id,
@@ -1650,9 +1657,16 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 opponent_source_generation=opponent.source_generation,
                 opponent_source_candidate_id=opponent.source_candidate_id,
             )
-            match_results.append(result)
-            if not result.ok and first_error is None:
-                first_error = match_error_message(result)
+
+        worker_count = min(config.match_workers, len(specifications))
+        with ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="eagle-match",
+        ) as executor:
+            for result in executor.map(run_specification, specifications):
+                match_results.append(result)
+                if not result.ok and first_error is None:
+                    first_error = match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
     expected_matches = config.fixed_matches_per_opponent * len(opponents)

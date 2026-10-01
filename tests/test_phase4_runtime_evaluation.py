@@ -5,6 +5,7 @@ import gzip
 import json
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -34,6 +35,53 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
 
         self.assertEqual(config.expected_match_count, 180)
         self.assertEqual(config.rounds_per_map, 3)
+        self.assertEqual(config.match_workers, 1)
+
+    def test_parallel_workers_preserve_canonical_result_order(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "CandidateAgent.java"
+            source.write_text("source", encoding="utf-8")
+            classes = root / "classes" / "candidate"
+            classes.mkdir(parents=True)
+            (classes / "CandidateAgent.class").write_bytes(b"compiled")
+            agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", "source", source)
+            config = ExperimentConfig.from_mapping({"evaluation": {"match_workers": 4}})
+            thread_names: set[str] = set()
+            thread_lock = threading.Lock()
+            four_workers_started = threading.Event()
+
+            def fake_match(**kwargs):
+                with thread_lock:
+                    thread_names.add(threading.current_thread().name)
+                    if len(thread_names) >= 4:
+                        four_workers_started.set()
+                if not four_workers_started.wait(timeout=5):
+                    raise AssertionError("parallel match workers did not start")
+                index = kwargs["match_index"]
+                return MatchResult(
+                    ok=True,
+                    score=float(index),
+                    command=["java"],
+                    match_index=index,
+                    opponent_id=kwargs["opponent_id"],
+                )
+
+            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+                results, error = evaluate_matches(
+                    candidate=Candidate(id="parallel-candidate"),
+                    agent=agent,
+                    config=config,
+                    classes_dir=root / "classes",
+                    match_artifacts_dir=root / "matches",
+                    mock=True,
+                    ordinal=0,
+                )
+
+        self.assertIsNone(error)
+        self.assertEqual(len(thread_names), 4)
+        self.assertEqual([item.match_index for item in results], list(range(180)))
+        self.assertEqual(config.to_mapping()["evaluation"]["match_workers"], 4)
 
     def test_one_source_and_class_set_serves_search_roster_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:

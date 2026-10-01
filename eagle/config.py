@@ -148,6 +148,7 @@ class ExperimentConfig:
     semantic_probe_timeout_seconds: float = 120.0
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
+    match_workers: int = 1
     match_artifact_mode: str = "compact"
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
     evaluation_map_tick_limits: tuple[int, ...] = ()
@@ -445,6 +446,9 @@ class ExperimentConfig:
             ),
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
+            match_workers=int(
+                evaluation_settings.get("match_workers", payload.get("match_workers", 1))
+            ),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             evaluation_maps=evaluation_maps,
             evaluation_map_tick_limits=evaluation_map_tick_limits,
@@ -623,6 +627,8 @@ class ExperimentConfig:
                 raise ValueError(f"Configured evaluation map does not exist: {microrts_root / map_path}")
         if self.match_timeout_seconds <= 0:
             raise ValueError("match_timeout_seconds must be greater than zero.")
+        if self.match_workers < 1:
+            raise ValueError("evaluation.match_workers must be at least 1.")
         if self.match_artifact_mode not in {"compact", "full"}:
             raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
@@ -726,6 +732,7 @@ class ExperimentConfig:
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
                 "mode": self.evaluation_mode,
+                "match_workers": self.match_workers,
                 "self_play_refresh_interval": self.self_play_refresh_interval,
                 "self_play_opponent_library_capacity": self.self_play_opponent_library_capacity,
                 "semantic_probes": {

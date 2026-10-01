@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from eagle.candidate import Candidate
 from evaluation.game_performance import GamePerformanceConfig
-from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
+from evaluation.match_matrix import (
+    MatchSpecification,
+    MatrixOpponent,
+    build_match_matrix,
+    canonical_evaluation_maps,
+)
 from evaluation.runtime_evaluation import MatchResult, hash_class_directory, hash_file, run_microrts_match
 
 
@@ -98,11 +104,20 @@ def evaluate_parent_vs_offspring(
     source_hash = hash_file(source_path) if source_path is not None and source_path.is_file() else None
     offspring_class_hash = hash_class_directory(offspring_classes)
     parent_class_hash = hash_class_directory(parent_classes)
+    scoring_config = GamePerformanceConfig(
+        result_win_score=config.result_win_score,
+        result_draw_score=config.result_draw_score,
+        result_loss_score=config.result_loss_score,
+        material_scale=config.material_scale,
+        resource_scale=config.resource_scale,
+        unit_values=dict(config.unit_material_values),
+    )
     results: list[MatchResult] = []
     references: list[dict[str, Any]] = []
-    for specification in specifications:
+
+    def run_specification(specification: MatchSpecification) -> MatchResult:
         try:
-            result = run_microrts_match(
+            return run_microrts_match(
                 microrts_dir=config.microrts_dir,
                 classes_dir=offspring_classes,
                 agent_class="ai.generated.CandidateAgent",
@@ -110,14 +125,7 @@ def evaluate_parent_vs_offspring(
                 tick_limit=specification.tick_limit,
                 match_index=specification.match_index,
                 match_artifacts_dir=match_artifacts_dir,
-                scoring_config=GamePerformanceConfig(
-                    result_win_score=config.result_win_score,
-                    result_draw_score=config.result_draw_score,
-                    result_loss_score=config.result_loss_score,
-                    material_scale=config.material_scale,
-                    resource_scale=config.resource_scale,
-                    unit_values=dict(config.unit_material_values),
-                ),
+                scoring_config=scoring_config,
                 mock=mock,
                 mock_score=1.0,
                 timeout_seconds=config.match_timeout_seconds,
@@ -136,7 +144,7 @@ def evaluate_parent_vs_offspring(
                 java_system_properties={PARENT_CLASSES_PROPERTY: str(parent_classes.resolve())},
             )
         except (RuntimeError, OSError, ValueError) as exc:
-            result = MatchResult(
+            return MatchResult(
                 ok=False,
                 score=0.0,
                 command=[],
@@ -153,16 +161,27 @@ def evaluate_parent_vs_offspring(
                 opponent_source_generation=comparison_parent.generation,
                 opponent_source_candidate_id=comparison_parent.id,
             )
-        results.append(result)
-        references.append({
-            "match_index": specification.match_index,
-            "map": specification.map_path,
-            "round": specification.round_index,
-            "offspring_player": specification.candidate_player,
-            "comparison_parent_player": specification.opponent_player,
-            "status": "completed" if result.ok else "error",
-            "artifact_path": f"matches/match_{specification.match_index:02d}",
-        })
+
+    worker_count = min(config.match_workers, len(specifications))
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="eagle-head-to-head",
+    ) as executor:
+        for specification, result in zip(
+            specifications,
+            executor.map(run_specification, specifications),
+            strict=True,
+        ):
+            results.append(result)
+            references.append({
+                "match_index": specification.match_index,
+                "map": specification.map_path,
+                "round": specification.round_index,
+                "offspring_player": specification.candidate_player,
+                "comparison_parent_player": specification.opponent_player,
+                "status": "completed" if result.ok else "error",
+                "artifact_path": f"matches/match_{specification.match_index:02d}",
+            })
 
     wins = sum(result.ok and result.winner == result.candidate_player for result in results)
     losses = sum(result.ok and result.winner == 1 - result.candidate_player for result in results)

@@ -70,6 +70,14 @@ otherwise it inherits the legacy top-level `tick_limit`. The matrix attaches
 the resolved limit to every match specification, so search, AOS head-to-head,
 and final-test matches use the same cap for a given map.
 
+Normal matrix execution is serial by default. `evaluation.match_workers` may
+opt into bounded match-level parallelism; each match still owns an isolated
+artifact directory, results are returned in canonical `match_index` order, and
+the default value remains `1` for backwards-compatible resource usage.
+`scripts/benchmark_match_workers.py` can compare worker counts over the mock
+artifact path or the real bundled MicroRTS matrix; benchmark results are
+machine-dependent and are not written back into experiment configuration.
+
 The evaluator groups match results by opponent in
 `evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
 per-match summaries, then computes the weighted aggregate only for reporting.

@@ -11,6 +11,7 @@ import argparse
 import csv
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -229,7 +230,7 @@ def _run_final_matrix(
         for item in FINAL_TEST_OPPONENTS
     }
 
-    results: list[dict[str, Any]] = []
+    specifications: list[tuple[Any, Any, int, int, int, Path]] = []
     match_index = 0
     for opponent in FINAL_TEST_OPPONENTS:
         for evaluation_map in maps:
@@ -243,51 +244,74 @@ def _run_final_matrix(
                         / f"p{candidate_player}"
                         / f"game_{game_index:02d}"
                     )
-                    result = run_microrts_match(
-                        microrts_dir=config.microrts_dir,
-                        classes_dir=classes_dir,
-                        agent_class=AGENT_CLASS,
-                        opponent=opponent.class_name,
-                        tick_limit=evaluation_map.tick_limit,
-                        match_index=match_index,
-                        match_artifacts_dir=output_dir / "matches",
-                        match_output_dir=match_dir,
-                        scoring_config=scoring_config,
-                        mock=False,
-                        generation_index=candidate_generation,
-                        timeout_seconds=config.match_timeout_seconds,
-                        map_path=evaluation_map.path,
-                        candidate_id=candidate_id,
-                        generation=candidate_generation,
-                        source_hash=source_hash,
-                        class_hash=class_hash,
-                        candidate_player=candidate_player,
-                        extra_classpath_entries=opponent_classpaths[opponent.opponent_id],
-                        artifact_mode="compact",
-                        map_id=evaluation_map.map_id,
-                        round_index=game_index,
-                    )
-                    results.append(
-                        {
-                            "opponent_id": opponent.opponent_id,
-                            "opponent_name": opponent.display_name,
-                            "map_id": evaluation_map.map_id,
-                            "map_path": evaluation_map.path,
-                            "candidate_player": candidate_player,
-                            "game_index": game_index,
-                            "result": _result_label(result),
-                            "ok": result.ok,
-                            "failure_category": result.failure_category,
-                            "failure_reason": result.failure_reason,
-                            "fault_scope": result.fault_scope,
-                            "opponent_fault_contained": result.opponent_fault_contained,
-                            "opponent_fault_recovered": result.opponent_fault_recovered,
-                            "opponent_fault_reason": result.opponent_fault_reason,
-                            "scoring_neutralized": result.scoring_neutralized,
-                            "match": result.to_json_dict(),
-                        }
+                    specifications.append(
+                        (
+                            opponent,
+                            evaluation_map,
+                            game_index,
+                            candidate_player,
+                            match_index,
+                            match_dir,
+                        )
                     )
                     match_index += 1
+
+    def run_specification(item: tuple[Any, Any, int, int, int, Path]):
+        opponent, evaluation_map, game_index, candidate_player, match_index, match_dir = item
+        result = run_microrts_match(
+            microrts_dir=config.microrts_dir,
+            classes_dir=classes_dir,
+            agent_class=AGENT_CLASS,
+            opponent=opponent.class_name,
+            tick_limit=evaluation_map.tick_limit,
+            match_index=match_index,
+            match_artifacts_dir=output_dir / "matches",
+            match_output_dir=match_dir,
+            scoring_config=scoring_config,
+            mock=False,
+            generation_index=candidate_generation,
+            timeout_seconds=config.match_timeout_seconds,
+            map_path=evaluation_map.path,
+            candidate_id=candidate_id,
+            generation=candidate_generation,
+            source_hash=source_hash,
+            class_hash=class_hash,
+            candidate_player=candidate_player,
+            extra_classpath_entries=opponent_classpaths[opponent.opponent_id],
+            artifact_mode="compact",
+            map_id=evaluation_map.map_id,
+            round_index=game_index,
+        )
+        return item, result
+
+    results: list[dict[str, Any]] = []
+    worker_count = min(config.match_workers, len(specifications))
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="eagle-final-test",
+    ) as executor:
+        for item, result in executor.map(run_specification, specifications):
+            opponent, evaluation_map, game_index, candidate_player, _, _ = item
+            results.append(
+                {
+                    "opponent_id": opponent.opponent_id,
+                    "opponent_name": opponent.display_name,
+                    "map_id": evaluation_map.map_id,
+                    "map_path": evaluation_map.path,
+                    "candidate_player": candidate_player,
+                    "game_index": game_index,
+                    "result": _result_label(result),
+                    "ok": result.ok,
+                    "failure_category": result.failure_category,
+                    "failure_reason": result.failure_reason,
+                    "fault_scope": result.fault_scope,
+                    "opponent_fault_contained": result.opponent_fault_contained,
+                    "opponent_fault_recovered": result.opponent_fault_recovered,
+                    "opponent_fault_reason": result.opponent_fault_reason,
+                    "scoring_neutralized": result.scoring_neutralized,
+                    "match": result.to_json_dict(),
+                }
+            )
     return results
 
 
