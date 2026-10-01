@@ -94,20 +94,33 @@ def update_self_play_opponent_library(
     entries = payload.get("opponents")
     if not isinstance(entries, list):
         raise ValueError(f"Self-play opponent library has invalid entries: {path}")
-    known_ids = {str(entry.get("candidate_id") or "") for entry in entries if isinstance(entry, dict)}
-    known_java_hashes = {
-        str(entry.get("generated_java_sha256") or "")
-        for entry in entries
-        if isinstance(entry, dict) and entry.get("generated_java_sha256")
-    }
-    semantic_library = SemanticLibrary()
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        summary = entry.get("semantic_signature")
-        if isinstance(summary, dict):
-            semantic_library.add(str(entry.get("candidate_id") or ""), summary)
+    if capacity < 1:
+        raise ValueError("Self-play opponent library capacity must be at least 1.")
+    if len(entries) > capacity:
+        del entries[:len(entries) - capacity]
+
+    def current_indexes() -> tuple[set[str], set[str], SemanticLibrary]:
+        known_ids = {
+            str(entry.get("candidate_id") or "")
+            for entry in entries
+            if isinstance(entry, dict)
+        }
+        known_java_hashes = {
+            str(entry.get("generated_java_sha256") or "")
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("generated_java_sha256")
+        }
+        semantic_library = SemanticLibrary()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            summary = entry.get("semantic_signature")
+            if isinstance(summary, dict):
+                semantic_library.add(str(entry.get("candidate_id") or ""), summary)
+        return known_ids, known_java_hashes, semantic_library
+
     for candidate in runnable_self_play_candidates(candidates):
+        known_ids, known_java_hashes, semantic_library = current_indexes()
         if candidate.id in known_ids:
             continue
         generated_java_sha256 = hashlib.sha256(
@@ -127,14 +140,11 @@ def update_self_play_opponent_library(
                 "reason": "complete executable semantic signature unavailable",
             },
         })
-        known_ids.add(candidate.id)
-        known_java_hashes.add(generated_java_sha256)
-        if semantic_summary is not None:
-            semantic_library.add(candidate.id, semantic_summary)
-    if capacity < 1:
-        raise ValueError("Self-play opponent library capacity must be at least 1.")
-    if len(entries) > capacity:
-        del entries[:len(entries) - capacity]
+        if len(entries) > capacity:
+            # The index must follow the bounded FIFO pool.  An evicted
+            # phenotype is eligible to re-enter later, like LocalLearner's
+            # rolling solution pool.
+            del entries[:len(entries) - capacity]
     atomic_json(path, payload)
 
 

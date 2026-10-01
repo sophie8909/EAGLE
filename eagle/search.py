@@ -66,6 +66,7 @@ from .selection import (
 from .self_play import (
     assert_shared_self_play_context,
     is_self_play_refresh,
+    population_matches_self_play_context,
     select_self_play_library_candidates,
     update_self_play_opponent_library,
     write_self_play_snapshot,
@@ -466,6 +467,14 @@ def _run_search_impl(
         source_parents = list(evaluated_population)
         parent_replicas: list[Candidate] = []
         snapshot_refreshed = is_self_play_refresh(config, generation)
+        context_migration_required = (
+            config.evaluation_mode == "self_play"
+            and self_play_opponent_snapshot is not None
+            and not population_matches_self_play_context(
+                source_parents,
+                self_play_opponent_snapshot,
+            )
+        )
         if snapshot_refreshed:
             update_self_play_opponent_library(
                 run_dir,
@@ -483,6 +492,7 @@ def _run_search_impl(
                 candidates=self_play_opponent_snapshot,
                 refresh_interval=config.self_play_refresh_interval,
             )
+        if snapshot_refreshed or context_migration_required:
             parent_replicas = build_self_play_fitness_refresh_replicas(
                 source_parents,
                 generation=generation,
@@ -603,7 +613,7 @@ def _run_search_impl(
             stagnation_count = 0
         generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
         if parent_replicas:
-            if snapshot_refreshed:
+            if snapshot_refreshed or context_migration_required:
                 write_self_play_parent_refresh_sidecar(
                     run_dir,
                     generation=generation,

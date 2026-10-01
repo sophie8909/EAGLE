@@ -339,9 +339,11 @@ Its selected candidates are cycled in stable order into `self_play_000` through
 Self-matches are retained and all self-play slots have weight `1.0`. At refresh,
 fresh-ID parent replicas preserve the existing Java phenotype without an LLM
 call and are evaluated against the new context before reflection and offspring
-generation. Only refreshed parents and offspring with the same context ID may
-enter survivor selection. Library, context, and refresh sidecars make this
-transition resumable.
+generation. If semantic deduplication changes the generation-zero context after
+its initial evaluation, the same phenotype-preserving migration runs before
+the first offspring generation. Only refreshed/migrated parents and offspring
+with the same context ID may enter survivor selection. Library, context, and
+refresh sidecars make this transition resumable.
 `evaluation.self_play_opponent_library_capacity` bounds retained entries; when
 the library exceeds that capacity, the oldest entries are removed before active
 context selection.

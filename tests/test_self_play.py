@@ -182,6 +182,41 @@ class SelfPlayTests(unittest.TestCase):
         )
         self.assertEqual(payload["opponents"][0]["semantic_signature"]["action_hashes"], ["a1", "a2"])
 
+    def test_evicted_pool_entries_can_reenter(self) -> None:
+        def persist(root: Path, candidate: Candidate) -> None:
+            write_candidate_inputs(root / "candidates", candidate)
+            phenotype = root / "candidates" / candidate.id / "phenotype"
+            phenotype.mkdir(parents=True)
+            (phenotype / "CandidateAgent.java").write_text(
+                candidate.generated_java,
+                encoding="utf-8",
+            )
+            write_candidate_snapshot(root / "candidates", candidate)
+
+        first = Candidate(id="first", generated_java="same Java", compile_status="success")
+        second = Candidate(id="second", generated_java="second Java", compile_status="success")
+        replacement = Candidate(
+            id="replacement",
+            generated_java="replacement Java",
+            compile_status="success",
+        )
+        reentry = Candidate(id="reentry", generated_java="same Java", compile_status="success")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for item in (first, second, replacement, reentry):
+                persist(root, item)
+            update_self_play_opponent_library(root, [first, second], capacity=2)
+            update_self_play_opponent_library(root, [replacement], capacity=2)
+            update_self_play_opponent_library(root, [reentry], capacity=2)
+            payload = json.loads(
+                (root / "archives" / "self_play_opponents.json").read_text()
+            )
+
+        self.assertEqual(
+            [entry["candidate_id"] for entry in payload["opponents"]],
+            ["replacement", "reentry"],
+        )
+
     def test_context_guard_rejects_stale_parent_fitness(self) -> None:
         parent = Candidate(
             id="parent",

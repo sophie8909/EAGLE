@@ -65,8 +65,10 @@ behavior signatures only when scalar fitness is tied.
    duplicates, and deterministically select the next active context from the
    library. Between refreshes, keep the context unchanged. At
    refresh, phenotype-preserving fresh-ID parent replicas are re-evaluated
-   before reflection; only those replicas and offspring evaluated against that
-   same context enter selection. Persist the library, active context, refresh
+   before reflection; the same migration is also performed if generation-zero
+   semantic deduplication changes the context before the first offspring
+   generation. Only those replicas and offspring evaluated against that same
+   context enter selection. Persist the library, active context, refresh
    audit sidecar, surviving population, and metrics. The sole objective is
    aggregate `game_performance`. Scores whose difference from the current tier
    maximum is at most `1.0` are tied; tiers are never formed by chained

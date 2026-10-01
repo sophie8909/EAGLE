@@ -31,9 +31,11 @@ generations.
 
 At refresh, parents receive fresh identities but preserve their Java phenotype
 and make no LLM call. They are evaluated against the new context before
-reflection and offspring planning. Selection rejects a pool unless every
-candidate has the same context ID. Self-play requires static reflection and
-does not update the fixed-opponent archive.
+reflection and offspring planning. If generation-zero semantic deduplication
+changes the seeded context after its initial evaluation, the same migration is
+performed before the first offspring generation. Selection rejects a pool
+unless every candidate has the same context ID. Self-play requires static
+reflection and does not update the fixed-opponent archive.
 
 ## Fitness and reporting
 

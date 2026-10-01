@@ -243,7 +243,9 @@ phenotype、不呼叫 LLM，再以新 context 重評；只有相同 context ID �
 offspring 可以一起做 selection。Self-play 以每個 tier 的最高
 `game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
 同級內 parent B 優先選擇與 parent A 語意距離最大者；survivor boundary 使用 seeded
-max-min 語意多樣性。Resume 會載入最後已提交的 context，並在下一個刷新邊界讀取
+max-min 語意多樣性。如果 generation 0 完成語意去重後，seeded context 與原始
+評估使用的 context 不同，會在第一個 offspring generation 前執行相同的 parent
+refresh 遷移。Resume 會載入最後已提交的 context，並在下一個刷新邊界讀取
 library；舊 checkpoint
 若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
 目前要求 `reflection_operator_mode: static` 與
