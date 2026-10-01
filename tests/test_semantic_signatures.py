@@ -25,14 +25,25 @@ ROOT = Path(__file__).resolve().parents[1]
 class SemanticSignatureTests(unittest.TestCase):
     def test_library_uses_exact_dataset_scoped_equivalence(self) -> None:
         library = SemanticLibrary()
-        first = {"status": "complete", "dataset_id": "d1", "global_hash": "same"}
-        other_dataset = {"status": "complete", "dataset_id": "d2", "global_hash": "same"}
+        first = {
+            "status": "complete", "dataset_id": "d1", "probe_ids": ["p1"],
+            "action_hashes": ["a1"], "global_hash": "same",
+        }
+        other_dataset = {
+            "status": "complete", "dataset_id": "d2", "probe_ids": ["p1"],
+            "action_hashes": ["a1"], "global_hash": "same",
+        }
+        same_hash_different_vector = {
+            "status": "complete", "dataset_id": "d1", "probe_ids": ["p1"],
+            "action_hashes": ["a2"], "global_hash": "same",
+        }
         self.assertTrue(library.add("a", first))
         self.assertTrue(library.add("b", first))
         self.assertTrue(library.add("c", other_dataset))
+        self.assertTrue(library.add("d", same_hash_different_vector))
         self.assertFalse(library.add("missing", {"status": "unavailable"}))
         self.assertEqual(library.find_equivalent(first), ("a", "b"))
-        self.assertEqual(library.unique_count, 2)
+        self.assertEqual(library.unique_count, 3)
         self.assertEqual(library.duplicate_count, 1)
 
     @unittest.skipUnless(shutil.which("java") and shutil.which("javac"), "Java is required")

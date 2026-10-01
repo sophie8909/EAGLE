@@ -207,8 +207,9 @@ phenotype.
 
 Self-play persists a run-local opponent library at
 `archives/self_play_opponents.json`. Its versioned entries contain candidate
-IDs, birth generations, and generated-Java SHA-256 references; candidate
-artifacts remain the sole Java-source owner. Each generation-zero or refresh
+IDs, birth generations, generated-Java SHA-256 references, and the compact
+semantic summary used for LISS-style exact behavior-vector deduplication;
+candidate artifacts remain the sole Java-source owner. Each generation-zero or refresh
 boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`, which
 records the active context ID, refresh interval, selected library sources, a
 pointer to the library, and ten `self_play_*` slot mappings. Resume loads the

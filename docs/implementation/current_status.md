@@ -35,8 +35,9 @@ Snapshot: 2026-09-24. This file describes executable repository behavior.
 - Explicit `evaluation.mode: self_play` uses a persisted opponent library plus
   immutable snapshot contexts and `self_play_000`…`self_play_009` cases with
   uniform weights. The library is seeded at generation zero and updated at the
-  five-generation refresh boundary; selected runnable library entries cycle to
-  fill ten slots. Refresh generations re-evaluate phenotype-preserving fresh-ID
+  five-generation refresh boundary; equivalent runnable phenotypes are collapsed
+  by their complete semantic probe/action vector before selected library entries
+  cycle to fill ten slots. Refresh generations re-evaluate phenotype-preserving fresh-ID
   parents before reflection and selection; resume reloads the last committed
   context and migrates pre-context checkpoints by refreshing
   parents against it. This mode requires static reflection.

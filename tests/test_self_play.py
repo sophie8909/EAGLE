@@ -61,7 +61,7 @@ class SelfPlayTests(unittest.TestCase):
             Candidate(
                 id=f"candidate-{index}",
                 generation=4,
-                generated_java="complete Java",
+                generated_java=f"complete Java {index}",
                 compile_status="success",
             )
             for index in range(12)
@@ -120,6 +120,67 @@ class SelfPlayTests(unittest.TestCase):
             [slot["source_candidate_id"] for slot in payload["slots"]],
             [candidate.id for candidate in selected],
         )
+
+    def test_opponent_library_deduplicates_equal_behavior_vectors(self) -> None:
+        candidates = [
+            Candidate(
+                id="first",
+                generation=0,
+                generated_java="first Java",
+                compile_status="success",
+                semantic_signature={
+                    "status": "complete", "dataset_id": "d1",
+                    "dataset_sha256": "state-set", "normalization_version": "v1",
+                    "probe_ids": ["p1", "p2"], "action_hashes": ["a1", "a2"],
+                    "global_hash": "g1",
+                },
+            ),
+            Candidate(
+                id="equivalent",
+                generation=0,
+                generated_java="equivalent Java",
+                compile_status="success",
+                semantic_signature={
+                    "status": "complete", "dataset_id": "d1",
+                    "dataset_sha256": "state-set", "normalization_version": "v1",
+                    "probe_ids": ["p1", "p2"], "action_hashes": ["a1", "a2"],
+                    "global_hash": "g1",
+                },
+            ),
+            Candidate(
+                id="different",
+                generation=0,
+                generated_java="different Java",
+                compile_status="success",
+                semantic_signature={
+                    "status": "complete", "dataset_id": "d1",
+                    "dataset_sha256": "state-set", "normalization_version": "v1",
+                    "probe_ids": ["p1", "p2"], "action_hashes": ["a1", "a3"],
+                    "global_hash": "g2",
+                },
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for candidate in candidates:
+                write_candidate_inputs(root / "candidates", candidate)
+                phenotype = root / "candidates" / candidate.id / "phenotype"
+                phenotype.mkdir(parents=True)
+                (phenotype / "CandidateAgent.java").write_text(
+                    candidate.generated_java, encoding="utf-8"
+                )
+                write_candidate_snapshot(root / "candidates", candidate)
+            update_self_play_opponent_library(root, candidates, capacity=10)
+            payload = json.loads(
+                (root / "archives" / "self_play_opponents.json").read_text()
+            )
+
+        self.assertEqual(payload["schema_version"], "eagle-self-play-opponent-library-v2")
+        self.assertEqual(
+            [entry["candidate_id"] for entry in payload["opponents"]],
+            ["first", "different"],
+        )
+        self.assertEqual(payload["opponents"][0]["semantic_signature"]["action_hashes"], ["a1", "a2"])
 
     def test_context_guard_rejects_stale_parent_fitness(self) -> None:
         parent = Candidate(

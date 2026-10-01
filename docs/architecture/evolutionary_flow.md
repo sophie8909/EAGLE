@@ -61,8 +61,9 @@ behavior signatures only when scalar fitness is tied.
 8. In `self_play` evaluation, maintain a persisted opponent library and one
    immutable ten-slot active context. Seed and update the library only at each
    configured refresh generation (five generations in the minimal protocol),
-   merge newly runnable candidates, and deterministically select the next active
-   context from the library. Between refreshes, keep the context unchanged. At
+   merge newly runnable candidates, collapse exact semantic probe/action-vector
+   duplicates, and deterministically select the next active context from the
+   library. Between refreshes, keep the context unchanged. At
    refresh, phenotype-preserving fresh-ID parent replicas are re-evaluated
    before reflection; only those replicas and offspring evaluated against that
    same context enter selection. Persist the library, active context, refresh

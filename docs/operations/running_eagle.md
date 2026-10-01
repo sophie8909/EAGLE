@@ -104,8 +104,10 @@ evaluation:
 ```
 
 The library is seeded at generation zero and admits runnable current parents at
-each refresh boundary. It deterministically rotates the next active snapshot
-every five generations. Resume reloads the last committed snapshot; older
+each refresh boundary, retaining only one representative for each exact
+semantic probe/action vector when the evidence is available. It deterministically
+rotates the next active snapshot every five generations. Resume reloads the last
+committed snapshot; older
 self-play checkpoints that lack context metadata are migrated by re-evaluating
 fresh-ID parent replicas against that snapshot before continuing.
 

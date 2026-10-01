@@ -328,8 +328,10 @@ In `self_play`, the run owns a persisted opponent library. The library is
 seeded from the runnable current population at generation zero and is updated
 only at each `evaluation.self_play_refresh_interval` generation (the supported
 minimal protocol uses five generations). At an update, newly runnable
-candidates are merged into the library and a deterministic stable-order
-selection from the library materializes the immutable ten-slot context. The
+candidates are merged into the library after LISS-style exact behavior-vector
+deduplication: candidates with the same ordered probe/action vector share one
+retained representative. A deterministic stable-order selection from the
+library then materializes the immutable ten-slot context. The
 library, rather than the current population alone, is therefore the source of
 the next opponent snapshot. Between refreshes the active context is unchanged.
 Its selected candidates are cycled in stable order into `self_play_000` through
@@ -358,7 +360,9 @@ Self-play additionally enables a versioned nine-state semantic dataset:
 exactly the configured three maps at early, middle, and late trajectory phases,
 always for the configured player side. A fresh full `CandidateAgent` instance
 acts on each reloaded state. Unit actions are canonically ordered and hashed;
-semantic distance is normalized Hamming distance over the nine action hashes.
+the ordered nine-action vector defines exact equivalence for the opponent
+library, while semantic distance is normalized Hamming distance over the nine
+action hashes.
 Scores within `fitness_tie_tolerance` (default and canonical value `1.0`,
 inclusive) of a tier's maximum are equal for selection. Tiers use that maximum
 as a fixed anchor, so pairwise chaining cannot merge a worse candidate. Missing

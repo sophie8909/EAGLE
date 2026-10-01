@@ -234,7 +234,8 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 明確設定 `evaluation.mode: self_play` 時，系統維護一個 run-local、可持久化的
 opponent library。Generation 0 先把可執行 candidate 放入 library；之後只在
 `self_play_refresh_interval` 的刷新邊界更新（最小版本固定為每五代一次），把新
-的可執行 candidate 合併進 library，再依穩定順序從 library 選出 immutable
+的可執行 candidate 以 LISS 式完整 probe/action 向量做 exact equivalence 去重後
+合併進 library，再依穩定順序從 library 選出 immutable
 十-slot context，循環填入 `self_play_000` 到 `self_play_009` 十個等權重 case。
 因此五個被選中的 candidate 會各佔兩個 slot，且保留 self-match；非刷新代沿用
 同一 context。每逢刷新，系統先建立 fresh-ID parent replica，完全沿用原 Java
@@ -253,7 +254,8 @@ FIFO 移除最舊 reference，不會刪除 candidate artifact。
 Self-play 對每個可執行完整 `CandidateAgent` 建立行為語意簽章：三張 configured map
 各取 early／mid／late 一個可行動、非 terminal 的重載 `GameState`，共九個 probe。
 每個 probe 使用新的 agent instance，將 unit action 依 unit ID 排序並 canonicalize
-後雜湊。語意距離是九個 action hash 的 normalized Hamming distance；dataset 或 probe
+後雜湊；九個有序 action hash 向量相同才視為 library 中的 exact equivalent。語意距離是
+九個 action hash 的 normalized Hamming distance；dataset 或 probe
 順序不相容、或缺少簽章時只能作 fallback，不能被視為最 novel。完整結果以 phenotype
 hash、dataset hash 與 normalization version 快取；probe 失敗只記 diagnostic，不改 fitness。
 

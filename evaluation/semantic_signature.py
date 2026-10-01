@@ -80,10 +80,17 @@ class SemanticSignatureResult:
 
 
 class SemanticLibrary:
-    """Exact-equivalence index for compatible semantic summaries."""
+    """Exact-equivalence index for compatible behavioral output vectors.
+
+    LISS compares the complete output vector produced by a program on its
+    fixed input set.  EAGLE stores the same evidence as ordered probe/action
+    hashes, so the vector is the primary key here.  The global hash fallback
+    keeps older compact summaries readable while new signatures remain
+    collision-independent at the library boundary.
+    """
 
     def __init__(self) -> None:
-        self._members: dict[tuple[str, str], list[str]] = {}
+        self._members: dict[tuple[object, ...], list[str]] = {}
 
     def add(self, candidate_id: str, summary: dict[str, Any]) -> bool:
         key = _summary_key(summary)
@@ -435,14 +442,34 @@ def _validate_cache(payload: dict[str, Any], *, cache_key: str, dataset: Semanti
         raise ValueError("Semantic signature cache is incompatible or incomplete.")
 
 
-def _summary_key(summary: dict[str, Any]) -> tuple[str, str] | None:
+def _summary_key(summary: dict[str, Any]) -> tuple[object, ...] | None:
     if summary.get("status") != "complete":
         return None
     dataset_id = summary.get("dataset_id")
-    global_hash = summary.get("global_hash")
-    if not isinstance(dataset_id, str) or not isinstance(global_hash, str):
+    if not isinstance(dataset_id, str) or not dataset_id:
         return None
-    return dataset_id, global_hash
+    probe_ids = summary.get("probe_ids")
+    action_hashes = summary.get("action_hashes")
+    if isinstance(probe_ids, (list, tuple)) and isinstance(action_hashes, (list, tuple)):
+        if (
+            probe_ids
+            and len(probe_ids) == len(action_hashes)
+            and all(isinstance(item, str) and item for item in probe_ids)
+            and all(isinstance(item, str) and item for item in action_hashes)
+            and len(set(probe_ids)) == len(probe_ids)
+        ):
+            return (
+                "vector",
+                dataset_id,
+                str(summary.get("dataset_sha256") or ""),
+                str(summary.get("normalization_version") or ""),
+                tuple(probe_ids),
+                tuple(action_hashes),
+            )
+    global_hash = summary.get("global_hash")
+    if not isinstance(global_hash, str) or not global_hash:
+        return None
+    return "hash", dataset_id, global_hash
 
 
 def _dataset_hash_core(manifest: dict[str, Any]) -> dict[str, Any]:

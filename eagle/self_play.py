@@ -10,11 +10,13 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .opponent_cases import SELF_PLAY_CASES
 from .run_artifacts import atomic_json
+from evaluation.semantic_signature import SemanticLibrary
 
 
 SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v2"
 LEGACY_SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v1"
-OPPONENT_LIBRARY_SCHEMA_VERSION = "eagle-self-play-opponent-library-v1"
+LEGACY_OPPONENT_LIBRARY_SCHEMA_VERSION = "eagle-self-play-opponent-library-v1"
+OPPONENT_LIBRARY_SCHEMA_VERSION = "eagle-self-play-opponent-library-v2"
 OPPONENT_LIBRARY_PATH = Path("archives/self_play_opponents.json")
 
 
@@ -77,8 +79,12 @@ def update_self_play_opponent_library(
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise ValueError(f"Self-play opponent library is missing or invalid: {path}") from exc
-        if payload.get("schema_version") != OPPONENT_LIBRARY_SCHEMA_VERSION:
+        if payload.get("schema_version") not in {
+            LEGACY_OPPONENT_LIBRARY_SCHEMA_VERSION,
+            OPPONENT_LIBRARY_SCHEMA_VERSION,
+        }:
             raise ValueError(f"Unsupported self-play opponent library schema: {path}")
+        payload["schema_version"] = OPPONENT_LIBRARY_SCHEMA_VERSION
     else:
         payload = {
             "schema_version": OPPONENT_LIBRARY_SCHEMA_VERSION,
@@ -89,17 +95,42 @@ def update_self_play_opponent_library(
     if not isinstance(entries, list):
         raise ValueError(f"Self-play opponent library has invalid entries: {path}")
     known_ids = {str(entry.get("candidate_id") or "") for entry in entries if isinstance(entry, dict)}
+    known_java_hashes = {
+        str(entry.get("generated_java_sha256") or "")
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("generated_java_sha256")
+    }
+    semantic_library = SemanticLibrary()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        summary = entry.get("semantic_signature")
+        if isinstance(summary, dict):
+            semantic_library.add(str(entry.get("candidate_id") or ""), summary)
     for candidate in runnable_self_play_candidates(candidates):
         if candidate.id in known_ids:
+            continue
+        generated_java_sha256 = hashlib.sha256(
+            candidate.generated_java.encode("utf-8")
+        ).hexdigest()
+        if generated_java_sha256 in known_java_hashes:
+            continue
+        semantic_summary = _library_semantic_summary(candidate)
+        if semantic_summary is not None and semantic_library.find_equivalent(semantic_summary):
             continue
         entries.append({
             "candidate_id": candidate.id,
             "generation": candidate.generation,
-            "generated_java_sha256": hashlib.sha256(
-                candidate.generated_java.encode("utf-8")
-            ).hexdigest(),
+            "generated_java_sha256": generated_java_sha256,
+            "semantic_signature": semantic_summary or {
+                "status": "unavailable",
+                "reason": "complete executable semantic signature unavailable",
+            },
         })
         known_ids.add(candidate.id)
+        known_java_hashes.add(generated_java_sha256)
+        if semantic_summary is not None:
+            semantic_library.add(candidate.id, semantic_summary)
     if capacity < 1:
         raise ValueError("Self-play opponent library capacity must be at least 1.")
     if len(entries) > capacity:
@@ -126,7 +157,10 @@ def select_self_play_library_candidates(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"Self-play opponent library is missing or invalid: {path}") from exc
-    if payload.get("schema_version") != OPPONENT_LIBRARY_SCHEMA_VERSION:
+    if payload.get("schema_version") not in {
+        LEGACY_OPPONENT_LIBRARY_SCHEMA_VERSION,
+        OPPONENT_LIBRARY_SCHEMA_VERSION,
+    }:
         raise ValueError(f"Unsupported self-play opponent library schema: {path}")
     entries = payload.get("opponents")
     if not isinstance(entries, list) or not entries:
@@ -243,3 +277,36 @@ def population_matches_self_play_context(
         and set(candidate.fitness_objectives) == expected_cases
         for candidate in candidates
     )
+
+
+def _library_semantic_summary(candidate: Candidate) -> dict[str, object] | None:
+    """Return the LISS-compatible output vector used for library deduplication."""
+
+    value = candidate.semantic_signature
+    if not isinstance(value, dict) or value.get("status") != "complete":
+        return None
+    dataset_id = value.get("dataset_id")
+    global_hash = value.get("global_hash")
+    probe_ids = value.get("probe_ids")
+    action_hashes = value.get("action_hashes")
+    if not isinstance(dataset_id, str) or not dataset_id:
+        return None
+    if not isinstance(global_hash, str) or not global_hash:
+        return None
+    if not isinstance(probe_ids, list) or not isinstance(action_hashes, list):
+        return None
+    if not probe_ids or len(probe_ids) != len(action_hashes):
+        return None
+    if any(not isinstance(item, str) or not item for item in probe_ids + action_hashes):
+        return None
+    if len(set(probe_ids)) != len(probe_ids):
+        return None
+    return {
+        "status": "complete",
+        "dataset_id": dataset_id,
+        "dataset_sha256": str(value.get("dataset_sha256") or ""),
+        "normalization_version": str(value.get("normalization_version") or ""),
+        "probe_ids": list(probe_ids),
+        "action_hashes": list(action_hashes),
+        "global_hash": global_hash,
+    }

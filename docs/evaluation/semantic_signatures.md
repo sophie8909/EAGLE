@@ -20,8 +20,15 @@ A fresh compiled full `CandidateAgent` instance receives each state and returns
 one `PlayerAction`. Unit actions are sorted by unit ID and represented with only
 stable action fields before hashing. A candidate summary contains the ordered
 probe IDs, nine action hashes, global hash, and map/phase hashes. Exact equality
-defines equivalence; normalized Hamming distance over compatible ordered hashes
-defines diversity.
+of the complete ordered probe/action vector defines equivalence; normalized
+Hamming distance over compatible ordered hashes defines diversity.
+
+This is the EAGLE adaptation of LISS's library-induced semantic space: at each
+self-play library update, the fixed probe set is the input set, and only the
+first runnable representative of an equivalent behavior vector is retained.
+The library therefore contains behavioral representatives rather than every
+syntactic variant. Candidates whose executable semantic evidence is unavailable
+remain as conservative fallback entries and are never treated as equivalent.
 
 The cache key includes phenotype source hash, dataset hash, and action
 normalization version. Full results live in
