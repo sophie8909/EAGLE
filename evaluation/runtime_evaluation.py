@@ -577,6 +577,7 @@ def _finish_match(
             },
             result=raw_result,
             expected_last_tick=int_or_none(raw_result.get("final_tick")) if raw_result else tick_limit,
+            write_result=False,
         )
     except (OSError, TypeError, ValueError) as exc:
         persistence_error = f"failed to persist match trace: {exc}"

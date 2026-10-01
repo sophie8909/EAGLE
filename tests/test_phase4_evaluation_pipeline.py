@@ -134,7 +134,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(candidates_dir, evaluation)
             candidate_dir = candidates_dir / candidate.id
 
-            self.assertEqual(calls, list(range(config.expected_match_count)))
+            self.assertEqual(sorted(calls), list(range(config.expected_match_count)))
             self.assertEqual(evaluation.result.failure_stage, "runtime")
             self.assertEqual(evaluation.result.failure_category, "runtime_exception")
             self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))

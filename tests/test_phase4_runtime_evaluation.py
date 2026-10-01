@@ -35,7 +35,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
 
         self.assertEqual(config.expected_match_count, 180)
         self.assertEqual(config.rounds_per_map, 3)
-        self.assertEqual(config.match_workers, 1)
+        self.assertEqual(config.match_workers, 10)
 
     def test_parallel_workers_preserve_canonical_result_order(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -83,6 +83,10 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual([item.match_index for item in results], list(range(180)))
         self.assertEqual(config.to_mapping()["evaluation"]["match_workers"], 4)
 
+    def test_parallel_worker_count_must_be_positive(self):
+        with self.assertRaisesRegex(ValueError, "match_workers must be at least 1"):
+            ExperimentConfig.from_mapping({"evaluation": {"match_workers": 0}}).validate()
+
     def test_one_source_and_class_set_serves_search_roster_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -97,7 +101,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 source=source.read_text(encoding="utf-8"),
                 source_path=source,
             )
-            config = ExperimentConfig.from_mapping({})
+            config = ExperimentConfig.from_mapping({"evaluation": {"match_workers": 1}})
             observed: list[dict] = []
 
             def fake_match(**kwargs):
@@ -425,12 +429,8 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             classes.mkdir(parents=True)
             agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", "source", source)
             config = ExperimentConfig.from_mapping({})
-            calls = 0
-
             def fake_match(**kwargs):
-                nonlocal calls
-                calls += 1
-                if calls == 3:
+                if kwargs["match_index"] == 2:
                     return MatchResult(
                         ok=False,
                         score=0.0,

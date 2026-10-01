@@ -35,12 +35,15 @@ def write_match_trace(
     metadata: dict[str, Any],
     result: dict[str, Any],
     expected_last_tick: int | None = None,
+    write_result: bool = True,
 ) -> TraceArtifact:
     """Stream round-state observations into the canonical match artifacts.
 
     Round-state files are already emitted by the Java game loop one per cycle.
     Reading them in filename order keeps memory bounded and makes the integrity
-    report expose any missing quiet ticks instead of silently filling them.
+    report expose any missing quiet ticks instead of silently filling them. The
+    runtime evaluator can defer the canonical result write until all trace
+    metadata is available, avoiding an intermediate result overwrite.
     """
 
     match_dir.mkdir(parents=True, exist_ok=True)
@@ -60,7 +63,8 @@ def write_match_trace(
         "evaluation_configuration",
     ):
         static.setdefault(field, None)
-    _write_json(result_path, result)
+    if write_result:
+        _write_json(result_path, result)
 
     ticks: list[int] = []
     write_error: str | None = None

@@ -43,6 +43,7 @@ DEFAULT_SEMANTIC_REFERENCE_AGENTS = (
     "ai.abstraction.HeavyRush",
 )
 DEFAULT_SEMANTIC_PHASE_FRACTIONS = (0.10, 0.50, 0.90)
+DEFAULT_MATCH_WORKERS = 10
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -148,7 +149,7 @@ class ExperimentConfig:
     semantic_probe_timeout_seconds: float = 120.0
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
-    match_workers: int = 1
+    match_workers: int = DEFAULT_MATCH_WORKERS
     match_artifact_mode: str = "compact"
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
     evaluation_map_tick_limits: tuple[int, ...] = ()
@@ -447,7 +448,10 @@ class ExperimentConfig:
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_workers=int(
-                evaluation_settings.get("match_workers", payload.get("match_workers", 1))
+                evaluation_settings.get(
+                    "match_workers",
+                    payload.get("match_workers", DEFAULT_MATCH_WORKERS),
+                )
             ),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             evaluation_maps=evaluation_maps,

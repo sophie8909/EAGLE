@@ -62,6 +62,20 @@ class MatchTraceTests(unittest.TestCase):
             self.assertIsNone(row["raw_state"])
             self.assertTrue(artifact.integrity["complete"])
 
+    def test_result_write_can_be_deferred_to_canonical_match_persistence(self):
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value)
+            artifact = write_match_trace(
+                round_state_dir=root / "missing-states",
+                match_dir=root / "match",
+                metadata=self._metadata(),
+                result={"final_tick": 0, "winner": 0},
+                expected_last_tick=0,
+                write_result=False,
+            )
+            self.assertFalse(artifact.result_path.exists())
+            self.assertTrue(artifact.trace_path.exists())
+
     def test_integrity_reports_missing_duplicate_and_out_of_order_ticks(self):
         with tempfile.TemporaryDirectory() as value:
             root = Path(value)

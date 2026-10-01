@@ -55,6 +55,13 @@ materialization. It switches back before the next generation.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
+Match execution uses ten bounded workers by default on the current benchmarked
+host. Override it under `evaluation.match_workers` when changing the resource
+budget, for example `1` for serial execution or `10` for the recommended
+setting. `match_timeout_seconds` and `match_artifact_mode` remain independent
+top-level settings because they control per-process timeout and evidence
+retention rather than scheduling.
+
 The resolved config records `survivor_selection: mu_plus_lambda`. Parent and
 offspring candidates jointly enter the evaluation mode's survivor selection:
 fixed roster uses seeded lexicase, while self-play uses scalar Game Performance

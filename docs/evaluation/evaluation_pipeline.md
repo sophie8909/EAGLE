@@ -70,10 +70,11 @@ otherwise it inherits the legacy top-level `tick_limit`. The matrix attaches
 the resolved limit to every match specification, so search, AOS head-to-head,
 and final-test matches use the same cap for a given map.
 
-Normal matrix execution is serial by default. `evaluation.match_workers` may
-opt into bounded match-level parallelism; each match still owns an isolated
-artifact directory, results are returned in canonical `match_index` order, and
-the default value remains `1` for backwards-compatible resource usage.
+Normal matrix execution uses ten bounded match workers by default, based on the
+bundled MicroRTS benchmark on the development host. `evaluation.match_workers`
+can override that value or restore serial execution with `1`; each match still
+owns an isolated artifact directory and results are returned in canonical
+`match_index` order.
 `scripts/benchmark_match_workers.py` can compare worker counts over the mock
 artifact path or the real bundled MicroRTS matrix; benchmark results are
 machine-dependent and are not written back into experiment configuration.
