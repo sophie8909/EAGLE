@@ -2,16 +2,11 @@
 from __future__ import annotations
 
 import random
-from dataclasses import replace
 from pathlib import Path
 
-from generation.backend import ExistingJavaPhenotypeBackend
-
 from .artifacts import write_summary
-from .candidate import Candidate
 from .config import ExperimentConfig
-from .crossover import CrossoverContext
-from .evaluation import evaluate_population, preflight_evaluation_opponents
+from .evaluation import preflight_evaluation_opponents
 from .run_artifacts import (
     finalize_run,
     load_error_memory,
@@ -19,39 +14,20 @@ from .run_artifacts import (
     load_resume_population,
     mark_run_failed,
     mark_run_interrupted,
-    record_error_memory,
-    record_generation,
 )
 from .search import (
     SearchResult,
-    apply_offspring_mutations,
-    materialize_code_reflections,
-    plan_offspring,
-    build_parent_evaluation_replicas,
-    build_self_play_fitness_refresh_replicas,
-    write_parent_evaluation_sidecar,
-    write_self_play_parent_refresh_sidecar,
+    run_generation_step,
 )
-from .strategy_reflection import cleanup_retired_match_traces
 from .strategy_diversity import (
-    archive_niches,
-    diversity_console_summary,
     ensure_strategy_archive,
-    generation_diversity_metrics,
     update_strategy_archive,
 )
 from .opponent_archive import ensure_opponent_archive, update_opponent_archive
-from .selection import best_candidate, population_signature, select_next_generation
+from .selection import best_candidate, population_signature
 from .search_runtime import build_search_runtime, preflight_llm_endpoint
-from .timing import Stopwatch, append_event, build_generation_event
 from .self_play import (
-    assert_shared_self_play_context,
-    is_self_play_refresh,
     load_self_play_snapshot,
-    population_matches_self_play_context,
-    select_self_play_library_candidates,
-    update_self_play_opponent_library,
-    write_self_play_snapshot,
 )
 
 
@@ -173,171 +149,36 @@ def _resume_search_impl(
         active_model_phase = phase
 
     for generation in range(completed_generation + 1, config.generations + 1):
-        span = Stopwatch.start()
-        source_parents = list(population)
-        parent_replicas: list[Candidate] = []
-        snapshot_refreshed = is_self_play_refresh(config, generation)
-        context_migration_required = (
-            config.evaluation_mode == "self_play"
-            and self_play_opponent_snapshot is not None
-            and not population_matches_self_play_context(
-                source_parents,
-                self_play_opponent_snapshot,
-            )
-        )
-        if snapshot_refreshed:
-            update_self_play_opponent_library(
-                run_dir,
-                source_parents,
-                capacity=config.self_play_opponent_library_capacity,
-            )
-            self_play_opponent_snapshot = select_self_play_library_candidates(
-                run_dir,
-                generation=generation,
-                refresh_interval=config.self_play_refresh_interval,
-            )
-            write_self_play_snapshot(
-                run_dir,
-                generation=generation,
-                candidates=self_play_opponent_snapshot,
-                refresh_interval=config.self_play_refresh_interval,
-            )
-        if snapshot_refreshed or context_migration_required:
-            parent_replicas = build_self_play_fitness_refresh_replicas(
-                source_parents,
-                generation=generation,
-            )
-            parent_replicas = evaluate_population(
-                parent_replicas,
-                generation=generation,
-                config=config,
-                backend=ExistingJavaPhenotypeBackend(),
-                generated_agents_dir=generated_agents_dir,
-                classes_dir=classes_dir,
-                candidates_dir=candidates_dir,
-                mock=mock,
-                llm_client=shared_client,
-                run_timing_path=run_dir / "timing.jsonl",
-                run_id=run_dir.name,
-                opponent_candidates=self_play_opponent_snapshot,
-            )
-        parents_for_generation = parent_replicas or population
-        activate_phase("reflection")
-        plans = plan_offspring(
-            parents_for_generation, config=config, generation=generation, rng=rng,
-            mutations=mutations, operator_controller=operator_controller,
-            artifact_root=candidates_dir, error_memory=error_memory,
-        )
-        plans = apply_offspring_mutations(plans, artifact_root=candidates_dir)
-        activate_phase("generation")
-        plans = materialize_code_reflections(plans, artifact_root=candidates_dir)
-        offspring = [plan.candidate for plan in plans]
-        evaluated = evaluate_population(
-            offspring, generation=generation, config=config, backend=generation_backend,
-            generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
-            candidates_dir=candidates_dir, mock=mock, llm_client=generation_client,
-            run_timing_path=run_dir / "timing.jsonl", run_id=run_dir.name,
-            opponent_candidates=self_play_opponent_snapshot,
-        )
-        evaluated, rewards = operator_controller.collect_rewards(
-            parents_for_generation,
-            evaluated,
+        step = run_generation_step(
+            generation=generation,
             config=config,
+            run_dir=run_dir,
             candidates_dir=candidates_dir,
+            generated_agents_dir=generated_agents_dir,
             classes_dir=classes_dir,
             mock=mock,
-        )
-        aos_record = operator_controller.update_generation(rewards)
-        evaluated = operator_controller.persist_reward_outcomes(
-            evaluated,
-            rewards,
-            record=aos_record,
-            candidates_dir=candidates_dir,
-        )
-        if config.parent_evaluation_mode == "regenerate_same_genotype":
-            parent_replicas = build_parent_evaluation_replicas(
-                source_parents,
-                generation=generation,
-            )
-            parent_replicas = evaluate_population(
-                parent_replicas,
-                generation=generation,
-                config=config,
-                backend=generation_backend,
-                generated_agents_dir=generated_agents_dir,
-                classes_dir=classes_dir,
-                candidates_dir=candidates_dir,
-                mock=mock,
-                llm_client=generation_client,
-                run_timing_path=run_dir / "timing.jsonl",
-                run_id=run_dir.name,
-                opponent_candidates=self_play_opponent_snapshot,
-            )
-        selection_candidates = [*parent_replicas, *evaluated]
-        if config.evaluation_mode == "self_play":
-            assert_shared_self_play_context(
-                [*(parent_replicas or population), *evaluated]
-            )
-        archive_before = archive_niches(run_dir)
-        update_strategy_archive(run_dir, selection_candidates)
-        if config.evaluation_mode == "fixed_roster":
-            update_opponent_archive(run_dir, selection_candidates)
-        error_memory = record_error_memory(run_dir, selection_candidates)
-        append_event(
-            run_dir / "timing.jsonl",
-            build_generation_event(
-                run_id=run_dir.name, generation=generation, candidates=selection_candidates,
-                span=span.finish(),
-            ),
-        )
-        population = select_next_generation(
-            parent_replicas if parent_replicas else population,
-            evaluated,
-            population_size=config.population_size,
+            run_id=run_dir.name,
             rng=rng,
-            selection_mode=config.algorithm,
-            fitness_tolerance=config.fitness_tie_tolerance,
+            population=population,
+            population_state_signature=population_state_signature,
+            stagnation_count=stagnation,
+            error_memory=error_memory,
+            self_play_opponent_snapshot=self_play_opponent_snapshot,
+            generation_backend=generation_backend,
+            shared_client=shared_client,
+            generation_client=generation_client,
+            mutations=mutations,
+            operator_controller=operator_controller,
+            activate_phase=activate_phase,
         )
-        signature = population_signature(
-            population,
-            selection_mode=config.algorithm,
-        )
-        stagnation = stagnation + 1 if signature == population_state_signature else 0
-        population_state_signature = signature
-        generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
-        if parent_replicas:
-            if snapshot_refreshed or context_migration_required:
-                write_self_play_parent_refresh_sidecar(
-                    run_dir,
-                    generation=generation,
-                    source_parents=source_parents,
-                    replicas=parent_replicas,
-                    selected_ids={candidate.id for candidate in population},
-                )
-            else:
-                write_parent_evaluation_sidecar(
-                    run_dir,
-                    generation=generation,
-                    source_parents=source_parents,
-                    replicas=parent_replicas,
-                    selected_ids={candidate.id for candidate in population},
-                )
-        record_generation(
-            run_dir,
-            generation,
-            population,
-            diversity=generation_diversity,
-            aos=aos_record,
-        )
-        cleanup_retired_match_traces(
-            candidates_dir,
-            [*source_parents, *selection_candidates],
-            surviving_candidate_ids={candidate.id for candidate in population},
-        )
-        print(diversity_console_summary(generation, generation_diversity), flush=True)
+        population = step.population
+        self_play_opponent_snapshot = step.self_play_opponent_snapshot
+        population_state_signature = step.population_state_signature
+        stagnation = step.stagnation_count
+        error_memory = step.error_memory
         completed_generation = generation
-        if config.stagnation_generations > 0 and stagnation >= config.stagnation_generations:
-            stop_reason = f"stagnation_{config.stagnation_generations}_generations"
+        if step.stop_reason is not None:
+            stop_reason = step.stop_reason
             break
     best = best_candidate(population)
     write_summary(

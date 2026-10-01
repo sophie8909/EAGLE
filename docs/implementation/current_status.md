@@ -58,6 +58,9 @@ Snapshot: 2026-09-24. This file describes executable repository behavior.
   completes before one final Java-materialization phase. Code revision is
   deferred into that phase alongside ordinary Strategy/Prompt/no-mutation Java
   generation.
+- Fresh search and v2 resume now execute that generation lifecycle through the
+  same `eagle.search.run_generation_step` owner; only initialization, snapshot
+  loading, and finalization remain entrypoint-specific.
 - The required `model` owns initialization and reflection/rewrite calls. An
   optional `generation_model` owns final Java materialization and compile repair;
   the experiment orchestrator switches its single owned llama.cpp process only

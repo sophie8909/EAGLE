@@ -24,10 +24,10 @@ kept as documentation entries.
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, one execution mode, EA/model/evaluation validation |
 | `eagle/search_runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
-| `eagle/search.py` | Initialization and evolutionary generation loop |
+| `eagle/search.py` | Initialization, shared evolutionary generation step, and generation loop |
 | `eagle/self_play.py` | Managed self-play opponent library, five-generation context selection, context hashes, resume loading, and selection guards |
 | `eagle/initial_population.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
-| `eagle/resume.py` | v2 snapshot resume with opponent-library refresh |
+| `eagle/resume.py` | v2 snapshot load/finalization around the shared generation step |
 | `eagle/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/aos.py` | Static and adaptive reflection-operator selection |
 
