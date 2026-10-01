@@ -815,11 +815,12 @@ def _persist_result(match_dir: Path, result: MatchResult) -> None:
     try:
         (match_dir / "stdout.txt").write_text(result.stdout, encoding="utf-8")
         (match_dir / "stderr.txt").write_text(result.stderr, encoding="utf-8")
+        payload = result.to_json_dict(include_telemetry=False)
         (match_dir / "result.json").write_text(
-            json.dumps(result.to_json_dict(include_telemetry=False), ensure_ascii=False, indent=2),
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        timing = result.to_json_dict(include_telemetry=False)["timing"]
+        timing = payload["timing"]
         (match_dir / "timing.json").write_text(json.dumps(timing, indent=2), encoding="utf-8")
     except OSError:
         # The caller receives the process/result evidence even if the filesystem fails.

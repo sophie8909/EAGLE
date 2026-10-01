@@ -77,7 +77,6 @@ from .config import ExperimentConfig
 from .opponent_cases import FAILED_OPPONENT_SCORE
 from .prompts import load_prompt, render_prompt
 from .self_play import expand_self_play_slots
-from .timing import append_event
 from .opponents import (
     ALLINBOT_UPSTREAM_CLASS_NAME,
     EVALUATION_ROSTER,
@@ -329,10 +328,9 @@ def _append_match_timing_events(
     matches: list[MatchResult],
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    for result in matches:
-        append_event(
-            path,
-            {
+    with path.open("a", encoding="utf-8", buffering=1) as handle:
+        for result in matches:
+            event = {
                 "event": "match",
                 "run_id": run_id,
                 "generation": generation,
@@ -357,8 +355,9 @@ def _append_match_timing_events(
                 "opponent_weight": result.opponent_weight,
                 "opponent_source_generation": result.opponent_source_generation,
                 "opponent_source_candidate_id": result.opponent_source_candidate_id,
-            },
-        )
+            }
+            handle.write(json.dumps(event, ensure_ascii=False))
+            handle.write("\n")
 
 
 def _build_self_play_opponents(
@@ -1584,12 +1583,12 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
             rounds_per_map=config.rounds_per_map,
             swap_player_sides=config.swap_player_sides,
         )
-        expected_matches = len(specifications)
         if not opponents:
             return match_results, (
                 "self-play opponent pool is empty"
             )
         opponent_by_id = {item.opponent_id: item for item in opponents}
+        scoring_config = scoring_config_from_experiment(config)
         for specification in specifications:
             opponent = opponent_by_id[specification.opponent_id]
             try:
@@ -1603,7 +1602,7 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     ),
                     tick_limit=specification.tick_limit, match_index=specification.match_index,
                     match_artifacts_dir=match_artifacts_dir,
-                    scoring_config=scoring_config_from_experiment(config), mock=mock,
+                    scoring_config=scoring_config, mock=mock,
                     mock_score=config.mock_score_base + config.mock_score_step * (
                         ordinal + specification.match_index
                     ),
