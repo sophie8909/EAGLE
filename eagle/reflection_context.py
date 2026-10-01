@@ -7,7 +7,6 @@ not read run artifacts or recalculate objectives.
 
 from __future__ import annotations
 
-import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping, TYPE_CHECKING
 

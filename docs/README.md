@@ -49,7 +49,6 @@ When code and the specification differ, preserve the specification and update [`
 | Successful `code_quality` formula | [`evaluation/code_quality.md`](evaluation/code_quality.md) |
 | Failure-stage classification and fitness | [`evaluation/failure_classification.md`](evaluation/failure_classification.md) |
 | Self-play behavior signatures and semantic tie-breaking | [`evaluation/semantic_signatures.md`](evaluation/semantic_signatures.md) |
-| Self-play behavior signatures and semantic tie-breaking | [`evaluation/semantic_signatures.md`](evaluation/semantic_signatures.md) |
 | Artifact paths and payload ownership | [`artifacts/artifact_schema.md`](artifacts/artifact_schema.md) |
 | Timing fields | [`artifacts/timing_schema.md`](artifacts/timing_schema.md) |
 | Lineage and component provenance | [`artifacts/lineage_schema.md`](artifacts/lineage_schema.md) |

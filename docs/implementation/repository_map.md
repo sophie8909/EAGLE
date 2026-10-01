@@ -11,6 +11,7 @@ kept as documentation entries.
 | `analyze.sh` | Wrapper for `python -m eagle analyze` |
 | `watchdog.sh` | Optional network-interface monitor; no model lifecycle ownership |
 | `scripts/run_gui_match.py` | Optional read-only visual match inspection |
+| `scripts/benchmark_match_workers.py` | Bounded mock/real MicroRTS match-worker benchmark |
 
 ## Experiment and search
 

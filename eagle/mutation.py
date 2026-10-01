@@ -11,7 +11,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol

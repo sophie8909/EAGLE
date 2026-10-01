@@ -11,9 +11,8 @@ import yaml
 
 from evaluation.compiler import CompileResult
 from evaluation.code_quality import OBJECTIVE_FORMULA_VERSION, analyze_compilation
-from evaluation.objectives import OBJECTIVE_DIRECTIONS
 from evaluation.microrts_runner import INTEGRATION_CHECK_NAMES, IntegrationResult
-from evaluation.runtime_evaluation import DEFAULT_MAP_PATH, MatchResult
+from evaluation.runtime_evaluation import MatchResult
 from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate, compact_candidate_metadata

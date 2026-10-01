@@ -48,6 +48,7 @@ benchmark_results_*.txt
 /prompt/
 /runs/
 /traces/
+/data/
 !/examples/traces/
 tournament/traces/*.json
 tournament/traces/*.xml

@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-09-24. This file describes executable repository behavior.
+Snapshot: 2026-10-02. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -25,6 +25,10 @@ Snapshot: 2026-09-24. This file describes executable repository behavior.
   for each opponent. Evaluation maps may define independent positive tick caps;
   string-only map entries retain the top-level `tick_limit` fallback. Normal,
   AOS head-to-head, and final-test matrices share the resolved per-map caps.
+- Match execution uses bounded parallel workers, defaulting to the benchmarked
+  `evaluation.match_workers: 10`; result ordering remains canonical by
+  `match_index`. Compact artifacts skip Java XML replay generation, while full
+  artifacts retain replay and round-state evidence.
 - Match repetitions are identified by `round_index`. The obsolete
   `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
   seed artifacts are removed; MicroRTS matches do not claim seeded

@@ -80,9 +80,7 @@ from .prompts import load_prompt, render_prompt
 from .self_play import expand_self_play_slots
 from .opponents import (
     ALLINBOT_UPSTREAM_CLASS_NAME,
-    EVALUATION_ROSTER,
     OpponentSetupError,
-    OpponentSpec,
     SEARCH_OPPONENT_REGISTRY,
     SAFE_ALLINBOT_CLASS_NAME,
     rooted_jar_path,
