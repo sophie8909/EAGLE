@@ -566,6 +566,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertFalse(replay_exists)
         self.assertFalse(rounds_exist)
         self.assertFalse(any(argument.startswith("-Deagle.match.seed=") for argument in result.command))
+        self.assertFalse(any(argument.startswith("-Dmicrorts.trace.path=") for argument in result.command))
         self.assertNotIn("seed", persisted)
         self.assertNotIn("match_seed", result.raw_result)
         self.assertEqual([item["tick"] for item in telemetry["ticks"]], [0, 100])

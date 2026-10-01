@@ -14,6 +14,7 @@ from typing import Any
 RESULT_WIN_SCORE = 100.0
 RESULT_DRAW_SCORE = 0.0
 RESULT_LOSS_SCORE = -100.0
+TELEMETRY_GZIP_COMPRESSLEVEL = 1
 DEFAULT_UNIT_VALUES = {
     "Resource": 0.0,
     "Base": 10.0,
@@ -272,7 +273,12 @@ def tick_from_result(raw_result: dict[str, Any], *, tick: int, player_index: int
 def write_telemetry_json(path: Path, telemetry: MatchTelemetry) -> None:
     payload = json.dumps(telemetry.to_json_dict(), ensure_ascii=False, indent=2)
     if path.suffix == ".gz":
-        with gzip.open(path, "wt", encoding="utf-8") as handle:
+        with gzip.open(
+            path,
+            "wt",
+            encoding="utf-8",
+            compresslevel=TELEMETRY_GZIP_COMPRESSLEVEL,
+        ) as handle:
             handle.write(payload)
         return
     path.write_text(payload, encoding="utf-8")
@@ -281,7 +287,12 @@ def write_telemetry_json(path: Path, telemetry: MatchTelemetry) -> None:
 def write_summary_json(path: Path, summary: dict[str, Any]) -> None:
     payload = json.dumps(summary, ensure_ascii=False, indent=2)
     if path.suffix == ".gz":
-        with gzip.open(path, "wt", encoding="utf-8") as handle:
+        with gzip.open(
+            path,
+            "wt",
+            encoding="utf-8",
+            compresslevel=TELEMETRY_GZIP_COMPRESSLEVEL,
+        ) as handle:
             handle.write(payload)
         return
     path.write_text(payload, encoding="utf-8")

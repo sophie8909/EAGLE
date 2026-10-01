@@ -258,14 +258,16 @@ def run_microrts_match(
     )
     ai1 = agent_class if candidate_player == 0 else opponent
     ai2 = opponent if candidate_player == 0 else agent_class
+    resolved_system_properties = dict(java_system_properties or {})
+    if artifact_mode == "full":
+        resolved_system_properties["microrts.trace.path"] = str(replay_path)
     system_properties = [
         f"-D{key}={value}"
-        for key, value in sorted((java_system_properties or {}).items())
+        for key, value in sorted(resolved_system_properties.items())
     ]
     command = [
         "java",
         *system_properties,
-        f"-Dmicrorts.trace.path={replay_path}",
         f"-Dmicrorts.round_state_dir={round_state_dir}",
         "-cp",
         classpath,

@@ -17,6 +17,7 @@ from typing import Any, Iterable, Iterator
 
 
 TRACE_SCHEMA_VERSION = "match-trace-v1"
+TRACE_GZIP_COMPRESSLEVEL = 1
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,13 @@ def write_match_trace(
     ticks: list[int] = []
     write_error: str | None = None
     try:
-        with gzip.open(trace_path, "wt", encoding="utf-8", newline="\n") as handle:
+        with gzip.open(
+            trace_path,
+            "wt",
+            encoding="utf-8",
+            newline="\n",
+            compresslevel=TRACE_GZIP_COMPRESSLEVEL,
+        ) as handle:
             for path in sorted(round_state_dir.glob("round_*.log")):
                 raw_state = path.read_text(encoding="utf-8", errors="replace")
                 row = _parse_round_state(raw_state)

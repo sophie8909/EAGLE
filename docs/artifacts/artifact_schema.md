@@ -325,7 +325,7 @@ and `match_metadata.json` `evaluation_configuration.tick_limit` must equal the
 resolved cap of the associated map. Final-test summary map entries likewise
 retain `tick_limit` beside map ID and path.
 
-Compact mode removes transient raw replay/round-state inputs after durable telemetry/trace creation. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
+Compact mode does not request the transient Java XML replay and removes round-state inputs after durable telemetry/trace creation. Full mode retains both replay and round-state inputs. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
 
 Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
 
