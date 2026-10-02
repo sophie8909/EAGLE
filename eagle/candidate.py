@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from .opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
-from .prompts import load_prompt
+from eagle.opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
+from eagle.prompts import load_prompt
 
 
 ACTION_API_GUIDE = load_prompt("action_api_guide")
@@ -83,7 +83,7 @@ class Candidate:
         agent_template_path: object | None = None,
     ) -> str:
         """Build one request for a complete single-file Java agent."""
-        from generation.agent_template import JavaTemplatePaths, load_java_template
+        from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
 
         # The default mode starts from the checked-in scaffold without parent
         # Java.  A candidate with inherited Java uses the explicitly separate
@@ -93,7 +93,7 @@ class Candidate:
             if agent_template_path is None
             else JavaTemplatePaths(agent_template_path)
         )
-        from .prompts import render_prompt
+        from eagle.prompts import render_prompt
 
         values = {
             "policy_prompt": self.strategy_prompt.strip(),

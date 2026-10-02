@@ -11,13 +11,14 @@ import yaml
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs, write_run_config
 from eagle.candidate import Candidate, LINEAGE_SCHEMA_VERSION
 from eagle.config import ExperimentConfig
-from eagle.crossover import CrossoverContext, crossover
-from eagle.evaluation import evaluate_candidate
-from eagle.search import initialize_population, run_search
+from eagle.operators.crossover import CrossoverContext, crossover
+from eagle.evaluation.pipeline import evaluate_candidate
+from eagle.evolution.search import run_search
+from eagle.operators.initialization import initialize_population
 from eagle.run_artifacts import load_candidate
-from generation.agent_template import JavaTemplatePaths, load_java_template
-from generation.backend import MockGenerationBackend
-from generation.backend import InitialJavaSeedBackend
+from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
+from eagle.generation.backend import MockGenerationBackend
+from eagle.generation.backend import InitialJavaSeedBackend
 
 
 class Phase1CandidateFoundationTests(unittest.TestCase):

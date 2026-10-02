@@ -281,8 +281,8 @@ Alignment 記為不適用且不呼叫 LLM。
 
 ## Match 與 Artifact owner
 
-`evaluation/microrts_runner.py` 只負責七項 integration probe；
-`evaluation/runtime_evaluation.py` 是唯一 match runner。
+`eagle/evaluation/microrts_runner.py` 只負責七項 integration probe；
+`eagle/evaluation/runtime_evaluation.py` 是唯一 match runner。
 
 Integration 不使用空白 state：probe 會載入真實、含雙方 base/worker 的
 `basesWorkers8x8.xml` 兩次，分別以獨立的 one-argument candidate instance 與
@@ -331,9 +331,15 @@ search 或必要 final test 尚未完成的 run，跳過完整完成者，再依
 ## 驗證
 
 ```bash
-python3 -m compileall eagle evaluation generation
+python3 -m compileall eagle
 python3 -m unittest discover -s tests
 git diff --check
 ```
 
 完整 evolutionary experiment 不是一般 repository migration 的必要驗證。
+
+## 2026-10-02 可維護性架構與文件入口
+
+Python 統一於 `eagle/`。修改單一 EA operator 到 `eagle/operators/` 的 initialization、selection、crossover、adaptive、strategy、prompt 或 code；演化階段順序集中於 `eagle/evolution/generation.py`，offspring 與 parent refresh 各自分開。Java 生成位於 `eagle/generation/`；評估的 records、decoding、opponents、matches、pipeline 位於 `eagle/evaluation/`。既有演算法、設定、assets、run artifacts 與 checkpoint 契約保持不變。
+
+文件 map 新增：[可維護性重構計畫](implementation/maintainability_refactor_plan.md)，包含掃描結果、修改入口、實作順序與驗證記錄；完整 owner 表見 [repository map](implementation/repository_map.md)。

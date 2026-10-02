@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from evaluation.objectives import OBJECTIVE_DIRECTIONS
+from eagle.evaluation.objectives import OBJECTIVE_DIRECTIONS
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 
-from .candidate import Candidate
-from .config import ExperimentConfig
+from eagle.candidate import Candidate
+from eagle.config import ExperimentConfig
 
 RUN_SCHEMA_VERSION = "eagle-run-v2"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v3"

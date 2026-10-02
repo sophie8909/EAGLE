@@ -93,6 +93,8 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
   narrow per-generation violin distributions while
   leaving bulky raw per-match payloads out of the in-memory analysis view.
 - A mock search is a smoke test, not proof of real Java/MicroRTS integration.
+- Java seed text hashes normalize checkout line endings; shell scripts use LF.
+- AlliBot metadata pinning tests use isolated fixtures and compile the real reflection adapter. Historical runtime regression requires its actual candidate and upstream assets.
 
 ## Documentation completion
 

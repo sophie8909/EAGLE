@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from evaluation.runtime_evaluation import MatchResult
-from evaluation.parent_offspring import evaluate_parent_vs_offspring, head_to_head_reward
+from eagle.evaluation.runtime_evaluation import MatchResult
+from eagle.evaluation.parent_offspring import evaluate_parent_vs_offspring, head_to_head_reward
 
 
 class ParentOffspringEvaluationTests(unittest.TestCase):
@@ -60,7 +60,7 @@ class ParentOffspringEvaluationTests(unittest.TestCase):
             )
 
         with tempfile.TemporaryDirectory() as temp_dir, patch(
-            "evaluation.parent_offspring.run_microrts_match", side_effect=fake_match
+            "eagle.evaluation.parent_offspring.run_microrts_match", side_effect=fake_match
         ):
             result = evaluate_parent_vs_offspring(
                 offspring,

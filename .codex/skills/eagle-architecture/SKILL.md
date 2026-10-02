@@ -27,7 +27,7 @@ Do not read `docs/architeture_specification_zh.md` as an implementation source.
   generated phenotype and pass it to the Generator without letting mutation
   edit it directly.
 - Make every offspring pass through final Java generation after crossover and optional mutation.
-- Keep exactly seven maximized opponent fitness cases and seeded lexicase parent/survivor selection; weighted `game_performance` and `code_quality` are diagnostics only.
+- Keep exactly ten maximized fixed-roster opponent fitness cases and seeded lexicase selection; self-play uses scalar Game Performance with semantic tie-breaking. Code quality remains diagnostic.
 - Keep failed candidates in lexicase with the canonical per-case failure sentinel and failure-stage diagnostics.
 - Preserve the exact CandidateAgent/integration contract from the canonical owners.
 - Persist component provenance, lineage, artifacts, and timing.
@@ -46,7 +46,7 @@ Do not read `docs/architeture_specification_zh.md` as an implementation source.
 
 ## Common files
 
-`eagle/candidate.py`, `eagle/search.py`, `eagle/selection.py`, `eagle/evaluation.py`, `eagle/config.py`, `eagle/artifacts.py`, affected operator/evaluation modules, `tests/`, and `configs/`.
+`eagle/candidate.py`, `eagle/evolution/search.py`, `eagle/operators/selection.py`, `eagle/evaluation/pipeline.py`, `eagle/config.py`, `eagle/artifacts.py`, affected operator/evaluation modules, `tests/`, and `configs/`.
 
 ## Documentation policy
 

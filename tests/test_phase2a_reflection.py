@@ -5,13 +5,9 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.mutation import (
-    MutationContext,
-    ReflectionStage,
-    build_prompt_reflection_prompt,
-    build_strategy_reflection_prompt,
-    parse_reflection_response,
-)
+from eagle.operators.context import ReflectionContext
+from eagle.operators.reflection import ReflectionStage, parse_reflection_response
+from eagle.operators.reflection_prompts import build_prompt_reflection_prompt, build_strategy_reflection_prompt
 from eagle.llm import truncate_prompt
 
 
@@ -36,7 +32,7 @@ class Phase2AReflectionTests(unittest.TestCase):
             strategy_prompt="Prioritize workers, then a fast ranged attack.",
             generation_prompt="Return one complete CandidateAgent.java file.",
         )
-        self.context = MutationContext(
+        self.context = ReflectionContext(
             generation=3,
             index=1,
             opponent="ai.abstraction.LightRush",

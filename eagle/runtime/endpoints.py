@@ -5,7 +5,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .config import RuntimeConfig
+from eagle.runtime.config import RuntimeConfig
 
 
 def health_check(runtime: RuntimeConfig, *, retries: int = 1) -> tuple[bool, str]:

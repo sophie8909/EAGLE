@@ -23,8 +23,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from evaluation.compiler import compile_generated_agent
-from evaluation.microrts_runner import integrate_microrts_agent
+from eagle.evaluation.compiler import compile_generated_agent
+from eagle.evaluation.microrts_runner import integrate_microrts_agent
 from eagle.opponents import (
     EVALUATION_ROSTER,
     EXTERNAL_OPPONENTS,

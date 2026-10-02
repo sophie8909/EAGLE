@@ -27,7 +27,7 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -e .
 
       - name: Compile Python modules
-        run: python -m compileall -q eagle evaluation generation
+        run: python -m compileall -q eagle
 
       - name: Run contract tests
         run: python -m unittest discover -s tests -p 'test_*.py'

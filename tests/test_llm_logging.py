@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.llm import LLMCallLogger, LLMServerError
-from generation.backend import OpenAICompatibleGenerationBackend
+from eagle.generation.backend import OpenAICompatibleGenerationBackend
 
 
 class FakeResponse:
@@ -83,7 +83,7 @@ class LLMLoggingTests(unittest.TestCase):
             candidate = Candidate(id="candidate-a", generation=3)
             response = "private Decision decide(AgentContext context) { return new Decision(); }"
             body = {"choices": [{"message": {"content": response}}]}
-            with patch("generation.backend.urllib.request.urlopen", return_value=FakeResponse(body)) as request:
+            with patch("eagle.generation.backend.urllib.request.urlopen", return_value=FakeResponse(body)) as request:
                 self.assertEqual(
                     backend.generate(candidate, "GeneratedAgent_candidate_a"),
                     response,
@@ -107,7 +107,7 @@ class LLMLoggingTests(unittest.TestCase):
             )
             candidate = Candidate(id="candidate-retry", generation=1)
             with patch(
-                "generation.backend.urllib.request.urlopen",
+                "eagle.generation.backend.urllib.request.urlopen",
                 side_effect=urllib.error.URLError("temporary"),
             ) as request:
                 with self.assertRaisesRegex(LLMServerError, "llm server error"):
@@ -129,7 +129,7 @@ class LLMLoggingTests(unittest.TestCase):
         candidate = Candidate(id="candidate-stream", generation=0)
 
         with patch(
-            "generation.backend.urllib.request.urlopen",
+            "eagle.generation.backend.urllib.request.urlopen",
             return_value=FakeStreamResponse(["package ai.generated;\n", "public class CandidateAgent {}"]),
         ) as request:
             content = backend.generate(candidate, "CandidateAgent")

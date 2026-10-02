@@ -9,16 +9,16 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from eagle.aos import ReflectionOperatorMode
+from eagle.operators.adaptive import ReflectionOperatorMode
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.resume import validate_resume_config
-from eagle.search import (
+from eagle.evolution.resume import validate_resume_config
+from eagle.evolution.parent_refresh import (
     build_parent_evaluation_replicas,
-    run_search,
     write_parent_evaluation_sidecar,
 )
-from eagle.selection import select_next_generation
+from eagle.evolution.search import run_search
+from eagle.operators.selection import select_next_generation
 
 
 class ParentEvaluationModeTests(unittest.TestCase):
@@ -189,7 +189,7 @@ class ParentEvaluationModeTests(unittest.TestCase):
             )
 
     def test_resume_reuses_the_same_experimental_replica_path(self) -> None:
-        from eagle.resume import resume_search
+        from eagle.evolution.resume import resume_search
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -9,7 +9,7 @@
 | Runtime adaptation and validation | `eagle.runtime.config` |
 | Health check | `eagle.runtime.endpoints` |
 | Owned process/PID/log lifecycle | `eagle.runtime.processes` |
-| EA search/resume | `eagle.search`, `eagle.resume` |
+| EA search/resume | `eagle.evolution.search`, `eagle.evolution.resume` |
 | Offline analysis | `analyze.sh`, `eagle.cli.analyze` |
 | Optional network watchdog | `watchdog.sh` |
 

@@ -10,11 +10,12 @@ from unittest.mock import patch
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import decode_validate_compile_candidate, evaluate_candidate
+from eagle.evaluation.decoding import decode_validate_compile_candidate
+from eagle.evaluation.pipeline import evaluate_candidate
 from eagle.llm import LLMCallLogger
-from evaluation.compiler import CompileResult
-from generation.agent_template import JavaTemplatePaths, load_java_template
-from generation.backend import (
+from eagle.evaluation.compiler import CompileResult
+from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
+from eagle.generation.backend import (
     GenerationBackend,
     InitialJavaSeedBackend,
     OpenAICompatibleGenerationBackend,
@@ -90,7 +91,7 @@ class GenerationAttemptTests(unittest.TestCase):
             generation_prompt="GENERATION_GENE_SENTINEL",
         )
         with tempfile.TemporaryDirectory() as temp, patch(
-            "eagle.evaluation.compile_agent_source",
+            "eagle.evaluation.decoding.compile_agent_source",
             return_value=CompileResult(True, ["javac"]),
         ) as compile_source:
             root = Path(temp)
@@ -158,7 +159,7 @@ class GenerationAttemptTests(unittest.TestCase):
             CompileResult(True, ["javac", "second"]),
         ]
         with tempfile.TemporaryDirectory() as temp, patch(
-            "eagle.evaluation.compile_agent_source",
+            "eagle.evaluation.decoding.compile_agent_source",
             side_effect=results,
         ) as compile_source:
             root = Path(temp)
@@ -194,7 +195,7 @@ class GenerationAttemptTests(unittest.TestCase):
         )
         backend = ScriptedBackend([first, second, valid])
         with tempfile.TemporaryDirectory() as temp, patch(
-            "eagle.evaluation.compile_agent_source",
+            "eagle.evaluation.decoding.compile_agent_source",
             return_value=CompileResult(True, ["javac"]),
         ):
             root = Path(temp)
@@ -233,7 +234,7 @@ class GenerationAttemptTests(unittest.TestCase):
             returncode=1,
         )
         with tempfile.TemporaryDirectory() as temp, patch(
-            "eagle.evaluation.compile_agent_source",
+            "eagle.evaluation.decoding.compile_agent_source",
             return_value=compile_failure,
         ):
             root = Path(temp)
@@ -309,14 +310,14 @@ class GenerationAttemptTests(unittest.TestCase):
                 logger=logger,
             )
             with patch(
-                "generation.backend.urllib.request.urlopen",
+                "eagle.generation.backend.urllib.request.urlopen",
                 side_effect=[
                     FakeResponse(invalid_source()),
                     FakeResponse(invalid_source()),
                     FakeResponse(valid),
                 ],
             ), patch(
-                "eagle.evaluation.compile_agent_source",
+                "eagle.evaluation.decoding.compile_agent_source",
                 return_value=CompileResult(True, ["javac"]),
             ):
                 decode_validate_compile_candidate(
@@ -385,7 +386,7 @@ class GenerationAttemptTests(unittest.TestCase):
                 logger=logger,
             )
             with patch(
-                "generation.backend.urllib.request.urlopen",
+                "eagle.generation.backend.urllib.request.urlopen",
                 side_effect=[FakeResponse(invalid_source()) for _ in range(3)],
             ):
                 outcome = decode_validate_compile_candidate(
@@ -457,7 +458,7 @@ class GenerationAttemptTests(unittest.TestCase):
         )
         backend = ScriptedBackend([generated])
         with tempfile.TemporaryDirectory() as temp, patch(
-            "eagle.evaluation.compile_agent_source",
+            "eagle.evaluation.decoding.compile_agent_source",
             return_value=CompileResult(True, ["javac"]),
         ) as compile_source:
             root = Path(temp)
@@ -516,7 +517,7 @@ class GenerationAttemptTests(unittest.TestCase):
         )
         backend = ScriptedBackend([valid, radical])
         with tempfile.TemporaryDirectory() as temp, patch(
-            "eagle.evaluation.compile_agent_source",
+            "eagle.evaluation.decoding.compile_agent_source",
             return_value=CompileResult(False, ["javac"], stderr="missing symbol", returncode=1),
         ) as compile_source:
             root = Path(temp)

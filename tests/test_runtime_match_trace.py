@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from evaluation.match_trace import iter_match_trace
-from evaluation.runtime_evaluation import run_microrts_match
+from eagle.evaluation.match_trace import iter_match_trace
+from eagle.evaluation.runtime_evaluation import run_microrts_match
 
 
 class RuntimeMatchTraceTests(unittest.TestCase):

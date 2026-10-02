@@ -1,6 +1,6 @@
 """Runtime package exports."""
-from .config import LLMConfig, RuntimeConfig, RuntimeSpec, ServerArguments, runtime_config_from_experiment
-from .processes import RuntimeManager
+from eagle.runtime.config import LLMConfig, RuntimeConfig, RuntimeSpec, ServerArguments, runtime_config_from_experiment
+from eagle.runtime.processes import RuntimeManager
 
 __all__ = [
     "LLMConfig",

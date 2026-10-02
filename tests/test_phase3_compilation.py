@@ -7,10 +7,10 @@ from unittest.mock import patch
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_candidate
-from evaluation.code_quality import analyze_compilation
-from evaluation.compiler import CompileResult, parse_compiler_diagnostics
-from generation.backend import MockGenerationBackend
+from eagle.evaluation.pipeline import evaluate_candidate
+from eagle.evaluation.code_quality import analyze_compilation
+from eagle.evaluation.compiler import CompileResult, parse_compiler_diagnostics
+from eagle.generation.backend import MockGenerationBackend
 
 
 class Phase3CompilationTests(unittest.TestCase):
@@ -44,7 +44,7 @@ CandidateAgent.java:15:3: error: cannot find symbol
             root = Path(temp_dir)
             source = root / "CandidateAgent.java"
             source.write_text("class CandidateAgent {}", encoding="utf-8")
-            from evaluation.compiler import compile_generated_agent
+            from eagle.evaluation.compiler import compile_generated_agent
 
             result = compile_generated_agent(
                 source,
@@ -93,9 +93,9 @@ CandidateAgent.java:15:3: error: cannot find symbol
             returncode=1,
             diagnostics=parse_compiler_diagnostics(diagnostic_text),
         )
-        with tempfile.TemporaryDirectory() as temp_dir, \
-             patch("eagle.evaluation.compile_agent_source", return_value=compile_failure), \
-             patch("eagle.evaluation.integrate_microrts_agent") as integrate:
+        with tempfile.TemporaryDirectory() as temp_dir,\
+             patch("eagle.evaluation.decoding.compile_agent_source", return_value=compile_failure),\
+             patch("eagle.evaluation.pipeline.integrate_microrts_agent") as integrate:
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
                 Candidate(id="compile-failure"),
@@ -130,8 +130,8 @@ CandidateAgent.java:15:3: error: cannot find symbol
             stderr=warning_text,
             diagnostics=parse_compiler_diagnostics(warning_text),
         )
-        with tempfile.TemporaryDirectory() as temp_dir, \
-             patch("eagle.evaluation.compile_agent_source", return_value=compile_success):
+        with tempfile.TemporaryDirectory() as temp_dir,\
+             patch("eagle.evaluation.decoding.compile_agent_source", return_value=compile_success):
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
                 Candidate(id="compile-warning"),

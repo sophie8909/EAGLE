@@ -6,10 +6,10 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.crossover import CrossoverContext, crossover
-from eagle.mutation import MutationContext
-from evaluation.compiler import compile_generated_agent
-from generation.agent_template import (
+from eagle.operators.crossover import CrossoverContext, crossover
+from eagle.operators.context import ReflectionContext
+from eagle.evaluation.compiler import compile_generated_agent
+from eagle.generation.agent_template import (
     ACTION_HELPER_METHODS,
     ACTION_HELPERS_END_MARKER,
     ACTION_HELPERS_START_MARKER,
@@ -20,8 +20,8 @@ from generation.agent_template import (
     load_java_template,
     validate_java_template,
 )
-from generation.backend import MockGenerationBackend
-from generation.java_agent_generator import generate_java_agent
+from eagle.generation.backend import MockGenerationBackend
+from eagle.generation.java_agent_generator import generate_java_agent
 
 
 class CompleteJavaGenerationTests(unittest.TestCase):

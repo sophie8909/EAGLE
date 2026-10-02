@@ -34,7 +34,7 @@ description: Implement or review EAGLE run, generation, candidate, mutation, Jav
 
 ## Common files
 
-`eagle/artifacts.py`, `eagle/llm_logging.py`, `eagle/search.py`, `eagle/evaluation.py`, `evaluation/microrts_runner.py`, analysis scripts, tests, and configuration serialization.
+`eagle/artifacts.py`, `eagle/llm.py`, `eagle/evolution/generation.py`, `eagle/evolution/offspring.py`, `eagle/evaluation/pipeline.py`, `eagle/evaluation/microrts_runner.py`, analysis scripts, tests, and configuration serialization.
 
 ## Documentation updates
 

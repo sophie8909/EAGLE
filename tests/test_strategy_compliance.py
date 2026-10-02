@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from eagle.strategy_compliance import validate_strategy_prompt_contract
+from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
 
 
 class StrategyComplianceTests(unittest.TestCase):

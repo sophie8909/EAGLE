@@ -8,13 +8,13 @@ from typing import Callable
 
 import yaml
 
-from .config import ExperimentConfig
-from .final_test import FINAL_TEST_SCHEMA_VERSION, main as final_test_main
-from .resume import load_resume_config, resume_search, validate_resume_config
-from .run_artifacts import load_manifest
-from .runtime.config import runtime_config_from_experiment
-from .runtime.processes import RuntimeManager
-from .search import SearchResult, run_search
+from eagle.config import ExperimentConfig
+from eagle.final_test import FINAL_TEST_SCHEMA_VERSION, main as final_test_main
+from eagle.evolution.resume import load_resume_config, resume_search, validate_resume_config
+from eagle.run_artifacts import load_manifest
+from eagle.runtime.config import runtime_config_from_experiment
+from eagle.runtime.processes import RuntimeManager
+from eagle.evolution.search import SearchResult, run_search
 
 
 def resolve_experiment_configs(path: str | Path) -> list[Path]:

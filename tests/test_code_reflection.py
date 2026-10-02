@@ -7,10 +7,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from eagle.candidate import Candidate
-from eagle.code_reflection import CodeReflectionMutation
+from eagle.operators.code import CodeReflectionMutation
 from eagle.config import ExperimentConfig
-from eagle.evaluation import decode_validate_compile_candidate
-from eagle.reflection_context import (
+from eagle.evaluation.decoding import decode_validate_compile_candidate
+from eagle.operators.context import (
     CandidateReflectionSummary,
     CodeDiagnostics,
     ObjectiveSummary,

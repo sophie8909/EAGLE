@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from eagle.aos import (
+from eagle.operators.adaptive import (
     AdaptiveOperatorSelection,
     AdaptiveOperatorSelector,
     CODE_REFLECTION,
@@ -22,7 +22,7 @@ from eagle.aos import (
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.opponent_cases import LEXICASE_CASES
-from eagle.selection import lexicase_select
+from eagle.operators.selection import lexicase_select
 
 
 def evaluated_candidate(
@@ -147,7 +147,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
         parent = evaluated_candidate("parent")
         child = selected(evaluated_candidate("child", generation=1), parent, STRATEGY_REFLECTION)
         with tempfile.TemporaryDirectory() as directory, patch(
-            "eagle.aos.evaluate_parent_vs_offspring"
+            "eagle.operators.adaptive.evaluate_parent_vs_offspring"
         ) as direct_matches:
             updated, rewards = controller.collect_rewards(
                 [parent], [child], config=config,
@@ -212,7 +212,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
         parent = evaluated_candidate("parent")
         child = selected(evaluated_candidate("child", generation=1), parent, STRATEGY_REFLECTION)
         with tempfile.TemporaryDirectory() as directory, patch(
-            "eagle.aos.evaluate_parent_vs_offspring"
+            "eagle.operators.adaptive.evaluate_parent_vs_offspring"
         ) as direct_matches:
             _, rewards = controller.collect_rewards(
                 [parent], [child], config=config,
@@ -241,9 +241,9 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             }),
         )
         with tempfile.TemporaryDirectory() as directory, patch(
-            "eagle.aos.evaluate_parent_vs_offspring", return_value=direct_result
+            "eagle.operators.adaptive.evaluate_parent_vs_offspring", return_value=direct_result
         ) as direct_matches, patch(
-            "eagle.aos.calculate_opponent_reward", side_effect=AssertionError("wrong provider")
+            "eagle.operators.adaptive.calculate_opponent_reward", side_effect=AssertionError("wrong provider")
         ):
             _, rewards = controller.collect_rewards(
                 [parent], [child], config=config,
@@ -265,7 +265,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             evaluated_candidate("child", runnable=False, generation=1), parent, STRATEGY_REFLECTION
         )
         with tempfile.TemporaryDirectory() as directory, patch(
-            "eagle.aos.evaluate_parent_vs_offspring"
+            "eagle.operators.adaptive.evaluate_parent_vs_offspring"
         ) as direct_matches:
             _, rewards = controller.collect_rewards(
                 [parent], [child], config=config,

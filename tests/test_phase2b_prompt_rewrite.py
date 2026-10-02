@@ -5,14 +5,16 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.mutation import MutationContext, ReflectionStage, build_strategy_reflection_prompt
-from eagle.rewrite import (
+from eagle.operators.context import ReflectionContext
+from eagle.operators.reflection import ReflectionStage
+from eagle.operators.reflection_prompts import build_strategy_reflection_prompt
+from eagle.operators.prompt import (
     PromptRewriteMutation,
     PromptRewriteStage,
     build_prompt_rewrite_prompt,
     build_strategy_rewrite_prompt,
 )
-from eagle.reusable_generation_prompt import (
+from eagle.operators.reusable_prompt import (
     RULES_END_MARKER,
     RULES_START_MARKER,
     parse_reusable_generation_rules,
@@ -61,7 +63,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             generation_prompt="old generation prompt",
             operator="crossover",
         )
-        self.context = MutationContext(
+        self.context = ReflectionContext(
             generation=2,
             index=0,
             match_summary={"wins": 5, "draws": 2, "losses": 3},

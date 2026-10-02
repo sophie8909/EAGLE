@@ -21,17 +21,17 @@ from typing import Any, Iterable
 
 import yaml
 
-from generation.backend import InitialJavaSeedBackend
+from eagle.generation.backend import InitialJavaSeedBackend
 
-from .artifacts import write_candidate_inputs
-from .candidate import Candidate
-from .config import ExperimentConfig
-from .evaluation import evaluate_population
-from .reflection_context import ReflectionContext, build_reflection_context
-from .runtime.config import runtime_config_from_experiment
-from .runtime.processes import RuntimeManager
-from .search_runtime import build_search_runtime, preflight_llm_endpoint
-from .strategy_reflection import normalize_mutation_intent
+from eagle.artifacts import write_candidate_inputs
+from eagle.candidate import Candidate
+from eagle.config import ExperimentConfig
+from eagle.evaluation.pipeline import evaluate_population
+from eagle.operators.context import ReflectionContext, build_reflection_context
+from eagle.runtime.config import runtime_config_from_experiment
+from eagle.runtime.processes import RuntimeManager
+from eagle.evolution.runtime import build_search_runtime, preflight_llm_endpoint
+from eagle.operators.strategy import normalize_mutation_intent
 
 
 INSPECTION_SCHEMA_VERSION = "eagle-reflection-inspection-v3"

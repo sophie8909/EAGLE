@@ -6,10 +6,10 @@ from pathlib import Path
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_candidate
-from eagle.mutation import MutationContext
-from eagle.rewrite import PromptRewriteMutation
-from generation.backend import GenerationBackend, MockGenerationBackend
+from eagle.evaluation.pipeline import evaluate_candidate
+from eagle.operators.context import ReflectionContext
+from eagle.operators.prompt import PromptRewriteMutation
+from eagle.generation.backend import GenerationBackend, MockGenerationBackend
 
 
 def code_rule_delta(instruction: str) -> str:
@@ -52,7 +52,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         )
 
     def _context(self):
-        return MutationContext(
+        return ReflectionContext(
             generation=3,
             index=0,
             match_summary={"wins": 6, "draws": 1, "losses": 3},

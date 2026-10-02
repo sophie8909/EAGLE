@@ -10,15 +10,15 @@ from typing import Any
 
 import yaml
 
-from generation.agent_template import (
+from eagle.generation.agent_template import (
     DEFAULT_AGENT_TEMPLATE_PATH,
     DEFAULT_INITIAL_JAVA_SEED_PATH,
 )
 
-from .candidate import DEFAULT_GENERATION_PROMPT
-from .aos import ReflectionOperatorMode, ReflectionOperatorSettings
-from .opponent_cases import LEXICASE_CASES, SELF_PLAY_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
-from .prompts import DEFAULT_PROMPT_DIR, PromptTemplate
+from eagle.candidate import DEFAULT_GENERATION_PROMPT
+from eagle.operators.adaptive import ReflectionOperatorMode, ReflectionOperatorSettings
+from eagle.opponent_cases import LEXICASE_CASES, SELF_PLAY_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
+from eagle.prompts import DEFAULT_PROMPT_DIR, PromptTemplate
 
 
 DEFAULT_EVALUATION_MAPS = (
@@ -655,7 +655,7 @@ class ExperimentConfig:
             raise ValueError("llm.match_commentator.temperature must not be negative.")
         if self.match_commentator_sample_count < 1:
             raise ValueError("llm.match_commentator.sample_count must be positive.")
-        from generation.agent_template import JavaTemplatePaths, validate_java_template
+        from eagle.generation.agent_template import JavaTemplatePaths, validate_java_template
         if self.material_scale <= 0 or self.resource_scale <= 0:
             raise ValueError("material_scale and resource_scale must be greater than zero.")
         if not self.unit_material_values:

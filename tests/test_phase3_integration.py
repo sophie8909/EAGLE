@@ -8,8 +8,8 @@ from unittest.mock import patch
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_candidate
-from evaluation.microrts_runner import (
+from eagle.evaluation.pipeline import evaluate_candidate
+from eagle.evaluation.microrts_runner import (
     INTEGRATION_PROBE_SOURCE,
     INTEGRATION_CHECK_NAMES,
     IntegrationCheck,
@@ -17,9 +17,9 @@ from evaluation.microrts_runner import (
     integrate_microrts_agent,
     parse_integration_checks,
 )
-from evaluation.compiler import compile_generated_agent
-from generation.backend import MockGenerationBackend
-from generation.agent_template import (
+from eagle.evaluation.compiler import compile_generated_agent
+from eagle.generation.backend import MockGenerationBackend
+from eagle.generation.agent_template import (
     JavaTemplatePaths,
     STRATEGY_END_MARKER,
     STRATEGY_START_MARKER,
@@ -96,9 +96,9 @@ class Phase3IntegrationTests(unittest.TestCase):
 
     def test_integration_failure_stops_matches_and_persists_metadata(self):
         failure = failed_integration_result()
-        with tempfile.TemporaryDirectory() as temp_dir, \
-             patch("eagle.evaluation.integrate_microrts_agent", return_value=failure), \
-             patch("eagle.evaluation.evaluate_matches") as evaluate_matches:
+        with tempfile.TemporaryDirectory() as temp_dir,\
+             patch("eagle.evaluation.pipeline.integrate_microrts_agent", return_value=failure),\
+             patch("eagle.evaluation.matches.evaluate_matches") as evaluate_matches:
             root = Path(temp_dir)
             candidates_dir = root / "candidates"
             evaluation = evaluate_candidate(

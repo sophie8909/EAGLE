@@ -15,4 +15,14 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["eagle*", "generation*", "evaluation*"]
+include = ["eagle*"]
+
+[tool.setuptools.package-data]
+eagle = [
+    "java_templates/*.java",
+    "java_seeds/*.java",
+    "java_seeds/*/*.java",
+    "opponent_adapters/*.java",
+    "opponent_sources/*.java",
+    "evaluation/java/*.java",
+]

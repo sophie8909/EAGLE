@@ -38,7 +38,7 @@ description: Implement or review EAGLE Strategy Reflection, Strategy Prompt Rewr
 
 ## Common files
 
-`eagle/mutation.py`, `eagle/search.py`, `eagle/candidate.py`, `generation/backend.py`, `eagle/llm_logging.py`, `eagle/artifacts.py`, and mutation/artifact tests.
+`eagle/operators/reflection.py`, `eagle/evolution/generation.py`, `eagle/evolution/offspring.py`, `eagle/candidate.py`, `eagle/generation/backend.py`, `eagle/llm.py`, `eagle/artifacts.py`, and mutation/artifact tests.
 
 ## Required tests and docs
 

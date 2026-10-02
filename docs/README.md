@@ -34,6 +34,10 @@ When code and the specification differ, preserve the specification and update [`
 | Track architecture implementation or choose the next gap | [architecture traceability matrix](implementation/architecture_traceability_matrix.md) + [architecture gaps](implementation/architecture_gaps.md) |
 | Change repository ownership or docs structure | [repository map](implementation/repository_map.md) + this index |
 
+## Maintainability refactor
+
+The [2026-10-02 refactor plan](implementation/maintainability_refactor_plan.md) records the scan, package boundaries, migration order, and validation. For operator edits, start at the [repository map](implementation/repository_map.md).
+
 ## Canonical ownership
 
 | Responsibility | Canonical document |

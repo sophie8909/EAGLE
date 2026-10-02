@@ -11,7 +11,7 @@ import unittest
 
 from eagle.analysis.loader import RunData
 from eagle.analysis.semantics import analyze_semantics
-from evaluation.semantic_signature import (
+from eagle.evaluation.semantic_signature import (
     ProbeMap,
     SemanticLibrary,
     ensure_semantic_dataset,

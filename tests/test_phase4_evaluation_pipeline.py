@@ -9,10 +9,10 @@ from unittest.mock import patch
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_candidate
+from eagle.evaluation.pipeline import evaluate_candidate
 from eagle.opponent_cases import LEXICASE_CASES
-from evaluation.runtime_evaluation import MatchResult
-from generation.backend import MockGenerationBackend
+from eagle.evaluation.runtime_evaluation import MatchResult
+from eagle.generation.backend import MockGenerationBackend
 
 
 class Phase4EvaluationPipelineTests(unittest.TestCase):
@@ -120,7 +120,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
                     raw_result={"winner": 0, "result": "p0_win"},
                 )
 
-            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+            with patch("eagle.evaluation.matches.run_microrts_match", side_effect=fake_match):
                 evaluation = evaluate_candidate(
                     candidate,
                     config=config,

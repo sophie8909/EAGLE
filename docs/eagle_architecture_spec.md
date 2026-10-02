@@ -285,8 +285,8 @@ with independent one-argument instances, and verify action integrity, safe
 issuance, and one cycle. A failed prerequisite blocks later checks and prevents
 matches. Integration failure does not re-enter the decoder.
 
-`evaluation/microrts_runner.py` owns only this integration probe.
-`evaluation/runtime_evaluation.py` is the sole match-execution owner.
+`eagle/evaluation/microrts_runner.py` owns only this integration probe.
+`eagle/evaluation/runtime_evaluation.py` is the sole match-execution owner.
 
 ## 9. Evolution evaluation
 
@@ -497,7 +497,7 @@ surfaces are prohibited.
 Behavior changes require focused contract tests followed by:
 
 ```bash
-python3 -m compileall eagle evaluation generation
+python3 -m compileall eagle
 python3 -m unittest discover -s tests
 git diff --check
 ```
@@ -505,3 +505,7 @@ git diff --check
 A bounded real Java/MicroRTS integration probe may supplement unit tests. A full
 evolutionary experiment is never required for repository validation unless the
 operator explicitly requests it.
+
+## 14. Implementation ownership
+
+Executable Python is packaged under `eagle`. `eagle/evolution` owns run and generation orchestration, `eagle/operators` owns independently editable EA operators, `eagle/generation` owns source generation/validation, and `eagle/evaluation` owns decoding, opponent preparation, match dispatch, scoring, and candidate evaluation. Internal imports target the actual owner; obsolete import shims are removed. The [repository map](implementation/repository_map.md) specifies module entrypoints. Configuration, assets, and serialized run/checkpoint contracts remain unchanged.

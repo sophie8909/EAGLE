@@ -14,9 +14,9 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .candidate import Candidate
-from .opponent_cases import LEXICASE_CASES
-from .run_artifacts import atomic_json
+from eagle.candidate import Candidate
+from eagle.opponent_cases import LEXICASE_CASES
+from eagle.run_artifacts import atomic_json
 
 
 STRATEGY_SIGNATURE_FIELDS = (

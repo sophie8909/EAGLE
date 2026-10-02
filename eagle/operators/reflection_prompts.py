@@ -1,0 +1,217 @@
+"""Mutation-specific reflection prompt formatting and deterministic budgets."""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from eagle.generation.agent_template import extract_strategy_region
+
+from eagle.candidate import Candidate
+from eagle.prompts import load_prompt, render_prompt
+from eagle.operators.context import ReflectionContext, coerce_structured_context
+
+
+REFLECTION_PROMPT_SCHEMA_VERSION = "reflection-prompt-v2"
+STRATEGY_BUDGETS = {
+    "current_strategy_prompt": 12_000,
+    "aggregate_game_performance": 4_000,
+    "parent_comparison": 2_000,
+    "mutation_targets": 4_000,
+    "opponent_commentaries": 18_000,
+    "behaviors_to_preserve": 3_000,
+}
+PROMPT_BUDGETS = {
+    "policy_prompt": 8_000,
+    "editable_strategy_java": 18_000,
+    "structural_evidence": 9_000,
+    "action_api_guide": 12_000,
+}
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
+STRUCTURAL_CODE_EVIDENCE_KEYS = (
+    "generation_failure",
+    "validation_failure",
+    "compile_success",
+    "compile_errors",
+    "compile_warnings",
+    "missing_functions",
+    "invalid_functions",
+)
+
+
+@dataclass(frozen=True)
+class ReflectionPrompt:
+    text: str
+    metadata: dict[str, object]
+
+
+def _json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _bounded_text(value: object, budget: int, *, section: str, truncated: list[str]) -> str:
+    text = str(value or "")
+    if len(text) <= budget:
+        return text
+    truncated.append(section)
+    return text[:budget] + f"\n[section {section} bounded; omitted={len(text) - budget} chars]"
+
+
+def _bounded_code(
+    source: str,
+    budget: int,
+    diagnostics: dict[str, object],
+    truncated: list[str],
+    *,
+    section: str,
+) -> str:
+    if len(source) <= budget:
+        return source
+    lines = source.splitlines()
+    line_numbers: list[int] = []
+    for value in diagnostics.get("compile_errors", ()) or ():
+        match = re.search(r":(\d+)(?::\d+)?", str(value))
+        if match:
+            line_numbers.append(int(match.group(1)))
+    if line_numbers:
+        center = max(1, min(len(lines), line_numbers[0]))
+        radius = max(4, budget // 120)
+        start = max(0, center - radius - 1)
+        end = min(len(lines), start + radius * 2)
+        snippet = "\n".join(lines[start:end])
+        if len(snippet) <= budget:
+            truncated.append(section)
+            return f"// lines {start + 1}-{end} around compiler diagnostic\n{snippet}"
+    marker = "\n// editable strategy middle omitted\n"
+    side_budget = max(1, (budget - len(marker)) // 2)
+    head = "\n".join(lines[: max(1, side_budget // 80)])
+    tail = "\n".join(lines[-max(1, side_budget // 80):])
+    truncated.append(section)
+    return (head + marker + tail)[:budget]
+
+
+def _editable_strategy_for_review(
+    source: str,
+    diagnostics: dict[str, object],
+) -> str:
+    """Return only Java that Prompt Reflection is allowed to review.
+
+    A malformed or partial source must not make the immutable scaffold visible
+    to the Reviewer.  The extraction failure remains scoped structural evidence
+    so the role can describe an implementation failure without inventing
+    behavior from fixed fields or helpers.
+    """
+
+    try:
+        return extract_strategy_region(source)
+    except ValueError as exc:
+        diagnostics["strategy_region_extraction_failure"] = str(exc)
+        return "// Editable strategy region unavailable; use structural evidence only."
+
+
+def structural_code_evidence(
+    context: ReflectionContext,
+    *,
+    reviewed_source: str,
+) -> dict[str, object]:
+    """Return only diagnostics that describe the Java source being reviewed."""
+
+    if reviewed_source.strip() != context.candidate.generated_code.strip():
+        return {}
+    diagnostics = context.code_diagnostics.to_dict()
+    return {
+        key: diagnostics.get(key)
+        for key in STRUCTURAL_CODE_EVIDENCE_KEYS
+        if diagnostics.get(key) not in (None, (), [], {}, "")
+    }
+
+
+def _metadata(section_values: dict[str, str], omitted: list[str], truncated: list[str], text: str) -> dict[str, object]:
+    return {
+        "estimated_prompt_size": len(text),
+        "section_sizes": {key: len(value) for key, value in section_values.items()},
+        "omitted_sections": list(dict.fromkeys(omitted)),
+        "truncated_sections": list(dict.fromkeys(truncated)),
+        "context_schema_version": REFLECTION_PROMPT_SCHEMA_VERSION,
+    }
+
+
+def build_strategy_reflection_prompt_bundle(candidate: Candidate, context: ReflectionContext) -> ReflectionPrompt:
+    context = coerce_structured_context(context, candidate)
+    truncated: list[str] = []
+    omitted: list[str] = []
+    aggregation = context.commentary_aggregation or {}
+    objective = context.objectives.to_dict() | {
+        "commented_match_count": aggregation.get("commented_match_count", 0),
+        "failed_commentary_count": aggregation.get("failed_commentary_count", 0),
+    }
+    parent = context.parent_comparison or {"available": False, "reason": "No equivalent parent matches were supplied."}
+    targets = aggregation.get("priority_strategy_changes") or []
+    opponents = aggregation.get("opponent_summaries") or [item.to_dict() for item in context.opponents]
+    preserve = aggregation.get("behaviors_to_preserve") or []
+    sections = {
+        "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
+        "current_strategy_prompt": f"candidate_id: {context.candidate.candidate_id}\n{context.candidate.strategy_prompt}",
+        "aggregate_game_performance": _bounded_text(_json(objective), STRATEGY_BUDGETS["aggregate_game_performance"], section="aggregate_game_performance", truncated=truncated),
+        "parent_comparison": _bounded_text(parent, STRATEGY_BUDGETS["parent_comparison"], section="parent_comparison", truncated=truncated),
+        "mutation_targets": _bounded_text(_json(targets[:8]), STRATEGY_BUDGETS["mutation_targets"], section="mutation_targets", truncated=truncated),
+        "opponent_commentaries": _bounded_text(_json(opponents), STRATEGY_BUDGETS["opponent_commentaries"], section="opponent_commentaries", truncated=truncated),
+        "behaviors_to_preserve": _bounded_text(_json(preserve), STRATEGY_BUDGETS["behaviors_to_preserve"], section="behaviors_to_preserve", truncated=truncated),
+    }
+    text = render_prompt("strategy_reflection", sections)
+    return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))
+
+
+def build_prompt_reflection_prompt_bundle(candidate: Candidate, context: ReflectionContext) -> ReflectionPrompt:
+    context = coerce_structured_context(context, candidate)
+    truncated: list[str] = []
+    omitted: list[str] = []
+    # In inherited-genotype mode the child may have independently selected
+    # policy, generation prompt, and Java. Review the exact child inputs;
+    # diagnostics come from the selected Java parent context.
+    policy_prompt = (
+        candidate.strategy_prompt
+        if candidate.inherited_java
+        else context.candidate.strategy_prompt
+    )
+    reviewed_source = candidate.inherited_java or context.candidate.generated_code
+    diagnostics = structural_code_evidence(
+        context,
+        reviewed_source=reviewed_source,
+    )
+    editable_strategy_java = _bounded_code(
+        _editable_strategy_for_review(reviewed_source, diagnostics),
+        PROMPT_BUDGETS["editable_strategy_java"],
+        diagnostics,
+        truncated,
+        section="editable_strategy_java",
+    )
+    structural_evidence = _bounded_text(
+        _json(diagnostics),
+        PROMPT_BUDGETS["structural_evidence"],
+        section="structural_evidence",
+        truncated=truncated,
+    )
+    sections = {
+        "policy_prompt": policy_prompt,
+        "editable_strategy_java": editable_strategy_java,
+        "structural_evidence": structural_evidence,
+        "action_api_guide": _bounded_text(
+            load_prompt("action_api_guide"),
+            PROMPT_BUDGETS["action_api_guide"],
+            section="action_api_guide",
+            truncated=truncated,
+        ),
+    }
+    text = render_prompt("prompt_reflection", sections)
+    return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))
+
+
+def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
+    return build_strategy_reflection_prompt_bundle(candidate, context).text
+
+
+def build_prompt_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
+    return build_prompt_reflection_prompt_bundle(candidate, context).text

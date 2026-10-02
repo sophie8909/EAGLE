@@ -9,17 +9,17 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from evaluation.compiler import CompileResult
-from evaluation.code_quality import OBJECTIVE_FORMULA_VERSION, analyze_compilation
-from evaluation.microrts_runner import INTEGRATION_CHECK_NAMES, IntegrationResult
-from evaluation.runtime_evaluation import MatchResult
-from generation.java_agent_generator import ValidationResult
+from eagle.evaluation.compiler import CompileResult
+from eagle.evaluation.code_quality import OBJECTIVE_FORMULA_VERSION, analyze_compilation
+from eagle.evaluation.microrts_runner import INTEGRATION_CHECK_NAMES, IntegrationResult
+from eagle.evaluation.runtime_evaluation import MatchResult
+from eagle.generation.java_agent_generator import ValidationResult
 
-from .candidate import Candidate, compact_candidate_metadata
-from .config import ExperimentConfig
+from eagle.candidate import Candidate, compact_candidate_metadata
+from eagle.config import ExperimentConfig
 
 if TYPE_CHECKING:
-    from .evaluation import CandidateEvaluation, GenerationAttemptResult
+    from eagle.evaluation.records import CandidateEvaluation, GenerationAttemptResult
 
 
 # Writers are grouped by lifecycle boundary: genotype inputs first,

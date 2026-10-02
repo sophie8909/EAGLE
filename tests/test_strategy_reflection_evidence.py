@@ -4,14 +4,14 @@ import statistics
 import unittest
 
 from eagle.candidate import Candidate
-from eagle.mutation import build_strategy_reflection_prompt
+from eagle.operators.reflection_prompts import build_strategy_reflection_prompt
 from eagle.opponents import EVALUATION_ROSTER, EXTERNAL_OPPONENTS
 from eagle.run_artifacts import generation_metrics
-from eagle.search import mutation_context_from_candidate
+from eagle.evolution.offspring import mutation_context_from_candidate
 from eagle.opponent_cases import OPPONENT_WEIGHTS
-from evaluation.game_metrics import FAILED_GAME_PERFORMANCE, compute_game_metrics
-from evaluation.game_performance import GamePerformanceBreakdown
-from evaluation.runtime_evaluation import MatchResult
+from eagle.evaluation.game_metrics import FAILED_GAME_PERFORMANCE, compute_game_metrics
+from eagle.evaluation.game_performance import GamePerformanceBreakdown
+from eagle.evaluation.runtime_evaluation import MatchResult
 
 
 class OpponentReflectionTests(unittest.TestCase):

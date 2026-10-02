@@ -118,3 +118,7 @@ See [`evolutionary_flow.md`](evolutionary_flow.md),
 [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md),
 and [`../implementation/current_status.md`](../implementation/current_status.md)
 for ownership and artifact details.
+
+## Python ownership
+
+`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns Java generation/validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness, phase ordering, configuration, or serialized run contracts.

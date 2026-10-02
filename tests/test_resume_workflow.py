@@ -7,9 +7,9 @@ from dataclasses import replace
 from pathlib import Path
 
 from eagle.config import ExperimentConfig
-from eagle.aos import ReflectionOperatorMode
-from eagle.resume import resume_search, validate_resume_config
-from eagle.search import run_search
+from eagle.operators.adaptive import ReflectionOperatorMode
+from eagle.evolution.resume import resume_search, validate_resume_config
+from eagle.evolution.search import run_search
 
 
 class ResumeWorkflowTests(unittest.TestCase):

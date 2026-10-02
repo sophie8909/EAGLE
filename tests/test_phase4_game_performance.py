@@ -3,14 +3,14 @@ from __future__ import annotations
 import math
 import unittest
 
-from evaluation.game_metrics import FAILED_GAME_PERFORMANCE, compute_game_metrics
-from evaluation.game_performance import (
+from eagle.evaluation.game_metrics import FAILED_GAME_PERFORMANCE, compute_game_metrics
+from eagle.evaluation.game_performance import (
     GamePerformanceBreakdown,
     GamePerformanceConfig,
     compute_performance_breakdown,
     tick_telemetry,
 )
-from evaluation.runtime_evaluation import MatchResult
+from eagle.evaluation.runtime_evaluation import MatchResult
 
 
 class Phase4GamePerformanceTests(unittest.TestCase):

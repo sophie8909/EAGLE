@@ -7,12 +7,13 @@ from pathlib import Path
 
 from eagle.artifacts import write_candidate_snapshot
 from eagle.config import ExperimentConfig
-from eagle.initial_population import generation_zero_uses_fixed_java
+from eagle.operators.initialization import generation_zero_uses_fixed_java
 from eagle.llm import LLMCallLogger
-from eagle.search import initialize_population, run_search
-from generation.agent_template import JavaTemplatePaths, validate_java_template
-from generation.backend import MockGenerationBackend
-from generation.java_agent_generator import validate_generated_java_source
+from eagle.evolution.search import run_search
+from eagle.operators.initialization import initialize_population
+from eagle.generation.agent_template import JavaTemplatePaths, validate_java_template
+from eagle.generation.backend import MockGenerationBackend
+from eagle.generation.java_agent_generator import validate_generated_java_source
 
 
 CONFIG_PATH = Path(

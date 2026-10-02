@@ -10,7 +10,7 @@ This is the focused current contract for the EAGLE evolutionary loop.
 passive random randombias lightrush heavyrush workerrush allinbot mayari coac tma
 ```
 
-For every candidate, `eagle/evaluation.py` executes all ten cases on three
+For every candidate, `eagle/evaluation/pipeline.py` executes all ten cases on three
 maps, for three rounds, with both p0 and p1 positions. The fixed matrix is
 therefore 180 matches. `allibot` remains the historical GUI opponent ID;
 the evolutionary case is `allinbot` in `eagle/opponents.py`.
@@ -39,7 +39,7 @@ reflection and does not update the fixed-opponent archive.
 
 ## Fitness and reporting
 
-In fixed-roster mode, `evaluation/objectives.py` returns exactly the ten case
+In fixed-roster mode, `eagle/evaluation/objectives.py` returns exactly the ten case
 scores, stored in `Candidate.fitness_objectives`. In self-play, those slot
 scores remain evaluation diagnostics and `Candidate.fitness_objectives` stores
 only the unweighted aggregate `game_performance`. A failed or incomplete
@@ -53,7 +53,7 @@ under `Candidate.code_quality_result` and is not an objective.
 
 ## Selection
 
-`eagle/selection.py:lexicase_select` uses the EA-seeded `random.Random`
+`eagle/operators/selection.py:lexicase_select` uses the EA-seeded `random.Random`
 instance. It shuffles the ten case order, filters the current survivors to
 the best score for each case, and stops when one candidate remains. There is
 no Pareto rank, crowding distance, dominance comparator, or code-quality

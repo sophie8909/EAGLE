@@ -10,16 +10,14 @@ from pathlib import Path
 
 import yaml
 
-from eagle.aos import ReflectionOperatorMode
+from eagle.operators.adaptive import ReflectionOperatorMode
 from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.opponent_cases import SELF_PLAY_CASES
-from eagle.search import (
-    build_self_play_fitness_refresh_replicas,
-    run_search,
-)
-from eagle.resume import resume_search
+from eagle.evolution.parent_refresh import build_self_play_fitness_refresh_replicas
+from eagle.evolution.search import run_search
+from eagle.evolution.resume import resume_search
 from eagle.self_play import (
     assert_shared_self_play_context,
     select_self_play_library_candidates,

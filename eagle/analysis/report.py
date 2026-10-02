@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 
-from .loader import RunData
+from eagle.analysis.loader import RunData
 
 
 OUTPUT_FILES = (

@@ -65,7 +65,7 @@ class LLMClient:
     def generation_backend(self, *, logger=None):
         """Build the shared final Java-generation backend lazily."""
 
-        from generation.backend import build_generation_backend
+        from eagle.generation.backend import build_generation_backend
 
         return build_generation_backend(
             "openai",
@@ -81,7 +81,7 @@ class LLMClient:
     def prompt_backend(self, *, operation: str, temperature: float | None = None):
         """Build a shared Reflection/role backend lazily."""
 
-        from eagle.mutation import build_reflection_backend
+        from eagle.operators.reflection import build_reflection_backend
 
         return build_reflection_backend(
             "openai",

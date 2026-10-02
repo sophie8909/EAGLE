@@ -114,7 +114,7 @@ class PromptResourceTests(unittest.TestCase):
                     path,
                 )
                 self.assertEqual(
-                    hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
+                    hashlib.sha256(config.initial_java_seed_path.read_text(encoding="utf-8").encode("utf-8")).hexdigest(),
                     "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
                     path,
                 )

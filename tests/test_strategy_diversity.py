@@ -17,14 +17,14 @@ from eagle.strategy_diversity import (
     strategy_distance,
     update_strategy_archive,
 )
-from eagle.strategy_reflection import (
+from eagle.operators.strategy import (
     STRATEGY_MUTATION_INTENT_DISTRIBUTION,
     MockRoleBackend,
     StrategyReflectionMutation,
     select_strategy_mutation_intent,
 )
-from eagle.mutation import ReflectionContext
-from eagle.reflection_context import EvolutionContext
+from eagle.operators.context import ReflectionContext
+from eagle.operators.context import EvolutionContext
 from eagle.opponent_cases import LEXICASE_CASES
 
 
@@ -112,8 +112,8 @@ class StrategyDiversityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             states = root / "states"
-            from evaluation.match_trace import write_match_trace
-            from evaluation.runtime_evaluation import write_mock_round_state
+            from eagle.evaluation.match_trace import write_match_trace
+            from eagle.evaluation.runtime_evaluation import write_mock_round_state
             write_mock_round_state(states, tick=0, p0_resource=1, p1_resource=1)
             log = write_match_trace(
                 round_state_dir=states,

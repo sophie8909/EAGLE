@@ -12,9 +12,10 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_matches, preflight_evaluation_opponents
-from evaluation.compiler import compile_generated_agent
-from generation.java_agent_generator import GeneratedJavaAgent
+from eagle.evaluation.matches import evaluate_matches
+from eagle.evaluation.opponents import preflight_evaluation_opponents
+from eagle.evaluation.compiler import compile_generated_agent
+from eagle.generation.java_agent_generator import GeneratedJavaAgent
 
 
 def benchmark(workers: int, repeats: int, mode: str) -> tuple[float, ...]:

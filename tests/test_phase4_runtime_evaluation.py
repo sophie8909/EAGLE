@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import Counter
 import gzip
+import hashlib
+import shutil
 import json
 import subprocess
 import tempfile
@@ -12,21 +14,21 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import (
+from eagle.evaluation.matches import evaluate_matches
+from eagle.evaluation.opponents import (
     _prepare_safe_allinbot_opponent,
     _prepare_worker_rush_opponent,
     _resolved_static_evaluation_opponents,
-    evaluate_matches,
-    evaluate_population,
     preflight_evaluation_opponents,
 )
+from eagle.evaluation.pipeline import evaluate_population
 from eagle.opponents import (
     ALLINBOT_UPSTREAM_CLASS_NAME,
     EVALUATION_ROSTER,
     SAFE_ALLINBOT_CLASS_NAME,
 )
-from evaluation.runtime_evaluation import MatchResult, run_microrts_match
-from generation.java_agent_generator import GeneratedJavaAgent
+from eagle.evaluation.runtime_evaluation import MatchResult, run_microrts_match
+from eagle.generation.java_agent_generator import GeneratedJavaAgent
 
 
 class Phase4RuntimeEvaluationTests(unittest.TestCase):
@@ -67,7 +69,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     opponent_id=kwargs["opponent_id"],
                 )
 
-            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+            with patch("eagle.evaluation.matches.run_microrts_match", side_effect=fake_match):
                 results, error = evaluate_matches(
                     candidate=Candidate(id="parallel-candidate"),
                     agent=agent,
@@ -116,7 +118,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     class_hash=kwargs["class_hash"],
                 )
 
-            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+            with patch("eagle.evaluation.matches.run_microrts_match", side_effect=fake_match):
                 results, error = evaluate_matches(
                     candidate=Candidate(id="candidate"),
                     agent=agent,
@@ -204,12 +206,12 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     raw_result={"winner": 0, "result": "p0_win", "final_tick": 100, "max_cycles": 100, "players": {"p0": {"resource_total": 50.0, "material_total": 10.0, "unit_types": {}}, "p1": {"resource_total": 40.0, "material_total": 10.0, "unit_types": {}}}},
                 )
 
-            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+            with patch("eagle.evaluation.matches.run_microrts_match", side_effect=fake_match):
                 evaluate_population(
                     [candidate],
                     generation=1,
                     config=config,
-                    backend=__import__("generation.backend", fromlist=["MockGenerationBackend"]).MockGenerationBackend(),
+                    backend=__import__("eagle.generation.backend", fromlist=["MockGenerationBackend"]).MockGenerationBackend(),
                     generated_agents_dir=run_dir / "generated_agents",
                     classes_dir=run_dir / "classes",
                     candidates_dir=candidates_dir,
@@ -234,12 +236,38 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
 
     def test_allinbot_uses_reflection_wrapper_while_preflight_pins_upstream(self):
         config = ExperimentConfig.from_mapping({})
-        preflight_evaluation_opponents(config, mock=False, repository_root=Path.cwd())
         with tempfile.TemporaryDirectory() as temp_dir:
-            classes_dir = Path(temp_dir) / "classes"
+            root = Path(temp_dir)
+            # These jars exercise metadata pinning; the reflection adapter
+            # intentionally has no compile-time dependency on upstream classes.
+            for opponent in EVALUATION_ROSTER:
+                if opponent.jar_path:
+                    jar = root / opponent.jar_path
+                    jar.parent.mkdir(parents=True, exist_ok=True)
+                    jar.write_bytes(b"opponent-metadata-fixture")
+            allibot_root = root / "third_party/gui_opponents"
+            library = allibot_root / "src/allibot/lib/fixture.jar"
+            library.parent.mkdir(parents=True)
+            library.write_bytes(b"library-metadata-fixture")
+            jar = allibot_root / "jars/allibot.jar"
+            (allibot_root / "resolved_allibot.json").write_text(json.dumps({
+                "schema_version": "eagle-allibot-v2",
+                "class_name": ALLINBOT_UPSTREAM_CLASS_NAME,
+                "jar_sha256": hashlib.sha256(jar.read_bytes()).hexdigest(),
+            }), encoding="utf-8")
+            source = root / "eagle/opponent_adapters/SafeAllInBot.java"
+            source.parent.mkdir(parents=True)
+            shutil.copyfile("eagle/opponent_adapters/SafeAllInBot.java", source)
+            preflight_evaluation_opponents(config, mock=False, repository_root=root)
+            jar.write_bytes(b"changed-upstream")
+            with self.assertRaisesRegex(Exception, "JAR hash"):
+                preflight_evaluation_opponents(config, mock=False, repository_root=root)
+            jar.write_bytes(b"opponent-metadata-fixture")
+            classes_dir = root / "classes"
             adapter_classes = _prepare_safe_allinbot_opponent(
                 config,
                 classes_dir=classes_dir,
+                repository_root=root,
             )
             manifest = json.loads(
                 (adapter_classes.parent / "manifest.json").read_text(encoding="utf-8")
@@ -248,6 +276,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 config,
                 mock=False,
                 classes_dir=classes_dir,
+                repository_root=root,
             )
             allinbot = next(item for item in opponents if item.opponent_id == "allinbot")
             adapter_class_exists = (
@@ -441,7 +470,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     )
                 return MatchResult(ok=True, score=100.0, command=["java"])
 
-            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+            with patch("eagle.evaluation.matches.run_microrts_match", side_effect=fake_match):
                 results, error = evaluate_matches(
                     candidate=Candidate(id="candidate"),
                     agent=agent,
@@ -462,7 +491,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             with patch(
-                "evaluation.runtime_evaluation.subprocess.run",
+                "eagle.evaluation.runtime_evaluation.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(["java"], 0.01, output="out", stderr="err"),
             ):
                 result = run_microrts_match(
@@ -492,7 +521,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 Path(command[-1]).write_text('{"winner": 0}', encoding="utf-8")
                 return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-            with patch("evaluation.runtime_evaluation.subprocess.run", side_effect=fake_run):
+            with patch("eagle.evaluation.runtime_evaluation.subprocess.run", side_effect=fake_run):
                 result = run_microrts_match(
                     microrts_dir=root,
                     classes_dir=root / "classes",
@@ -519,7 +548,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     stderr="",
                 )
 
-            with patch("evaluation.runtime_evaluation.subprocess.run", side_effect=fake_run):
+            with patch("eagle.evaluation.runtime_evaluation.subprocess.run", side_effect=fake_run):
                 result = run_microrts_match(
                     microrts_dir=root,
                     classes_dir=root / "classes",

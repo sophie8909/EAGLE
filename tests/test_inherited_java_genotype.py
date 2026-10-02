@@ -9,14 +9,14 @@ from pathlib import Path
 from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.crossover import CrossoverContext, crossover
-from eagle.evaluation import decode_validate_compile_candidate
-from eagle.mutation import MutationContext
-from eagle.rewrite import PromptRewriteMutation
+from eagle.operators.crossover import CrossoverContext, crossover
+from eagle.evaluation.decoding import decode_validate_compile_candidate
+from eagle.operators.context import ReflectionContext
+from eagle.operators.prompt import PromptRewriteMutation
 from eagle.run_artifacts import load_candidate
-from eagle.search import initialize_population
-from generation.agent_template import JavaTemplatePaths, load_java_template
-from generation.backend import GenerationBackend
+from eagle.operators.initialization import initialize_population
+from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
+from eagle.generation.backend import GenerationBackend
 
 
 class CountingBackend(GenerationBackend):
@@ -166,7 +166,7 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
             mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
-        ).mutate(child, MutationContext(generation=1, index=0))
+        ).mutate(child, ReflectionContext(generation=1, index=0))
         self.assertIn("CHILD_POLICY", backend.calls[0])
         self.assertIn("INHERITED_JAVA", backend.calls[0])
         self.assertNotIn("FIXED_INHERITED_JAVA", backend.calls[0])

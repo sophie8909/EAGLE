@@ -7,11 +7,11 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.mutation import ReflectionContext
-from eagle.reflection_context import build_reflection_context
-from eagle.reflection_prompts import build_prompt_reflection_prompt_bundle
-from eagle.rewrite import PromptRewriteMutation, build_prompt_rewrite_prompt
-from eagle.strategy_reflection import (
+from eagle.operators.context import ReflectionContext
+from eagle.operators.context import build_reflection_context
+from eagle.operators.reflection_prompts import build_prompt_reflection_prompt_bundle
+from eagle.operators.prompt import PromptRewriteMutation, build_prompt_rewrite_prompt
+from eagle.operators.strategy import (
     MockRoleBackend,
     StrategyReflectionMutation,
     _parse_coach,
@@ -184,7 +184,7 @@ Attack the enemy Base."}
     def test_code_prompt_rewriter_receives_only_code_prompt_and_review(self) -> None:
         candidate = self.candidate()
         backend = ScriptedBackend((code_review(),))
-        from eagle.mutation import ReflectionStage
+        from eagle.operators.reflection import ReflectionStage
 
         review = ReflectionStage(backend, max_attempts=1).run(
             reflection_type="prompt", candidate=candidate, request="review"

@@ -9,10 +9,10 @@ from unittest.mock import patch
 
 import yaml
 
-from eagle.aos import build_reflection_operator_controller
+from eagle.operators.adaptive import build_reflection_operator_controller
 from eagle.config import ExperimentConfig
 from eagle.experiment import ExperimentOrchestrator, resolve_experiment_configs
-from eagle.search import SearchResult
+from eagle.evolution.search import SearchResult
 
 
 class ExperimentLauncherTests(unittest.TestCase):

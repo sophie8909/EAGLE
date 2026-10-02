@@ -4,13 +4,14 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_candidate
-from eagle.mutation import build_prompt_reflection_prompt, build_strategy_reflection_prompt, ReflectionContext
-from eagle.search import mutation_context_from_candidate
-from generation.backend import MockGenerationBackend
+from eagle.evaluation.pipeline import evaluate_candidate
+from eagle.operators.reflection_prompts import build_prompt_reflection_prompt, build_strategy_reflection_prompt
+from eagle.operators.context import ReflectionContext
+from eagle.evolution.offspring import mutation_context_from_candidate
+from eagle.generation.backend import MockGenerationBackend
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE, LEXICASE_CASES
-from evaluation.code_quality import build_failure_code_quality
-from evaluation.objectives import build_objectives
+from eagle.evaluation.code_quality import build_failure_code_quality
+from eagle.evaluation.objectives import build_objectives
 
 
 class ReflectionContextTests(unittest.TestCase):

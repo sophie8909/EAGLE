@@ -3,13 +3,13 @@ import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
-from evaluation.code_quality import (
+from eagle.evaluation.code_quality import (
     analyze_compilation,
     analyze_static_code,
     build_code_quality,
     evaluate_agent_strategy_region,
 )
-from evaluation.compiler import CompileResult
+from eagle.evaluation.compiler import CompileResult
 
 
 class CodeQualityTests(unittest.TestCase):

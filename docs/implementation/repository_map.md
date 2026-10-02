@@ -24,26 +24,29 @@ kept as documentation entries.
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, one execution mode, EA/model/evaluation validation |
-| `eagle/search_runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
-| `eagle/search.py` | Initialization, shared evolutionary generation step, and generation loop |
+| `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
+| `eagle/evolution/search.py` | Fresh run initialization, generation loop, and finalization |
+| `eagle/evolution/generation.py` | Shared fresh/resume generation ordering, evaluation, credit, selection, and persistence |
+| `eagle/evolution/offspring.py` | Whole-generation assignment, reflection/rewrite, deferred Code materialization, evidence-parent lookup |
+| `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/self_play.py` | Managed self-play opponent library, five-generation context selection, context hashes, resume loading, and selection guards |
-| `eagle/initial_population.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
-| `eagle/resume.py` | v2 snapshot load/finalization around the shared generation step |
-| `eagle/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
-| `eagle/aos.py` | Static and adaptive reflection-operator selection |
+| `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
+| `eagle/evolution/resume.py` | v2 snapshot load/finalization around the shared generation step |
+| `eagle/operators/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
+| `eagle/operators/adaptive.py` | Static and adaptive reflection-operator selection |
 
 ## Candidate and mutation
 
 | Path | Responsibility |
 | --- | --- |
 | `eagle/candidate.py` | Candidate genotype, phenotype, lineage, failure, fitness, references |
-| `eagle/crossover.py` | Independent prompt and optional inherited-Java crossover with provenance |
-| `eagle/mutation.py` | Reflection context and transport contracts |
-| `eagle/rewrite.py` | Prompt-only mutation rewrite |
-| `eagle/code_reflection.py` | Diagnosis-guided direct parent-Java Code Reflection |
-| `eagle/strategy_reflection.py` | Match sampling, Commentator, Coach, trace lifecycle |
-| `eagle/reflection_context.py` | Structured mutation evidence |
-| `eagle/reflection_prompts.py` | Prompt Reflection reviewer rendering |
+| `eagle/operators/crossover.py` | Independent prompt and optional inherited-Java crossover with provenance |
+| `eagle/operators/reflection.py` | Reflection context and transport contracts |
+| `eagle/operators/prompt.py` | Prompt-only mutation rewrite |
+| `eagle/operators/code.py` | Diagnosis-guided direct parent-Java Code Reflection |
+| `eagle/operators/strategy.py` | Match sampling, Commentator, Coach, trace lifecycle |
+| `eagle/operators/context.py` | Structured mutation evidence |
+| `eagle/operators/reflection_prompts.py` | Prompt Reflection reviewer rendering |
 | `eagle/prompts.py` | Prompt manifest loading, rendering, and bounds |
 | `eagle/strategy_diversity.py` | Strategy signature/niche/archive diagnostics |
 
@@ -51,25 +54,29 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `generation/backend.py` | Mock/OpenAI-compatible complete-source generation |
-| `generation/java_agent_generator.py` | Complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
-| `generation/agent_template.py` | Java template and canonical scaffold assembly contract |
+| `eagle/generation/backend.py` | Mock/OpenAI-compatible complete-source generation |
+| `eagle/generation/java_agent_generator.py` | Complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
+| `eagle/generation/agent_template.py` | Java template and canonical scaffold assembly contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
 | `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op seed and configured inherited-mode scaffold |
 | `eagle/java_seeds/worker_rush/CandidateAgent.java` | Fixed Worker Rush generation-zero phenotype for mixed-policy initialization |
-| `eagle/evaluation.py` | Canonical child evaluation orchestration |
-| `evaluation/compiler.py` | Isolated javac and diagnostics |
-| `evaluation/microrts_runner.py` | Standalone seven-check integration probe only |
-| `evaluation/runtime_evaluation.py` | Sole MicroRTS match process owner |
-| `evaluation/match_trace.py` | Sole compressed tick-stream format and integrity report |
-| `evaluation/match_matrix.py` | Opponent/map/round/side schedule |
-| `evaluation/game_performance.py` | Per-match Game Performance formula |
-| `evaluation/game_metrics.py` | Matrix aggregation and compact summaries |
-| `evaluation/code_quality.py` | Static metrics and canonical simplicity diagnostic |
-| `evaluation/function_capability.py` | Function-capability diagnostic |
-| `evaluation/strategy_alignment.py` | Strategy-alignment diagnostic |
-| `evaluation/objectives.py` | Ten opponent fitness cases and reporting aggregate |
-| `evaluation/parent_offspring.py` | Head-to-head AOS evidence only |
+| `eagle/evaluation/pipeline.py` | Population/candidate evaluation, objectives, timing and result assembly |
+| `eagle/evaluation/records.py` | Typed cross-stage evaluation/decoder/opponent records |
+| `eagle/evaluation/decoding.py` | Bounded Java decoding, validation, compilation, diagnostic repair and class promotion |
+| `eagle/evaluation/opponents.py` | Fixed/self-play pools, prerequisite checks and opponent compilation |
+| `eagle/evaluation/matches.py` | Ordered matrix dispatch with configured match workers |
+| `eagle/evaluation/compiler.py` | Isolated javac and diagnostics |
+| `eagle/evaluation/microrts_runner.py` | Standalone seven-check integration probe only |
+| `eagle/evaluation/runtime_evaluation.py` | Sole MicroRTS match process owner |
+| `eagle/evaluation/match_trace.py` | Sole compressed tick-stream format and integrity report |
+| `eagle/evaluation/match_matrix.py` | Opponent/map/round/side schedule |
+| `eagle/evaluation/game_performance.py` | Per-match Game Performance formula |
+| `eagle/evaluation/game_metrics.py` | Matrix aggregation and compact summaries |
+| `eagle/evaluation/code_quality.py` | Static metrics and canonical simplicity diagnostic |
+| `eagle/evaluation/function_capability.py` | Function-capability diagnostic |
+| `eagle/evaluation/strategy_alignment.py` | Strategy-alignment diagnostic |
+| `eagle/evaluation/objectives.py` | Ten opponent fitness cases and reporting aggregate |
+| `eagle/evaluation/parent_offspring.py` | Head-to-head AOS evidence only |
 
 ## Persistence and analysis
 
@@ -92,6 +99,22 @@ kept as documentation entries.
 | `third_party/microrts/` | Vendored MicroRTS runtime/maps/libraries |
 | `third_party/final_test_opponents/` | Final-test opponent dependencies |
 | `third_party/gui_opponents/` | Optional GUI/external opponent assets |
+
+## Editing an EA operator
+
+| Change | Start here |
+| --- | --- |
+| Initial policies | `eagle/operators/initialization.py` |
+| Parent/survivor selection | `eagle/operators/selection.py` |
+| Component crossover | `eagle/operators/crossover.py` |
+| Reflection choice or adaptive credit | `eagle/operators/adaptive.py` |
+| Strategy mutation | `eagle/operators/strategy.py` |
+| Prompt mutation | `eagle/operators/prompt.py` |
+| Code mutation | `eagle/operators/code.py` |
+| Operator evidence | `eagle/operators/context.py`, `eagle/operators/reflection_prompts.py` |
+| Phase order | `eagle/evolution/generation.py`, `eagle/evolution/offspring.py` |
+
+All executable Python belongs to the `eagle` package. Internal callers import the actual owner; removed paths have no compatibility shim. Assets/config/checkpoint paths retain their existing contracts. The [refactor plan](maintainability_refactor_plan.md) records the migration.
 
 ## Dependency direction
 

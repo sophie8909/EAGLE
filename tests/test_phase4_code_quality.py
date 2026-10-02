@@ -4,19 +4,19 @@ import urllib.error
 from unittest.mock import patch
 
 from eagle.llm import LLMServerError
-from evaluation.code_quality import (
+from eagle.evaluation.code_quality import (
     analyze_compilation,
     build_failure_code_quality,
     build_successful_code_quality,
     failure_code_quality,
 )
-from evaluation.compiler import CompileResult
-from evaluation.function_capability import (
+from eagle.evaluation.compiler import CompileResult
+from eagle.evaluation.function_capability import (
     FunctionCapabilityResult,
     evaluate_function_capability,
 )
-from evaluation.runtime_evaluation import MatchResult
-from evaluation.strategy_alignment import (
+from eagle.evaluation.runtime_evaluation import MatchResult
+from eagle.evaluation.strategy_alignment import (
     OpenAICompatibleStrategyAlignmentBackend,
     StrategyAlignmentBackend,
     StrategyAlignmentResult,
@@ -70,7 +70,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
         )
 
         with patch(
-            "evaluation.strategy_alignment.urllib.request.urlopen",
+            "eagle.evaluation.strategy_alignment.urllib.request.urlopen",
             side_effect=urllib.error.URLError("server stopped"),
         ):
             with self.assertRaisesRegex(LLMServerError, "llm server error"):

@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .loader import RunData
+from eagle.analysis.loader import RunData
 
 
 SEMANTIC_ANALYSIS_SCHEMA_VERSION = "eagle-semantic-analysis-v1"

@@ -7,9 +7,9 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.llm import LLMCallLogger
-from eagle.mutation import ReflectionContext
-from eagle.reflection_context import CandidateReflectionSummary, EvolutionContext
-from eagle.strategy_reflection import (
+from eagle.operators.context import ReflectionContext
+from eagle.operators.context import CandidateReflectionSummary, EvolutionContext
+from eagle.operators.strategy import (
     MockRoleBackend,
     StrategyReflectionMutation,
     _parse_commentary,
@@ -17,8 +17,8 @@ from eagle.strategy_reflection import (
     cleanup_retired_match_traces,
     select_reflection_matches,
 )
-from evaluation.match_trace import iter_match_trace, write_match_trace
-from evaluation.runtime_evaluation import write_mock_round_state
+from eagle.evaluation.match_trace import iter_match_trace, write_match_trace
+from eagle.evaluation.runtime_evaluation import write_mock_round_state
 
 
 def _write_trace(path: Path, *, metadata, round_state_dir, raw_result, tick_limit) -> None:

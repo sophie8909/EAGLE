@@ -7,13 +7,13 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.mutation import ReflectionStage
-from eagle.reflection_context import build_reflection_context
-from eagle.reflection_prompts import (
+from eagle.operators.reflection import ReflectionStage
+from eagle.operators.context import build_reflection_context
+from eagle.operators.reflection_prompts import (
     build_prompt_reflection_prompt_bundle,
     build_strategy_reflection_prompt_bundle,
 )
-from eagle.rewrite import PromptRewriteMutation
+from eagle.operators.prompt import PromptRewriteMutation
 from eagle.run_artifacts import initialize_run_manifest, load_error_memory, record_error_memory
 
 

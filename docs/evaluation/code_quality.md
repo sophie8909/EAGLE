@@ -1,6 +1,6 @@
 # Code-quality diagnostics
 
-`evaluation/code_quality.py` calculates deterministic simplicity and retains
+`eagle/evaluation/code_quality.py` calculates deterministic simplicity and retains
 compiler, validation, function-capability, and strategy-alignment evidence.
 The resulting `code_quality` value is diagnostic only. It is not in
 `Candidate.objective_vector()` and is not used by lexicase or survivor
@@ -24,5 +24,5 @@ compilation, integration, runtime, and incomplete-evaluation failures retain
 their diagnostics and receive `-1000.0` for each opponent fitness case.
 
 Reflection can inspect these diagnostics through `CodeDiagnostics` in
-`eagle/reflection_context.py`, but no diagnostic is silently converted into an
+`eagle/operators/context.py`, but no diagnostic is silently converted into an
 evolutionary objective.

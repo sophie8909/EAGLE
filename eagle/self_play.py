@@ -6,11 +6,11 @@ import hashlib
 import json
 from pathlib import Path
 
-from .candidate import Candidate
-from .config import ExperimentConfig
-from .opponent_cases import SELF_PLAY_CASES
-from .run_artifacts import atomic_json
-from evaluation.semantic_signature import SemanticLibrary
+from eagle.candidate import Candidate
+from eagle.config import ExperimentConfig
+from eagle.opponent_cases import SELF_PLAY_CASES
+from eagle.run_artifacts import atomic_json
+from eagle.evaluation.semantic_signature import SemanticLibrary
 
 
 SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v2"
@@ -176,7 +176,7 @@ def select_self_play_library_candidates(
     if not isinstance(entries, list) or not entries:
         raise ValueError(f"Self-play opponent library has no opponents: {path}")
 
-    from .run_artifacts import load_candidate
+    from eagle.run_artifacts import load_candidate
 
     candidates: list[Candidate] = []
     for entry in entries:
@@ -255,7 +255,7 @@ def load_self_play_snapshot(
     candidate_ids = payload.get("source_candidate_ids")
     if not isinstance(candidate_ids, list) or not candidate_ids:
         raise ValueError(f"Self-play snapshot has no source candidates: {path}")
-    from .run_artifacts import load_candidate
+    from eagle.run_artifacts import load_candidate
 
     candidates = [load_candidate(run_dir, str(candidate_id)) for candidate_id in candidate_ids]
     if self_play_context_id(candidates) != payload.get("context_id"):

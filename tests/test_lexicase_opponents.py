@@ -10,7 +10,7 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, FIXED_OPPONENT_WEIGHT_SUM
 from eagle.opponent_archive import ensure_opponent_archive, update_opponent_archive
 from eagle.opponent_cases import LEXICASE_CASES
-from eagle.selection import best_candidate, lexicase_select, select_next_generation
+from eagle.operators.selection import best_candidate, lexicase_select, select_next_generation
 
 
 def candidate(candidate_id: str, scores: dict[str, float], *, generation: int = 0) -> Candidate:

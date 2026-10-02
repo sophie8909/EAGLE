@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from eagle.config import ExperimentConfig
-from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
+from eagle.evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
 
 
 MAPS_WITH_TICK_LIMITS = [

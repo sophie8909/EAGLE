@@ -1,6 +1,6 @@
 # Evaluation pipeline
 
-`eagle/evaluation.py` owns the candidate evaluation boundary. It performs Java
+`eagle/evaluation/pipeline.py` owns the candidate evaluation boundary. Bounded decoder attempts live in `decoding.py`; opponent setup lives in `opponents.py`; ordered match dispatch lives in `matches.py`; shared typed results live in `records.py`. It performs Java
 generation, validation, compilation, integration, the complete MicroRTS
 matrix, diagnostics, objective construction, and candidate artifact writing.
 
@@ -64,8 +64,8 @@ library is consulted only for a subsequent refresh.
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three
 rounds, and both candidate player positions. The matrix is owned by
-`evaluation/match_matrix.py`; execution is owned by
-`evaluation/runtime_evaluation.py`. A map entry may carry a positive `tick_limit`;
+`eagle/evaluation/match_matrix.py`; execution is owned by
+`eagle/evaluation/runtime_evaluation.py`. A map entry may carry a positive `tick_limit`;
 otherwise it inherits the legacy top-level `tick_limit`. The matrix attaches
 the resolved limit to every match specification, so search, AOS head-to-head,
 and final-test matches use the same cap for a given map.
@@ -80,7 +80,7 @@ artifact path or the real bundled MicroRTS matrix; benchmark results are
 machine-dependent and are not written back into experiment configuration.
 
 The evaluator groups match results by opponent in
-`evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
+`eagle/evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
 per-match summaries, then computes the weighted aggregate only for reporting.
 The aggregate denominator is the fixed weight sum `12.5`.
 
@@ -98,7 +98,7 @@ so an upstream defect can neither crash the JVM nor become a candidate win.
 
 ## Objective and diagnostics
 
-`evaluation/objectives.py` returns ten scores in fixed-roster mode. Self-play
+`eagle/evaluation/objectives.py` returns ten scores in fixed-roster mode. Self-play
 stores only aggregate `game_performance` as fitness. `code_quality`, compiler diagnostics, function coverage,
 strategy alignment, and runtime failure details remain in their diagnostic
 artifacts and reflection context; none is inserted into the evolutionary
@@ -125,8 +125,8 @@ failures.
 ## `aos_head2head`-only parent-vs-offspring evaluation
 
 After normal evaluation succeeds for a mutated offspring,
-`evaluation/parent_offspring.py` reuses the offspring and comparison parent's
-compiled class directories. It uses `evaluation/match_matrix.py` with the same
+`eagle/evaluation/parent_offspring.py` reuses the offspring and comparison parent's
+compiled class directories. It uses `eagle/evaluation/match_matrix.py` with the same
 three configured maps, three round indices, and both player positions, producing
 18 direct matches. `ComparisonParentAgent` isolates the parent's already
 compiled same-named `ai.generated.CandidateAgent`; it does not regenerate or
@@ -144,7 +144,7 @@ normal runtime matrix does not launch this evaluator.
 
 `aos_opponent` launches no direct matches: its credit provider reuses the ten
 completed opponent summaries from normal evaluation. `static` calculates no
-reward at all. Both adaptive providers feed the updater in `eagle/aos.py` and
+reward at all. Both adaptive providers feed the updater in `eagle/operators/adaptive.py` and
 do not alter the normal evaluation vector.
 
 ## Final-test candidate recovery

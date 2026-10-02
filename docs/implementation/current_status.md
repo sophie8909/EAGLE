@@ -67,7 +67,7 @@ Snapshot: 2026-10-02. This file describes executable repository behavior.
   deferred into that phase alongside ordinary Strategy/Prompt/no-mutation Java
   generation.
 - Fresh search and v2 resume now execute that generation lifecycle through the
-  same `eagle.search.run_generation_step` owner; only initialization, snapshot
+  same `eagle.evolution.search.run_generation_step` owner; only initialization, snapshot
   loading, and finalization remain entrypoint-specific.
 - The required `model` owns initialization and reflection/rewrite calls. An
   optional `generation_model` owns final Java materialization and compile repair;
@@ -96,16 +96,16 @@ Snapshot: 2026-10-02. This file describes executable repository behavior.
 | --- | --- |
 | Fixed cases and reporting weights | `eagle/opponent_cases.py` |
 | Candidate state and objective vector | `eagle/candidate.py` |
-| Evaluation orchestration | `eagle/evaluation.py` |
+| Evaluation orchestration | `eagle/evaluation/pipeline.py` |
 | Self-play opponent library, snapshots, and context validation | `eagle/self_play.py` |
-| Match matrix | `evaluation/match_matrix.py` |
-| Reflection selection, reward providers, shared AOS updater | `eagle/aos.py` |
-| Head-to-head-only parent-vs-offspring evaluation | `evaluation/parent_offspring.py` |
-| Match aggregation | `evaluation/game_metrics.py` |
-| Objective construction | `evaluation/objectives.py` |
-| Parent and survivor selection | `eagle/selection.py` |
-| Evolution loop | `eagle/search.py`, `eagle/resume.py` |
-| Generation-zero policy construction | `eagle/initial_population.py` |
+| Match matrix | `eagle/evaluation/match_matrix.py` |
+| Reflection selection, reward providers, shared AOS updater | `eagle/operators/adaptive.py` |
+| Head-to-head-only parent-vs-offspring evaluation | `eagle/evaluation/parent_offspring.py` |
+| Match aggregation | `eagle/evaluation/game_metrics.py` |
+| Objective construction | `eagle/evaluation/objectives.py` |
+| Parent and survivor selection | `eagle/operators/selection.py` |
+| Evolution loop | `eagle/evolution/search.py`, `eagle/evolution/resume.py` |
+| Generation-zero policy construction | `eagle/operators/initialization.py` |
 | Experiment/model lifecycle | `eagle/experiment.py`, `eagle/runtime/processes.py` |
 | Fully resolved experiment schema | `eagle/config.py`, run-local `config.yaml` |
 | Per-opponent archive | `eagle/opponent_archive.py` |
@@ -412,3 +412,7 @@ W/L/D contribution are a zero-score draw, never an accidental candidate win;
 final-test JSON/CSV/Markdown count these upstream-contained matches separately.
 The targeted real regression first reproduces the original 24×24 crash, then
 proves wrapper completion, one-time marker persistence, and neutral scoring.
+
+## Maintainability refactor (2026-10-02)
+
+Operators now have separate owners under `eagle/operators`; fresh/resume share `eagle/evolution/generation.py`, with offspring planning and parent refresh separated. Generation and evaluation are subpackages of `eagle`; evaluation separates records, decoding, opponents, matches and pipeline orchestration. Offspring planning calculates generation-best evidence once per generation. See the [plan and verification](maintainability_refactor_plan.md) and [repository map](repository_map.md). Evolution/artifact protocols are unchanged.

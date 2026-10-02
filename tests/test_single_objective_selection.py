@@ -4,7 +4,7 @@ import random
 import unittest
 
 from eagle.candidate import Candidate
-from eagle.selection import (
+from eagle.operators.selection import (
     GAME_PERFORMANCE_SELECTION,
     population_signature,
     select_next_generation,

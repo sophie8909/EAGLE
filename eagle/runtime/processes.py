@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .config import RuntimeConfig, RuntimeSpec
-from .endpoints import health_check
+from eagle.runtime.config import RuntimeConfig, RuntimeSpec
+from eagle.runtime.endpoints import health_check
 
 
 OWNERSHIP_SCHEMA_VERSION = "eagle-runtime-ownership-v1"

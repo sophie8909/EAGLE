@@ -1,6 +1,6 @@
 ---
 name: eagle-evaluation
-description: Implement or review EAGLE Java validation/compilation/integration, the configured 126-match seven-opponent MicroRTS matrix, opponent-wise lexicase fitness, game_performance/code_quality diagnostics, and failure-stage handling. Use for runner, scoring, telemetry, diagnostics, integration, or failure-classification changes.
+description: Implement or review EAGLE Java validation/compilation/integration, the configured 180-match ten-opponent MicroRTS matrix, opponent-wise lexicase fitness, game_performance/code_quality diagnostics, and failure-stage handling. Use for runner, scoring, telemetry, diagnostics, integration, or failure-classification changes.
 ---
 
 # EAGLE evaluation workflow
@@ -36,7 +36,7 @@ description: Implement or review EAGLE Java validation/compilation/integration, 
 
 ## Common files
 
-`eagle/evaluation.py`, `evaluation/compiler.py`, `evaluation/microrts_runner.py`, `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/code_quality.py`, `evaluation/objectives.py`, `eagle/config.py`, `eagle/artifacts.py`, `tests/`, and `configs/`.
+`eagle/evaluation/pipeline.py`, `eagle/evaluation/compiler.py`, `eagle/evaluation/microrts_runner.py`, `eagle/evaluation/game_performance.py`, `eagle/evaluation/game_metrics.py`, `eagle/evaluation/code_quality.py`, `eagle/evaluation/objectives.py`, `eagle/config.py`, `eagle/artifacts.py`, `tests/`, and `configs/`.
 
 ## Required documentation updates
 

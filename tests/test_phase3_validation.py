@@ -6,12 +6,12 @@ from pathlib import Path
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import evaluate_candidate
-from generation.java_agent_generator import (
+from eagle.evaluation.pipeline import evaluate_candidate
+from eagle.generation.java_agent_generator import (
     validate_assembled_java,
     validate_generated_java_source,
 )
-from generation.agent_template import (
+from eagle.generation.agent_template import (
     JavaTemplatePaths,
     STRATEGY_END_MARKER,
     STRATEGY_START_MARKER,

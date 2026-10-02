@@ -13,19 +13,15 @@ from unittest.mock import patch
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.crossover import CrossoverContext, crossover
-from eagle.evaluation import evaluate_candidate, print_progress
-from eagle.mutation import MutationContext
+from eagle.operators.crossover import CrossoverContext, crossover
+from eagle.evaluation.pipeline import evaluate_candidate, print_progress
+from eagle.operators.context import ReflectionContext
 from eagle.prompts import normalize_prompt
-from eagle.search import (
-    create_offspring,
-    mutation_evidence_parent,
-    population_signature,
-    run_search,
-)
-from eagle.selection import select_parent
-from evaluation.compiler import CompileResult, compile_generated_agent
-from evaluation.game_performance import (
+from eagle.evolution.offspring import create_offspring, mutation_evidence_parent
+from eagle.evolution.search import run_search
+from eagle.operators.selection import population_signature, select_parent
+from eagle.evaluation.compiler import CompileResult, compile_generated_agent
+from eagle.evaluation.game_performance import (
     GamePerformanceConfig,
     compute_performance_breakdown,
     parse_round_state,
@@ -33,19 +29,19 @@ from evaluation.game_performance import (
     telemetry_summary,
     tick_telemetry,
 )
-from evaluation.game_metrics import GameMetrics, compute_game_metrics
-from evaluation.runtime_evaluation import MatchResult, run_microrts_match
-from evaluation.objectives import build_objectives
+from eagle.evaluation.game_metrics import GameMetrics, compute_game_metrics
+from eagle.evaluation.runtime_evaluation import MatchResult, run_microrts_match
+from eagle.evaluation.objectives import build_objectives
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE, LEXICASE_CASES
-from evaluation.code_quality import CodeQualityBreakdown
-from generation.agent_template import (
+from eagle.evaluation.code_quality import CodeQualityBreakdown
+from eagle.generation.agent_template import (
     STRATEGY_START_MARKER,
     JavaTemplatePaths,
     load_java_template,
     render_blank_strategy_agent,
 )
-from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
-from generation.java_agent_generator import (
+from eagle.generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
+from eagle.generation.java_agent_generator import (
     clean_generated_java_output,
     generate_java_agent,
     normalize_java_agent_source,
@@ -157,7 +153,7 @@ class EaglePipelineTests(unittest.TestCase):
         comparison_parent = replace(parent, id="strategy-evidence-parent")
         output = StringIO()
         with patch(
-            "eagle.search.mutation_evidence_parent",
+            "eagle.evolution.offspring.mutation_evidence_parent",
             return_value=comparison_parent,
         ), redirect_stdout(output):
             offspring = create_offspring(
@@ -582,13 +578,28 @@ class EaglePipelineTests(unittest.TestCase):
                     )
                 ]
 
-            with patch("eagle.search.evaluate_population", side_effect=fake_evaluate_population) as evaluate, patch(
-                "eagle.search.create_offspring",
-                return_value=[Candidate(generation=1)],
+            with (
+                patch(
+                    "eagle.evolution.search.evaluate_population",
+                    side_effect=fake_evaluate_population,
+                ) as initial_evaluate,
+                patch(
+                    "eagle.evolution.generation.evaluate_population",
+                    side_effect=fake_evaluate_population,
+                ) as generation_evaluate,
+                patch("eagle.evolution.generation.plan_offspring", return_value=[]),
             ):
-                result = run_search(config, config_path=config_path, mock=True, run_id="stagnation_run")
+                result = run_search(
+                    config,
+                    config_path=config_path,
+                    mock=True,
+                    run_id="stagnation_run",
+                )
 
-            self.assertEqual(evaluate.call_count, 3)
+            self.assertEqual(
+                initial_evaluate.call_count + generation_evaluate.call_count,
+                3,
+            )
             self.assertEqual(result.completed_generation, 2)
             self.assertEqual(result.stop_reason, "stagnation_2_generations")
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))

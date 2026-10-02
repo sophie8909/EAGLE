@@ -42,3 +42,7 @@ New migrations update source, tests, configuration, artifacts/readers, the
 Chinese overview, current status, repository map, and canonical spec together.
 Unsupported historical formats are removed rather than retained as silent
 compatibility layers.
+
+## Maintainability migration (2026-10-02)
+
+The [refactor plan](maintainability_refactor_plan.md) precedes implementation. Python owners are consolidated under `eagle`; each EA operator remains independent, and generation/search/evaluation phase owners are split without a compatibility layer. Callers, test patch targets, packaging and resource roots migrate together. Verification is recorded in the plan.

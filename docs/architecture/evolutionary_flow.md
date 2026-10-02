@@ -75,8 +75,8 @@ behavior signatures only when scalar fitness is tied.
    pairwise comparisons. Parent B and a cut survivor tier prefer the greatest
    compatible Hamming distance across the nine action hashes.
 
-The implementation is in `eagle/search.py`, `eagle/selection.py`, and
-`eagle/evaluation.py`.
+The shared generation implementation is in `eagle/evolution/generation.py` and `eagle/evolution/offspring.py`; selection is in `eagle/operators/selection.py`, with evaluation in
+`eagle/evaluation/pipeline.py`.
 
 ## Objective contract
 

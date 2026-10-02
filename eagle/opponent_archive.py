@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .candidate import Candidate
-from .opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
+from eagle.candidate import Candidate
+from eagle.opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
 
 
 ARCHIVE_SCHEMA_VERSION = "eagle-opponent-archive-v1"

@@ -6,7 +6,7 @@ equal. They are not a second objective.
 
 ## Dataset
 
-`evaluation/semantic_signature.py` creates one versioned dataset from exactly
+`eagle/evaluation/semantic_signature.py` creates one versioned dataset from exactly
 the three configured evaluation maps. `WorkerRush` versus `HeavyRush` supplies
 the deterministic reference trajectory. For the configured player side, one
 actionable non-terminal state is saved for each early, middle, and late phase,

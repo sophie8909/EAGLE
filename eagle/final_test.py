@@ -16,18 +16,17 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from eagle.evaluation import (
+from eagle.evaluation.opponents import (
     _prepare_safe_allinbot_opponent,
     _prepare_worker_rush_opponent,
-    hash_class_directory,
-    hash_file,
     preflight_evaluation_opponents,
-    scoring_config_from_experiment,
 )
+from eagle.evaluation.matches import scoring_config_from_experiment
+from eagle.evaluation.runtime_evaluation import hash_class_directory, hash_file
 from eagle.opponents import SEARCH_OPPONENT_REGISTRY, rooted_jar_path
-from evaluation.match_matrix import canonical_evaluation_maps
-from evaluation.microrts_runner import integrate_microrts_agent
-from evaluation.runtime_evaluation import run_microrts_match
+from eagle.evaluation.match_matrix import canonical_evaluation_maps
+from eagle.evaluation.microrts_runner import integrate_microrts_agent
+from eagle.evaluation.runtime_evaluation import run_microrts_match
 from eagle.config import ExperimentConfig
 
 

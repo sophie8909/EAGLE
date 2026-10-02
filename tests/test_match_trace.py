@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from evaluation.match_trace import iter_match_trace, write_match_trace
-from evaluation.runtime_evaluation import write_mock_round_state
+from eagle.evaluation.match_trace import iter_match_trace, write_match_trace
+from eagle.evaluation.runtime_evaluation import write_mock_round_state
 
 
 class MatchTraceTests(unittest.TestCase):

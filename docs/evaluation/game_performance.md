@@ -2,7 +2,7 @@
 
 ## Per-match score
 
-The existing match formula remains owned by `evaluation/game_performance.py`:
+The existing match formula remains owned by `eagle/evaluation/game_performance.py`:
 
 ```text
 Win  = +100
@@ -11,7 +11,7 @@ Loss = -100
 ```
 
 Material, final-resource, and survival shaping are bounded and retained in
-the per-match summaries. `evaluation/game_metrics.py` groups these scores by
+the per-match summaries. `eagle/evaluation/game_metrics.py` groups these scores by
 opponent and retains map, player-side, and individual-match evidence.
 
 ## Candidate reporting aggregate

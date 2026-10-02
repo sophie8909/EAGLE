@@ -4,7 +4,7 @@ import json
 import unittest
 
 from eagle.prompts import load_prompt
-from eagle.reusable_generation_prompt import (
+from eagle.operators.reusable_prompt import (
     RULES_END_MARKER,
     RULES_START_MARKER,
     apply_reusable_rule_delta,
