@@ -113,6 +113,7 @@ class ExperimentConfig:
     experiment_name: str = "eagle_experiment"
     model: ModelConfig = field(default_factory=ModelConfig)
     generation_model: ModelConfig | None = None
+    runs: int = 1
     generations: int = 1
     population_size: int = 4
     mutation_max_attempts: int = 3
@@ -389,6 +390,7 @@ class ExperimentConfig:
             experiment_name=str(payload.get("experiment_name", "eagle_experiment")),
             model=model,
             generation_model=generation_model,
+            runs=int(payload.get("runs", 1)),
             generations=int(payload.get("generations", 1)),
             population_size=int(payload.get("population_size", max(1, len(seed_prompts)))),
             mutation_max_attempts=int(payload.get("mutation_max_attempts", cls.mutation_max_attempts)),
@@ -485,6 +487,8 @@ class ExperimentConfig:
         self.model.validate()
         if self.generation_model is not None:
             self.generation_model.validate()
+        if self.runs < 1:
+            raise ValueError("runs must be at least 1.")
         if self.generations < 1:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
@@ -702,6 +706,7 @@ class ExperimentConfig:
                 self.initial_policy_generation_prompt_file
             ),
             "initial_policy_max_attempts": self.initial_policy_max_attempts,
+            "runs": self.runs,
             "generations": self.generations,
             "population_size": self.population_size,
             "mutation_max_attempts": self.mutation_max_attempts,

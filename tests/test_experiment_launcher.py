@@ -182,6 +182,51 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertFalse(any(item.startswith("final:") for item in events))
             self.assertEqual(events[-1], "stop:model.gguf")
 
+    def test_direct_config_runs_requested_replicates_with_incremented_seeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "replicated.yaml", model_name="one", model_path=model)
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["runs"] = 3
+            payload["random_seed"] = 40
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            seeds: list[int] = []
+
+            def search(config, **_kwargs):
+                seeds.append(config.random_seed)
+                return SearchResult(root / f"run-{len(seeds)}", [], None)
+
+            orchestrator = ExperimentOrchestrator(
+                search_runner=search,
+                final_test_runner=lambda _argv: 0,
+            )
+            orchestrator.run(config_path=path, mock=True)
+
+            self.assertEqual(seeds, [40, 41, 42])
+
+    def test_folder_batch_rejects_multi_run_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "replicated.yaml", model_name="one", model_path=model)
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["runs"] = 3
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "direct config path"):
+                ExperimentOrchestrator(search_runner=lambda *_args, **_kwargs: None).run(
+                    config_path=root,
+                    mock=True,
+                )
+
+    def test_runs_must_be_positive(self):
+        config = ExperimentConfig.from_mapping({"runs": 0})
+        with self.assertRaisesRegex(ValueError, "runs must be at least 1"):
+            config.validate()
+
     def test_normal_sequence_and_final_test(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

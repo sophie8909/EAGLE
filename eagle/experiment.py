@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -152,6 +152,15 @@ def _batch_entry_is_complete(
     return mock or skip_final_test or _final_test_is_complete(run_dir)
 
 
+def _reject_multi_run_directory_config(config: ExperimentConfig, config_dir: Path) -> None:
+    if config.runs > 1:
+        raise ValueError(
+            f"runs={config.runs} is supported for a direct config path only; "
+            f"run the YAML file directly or set runs: 1 for a folder batch "
+            f"({config_dir})."
+        )
+
+
 def resolve_experiment_config(path: str | Path) -> Path:
     """Resolve the folder-first interface to a single YAML document."""
 
@@ -298,6 +307,8 @@ class ExperimentOrchestrator:
                 print(f"Survivor selection: {config.survivor_selection} lexicase")
                 print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
                 config.validate()
+                if run_index_path is not None:
+                    _reject_multi_run_directory_config(config, config_path.resolve())
                 record_run = (
                     None
                     if run_index_path is None
@@ -305,42 +316,52 @@ class ExperimentOrchestrator:
                         run_index_path, name, run_dir
                     )
                 )
-                if mock:
-                    result = self.search_runner(
+                for replicate_index in range(config.runs):
+                    run_config = replace(
                         config,
+                        random_seed=config.random_seed + replicate_index,
+                    )
+                    if config.runs > 1:
+                        print(
+                            f"Run [{replicate_index + 1}/{config.runs}] "
+                            f"random_seed={run_config.random_seed}"
+                        )
+                    if mock:
+                        result = self.search_runner(
+                            run_config,
+                            config_path=resolved_path,
+                            mock=mock,
+                            on_run_created=record_run,
+                        )
+                        if record_run is not None:
+                            record_run(result.run_dir)
+                        last_result = result
+                        continue
+
+                    if manager is None:
+                        manager = self.runtime_factory()
+                    _ensure_runtime_phase(manager, run_config, "reflection")
+                    search_kwargs = {}
+                    if run_config.uses_distinct_generation_model:
+                        search_kwargs["activate_model_phase"] = (
+                            lambda phase, selected=run_config: _ensure_runtime_phase(
+                                manager, selected, phase
+                            )
+                        )
+                    result = self.search_runner(
+                        run_config,
                         config_path=resolved_path,
                         mock=mock,
                         on_run_created=record_run,
+                        **search_kwargs,
                     )
                     if record_run is not None:
                         record_run(result.run_dir)
                     last_result = result
-                    continue
-
-                if manager is None:
-                    manager = self.runtime_factory()
-                _ensure_runtime_phase(manager, config, "reflection")
-                search_kwargs = {}
-                if config.uses_distinct_generation_model:
-                    search_kwargs["activate_model_phase"] = (
-                        lambda phase, selected=config: _ensure_runtime_phase(
-                            manager, selected, phase
-                        )
-                    )
-                result = self.search_runner(
-                    config,
-                    config_path=resolved_path,
-                    mock=mock,
-                    on_run_created=record_run,
-                    **search_kwargs,
-                )
-                if record_run is not None:
-                    record_run(result.run_dir)
-                last_result = result
-                if not skip_final_test:
-                    status = self.final_test_runner(["--run-dir", str(result.run_dir)])
-                    if status:
-                        raise RuntimeError(f"Final test failed with exit code {status}.")
+                    if not skip_final_test:
+                        status = self.final_test_runner(["--run-dir", str(result.run_dir)])
+                        if status:
+                            raise RuntimeError(f"Final test failed with exit code {status}.")
             if last_result is None:
                 raise RuntimeError("No configs were executed.")
         finally:
@@ -361,6 +382,10 @@ class ExperimentOrchestrator:
         """Resume an interrupted folder batch, then run remaining configs."""
 
         discovered_paths = resolve_experiment_configs(config_dir)
+        for path in discovered_paths:
+            requested = ExperimentConfig.from_file(path)
+            requested.validate()
+            _reject_multi_run_directory_config(requested, config_dir)
         run_index_path = config_dir / "experiment.yaml"
         indexed_runs = _load_experiment_run_index(config_dir)
         pending_resumes = [

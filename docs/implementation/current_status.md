@@ -33,6 +33,10 @@ Snapshot: 2026-10-02. This file describes executable repository behavior.
   `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
   seed artifacts are removed; MicroRTS matches do not claim seeded
   reproducibility.
+- A direct config may set `runs` to execute independent replicates. Each run
+  uses the base `random_seed` plus its zero-based replicate index and writes a
+  separate run directory; folder batches retain one run per config for stable
+  `experiment.yaml` indexing.
 - Fixed-roster candidate fitness is a ten-field opponent score mapping.
   Self-play candidate fitness contains only `game_performance`. Failed or
   incomplete candidates receive `-1000.0` for the active objective(s).

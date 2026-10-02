@@ -55,6 +55,13 @@ materialization. It switches back before the next generation.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
+Set `runs: 3` to execute three independent replicates from a direct config
+path. Each replicate writes its own run directory and uses an incremented
+`random_seed` (`random_seed`, then `random_seed + 1`, and so on). The default
+is `runs: 1`. Folder batches keep one run per config so their generated
+`experiment.yaml` index remains one-to-one; invoke a multi-run config by its
+YAML file path.
+
 Match execution uses ten bounded workers by default on the current benchmarked
 host. Override it under `evaluation.match_workers` when changing the resource
 budget, for example `1` for serial execution or `10` for the recommended
