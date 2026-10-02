@@ -1,12 +1,12 @@
 schema_version: experiment-v2
-experiment_name: ministral3_8b_parallel_match_20x10
-algorithm: lexicase
+experiment_name: ministral3_8b_self_play_semantic_tie_20x10
+algorithm: game_performance_semantic_tiebreak
 survivor_selection: mu_plus_lambda
 candidate_java_mode: inherited_genotype
 parent_evaluation_mode: reuse_cached
 initial_population_mode: llm_generated_policies
 application: microrts
-objectives: {opponent_cases: maximize}
+objectives: {game_performance: maximize}
 
 model:
   name: ministral3_8b
@@ -54,6 +54,12 @@ match_artifact_mode: compact
 stagnation_generations: 25
 
 evaluation:
+  mode: self_play
+  self_play_refresh_interval: 5
+  self_play_opponent_library_capacity: 50
+  semantic_probes:
+    enabled: true
+    fitness_tie_tolerance: 1.0
   match_workers: 10
   maps:
     - {path: maps/8x8/basesWorkers8x8.xml, tick_limit: 1500}
