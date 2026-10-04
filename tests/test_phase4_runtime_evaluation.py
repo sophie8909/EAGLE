@@ -27,7 +27,7 @@ from eagle.opponents import (
     EVALUATION_ROSTER,
     SAFE_ALLINBOT_CLASS_NAME,
 )
-from eagle.evaluation.runtime_evaluation import MatchResult, run_microrts_match
+from eagle.evaluation.runtime_evaluation import MatchResult, _persist_result, run_microrts_match
 from eagle.generation.java_agent_generator import GeneratedJavaAgent
 
 
@@ -505,13 +505,30 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     timeout_seconds=0.01,
                 )
             payload = json.loads((root / "matches" / "match_00" / "result.json").read_text(encoding="utf-8"))
-            timing = json.loads((root / "matches" / "match_00" / "timing.json").read_text(encoding="utf-8"))
+            match_dir = root / "matches" / "match_00"
+            stderr = (match_dir / "stderr.txt").read_text(encoding="utf-8")
 
         self.assertFalse(result.ok)
         self.assertEqual(result.failure_category, "timeout")
         self.assertEqual(payload["failure_category"], "timeout")
-        self.assertEqual(timing["status"], "failed")
-        self.assertEqual(timing["timeout_seconds"], 0.01)
+        self.assertEqual(payload["timing"]["status"], "failed")
+        self.assertEqual(payload["timing"]["timeout_seconds"], 0.01)
+        self.assertEqual(payload["artifact_paths"]["timing"], "result.json#/timing")
+        self.assertFalse((match_dir / "timing.json").exists())
+        self.assertEqual(stderr, "err")
+
+    def test_empty_process_output_does_not_create_log_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            match_dir = Path(temp_dir) / "match_00"
+            match_dir.mkdir()
+            _persist_result(match_dir, MatchResult(ok=True, score=0.0, command=[]))
+            payload = json.loads((match_dir / "result.json").read_text(encoding="utf-8"))
+            self.assertFalse((match_dir / "stdout.txt").exists())
+            self.assertFalse((match_dir / "stderr.txt").exists())
+            self.assertFalse((match_dir / "timing.json").exists())
+            self.assertIsNone(payload["artifact_paths"]["stdout"])
+            self.assertIsNone(payload["artifact_paths"]["stderr"])
+            self.assertEqual(payload["artifact_paths"]["timing"], "result.json#/timing")
 
     def test_invalid_result_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:

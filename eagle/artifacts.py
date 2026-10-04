@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 # Writers are grouped by lifecycle boundary: genotype inputs first,
 # stage/evaluation evidence next, and run summaries/configuration last.
-ARTIFACT_SCHEMA_VERSION = "phase4-v5"
+ARTIFACT_SCHEMA_VERSION = "phase4-v6"
 
 
 def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
@@ -90,23 +90,23 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
 
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
-    write_candidate_inputs(candidates_dir, evaluation.candidate)
+    if not (candidate_dir / "lineage.json").is_file():
+        write_candidate_inputs(candidates_dir, evaluation.candidate)
     source_without_generation = (evaluation.generation_timing or {}).get("operation") in {
         "initial_java_seed",
         "self_play_fitness_refresh",
     }
     if not source_without_generation:
         for attempt in evaluation.generation_attempts:
-            write_generation_attempt_artifacts(
-                candidate_dir,
-                attempt,
-                initial_seed_source=False,
+            attempt_dir = candidate_dir / "generation" / "attempts" / f"attempt_{attempt.attempt:03d}"
+            if not (attempt_dir / "result.json").is_file():
+                write_generation_attempt_artifacts(
+                    candidate_dir, attempt, initial_seed_source=False,
+                )
+        if not (candidate_dir / "generation" / "repair_ledger.json").is_file():
+            write_generation_repair_ledger(
+                candidate_dir, evaluation.generation_attempts, initial_seed_source=False,
             )
-        write_generation_repair_ledger(
-            candidate_dir,
-            evaluation.generation_attempts,
-            initial_seed_source=False,
-        )
     _write_generation_artifacts(candidate_dir, evaluation)
     validation_payload = validation_to_dict(evaluation.result.validation_result)
     if validation_payload is None:
@@ -174,48 +174,8 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
 def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Persist canonical post-Integration evaluation evidence and objective values."""
 
-    alignment_dir = candidate_dir / "strategy_alignment"
-    alignment_dir.mkdir(parents=True, exist_ok=True)
-    alignment = evaluation.strategy_alignment_result
-    if alignment is None:
-        request = ""
-        raw_response = ""
-        blank_policy = not evaluation.candidate.strategy_prompt.strip()
-        alignment_payload = {
-            "status": "not_applicable" if blank_policy else "blocked",
-            "request": request,
-            "raw_response": raw_response,
-            "parsed_response": None,
-            "score": None if blank_policy else 0.0,
-            "reason": (
-                "Strategy Alignment is not applicable to an empty policy prompt."
-                if blank_policy
-                else "Strategy Alignment runs only after the complete evaluation matrix."
-            ),
-            "error": None if blank_policy else evaluation.result.failure_reason,
-            "attempts": [],
-        }
-    else:
-        request = alignment.request
-        raw_response = alignment.raw_response
-        alignment_payload = alignment.to_json_dict()
-    (alignment_dir / "request.txt").write_text(request, encoding="utf-8")
-    (alignment_dir / "response_raw.txt").write_text(raw_response, encoding="utf-8")
-    write_json(alignment_dir / "result.json", alignment_payload)
-
     evaluation_dir = candidate_dir / "evaluation"
     game_payload = evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {}
-    capability = evaluation.function_capability_result
-    capability_payload = (
-        {
-            "status": "blocked",
-            "function_score": 0,
-            "reason": "Function Capability runs only after the complete evaluation matrix.",
-            "evidence": {},
-        }
-        if capability is None
-        else {"status": "success", **capability.to_json_dict()}
-    )
     code_quality_payload = evaluation.code_quality_breakdown.to_json_dict()
     objectives_payload = {
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
@@ -247,7 +207,6 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
             "unavailable_commentary": [{"reason": "commentary not run"}],
         },
     )
-    write_json(evaluation_dir / "function_capability.json", capability_payload)
     write_json(evaluation_dir / "code_quality.json", code_quality_payload)
     write_json(evaluation_dir / "objectives.json", objectives_payload)
     if evaluation.result.failure_stage == "runtime":
@@ -271,47 +230,15 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
 
 
 def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> None:
-    """Persist reflector and rewriter evidence from the canonical mutation record."""
+    """Persist structured mutation context; operators own raw attempt evidence."""
 
     mutation_type = str(mutation_record.get("type") or "unknown")
     mutation_dir = candidate_dir / "mutation" / f"{mutation_type}_reflection"
     if "evidence" in mutation_record:
         write_json(mutation_dir / "reflection_context.json", mutation_record["evidence"])
-    reflection = mutation_record.get("reflection") or {}
-    if reflection:
-        (mutation_dir / "reflector_request.txt").write_text(
-            str(reflection.get("request") or ""), encoding="utf-8"
-        )
-        (mutation_dir / "reflector_response_raw.txt").write_text(
-            str(reflection.get("raw_response") or ""), encoding="utf-8"
-        )
-    rewrite = mutation_record.get("rewrite")
-    if rewrite:
-        (mutation_dir / "rewriter_request.txt").write_text(
-            str(rewrite.get("request") or ""), encoding="utf-8"
-        )
-        (mutation_dir / "rewriter_response_raw.txt").write_text(
-            str(rewrite.get("raw_response") or ""), encoding="utf-8"
-        )
-    revision = mutation_record.get("revision")
-    if revision:
-        (mutation_dir / "revision_request.txt").write_text(
-            str(revision.get("request") or ""), encoding="utf-8"
-        )
-        (mutation_dir / "revision_response_raw.txt").write_text(
-            str(revision.get("raw_response") or ""), encoding="utf-8"
-        )
     reflection_conclusion = mutation_record.get("reflection_conclusion")
     if isinstance(reflection_conclusion, dict):
         write_json(mutation_dir / "reflection_conclusion.json", reflection_conclusion)
-    for prefix, rewrite in (("strategy_", mutation_record.get("strategy_rewrite")), ("code_", mutation_record.get("generation_rewrite"))):
-        if isinstance(rewrite, dict):
-            (mutation_dir / f"{prefix}rewriter_request.txt").write_text(
-                str(rewrite.get("request") or ""), encoding="utf-8"
-            )
-            (mutation_dir / f"{prefix}rewriter_response_raw.txt").write_text(
-                str(rewrite.get("raw_response") or ""), encoding="utf-8"
-            )
 
 
 def _mutation_metadata_record(record: dict) -> dict:
@@ -343,22 +270,14 @@ def write_generation_attempt_artifacts(
     )
     attempt_dir.mkdir(parents=True, exist_ok=True)
     generation = attempt.generation
-    (attempt_dir / "request.txt").write_text(
-        "" if initial_seed_source else attempt.request,
-        encoding="utf-8",
-    )
-    (attempt_dir / "response_raw.txt").write_text(
-        "" if initial_seed_source else generation.raw_llm_output,
-        encoding="utf-8",
-    )
-    (attempt_dir / "extracted_candidate.java").write_text(
-        generation.extracted_code,
-        encoding="utf-8",
-    )
-    (attempt_dir / "normalized_candidate.java").write_text(
-        generation.assembled_java,
-        encoding="utf-8",
-    )
+    if not (attempt_dir / "request.txt").is_file():
+        (attempt_dir / "request.txt").write_text("" if initial_seed_source else attempt.request, encoding="utf-8")
+    if not (attempt_dir / "response_raw.txt").is_file():
+        (attempt_dir / "response_raw.txt").write_text("" if initial_seed_source else generation.raw_llm_output, encoding="utf-8")
+    if not (attempt_dir / "extracted_candidate.java").is_file():
+        (attempt_dir / "extracted_candidate.java").write_text(generation.extracted_code, encoding="utf-8")
+    if not (attempt_dir / "normalized_candidate.java").is_file():
+        (attempt_dir / "normalized_candidate.java").write_text(generation.assembled_java, encoding="utf-8")
     validation_dir = attempt_dir / "validation"
     validation_payload = validation_to_dict(generation.validation_result) or {
         "status": "blocked",
@@ -398,6 +317,17 @@ def write_generation_attempt_artifacts(
             "compilation": attempt.compilation_timing,
         },
     )
+    write_generation_attempt_result(candidate_dir, attempt)
+    if attempt.repair_evidence is not None:
+        write_json(attempt_dir / "repair_input.json", attempt.repair_evidence)
+
+
+def write_generation_attempt_result(candidate_dir: Path, attempt: "GenerationAttemptResult") -> None:
+    """Update attempt outcome without rewriting immutable request/source evidence."""
+
+    attempt_dir = candidate_dir / "generation" / "attempts" / f"attempt_{attempt.attempt:03d}"
+    generation = attempt.generation
+    compilation = attempt.compile_result
     write_json(
         attempt_dir / "result.json",
         {
@@ -438,8 +368,6 @@ def write_generation_attempt_artifacts(
             "final": attempt.final,
         },
     )
-    if attempt.repair_evidence is not None:
-        write_json(attempt_dir / "repair_input.json", attempt.repair_evidence)
 
 
 def write_generation_repair_ledger(
@@ -527,16 +455,10 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         if representative_attempt is not None
         else evaluation.candidate.generation_input(class_name="CandidateAgent")
     )
-    (generation_dir / "request.txt").write_text(request, encoding="utf-8")
-    (generation_dir / "response_raw.txt").write_text(
-        "" if source_without_generation else result.raw_llm_output or "",
-        encoding="utf-8",
-    )
-    (generation_dir / "extracted_candidate.java").write_text(result.extracted_code or "", encoding="utf-8")
-    (generation_dir / "normalized_candidate.java").write_text(
-        result.assembled_java or evaluation.candidate.generated_java or "",
-        encoding="utf-8",
-    )
+    failed_source = None
+    if source_without_generation and not (evaluation.compile_result is not None and evaluation.compile_result.ok):
+        failed_source = "generation/failed_candidate.java"
+        (candidate_dir / failed_source).write_text(result.assembled_java or "", encoding="utf-8")
     if evaluation.compile_result is not None and evaluation.compile_result.ok:
         phenotype_dir = candidate_dir / "phenotype"
         phenotype_dir.mkdir(parents=True, exist_ok=True)
@@ -545,6 +467,8 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
             encoding="utf-8",
         )
     write_json(generation_dir / "result.json", {
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "failed_source_artifact": failed_source,
         "status": (
             "success"
             if evaluation.compile_result is not None and evaluation.compile_result.ok
@@ -645,8 +569,6 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "integration": "integration/integration_result.json",
         "matches": "matches/",
         "game_performance": "evaluation/game_performance.json",
-        "function_capability": "evaluation/function_capability.json",
-        "strategy_alignment": "strategy_alignment/result.json",
         "code_quality": "evaluation/code_quality.json",
         "objectives": "evaluation/objectives.json",
         "timing": "timing.json",
@@ -659,7 +581,17 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
     if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file():
         artifact_references["generated_java"] = "phenotype/CandidateAgent.java"
     else:
-        artifact_references["failed_generation_source"] = "generation/normalized_candidate.java"
+        generation_path = candidate_dir / "generation" / "result.json"
+        generation_record = (
+            json.loads(generation_path.read_text(encoding="utf-8"))
+            if generation_path.is_file() else {}
+        )
+        attempt_ref = generation_record.get("representative_attempt_artifact")
+        failed_source = generation_record.get("failed_source_artifact")
+        if attempt_ref:
+            artifact_references["failed_generation_source"] = f"{attempt_ref}/normalized_candidate.java"
+        elif failed_source:
+            artifact_references["failed_generation_source"] = failed_source
     if (candidate_dir / "mutation" / "strategy_reflection" / "metadata.json").is_file():
         artifact_references.update({
             "strategy_reflection": "mutation/strategy_reflection/metadata.json",
@@ -673,7 +605,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "initialization/policy_generation/result.json"
         )
     payload = {
-        "candidate_schema_version": "eagle-candidate-v5",
+        "candidate_schema_version": "eagle-candidate-v6",
         "candidate_id": candidate.id,
         "generation": candidate.generation,
         "parent_ids": list(candidate.parent_ids),

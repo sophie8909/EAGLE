@@ -264,7 +264,13 @@ def llm_request_progress(
 
 # Durable request/response and timing logging
 class LLMCallLogger:
-    """Write one durable JSON artifact and optional run-level timing event per request."""
+    """Write one compact call index and optional run-level timing event per request.
+
+    Candidate stages own full request and raw-response evidence. Callers that
+    supply ``artifact_refs`` therefore get a correlation/index record here
+    instead of a second copy of the payload. Transport failures may retain
+    inline evidence because those bytes may never reach the stage owner.
+    """
 
     def __init__(self, log_dir: Path, *, run_id: str | None = None, timing_path: Path | None = None) -> None:
         self.log_dir = log_dir
@@ -300,6 +306,8 @@ class LLMCallLogger:
         started_at: str | None = None,
         finished_at: str | None = None,
         duration_seconds: float | None = None,
+        artifact_refs: dict[str, str] | None = None,
+        retain_inline_evidence: bool = False,
     ) -> Path:
         with self._lock:
             self._sequence += 1
@@ -312,7 +320,9 @@ class LLMCallLogger:
             parts.append(safe_name(module_name))
         path = self.log_dir / ("_".join(parts) + ".json")
         details = metadata or {}
+        owns_payload = not artifact_refs or retain_inline_evidence
         payload = {
+            "schema_version": "eagle-llm-call-v2",
             "call_id": sequence,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "stage": stage,
@@ -328,8 +338,10 @@ class LLMCallLogger:
             "generation_attempt_id": details.get("generation_attempt_id"),
             "transport_attempt": details.get("transport_attempt"),
             "generation_request_kind": details.get("generation_request_kind"),
-            "input": input_text,
-            "response": response_text,
+            "input": input_text if owns_payload else None,
+            "response": response_text if owns_payload else None,
+            "artifact_refs": artifact_refs,
+            "inline_evidence_retained": owns_payload,
             "error": error,
             "metadata": details,
             "run_id": self.run_id,

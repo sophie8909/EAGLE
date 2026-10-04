@@ -71,11 +71,12 @@ explicitly and must be inspected with the repository revision that created them.
 3. Follow the candidate's lineage and stage artifact references.
 4. Read `generation/result.json` for `selected_attempt` or
    `representative_failure_attempt`, then compare the persisted request and every
-   `generation/attempts/attempt_<nnn>/` raw, source, validation, compilation,
-   and timing envelope. Each request hash must match its own `request.txt`.
-5. Confirm the flat phenotype/validation/compilation projection references the
-   selected attempt (or final representative failure) before interpreting
-   Integration or match failures.
+   `generation/attempts/attempt_NNN/` request, raw response, source, validation,
+   compilation, and timing payloads, which are written once. Each request hash must match its own `request.txt`.
+5. Follow `generation/result.json` selected/final pointers. The phenotype exists
+   only for the selected compile success. The candidate's `failed_generation_source`
+   points to the representative attempt's normalized source; zero-LLM source
+   failures instead reference `generation/failed_candidate.java`.
 6. Verify all integration checks before interpreting runtime evidence.
 7. Count match results and verify that source and class hashes remain stable.
 8. Recompute objective components from persisted inputs using the recorded formula version.

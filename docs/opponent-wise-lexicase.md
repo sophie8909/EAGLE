@@ -91,8 +91,11 @@ The following records are written after each generation:
   provenance, ten slots, and context hash;
 - `candidates/<id>/evaluation/objectives.json`: active-mode objective mapping;
 - `candidates/<id>/evaluation/game_performance.json`: aggregate reporting
-  metric and detailed opponent/match summaries;
-- `archives/opponents.json`: one best valid representative per opponent case.
+  metric and detailed opponent/match summaries.
+
+New search runs do not write `archives/opponents.json`. The explicit
+`eagle analyze` command derives `analysis/opponent_representatives.json` from
+all evaluated candidates, including nonsurvivors.
 
 `python -m eagle analyze --run-dir <run>` writes
 `opponent_game_performance.csv` and one

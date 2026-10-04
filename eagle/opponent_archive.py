@@ -1,67 +1,42 @@
-"""Run-level archive of the best valid candidate for each opponent case."""
+"""Derive per-opponent best representatives from canonical candidate snapshots."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
 
-from eagle.candidate import Candidate
-from eagle.opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
+from eagle.opponent_cases import LEXICASE_CASES
+
+ARCHIVE_SCHEMA_VERSION = "eagle-opponent-archive-v2"
 
 
-ARCHIVE_SCHEMA_VERSION = "eagle-opponent-archive-v1"
-ARCHIVE_PATH = Path("archives/opponents.json")
-
-
-def ensure_opponent_archive(run_dir: Path) -> None:
-    path = run_dir / ARCHIVE_PATH
-    if path.is_file():
-        return
-    _write(path, {
-        "schema_version": ARCHIVE_SCHEMA_VERSION,
-        "opponents": {case: None for case in LEXICASE_CASES},
-    })
-
-
-def update_opponent_archive(run_dir: Path, candidates: list[Candidate]) -> None:
-    ensure_opponent_archive(run_dir)
-    payload = json.loads((run_dir / ARCHIVE_PATH).read_text(encoding="utf-8"))
-    entries = payload.setdefault("opponents", {})
-    for candidate in candidates:
-        if candidate.status != "evaluated" or candidate.failure_reason:
+def build_opponent_archive(run_dir: Path) -> dict[str, Any]:
+    """Read all evaluated candidates; never maintain a second search-time archive."""
+    entries: dict[str, Any] = {case: None for case in LEXICASE_CASES}
+    for path in sorted((run_dir / "candidates").glob("*/candidate.json")):
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+        if candidate.get("status") != "evaluated" or candidate.get("failure_reason"):
             continue
-        aggregate = float((candidate.game_eval_result or {}).get("game_performance", -1000.0))
+        scores = candidate.get("fitness_objectives") or {}
+        aggregate = float(candidate.get("aggregate_game_performance") or 0.0)
+        identity = candidate["candidate_id"]
         for case in LEXICASE_CASES:
-            score = float(candidate.fitness_objectives.get(case, FAILED_OPPONENT_SCORE))
-            current = entries.get(case)
-            if current is not None and not _is_better(score, aggregate, candidate.id, current):
+            if case not in scores:
                 continue
+            score = float(scores[case])
+            current = entries[case]
+            if current is not None:
+                rank = (score, aggregate)
+                previous = (current["opponent_score"], current["game_performance"])
+                if rank < previous or (rank == previous and identity >= current["candidate_id"]):
+                    continue
             entries[case] = {
-                "candidate_id": candidate.id,
-                "generation": candidate.generation,
+                "candidate_id": identity,
+                "generation": candidate.get("generation", 0),
                 "opponent_score": score,
                 "game_performance": aggregate,
-                "strategy_niche": candidate.strategy_niche,
-                "strategy_signature": dict(candidate.strategy_signature),
-                "policy_prompt": f"candidates/{candidate.id}/genotype/policy_prompt.txt",
+                "strategy_niche": candidate.get("strategy_niche", "unknown"),
+                "strategy_signature": candidate.get("strategy_signature") or {},
+                "policy_prompt": f"candidates/{identity}/genotype/policy_prompt.txt",
             }
-    _write(run_dir / ARCHIVE_PATH, payload)
-
-
-def _is_better(score: float, aggregate: float, candidate_id: str, current: dict[str, Any]) -> bool:
-    if score != float(current.get("opponent_score", FAILED_OPPONENT_SCORE)):
-        return score > float(current.get("opponent_score", FAILED_OPPONENT_SCORE))
-    if aggregate != float(current.get("game_performance", FAILED_OPPONENT_SCORE)):
-        return aggregate > float(current.get("game_performance", FAILED_OPPONENT_SCORE))
-    return _stable_id(candidate_id) < _stable_id(str(current.get("candidate_id", "")))
-
-
-def _stable_id(value: str) -> tuple[int, str]:
-    return (0, value)
-
-
-def _write(path: Path, payload: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    return {"schema_version": ARCHIVE_SCHEMA_VERSION, "opponents": entries}

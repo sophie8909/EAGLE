@@ -339,7 +339,11 @@ class GenerationAttemptTests(unittest.TestCase):
             self.assertEqual([item["transport_attempt"] for item in logs], [1, 1, 1])
             self.assertEqual(len({item["generation_attempt_id"] for item in logs}), 3)
             self.assertEqual(len({item["request_correlation_id"] for item in logs}), 3)
-            self.assertEqual(len({item["input"] for item in logs}), 3)
+            self.assertTrue(all(item["input"] is None and item["response"] is None for item in logs))
+            requests = [(root / item["artifact_refs"]["request"]).read_text() for item in logs]
+            self.assertEqual(len(set(requests)), 3)
+            for item in logs:
+                self.assertTrue((root / item["artifact_refs"]["response_raw"]).is_file())
             self.assertEqual(
                 [item["generation_request_kind"] for item in logs],
                 ["initial_decode", "compile_repair", "compile_repair"],
@@ -571,6 +575,35 @@ class GenerationAttemptTests(unittest.TestCase):
         )
         self.assertEqual(evaluation.candidate.lineage_to_json_dict(), before_lineage)
         self.assertEqual(evaluation.candidate.metadata["aos"], {"sentinel": "unchanged"})
+
+
+    def test_valid_source_is_validated_once_and_artifact_finalization_does_not_rewrite_attempts(self):
+        from eagle.generation.java_agent_generator import validate_generated_java_source
+        from eagle.generation.backend import MockGenerationBackend
+        from eagle.artifacts import write_generation_attempt_artifacts
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = ExperimentConfig.from_mapping({})
+            with patch("eagle.generation.java_agent_generator.validate_generated_java_source", wraps=validate_generated_java_source) as validate, patch(
+                "eagle.evaluation.decoding.write_generation_attempt_artifacts", wraps=write_generation_attempt_artifacts
+            ) as persist:
+                evaluation = evaluate_candidate(
+                    Candidate(id="single-write", strategy_prompt="Worker Rush"), config=config,
+                    backend=MockGenerationBackend(), generated_agents_dir=root / "generated",
+                    classes_dir=root / "classes", match_artifacts_dir=root / "candidates/single-write/matches",
+                    mock=True, ordinal=0,
+                )
+            self.assertEqual(validate.call_count, 1)
+            self.assertEqual(persist.call_count, 1)
+            attempt = root / "candidates/single-write/generation/attempts/attempt_001"
+            outcome = json.loads((attempt / "result.json").read_text())
+            self.assertTrue(outcome["selected"])
+            self.assertTrue(outcome["final"])
+            with patch("eagle.artifacts.write_generation_attempt_artifacts", wraps=write_generation_attempt_artifacts) as finalize:
+                write_candidate_artifacts(root / "candidates", evaluation)
+            finalize.assert_not_called()
+            self.assertFalse((root / "candidates/single-write/generation/request.txt").exists())
+            self.assertTrue((root / "candidates/single-write/phenotype/CandidateAgent.java").is_file())
 
 
 if __name__ == "__main__":

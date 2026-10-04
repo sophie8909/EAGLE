@@ -376,10 +376,10 @@ objective. Successful Code Quality is:
 `100 - (40C + 25N + 20L + 15F)`
 
 where the terms are normalized cyclomatic complexity, nesting, logical LOC, and
-longest-function LOC. Failure Code Quality is `-1000.0`. Compiler diagnostics,
-Function Capability, and Strategy Alignment are persisted diagnostics only.
-Strategy Alignment is not applicable to an empty policy prompt and is persisted
-as skipped with a null score and no LLM attempt.
+longest-function LOC. Failure Code Quality is `-1000.0`. Compiler diagnostics remain available to reflection and failure records. Normal
+evaluation does not call Function Capability or Strategy Alignment and writes no
+related diagnostic files or timing. The standalone helper modules remain available
+to explicitly invoked tooling.
 
 ## 10. Match evidence
 

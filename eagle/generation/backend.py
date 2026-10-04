@@ -60,6 +60,9 @@ class GenerationBackend(ABC):
     def set_generation_request_kind(self, request_kind: str) -> None:
         """Identify base generation versus compile-guided decoder repair."""
 
+    def set_request_artifact_dir(self, artifact_dir: Path | None) -> None:
+        """Override the stage directory for the next transported request."""
+
 class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
@@ -125,10 +128,12 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self._generation_attempt = 1
         self._generation_attempt_id: str | None = None
         self._generation_request_kind = "initial_decode"
+        self._request_artifact_dir: Path | None = None
 
     def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
         self._generation_attempt = attempt
         self._generation_attempt_id = attempt_id
+        self._request_artifact_dir = None
 
     def set_generation_request_kind(self, request_kind: str) -> None:
         if request_kind not in {
@@ -139,6 +144,9 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         }:
             raise ValueError(f"Unsupported generation request kind: {request_kind}")
         self._generation_request_kind = request_kind
+
+    def set_request_artifact_dir(self, artifact_dir: Path | None) -> None:
+        self._request_artifact_dir = artifact_dir
 
     @property
     def chat_completions_url(self) -> str:
@@ -277,6 +285,12 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
     ) -> None:
         if self.logger is None:
             return
+        artifact_refs = self._persist_stage_evidence(
+            candidate=candidate,
+            prompt=prompt,
+            response_text=response_text,
+            status=status,
+        )
         self.logger.write(
             stage="generation",
             input_text=prompt,
@@ -308,7 +322,59 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             started_at=self._active_request_started_at,
             finished_at=utc_now(),
             duration_seconds=None if self._active_request_started_monotonic is None else max(0.0, time.monotonic() - self._active_request_started_monotonic),
+            artifact_refs=artifact_refs,
+            retain_inline_evidence=status != "success",
         )
+
+    def _persist_stage_evidence(
+        self,
+        *,
+        candidate: Candidate,
+        prompt: str,
+        response_text: str,
+        status: str,
+    ) -> dict[str, str] | None:
+        """Persist successful raw transport evidence before downstream parsing."""
+
+        if status != "success" or self.logger is None or self.logger.log_dir.name != "llm_logs":
+            return None
+        run_dir = self.logger.log_dir.parent
+        if self._generation_request_kind == "code_reflection":
+            directory = self._request_artifact_dir
+            if directory is None:
+                directory = (
+                    run_dir
+                    / "candidates"
+                    / candidate.id
+                    / "mutation"
+                    / "code_reflection"
+                )
+            request_name = f"revision_attempt_{self._generation_attempt:03d}_request.txt"
+            response_name = f"revision_attempt_{self._generation_attempt:03d}_response_raw.txt"
+        else:
+            directory = (
+                run_dir
+                / "candidates"
+                / candidate.id
+                / "generation"
+                / "attempts"
+                / f"attempt_{self._generation_attempt:03d}"
+            )
+            request_name = "request.txt"
+            response_name = "response_raw.txt"
+        directory.mkdir(parents=True, exist_ok=True)
+        request_path = directory / request_name
+        if not request_path.exists():
+            request_path.write_text(prompt, encoding="utf-8")
+        (directory / response_name).write_text(response_text, encoding="utf-8")
+        try:
+            relative_dir = directory.relative_to(run_dir)
+        except ValueError:
+            return None
+        return {
+            "request": (relative_dir / request_name).as_posix(),
+            "response_raw": (relative_dir / response_name).as_posix(),
+        }
 
 
 def backend_http_error_message(

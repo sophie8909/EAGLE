@@ -138,9 +138,8 @@ context，不是 generation-0 phenotype。每一份初始 policy 都各自呼叫
 不重複 prompt／response 的 request timing event。
 
 Callable no-op Java 保留完整 action helper API，但 `decide` 不發出 action；同一
-檔案同時是這三份設定的初始 Java component 與 immutable scaffold。空白 policy
-的 Strategy Alignment 仍記為 `not_applicable`、`score: null`，且不建立 alignment
-LLM attempt。
+檔案同時是這三份設定的初始 Java component 與 immutable scaffold。一般 evaluation 不會呼叫 Function Capability 或 Strategy Alignment，也不會
+寫入相關診斷檔或 timing；standalone helper modules 保留供明確呼叫的工具使用。
 
 所有走 Generator 的 candidate 可用 `generation_max_attempts` 做有界
 compile-guided decoder。Attempt 1 使用權威的 active genotype 生成請求；若
@@ -275,9 +274,9 @@ Code Quality 也是 diagnostic，不是 lexicase objective。成功分數為：
 `100 - (40C + 25N + 20L + 15F)`
 
 其中 C、N、L、F 分別是 normalized cyclomatic complexity、nesting、logical
-LOC 與 longest-function LOC。失敗分數為 `-1000.0`。Compiler、Function
-Capability、Strategy Alignment 只保存為診斷資料；空白 policy 的 Strategy
-Alignment 記為不適用且不呼叫 LLM。
+LOC 與 longest-function LOC。失敗分數為 `-1000.0`。Compiler 診斷仍供 reflection 與失敗記錄使用。一般 evaluation 不會呼叫
+Function Capability 或 Strategy Alignment，也不會寫入相關診斷檔或 timing；
+standalone helper modules 保留供明確呼叫的工具使用。
 
 ## Match 與 Artifact owner
 

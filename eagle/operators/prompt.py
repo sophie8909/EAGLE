@@ -15,7 +15,7 @@ from typing import Any, Protocol
 from eagle.candidate import Candidate, compact_mutation_record
 from eagle.config import ExperimentConfig
 from eagle.llm import LLMServerError
-from eagle.operators.reflection import REFLECTION_SCHEMA_VERSION, ReflectionAttempt, ReflectionBackend, ReflectionResult, ReflectionStage, _timing_payload
+from eagle.operators.reflection import REFLECTION_SCHEMA_VERSION, ReflectionAttempt, ReflectionBackend, ReflectionResult, ReflectionStage, _run_relative_artifact_base, _timing_payload
 from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection_prompts import build_prompt_reflection_prompt_bundle, build_strategy_reflection_prompt_bundle
 from eagle.llm import parse_json_object_response
@@ -29,7 +29,7 @@ from eagle.operators.reusable_prompt import (
 from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
 
 
-REWRITE_SCHEMA_VERSION = "phase2b-v2"
+REWRITE_SCHEMA_VERSION = "phase2b-v3"
 
 
 class RewriteBackend(Protocol):
@@ -53,12 +53,14 @@ class RewriteResult:
     backend: str | None = None
     operation: str | None = None
     token_counts: dict[str, int] | None = None
+    artifact_base: str | None = None
 
     @property
     def succeeded(self) -> bool:
         return self.status == "success"
 
     def to_dict(self) -> dict[str, object]:
+        representative_attempt = self.attempts[-1].attempt if self.attempts else None
         return {
             "schema_version": REWRITE_SCHEMA_VERSION,
             "stage": self.stage,
@@ -68,6 +70,16 @@ class RewriteResult:
             "rewritten_prompt": self.rewritten_prompt,
             "status": self.status,
             "attempts": [attempt.to_dict() for attempt in self.attempts],
+            "selected_attempt": representative_attempt if self.succeeded else None,
+            "representative_attempt": representative_attempt,
+            "representative_attempt_artifacts": (
+                None
+                if representative_attempt is None or self.artifact_base is None
+                else {
+                    "request": f"{self.artifact_base}/rewriter_attempt_{representative_attempt:03d}_request.txt",
+                    "response_raw": f"{self.artifact_base}/rewriter_attempt_{representative_attempt:03d}_response_raw.txt",
+                }
+            ),
             "error": self.error,
             "model": self.model,
             "backend": self.backend,
@@ -117,9 +129,16 @@ class PromptRewriteStage:
                 mutation_type=artifact_mutation_type,
             )
         )
+        mutation_type = artifact_mutation_type or (
+            "prompt" if rewrite_type == "generation_prompt_rewrite" else "strategy"
+        )
+        artifact_base = _run_relative_artifact_base(
+            stage_dir,
+            self.logger,
+            fallback=f"candidates/{candidate.id}/mutation/{mutation_type}_reflection",
+        )
         if artifact_dir is not None:
             assert stage_dir is not None
-            _write_text(stage_dir / f"{artifact_prefix}{stage}_request.txt", request)
         attempts: list[ReflectionAttempt] = []
         last_response = ""
         last_error: str | None = None
@@ -149,6 +168,12 @@ class PromptRewriteStage:
             try:
                 response = self.backend.generate(attempt_request)
                 last_response = response
+                if artifact_dir is not None:
+                    assert stage_dir is not None
+                    _write_text(
+                        stage_dir / f"{artifact_prefix}{stage}_attempt_{attempt_number:03d}_response_raw.txt",
+                        response,
+                    )
                 rewritten_prompt = _parse_rewritten_prompt(
                     response,
                     rewrite_type,
@@ -173,10 +198,16 @@ class PromptRewriteStage:
             )
             if artifact_dir is not None:
                 assert stage_dir is not None
-                _write_text(stage_dir / f"{artifact_prefix}{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
-                if response:
-                    _write_text(stage_dir / f"{artifact_prefix}{stage}_response_raw.txt", response)
+                response_path = stage_dir / f"{artifact_prefix}{stage}_attempt_{attempt_number:03d}_response_raw.txt"
+                if not response_path.exists():
+                    _write_text(response_path, response)
             if self.logger is not None:
+                artifact_refs = None
+                if artifact_dir is not None:
+                    artifact_refs = {
+                        "request": f"{artifact_base}/{artifact_prefix}{stage}_attempt_{attempt_number:03d}_request.txt",
+                        "response_raw": f"{artifact_base}/{artifact_prefix}{stage}_attempt_{attempt_number:03d}_response_raw.txt",
+                    }
                 self.logger.write(
                     stage=stage,
                     input_text=attempt_request,
@@ -193,6 +224,7 @@ class PromptRewriteStage:
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
+                    artifact_refs=artifact_refs,
                 )
             if status == "success":
                 return RewriteResult(
@@ -206,11 +238,9 @@ class PromptRewriteStage:
                     model=self.model,
                     backend=self.backend_name,
                     operation=self.operation,
+                    artifact_base=artifact_base if artifact_dir is not None else None,
                 )
             time.sleep(0)
-        if artifact_dir is not None:
-            assert stage_dir is not None
-            _write_text(stage_dir / f"{artifact_prefix}{stage}_response_raw.txt", last_response)
         return RewriteResult(
             stage=stage,
             rewrite_type=rewrite_type,
@@ -223,6 +253,7 @@ class PromptRewriteStage:
             model=self.model,
             backend=self.backend_name,
             operation=self.operation,
+            artifact_base=artifact_base if artifact_dir is not None else None,
         )
 
 

@@ -22,7 +22,6 @@ from eagle.evolution.parent_refresh import (
     write_self_play_parent_refresh_sidecar,
 )
 from eagle.generation.backend import ExistingJavaPhenotypeBackend
-from eagle.opponent_archive import update_opponent_archive
 from eagle.operators.adaptive import ReflectionOperatorController
 from eagle.operators.selection import population_signature, select_next_generation
 from eagle.operators.strategy import cleanup_retired_match_traces
@@ -209,8 +208,6 @@ def run_generation_step(
         )
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, selection_candidates)
-    if config.evaluation_mode == "fixed_roster":
-        update_opponent_archive(run_dir, selection_candidates)
     error_memory = record_error_memory(run_dir, selection_candidates)
     append_event(
         run_dir / "timing.jsonl",

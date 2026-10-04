@@ -10,7 +10,10 @@ import shutil
 import time
 from pathlib import Path
 
-from eagle.artifacts import write_generation_attempt_artifacts, write_generation_repair_ledger
+from eagle.artifacts import (
+    write_generation_attempt_artifacts, write_generation_attempt_result,
+    write_generation_repair_ledger,
+)
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.compiler import CompileResult, compile_generated_agent
@@ -156,12 +159,6 @@ def decode_validate_compile_candidate(
             if attempt_artifact_dir is not None and not source_without_generation:
                 attempt_artifact_dir.mkdir(parents=True, exist_ok=True)
                 (attempt_artifact_dir / "request.txt").write_text(request, encoding="utf-8")
-                for filename in (
-                    "response_raw.txt",
-                    "extracted_candidate.java",
-                    "normalized_candidate.java",
-                ):
-                    (attempt_artifact_dir / filename).write_text("", encoding="utf-8")
             attempt_backend = (
                 _DirectCodeReflectionBackend(direct_code_source)
                 if direct_code_source and attempt_number == 1
@@ -288,7 +285,7 @@ def decode_validate_compile_candidate(
                 selected=selected_attempt == attempt_number,
             )
             attempts.append(attempt)
-            if candidate_artifact_dir is not None:
+            if candidate_artifact_dir is not None and not source_without_generation:
                 write_generation_attempt_artifacts(
                     candidate_artifact_dir,
                     attempt,
@@ -316,12 +313,8 @@ def decode_validate_compile_candidate(
 
     final_attempt = attempts[-1].attempt
     attempts[-1] = replace(attempts[-1], final=True)
-    if candidate_artifact_dir is not None:
-        write_generation_attempt_artifacts(
-            candidate_artifact_dir,
-            attempts[-1],
-            initial_seed_source=source_without_generation,
-        )
+    if candidate_artifact_dir is not None and not source_without_generation:
+        write_generation_attempt_result(candidate_artifact_dir, attempts[-1])
         write_generation_repair_ledger(
             candidate_artifact_dir,
             attempts,

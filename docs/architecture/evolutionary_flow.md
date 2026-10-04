@@ -129,10 +129,8 @@ old and newly generated Java hashes, the replica fitness/status, and whether
 the replica survived. Generation archives, error memory, timing aggregation,
 and retired-trace cleanup use the actual replica-plus-offspring selection pool.
 
-In fixed-roster runs, `runs/<run>/archives/opponents.json` keeps one best valid representative per
-opponent case. Each generation JSON stores objective statistics for all
-ten cases and `opponent_scores.by_opponent` stores reporting summaries. The
-archive is intentionally not updated by self-play because those slot identities
+New search runs do not write `runs/<run>/archives/opponents.json`. The explicit `eagle analyze` command derives `analysis/opponent_representatives.json` from all evaluated candidates, including nonsurvivors. Each generation JSON stores objective statistics for all
+ten cases and `opponent_scores.by_opponent` stores reporting summaries. Representatives use fixed-roster case IDs; self-play slot identities
 are snapshot-scoped.
 `python -m eagle analyze --semantics --run-dir <run>` reads existing wrapper and
 cache artifacts without executing agents, and writes candidate/probe tables,

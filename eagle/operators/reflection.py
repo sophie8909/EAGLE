@@ -30,7 +30,7 @@ from eagle.operators.context import ReflectionContext
 # Typed request/result records and response parsing are shared by Prompt
 # Reflection and Strategy Reflection. The concrete strategy role sequence is
 # intentionally kept in eagle.operators.strategy.
-REFLECTION_SCHEMA_VERSION = "reflection-v2"
+REFLECTION_SCHEMA_VERSION = "reflection-v3"
 DEFAULT_STRUCTURED_OUTPUT_TOKENS = 4096
 
 
@@ -67,12 +67,14 @@ class ReflectionResult:
     analysis_summary: str = ""
     revised_prompt: str = ""
     prompt_metadata: dict[str, object] | None = None
+    artifact_base: str | None = None
 
     @property
     def succeeded(self) -> bool:
         return self.status == "success"
 
     def to_dict(self) -> dict[str, object]:
+        representative_attempt = self.attempts[-1].attempt if self.attempts else None
         return {
             "schema_version": REFLECTION_SCHEMA_VERSION,
             "stage": self.stage,
@@ -82,6 +84,16 @@ class ReflectionResult:
             "reflection": self.reflection,
             "status": self.status,
             "attempts": [attempt.to_dict() for attempt in self.attempts],
+            "selected_attempt": representative_attempt if self.succeeded else None,
+            "representative_attempt": representative_attempt,
+            "representative_attempt_artifacts": (
+                None
+                if representative_attempt is None or self.artifact_base is None
+                else {
+                    "request": f"{self.artifact_base}/reflector_attempt_{representative_attempt:03d}_request.txt",
+                    "response_raw": f"{self.artifact_base}/reflector_attempt_{representative_attempt:03d}_response_raw.txt",
+                }
+            ),
             "error": self.error,
             "model": self.model,
             "backend": self.backend,
@@ -484,9 +496,16 @@ class ReflectionStage:
     ) -> ReflectionResult:
         stage = "reflector"
         stage_dir = None if artifact_dir is None else _reflection_artifact_dir(artifact_dir, reflection_type)
+        artifact_base = _run_relative_artifact_base(
+            stage_dir,
+            self.logger,
+            fallback=(
+                f"candidates/{candidate.id}/mutation/"
+                f"{reflection_type.removesuffix('_reflection')}_reflection"
+            ),
+        )
         if artifact_dir is not None:
             assert stage_dir is not None
-            _write_text(stage_dir / f"{stage}_request.txt", request)
             if prompt_metadata is not None:
                 _write_json(stage_dir / f"{stage}_prompt_metadata.json", prompt_metadata)
 
@@ -515,6 +534,12 @@ class ReflectionStage:
             try:
                 response = self.backend.generate(attempt_request)
                 last_response = response
+                if artifact_dir is not None:
+                    assert stage_dir is not None
+                    _write_text(
+                        stage_dir / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt",
+                        response,
+                    )
                 parsed, analysis_summary, revised_prompt = parse_reflection_response(response, reflection_type)
                 _validate_reflection_candidate_preconditions(
                     candidate,
@@ -541,13 +566,16 @@ class ReflectionStage:
             )
             if artifact_dir is not None:
                 assert stage_dir is not None
-                _write_text(
-                    stage_dir / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt",
-                    response,
-                )
-                if response:
-                    _write_text(stage_dir / f"{stage}_response_raw.txt", response)
+                response_path = stage_dir / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt"
+                if not response_path.exists():
+                    _write_text(response_path, response)
             if self.logger is not None:
+                artifact_refs = None
+                if artifact_dir is not None:
+                    artifact_refs = {
+                        "request": f"{artifact_base}/{stage}_attempt_{attempt_number:03d}_request.txt",
+                        "response_raw": f"{artifact_base}/{stage}_attempt_{attempt_number:03d}_response_raw.txt",
+                    }
                 self.logger.write(
                     stage=stage,
                     input_text=attempt_request,
@@ -569,6 +597,7 @@ class ReflectionStage:
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
+                    artifact_refs=artifact_refs,
                 )
             if status == "success":
                 return ReflectionResult(
@@ -586,12 +615,10 @@ class ReflectionStage:
                     analysis_summary=analysis_summary,
                     revised_prompt=revised_prompt,
                     prompt_metadata=prompt_metadata,
+                    artifact_base=artifact_base if artifact_dir is not None else None,
                 )
             time.sleep(0)
 
-        if artifact_dir is not None:
-            assert stage_dir is not None
-            _write_text(stage_dir / f"{stage}_response_raw.txt", last_response)
         return ReflectionResult(
             stage=stage,
             reflection_type=reflection_type,
@@ -605,6 +632,7 @@ class ReflectionStage:
             backend=self.backend_name,
             operation=self.operation,
             prompt_metadata=prompt_metadata,
+            artifact_base=artifact_base if artifact_dir is not None else None,
         )
 
 
@@ -660,6 +688,25 @@ def _reflection_artifact_dir(root: Path | None, reflection_type: str) -> Path:
     assert root is not None
     mutation_type = reflection_type.removesuffix("_reflection")
     return root / "mutation" / f"{mutation_type}_reflection"
+
+
+def _run_relative_artifact_base(
+    directory: Path | None,
+    logger: object | None,
+    *,
+    fallback: str,
+) -> str:
+    if directory is not None:
+        log_dir = getattr(logger, "log_dir", None)
+        if isinstance(log_dir, Path):
+            try:
+                return directory.relative_to(log_dir.parent).as_posix()
+            except ValueError:
+                pass
+        parts = directory.parts
+        if "trials" in parts:
+            return Path(*parts[parts.index("trials"):]).as_posix()
+    return fallback
 
 
 def _write_text(path: Path, value: str) -> None:

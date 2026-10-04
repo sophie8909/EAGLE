@@ -17,11 +17,11 @@ description: Implement or review EAGLE Java validation/compilation/integration, 
 
 ## Preserve
 
-- Validate, compile once, integrate, then run the configured seven-opponent × map × round × side matrix (126 matches in the canonical production configuration), including a distinct WorkerRush.
+- Validate, compile once, integrate, then run the configured ten-opponent × three-map × three-round × two-side matrix (180 matches), including a distinct WorkerRush.
 - Reuse identical source/classes; make no generation call between matches.
-- Use the seven opponent scores as the only optimizer fitness cases; `game_performance`, `code_quality`, Function Capability, and Strategy Alignment are diagnostics.
-- Assign every failed evaluation the canonical `-1000` sentinel on all seven opponent cases and retain stage-aware diagnostics.
-- Skip Strategy Alignment for an empty policy; otherwise retain it as a diagnostic, never as an optimizer case.
+- In fixed-roster mode, use the ten opponent scores as the only optimizer fitness cases. In self-play mode, use aggregate Game Performance as fitness; `code_quality` remains diagnostic. Normal evaluation does not call Function Capability or Strategy Alignment.
+- Assign every failed evaluation the canonical `-1000` sentinel on all active objective cases (ten fixed-roster cases or the self-play scalar) and retain stage-aware diagnostics.
+- Function Capability and Strategy Alignment helper modules remain standalone and are not called by normal evaluation.
 - Retain completed match evidence on partial runtime failure.
 - Enforce the exact `ai.generated.CandidateAgent` identity and seven ordered pre-match integration checks from the Java-generation and evaluation owners.
 

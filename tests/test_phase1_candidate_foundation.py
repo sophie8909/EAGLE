@@ -278,12 +278,12 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
                 (candidate_dir / "generation" / "result.json").read_text(encoding="utf-8")
             )
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
-            alignment = json.loads(
-                (candidate_dir / "strategy_alignment" / "result.json").read_text(encoding="utf-8")
-            )
+            self.assertFalse((candidate_dir / "strategy_alignment").exists())
+            self.assertFalse((candidate_dir / "evaluation" / "function_capability.json").exists())
+            self.assertFalse((candidate_dir / "generation" / "attempts").exists())
+            self.assertFalse((candidate_dir / "generation" / "request.txt").exists())
+            self.assertFalse((candidate_dir / "generation" / "response_raw.txt").exists())
             phenotype = (candidate_dir / "phenotype" / "CandidateAgent.java").read_bytes()
-            generation_request = (candidate_dir / "generation" / "request.txt").read_text()
-            generation_response = (candidate_dir / "generation" / "response_raw.txt").read_text()
 
         self.assertEqual(generation["operation"], "initial_java_seed")
         self.assertIsNone(generation["model"])
@@ -291,15 +291,9 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(generation["source"]["kind"], "checked_in_java_seed")
         self.assertEqual(generation["source"]["path"], str(config.initial_java_seed_path.resolve()))
         self.assertEqual(generation["source"]["sha256"], hashlib.sha256(phenotype).hexdigest())
-        self.assertEqual(generation_request, "")
-        self.assertEqual(generation_response, "")
         self.assertIsNone(timing["generation_llm"]["started_at"])
         self.assertIsNone(timing["generation_llm"]["duration_seconds"])
         self.assertEqual(timing["generation_llm"]["attempts"], [])
-        self.assertEqual(alignment["status"], "not_applicable")
-        self.assertIsNone(alignment["score"])
-        self.assertEqual(alignment["attempts"], [])
-        self.assertIsNone(timing["strategy_alignment_llm"]["duration_seconds"])
 
     def test_run_lineage_ids_resolve_to_earlier_acyclic_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

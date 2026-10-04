@@ -182,13 +182,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def load_candidate_source(run_dir: Path, candidate_id: str) -> Path:
     candidate_dir = run_dir / "candidates" / candidate_id
-    individual_path = candidate_dir / "individual.json"
-    source_path = candidate_dir / "generation" / "normalized_candidate.java"
+    individual_path = candidate_dir / "candidate.json"
+    source_path = candidate_dir / "phenotype" / "CandidateAgent.java"
+    if not individual_path.is_file():
+        individual_path = candidate_dir / "individual.json"
+        source_path = candidate_dir / "generation" / "normalized_candidate.java"
     if not run_dir.is_dir():
         raise ValueError(f"Run directory does not exist: {run_dir}")
     if not individual_path.is_file() or not source_path.is_file():
         raise ValueError(
-            "Candidate requires individual.json and generation/normalized_candidate.java: "
+            "Candidate requires a snapshot and canonical phenotype source: "
             f"{candidate_dir}"
         )
     record = json.loads(individual_path.read_text(encoding="utf-8"))

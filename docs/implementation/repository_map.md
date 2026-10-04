@@ -73,8 +73,8 @@ kept as documentation entries.
 | `eagle/evaluation/game_performance.py` | Per-match Game Performance formula |
 | `eagle/evaluation/game_metrics.py` | Matrix aggregation and compact summaries |
 | `eagle/evaluation/code_quality.py` | Static metrics and canonical simplicity diagnostic |
-| `eagle/evaluation/function_capability.py` | Function-capability diagnostic |
-| `eagle/evaluation/strategy_alignment.py` | Strategy-alignment diagnostic |
+| `eagle/evaluation/function_capability.py` | Standalone Function Capability helper; not called by normal evaluation |
+| `eagle/evaluation/strategy_alignment.py` | Standalone Strategy Alignment helper; not called by normal evaluation |
 | `eagle/evaluation/objectives.py` | Ten opponent fitness cases and reporting aggregate |
 | `eagle/evaluation/parent_offspring.py` | Head-to-head AOS evidence only |
 

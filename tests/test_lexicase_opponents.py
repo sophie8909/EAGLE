@@ -8,7 +8,7 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, FIXED_OPPONENT_WEIGHT_SUM
-from eagle.opponent_archive import ensure_opponent_archive, update_opponent_archive
+from eagle.opponent_archive import build_opponent_archive
 from eagle.opponent_cases import LEXICASE_CASES
 from eagle.operators.selection import best_candidate, lexicase_select, select_next_generation
 
@@ -108,12 +108,18 @@ class LexicaseOpponentTests(unittest.TestCase):
     def test_per_opponent_archive_keeps_best_score_without_code_quality_tie_break(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
-            ensure_opponent_archive(run)
             low = candidate("z-low", {case: 1.0 for case in LEXICASE_CASES})
             high = candidate("a-high", {case: 2.0 for case in LEXICASE_CASES})
-            update_opponent_archive(run, [low])
-            update_opponent_archive(run, [high])
-            payload = json.loads((run / "archives" / "opponents.json").read_text())
+            for item in (low, high):
+                path = run / "candidates" / item.id / "candidate.json"
+                path.parent.mkdir(parents=True)
+                path.write_text(json.dumps({
+                    "candidate_id": item.id, "generation": item.generation,
+                    "status": item.status, "fitness_objectives": item.fitness_objectives,
+                    "aggregate_game_performance": item.game_eval_result["game_performance"],
+                }))
+            payload = build_opponent_archive(run)
+            self.assertFalse((run / "archives" / "opponents.json").exists())
         self.assertEqual(payload["opponents"]["lightrush"]["candidate_id"], "a-high")
 
 

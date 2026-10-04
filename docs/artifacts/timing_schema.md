@@ -58,12 +58,6 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
     "error": null,
     "cache_hit": false
   },
-  "strategy_alignment_llm": {
-    "started_at": null,
-    "finished_at": null,
-    "duration_seconds": null,
-    "attempts": []
-  },
   "matches_total_duration_seconds": 0.0,
   "match_durations_seconds": []
 }
@@ -81,8 +75,7 @@ independently for all `population_size` candidates. Inherited
 timing plus preceding UTC-bounded policy attempts below
 `initialization/policy_generation/`; each actual policy request emits one run
 `timing.jsonl` event with `operation_type: initialization` and
-`operation_stage: initial_policy_generation`. Strategy Alignment has null timing
-and no attempts when an empty policy makes the diagnostic not applicable.
+`operation_stage: initial_policy_generation`. Normal evaluation has no Function Capability or Strategy Alignment calls or timing records; standalone helpers are available only to explicit tooling.
 
 Self-play fitness refresh has null Java-generation timing and an empty attempt
 list because it reuses the source parent's phenotype. Its Integration, matches,
@@ -146,7 +139,7 @@ immediately previous complete source's structured validation/javac feedback.
 
 ## Match timing
 
-Each match-level `timing.json` records at least start, finish, duration, process start/finish if distinct, timeout limit, and status. Candidate totals must agree with the match duration list within documented measurement boundaries.
+Each match `result.json` owns start, finish, duration, process start/finish if distinct, timeout limit, and status; there is no match `timing.json`. Candidate totals must agree with the match duration list within documented measurement boundaries.
 The wall-clock `timeout_seconds` remains distinct from the map-specific game
 tick cap; the latter is persisted as `max_cycles` in match result/metadata
 evidence and does not change timing arithmetic.
@@ -154,7 +147,7 @@ evidence and does not change timing arithmetic.
 AOS parent-vs-offspring matches use the same match-level timing schema under
 `aos/head_to_head/matches/`. They are separate from the 180 normal-evaluation
 durations in candidate `timing.json`; their aggregate is reconstructable from
-the 18 AOS-owned match timing files and does not change normal evaluation counts.
+the timing blocks in the 18 AOS-owned match result files and does not change normal evaluation counts.
 
 ## Tests
 
@@ -176,7 +169,7 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 
 ## Phase 4 implementation note
 
-Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, objective-calculation timing. Successful evaluation has exactly 180 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
 
 ## Canonical runtime timing additions
 
@@ -195,7 +188,7 @@ under its mutation directory.
 
 ## Compact snapshot retention (2026-08-04)
 
-Candidate `timing` is retained unchanged in `eagle-candidate-v5` generation and
+Candidate `timing` is retained unchanged in `eagle-candidate-v6` generation and
 final-population snapshots. Match stdout/stderr, commands, raw result payloads,
 and telemetry are excluded from those snapshots and remain in their owning
 match directories. Artifact compaction must never remove fitness objectives or

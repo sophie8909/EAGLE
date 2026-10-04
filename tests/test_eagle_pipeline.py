@@ -491,7 +491,7 @@ class EaglePipelineTests(unittest.TestCase):
             self.assertTrue((candidate_dir / "lineage.json").exists())
             self.assertTrue((candidate_dir / "genotype" / "policy_prompt.txt").exists())
             self.assertTrue(
-                (candidate_dir / "generation" / "normalized_candidate.java").exists()
+                (candidate_dir / "phenotype" / "CandidateAgent.java").exists()
             )
             self.assertFalse((candidate_dir / "CandidateBehaviors.java").exists())
             self.assertTrue((candidate_dir / "compilation" / "compilation_result.json").exists())

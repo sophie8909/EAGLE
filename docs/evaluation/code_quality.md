@@ -1,7 +1,7 @@
 # Code-quality diagnostics
 
 `eagle/evaluation/code_quality.py` calculates deterministic simplicity and retains
-compiler, validation, function-capability, and strategy-alignment evidence.
+compiler and validation evidence. Normal evaluation does not call Function Capability or Strategy Alignment; standalone helpers remain available to explicit tooling.
 The resulting `code_quality` value is diagnostic only. It is not in
 `Candidate.objective_vector()` and is not used by lexicase or survivor
 selection.

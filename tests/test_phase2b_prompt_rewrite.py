@@ -288,10 +288,12 @@ EAGLE_REUSABLE_RULES_END"""
             mutation_dir = Path(temp) / "mutation" / "strategy_reflection"
             self.assertFalse(child.metadata["mutation"]["applied"])
             self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-            self.assertTrue((mutation_dir / "reflector_request.txt").exists())
-            self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
-            self.assertTrue((mutation_dir / "rewriter_request.txt").exists())
-            self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
+            self.assertFalse((mutation_dir / "reflector_request.txt").exists())
+            self.assertFalse((mutation_dir / "reflector_response_raw.txt").exists())
+            self.assertFalse((mutation_dir / "rewriter_request.txt").exists())
+            self.assertFalse((mutation_dir / "rewriter_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_attempt_001_request.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_attempt_001_response_raw.txt").exists())
             self.assertEqual(
                 (mutation_dir / "rewriter_attempt_001_request.txt").read_text(encoding="utf-8"),
                 backend.calls[1],
@@ -307,6 +309,8 @@ EAGLE_REUSABLE_RULES_END"""
             )
             self.assertTrue((mutation_dir / "original_policy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
+            metadata = json.loads((mutation_dir / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["rewrite"]["representative_attempt"], 2)
 
     @staticmethod
     def _strategy_reflection():

@@ -70,10 +70,12 @@ mutation/strategy_reflection/
   commentator_01.json
   ...
   coach_input.json
-  coach_prompt.txt
-  coach_request.json
-  coach_response.json
-  coach_raw.txt
+  commentary/<match_id>/result.json
+  commentary/<match_id>/request_attempt_NNN.json
+  commentary/<match_id>/response_attempt_NNN.json
+  reflection/<role>_call.json
+  reflection/<role>_request_attempt_NNN.json
+  reflection/<role>_response_attempt_NNN.json
   coach_output.json
   coach_result.json
   child_strategy_prompt.txt
@@ -84,11 +86,12 @@ Every role envelope records `role`, `candidate_id`, `generation_index`,
 `request_id`, model-configuration identity, prompt version, and schema version.
 Every attempt additionally records UTC start/finish timestamps, monotonic
 duration, status, and error. The same attempt has one compact `llm_request`
-event in run `timing.jsonl`; the exact prompt/response remains only in the
-candidate-owned role artifacts and is not duplicated under `llm_logs/`.
+event in run `timing.jsonl`. Successful calls retain metadata and canonical
+run-relative artifact references; raw bytes are persisted before parsing. Failures
+without durable references retain raw payloads inline.
 The numbered Commentator files contain the exact parsed responses in call order.
 `coach_input.json` contains the semantic render inputs and selected Coach prompt
-name, while `coach_prompt.txt` is the exact bounded prompt sent.
+name; `result.json` points to the selected attempt request and response.
 `coach_output.json` is the parsed response before validation or normalization;
 it therefore preserves any model-provided parent-policy echo losslessly.
 `coach_result.json` is the validated runtime result and always takes

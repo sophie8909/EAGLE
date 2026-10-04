@@ -77,5 +77,16 @@ class GuiMatchOpponentTests(unittest.TestCase):
         self.assertEqual(classpath[:3], ["/allibot.jar", "/candidate/classes", "/microrts/bin"])
 
 
+    def test_canonical_candidate_source_does_not_require_generation_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            folder = root / "candidates/current"
+            (folder / "phenotype").mkdir(parents=True)
+            (folder / "candidate.json").write_text(json.dumps({"candidate_id": "current"}))
+            source = folder / "phenotype/CandidateAgent.java"
+            source.write_text("package ai.generated; public class CandidateAgent {}")
+            self.assertEqual(gui.load_candidate_source(root, "current"), source)
+
+
 if __name__ == "__main__":
     unittest.main()

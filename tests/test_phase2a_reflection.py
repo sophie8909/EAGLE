@@ -224,9 +224,11 @@ class Phase2AReflectionTests(unittest.TestCase):
             mutation_dir = Path(temp) / "mutation" / "prompt_reflection"
             self.assertEqual(result.status, "failed")
             self.assertEqual(len(result.attempts), 2)
-            self.assertTrue((mutation_dir / "reflector_request.txt").exists())
-            self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
+            self.assertFalse((mutation_dir / "reflector_request.txt").exists())
+            self.assertFalse((mutation_dir / "reflector_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_attempt_002_request.txt").exists())
             self.assertTrue((mutation_dir / "reflector_attempt_002_response_raw.txt").exists())
+            self.assertEqual(result.to_dict()["representative_attempt"], 2)
             self.assertIsNotNone(result.error)
 
     def test_reflection_request_is_not_blindly_truncated(self):

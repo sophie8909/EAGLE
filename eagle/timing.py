@@ -74,7 +74,6 @@ def build_generation_event(
         duration(item.timing.get("generation_llm"))
         + duration(item.timing.get("reflection_llm"))
         + duration(item.timing.get("rewrite_llm"))
-        + duration(item.timing.get("strategy_alignment_llm"))
         for item in values
     )
     return {

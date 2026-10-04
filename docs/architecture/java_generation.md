@@ -55,7 +55,7 @@ security checks pass, normalization deterministically combines the configured
 canonical scaffold with only the extracted strategy region. Thus harmless model
 rewrites or deletion of fixed code are retained as extracted evidence but never
 enter validation, compilation, or the phenotype. Extracted/normalized generation
-evidence remains under `generation/`; only a compilation success creates the
+evidence remains under `generation/attempts/attempt_NNN/`; only a compilation success creates the
 canonical `phenotype/CandidateAgent.java`.
 
 For every Generator-decoded candidate, including both inherited generation-zero
@@ -111,8 +111,9 @@ Generator call.
    normalized source that passes validation.
 5. Stop at the first validation+compilation success and promote its isolated
    classes and source as the only canonical phenotype. If all attempts fail,
-   project the final source only under `generation/` as failure evidence; do not
-   create a canonical phenotype.
+   point `generation/result.json` at the representative failed attempt; for
+   source_without_generation failures persist `generation/failed_candidate.java`;
+   do not create a canonical phenotype.
 6. Run Integration once for the canonical success, then reuse the identical
    source/classes for every evaluation match. Its bounded probe loads the real
    populated `basesWorkers8x8.xml` map twice, exercises both player sides with

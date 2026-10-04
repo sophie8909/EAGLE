@@ -83,15 +83,14 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             {"mutation_max_attempts": 1}
         )
         candidate = self._candidate()
-        mutated = PromptRewriteMutation(
-            config,
-            mutation_type="prompt",
-            reflection_backend=backend,
-            rewrite_backend=backend,
-        ).mutate(candidate, self._context())
-
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            mutated = PromptRewriteMutation(
+                config,
+                mutation_type="prompt",
+                reflection_backend=backend,
+                rewrite_backend=backend,
+            ).mutate(candidate, self._context(), artifact_dir=root / "candidates" / candidate.id)
             evaluation = evaluate_candidate(
                 mutated,
                 config=config,
@@ -105,9 +104,9 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(root / "candidates", evaluation)
             candidate_dir = root / "candidates" / candidate.id
             self.assertEqual(evaluation.candidate.status, "failed")
-            self.assertTrue((candidate_dir / "mutation" / "prompt_reflection" / "reflector_response_raw.txt").exists())
-            self.assertTrue((candidate_dir / "mutation" / "prompt_reflection" / "rewriter_response_raw.txt").exists())
-            self.assertTrue((candidate_dir / "generation" / "response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "prompt_reflection" / "reflector_attempt_001_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "prompt_reflection" / "rewriter_attempt_001_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "generation/attempts/attempt_001/response_raw.txt").exists())
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "error")
 
@@ -135,7 +134,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             mutated = mutation.mutate(
                 candidate,
                 self._context(),
-                artifact_dir=root / candidate.id,
+                artifact_dir=root / "candidates" / candidate.id,
             )
             self.assertEqual(len(backend.calls), 2)
             if mutation_type == "strategy":
@@ -168,28 +167,28 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             mutation_dir = candidate_dir / "mutation" / f"{mutation_type}_reflection"
             generation_dir = candidate_dir / "generation"
             for name in (
-                "reflector_request.txt",
-                "reflector_response_raw.txt",
-                "rewriter_request.txt",
-                "rewriter_response_raw.txt",
+                "reflector_attempt_001_request.txt",
+                "reflector_attempt_001_response_raw.txt",
+                "rewriter_attempt_001_request.txt",
+                "rewriter_attempt_001_response_raw.txt",
                 "metadata.json",
             ):
                 self.assertTrue((mutation_dir / name).exists(), name)
-            for name in (
-                "request.txt",
-                "response_raw.txt",
-                "extracted_candidate.java",
-                "normalized_candidate.java",
-                "result.json",
-            ):
-                self.assertTrue((generation_dir / name).exists(), name)
+            for alias in ("reflector_request.txt", "reflector_response_raw.txt", "rewriter_request.txt", "rewriter_response_raw.txt"):
+                self.assertFalse((mutation_dir / alias).exists(), alias)
+            generation_record = json.loads((generation_dir / "result.json").read_text())
+            attempt_dir = candidate_dir / generation_record["canonical_attempt_artifact"]
+            for name in ("request.txt", "response_raw.txt", "extracted_candidate.java", "normalized_candidate.java", "result.json"):
+                self.assertTrue((attempt_dir / name).is_file(), name)
+                if name != "result.json":
+                    self.assertFalse((generation_dir / name).exists(), name)
 
-            generation_request = (generation_dir / "request.txt").read_text(encoding="utf-8")
+            generation_request = (attempt_dir / "request.txt").read_text(encoding="utf-8")
             self.assertIn(rewritten, generation_request)
             self.assertIn("canonical checked-in scaffold", generation_request)
-            self.assertIn("package ai.generated;", (generation_dir / "response_raw.txt").read_text(encoding="utf-8"))
+            self.assertIn("package ai.generated;", (attempt_dir / "response_raw.txt").read_text(encoding="utf-8"))
             self.assertEqual(
-                (generation_dir / "normalized_candidate.java").read_text(encoding="utf-8"),
+                (attempt_dir / "normalized_candidate.java").read_text(encoding="utf-8"),
                 evaluation.result.assembled_java,
             )
 

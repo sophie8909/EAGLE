@@ -53,35 +53,32 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertIsNone(evaluation.result.failure_stage)
             self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
             self.assertTrue(all(value != -1000 for value in evaluation.candidate.fitness_objectives.values()))
-            self.assertIsNotNone(evaluation.function_capability_result)
-            self.assertIsNotNone(evaluation.strategy_alignment_result)
-            self.assertEqual(evaluation.strategy_alignment_result.score, 10)
+            self.assertIsNone(evaluation.function_capability_result)
+            self.assertIsNone(evaluation.strategy_alignment_result)
             self.assertEqual(evaluation.candidate.game_eval_result["game_performance"], evaluation.game_metrics.objective)
 
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(len(timing["match_durations_seconds"]), config.expected_match_count)
             self.assertEqual(timing["evaluation"]["status"], "success")
-            self.assertEqual(timing["strategy_alignment_llm"]["attempts"][0]["attempt"], 1)
+            self.assertNotIn("strategy_alignment_llm", timing)
             self.assertGreaterEqual(timing["objective_calculation_duration_seconds"], 0)
             self.assertGreaterEqual(timing["matches_total_duration_seconds"], 0)
 
             for index in range(config.expected_match_count):
                 match_dir = candidate_dir / "matches" / f"match_{index:02d}"
                 result = json.loads((match_dir / "result.json").read_text(encoding="utf-8"))
-                match_timing = json.loads((match_dir / "timing.json").read_text(encoding="utf-8"))
+
                 self.assertNotIn("seed", result)
                 self.assertEqual(result["source_hash"], evaluation.match_results[0].source_hash)
                 self.assertEqual(result["class_hash"], evaluation.match_results[0].class_hash)
-                self.assertEqual(match_timing["status"], "success")
+                self.assertEqual(result["timing"]["status"], "success")
+                self.assertEqual(result["artifact_paths"]["timing"], "result.json#/timing")
+                self.assertFalse((match_dir / "timing.json").exists())
 
-            alignment = json.loads((candidate_dir / "strategy_alignment" / "result.json").read_text(encoding="utf-8"))
-            self.assertEqual(alignment["parsed_response"]["score"], 10.0)
-            self.assertTrue((candidate_dir / "strategy_alignment" / "request.txt").read_text(encoding="utf-8"))
-            self.assertTrue((candidate_dir / "strategy_alignment" / "response_raw.txt").read_text(encoding="utf-8"))
-            capability = json.loads((candidate_dir / "evaluation" / "function_capability.json").read_text(encoding="utf-8"))
+            self.assertFalse((candidate_dir / "strategy_alignment").exists())
+            self.assertFalse((candidate_dir / "evaluation/function_capability.json").exists())
             objectives = json.loads((candidate_dir / "evaluation" / "objectives.json").read_text(encoding="utf-8"))
             summary = json.loads((candidate_dir / "candidate.json").read_text(encoding="utf-8"))
-            self.assertEqual(capability["function_score"], evaluation.code_quality_breakdown.function_score)
             self.assertEqual(objectives["objective_names"], list(LEXICASE_CASES))
             self.assertEqual(set(objectives["opponent_scores"]), set(LEXICASE_CASES))
             self.assertEqual(summary["status"], "evaluated")
@@ -150,7 +147,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertEqual(len(game_performance["opponent_results"]), len(LEXICASE_CASES))
             self.assertEqual(len(timing["match_durations_seconds"]), config.expected_match_count)
             self.assertEqual(timing["evaluation"]["status"], "failed")
-            self.assertEqual(timing["strategy_alignment_llm"]["attempts"], [])
+            self.assertNotIn("strategy_alignment_llm", timing)
 
 
 if __name__ == "__main__":

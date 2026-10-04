@@ -15,7 +15,7 @@ from eagle.generation.java_agent_generator import extract_code_from_output, norm
 from eagle.candidate import Candidate, compact_mutation_record
 from eagle.config import ExperimentConfig
 from eagle.llm import LLMServerError
-from eagle.operators.reflection import ReflectionAttempt, ReflectionResult, ReflectionStage, _timing_payload
+from eagle.operators.reflection import ReflectionAttempt, ReflectionResult, ReflectionStage, _run_relative_artifact_base, _timing_payload
 from eagle.operators.context import ReflectionContext
 from eagle.timing import utc_now
 from eagle.prompts import load_prompt, render_prompt
@@ -23,7 +23,7 @@ from eagle.operators.context import coerce_structured_context
 from eagle.operators.reflection_prompts import structural_code_evidence
 
 
-CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v4"
+CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v5"
 
 
 class CodeReflectionMutation:
@@ -108,6 +108,9 @@ class CodeReflectionMutation:
                 else "not_run"
             ),
             "attempts": [],
+            "selected_attempt": None,
+            "representative_attempt": None,
+            "representative_attempt_artifacts": None,
             "error": None,
             "model": getattr(self.backend, "model", None),
             "operation": getattr(self.backend, "operation", None),
@@ -175,8 +178,6 @@ class CodeReflectionMutation:
         metadata["reflection_history"] = history
         self._write_result(
             target_dir,
-            request="",
-            response="",
             parent_java=parent_java,
             reflected_java="",
             reflection=reflection,
@@ -267,6 +268,12 @@ class CodeReflectionMutation:
             )
             if hasattr(self.backend, "prepare_request"):
                 attempt_request = self.backend.prepare_request(attempt_request)
+            if target_dir is not None:
+                _write_text(
+                    target_dir / "mutation" / "code_reflection"
+                    / f"revision_attempt_{attempt_number:03d}_request.txt",
+                    attempt_request,
+                )
             if hasattr(self.backend, "set_generation_attempt_context"):
                 self.backend.set_generation_attempt_context(
                     attempt_number,
@@ -274,15 +281,31 @@ class CodeReflectionMutation:
                 )
             if hasattr(self.backend, "set_generation_request_kind"):
                 self.backend.set_generation_request_kind("code_reflection")
+            if hasattr(self.backend, "set_request_artifact_dir"):
+                self.backend.set_request_artifact_dir(
+                    None
+                    if target_dir is None
+                    else target_dir / "mutation" / "code_reflection"
+                )
             started_at = utc_now()
             started = time.monotonic()
             status = "success"
             error: str | None = None
             try:
-                revision_response = self.backend.generate_from_request(
-                    candidate,
-                    "CandidateAgent",
-                    attempt_request,
+                try:
+                    revision_response = self.backend.generate_from_request(
+                        candidate,
+                        "CandidateAgent",
+                        attempt_request,
+                    )
+                finally:
+                    if hasattr(self.backend, "set_request_artifact_dir"):
+                        self.backend.set_request_artifact_dir(None)
+                self._write_revision_attempt(
+                    target_dir,
+                    attempt_number=attempt_number,
+                    request=attempt_request,
+                    response=revision_response,
                 )
                 reflected_java = normalize_java_agent_source(
                     extract_code_from_output(revision_response)
@@ -304,18 +327,38 @@ class CodeReflectionMutation:
                     error=error,
                 )
             )
-            self._write_revision_attempt(
-                target_dir,
-                attempt_number=attempt_number,
-                request=attempt_request,
-                response=revision_response,
+            response_path = (
+                None
+                if target_dir is None
+                else target_dir / "mutation" / "code_reflection"
+                / f"revision_attempt_{attempt_number:03d}_response_raw.txt"
             )
+            if response_path is not None and not response_path.exists():
+                self._write_revision_attempt(
+                    target_dir,
+                    attempt_number=attempt_number,
+                    request=attempt_request,
+                    response=revision_response,
+                )
             if status == "success":
                 break
             time.sleep(0)
 
         succeeded = bool(revision_required and reflected_java)
         direct_java = reflected_java or parent_java
+        representative_attempt = (
+            revision_attempts[-1].attempt if revision_attempts else None
+        )
+        revision_stage_dir = (
+            None
+            if target_dir is None
+            else target_dir / "mutation" / "code_reflection"
+        )
+        revision_artifact_base = _run_relative_artifact_base(
+            revision_stage_dir,
+            self.reflector.logger,
+            fallback=f"candidates/{candidate.id}/mutation/code_reflection",
+        )
         revision = {
             "stage": "code_revision",
             "request": base_request,
@@ -330,6 +373,22 @@ class CodeReflectionMutation:
                 else "not_run"
             ),
             "attempts": [attempt.to_dict() for attempt in revision_attempts],
+            "selected_attempt": representative_attempt if succeeded else None,
+            "representative_attempt": representative_attempt,
+            "representative_attempt_artifacts": (
+                None
+                if representative_attempt is None
+                else {
+                    "request": (
+                        f"{revision_artifact_base}/"
+                        f"revision_attempt_{representative_attempt:03d}_request.txt"
+                    ),
+                    "response_raw": (
+                        f"{revision_artifact_base}/"
+                        f"revision_attempt_{representative_attempt:03d}_response_raw.txt"
+                    ),
+                }
+            ),
             "error": None if succeeded else last_revision_error,
             "model": getattr(self.backend, "model", None),
             "operation": getattr(self.backend, "operation", None),
@@ -358,8 +417,6 @@ class CodeReflectionMutation:
         )
         if target_dir is not None:
             directory = target_dir / "mutation" / "code_reflection"
-            _write_text(directory / "revision_request.txt", base_request)
-            _write_text(directory / "revision_response_raw.txt", revision_response)
             _write_text(directory / "reflected_candidate.java", direct_java)
             _write_json(directory / "metadata.json", _metadata_record(mutation_record))
         return replace(
@@ -445,21 +502,15 @@ class CodeReflectionMutation:
         if target_dir is None:
             return
         directory = target_dir / "mutation" / "code_reflection"
-        _write_text(
-            directory / f"revision_attempt_{attempt_number:03d}_request.txt",
-            request,
-        )
-        _write_text(
-            directory / f"revision_attempt_{attempt_number:03d}_response_raw.txt",
-            response,
-        )
+        for name, value in (("request", request), ("response_raw", response)):
+            path = directory / f"revision_attempt_{attempt_number:03d}_{name}.txt"
+            if not path.is_file():
+                _write_text(path, value)
 
     @staticmethod
     def _write_result(
         target_dir: Path | None,
         *,
-        request: str,
-        response: str,
         parent_java: str,
         reflected_java: str,
         reflection: ReflectionResult,
@@ -470,11 +521,7 @@ class CodeReflectionMutation:
         if target_dir is None:
             return
         directory = target_dir / "mutation" / "code_reflection"
-        _write_text(directory / "reflector_request.txt", reflection.request)
-        _write_text(directory / "reflector_response_raw.txt", reflection.raw_response)
         _write_json(directory / "reflection_conclusion.json", reflection_conclusion)
-        _write_text(directory / "revision_request.txt", request)
-        _write_text(directory / "revision_response_raw.txt", response)
         _write_text(directory / "parent_candidate.java", parent_java)
         _write_text(directory / "reflected_candidate.java", reflected_java)
         _write_json(directory / "metadata.json", _metadata_record(metadata))

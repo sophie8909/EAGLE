@@ -623,9 +623,9 @@ def _request_response_index(trial_dir: Path) -> dict[str, object]:
 def _is_root_request_path(path: str) -> bool:
     """Identify requests whose inputs precede every stochastic role output."""
 
-    if path.endswith("/reflector_request.txt"):
+    if path.endswith(("/reflector_request.txt", "/reflector_attempt_001_request.txt")):
         return True
-    return "/strategy_reflection/commentary/" in path and path.endswith("/request.json")
+    return "/strategy_reflection/commentary/" in path and path.endswith(("/request.json", "/request_attempt_001.json"))
 
 
 def _indexed_file(

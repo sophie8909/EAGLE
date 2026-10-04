@@ -61,9 +61,36 @@ class ReflectionInspectionTests(unittest.TestCase):
                     / "trial_01"
                     / "mutation"
                     / "strategy_reflection"
-                    / "coach_raw.txt"
+                    / "coach_response_attempt_001.json"
                 ).is_file()
             )
+            referenced_artifacts: list[str] = []
+
+            def collect_references(value: object) -> None:
+                if isinstance(value, dict):
+                    for key, item in value.items():
+                        if key in {
+                            "artifact_refs",
+                            "selected_attempt_artifacts",
+                            "representative_attempt_artifacts",
+                        } and isinstance(item, dict):
+                            referenced_artifacts.extend(
+                                reference
+                                for reference in item.values()
+                                if isinstance(reference, str)
+                            )
+                        collect_references(item)
+                elif isinstance(value, list):
+                    for item in value:
+                        collect_references(item)
+
+            for path in output.rglob("*.json"):
+                collect_references(json.loads(path.read_text(encoding="utf-8")))
+            self.assertTrue(list((output / "llm_logs").glob("*.json")))
+            self.assertTrue(referenced_artifacts)
+            for reference in referenced_artifacts:
+                self.assertFalse(Path(reference).is_absolute(), reference)
+                self.assertTrue((output / reference).is_file(), reference)
 
     def test_config_rejects_missing_reflection_type(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

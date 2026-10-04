@@ -325,11 +325,11 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 coach_input["semantic_payload"]["gameplay_contract"],
                 coach_input["render_variables"]["gameplay_contract"],
             )
-            self.assertEqual(
-                (reflection_dir / "coach_prompt.txt").read_text(encoding="utf-8"),
-                next(item for item in backend.prompts if "ROLE: coach" in item),
-            )
-            coach_raw = (reflection_dir / "coach_raw.txt").read_text(encoding="utf-8")
+            coach_call = json.loads((reflection_dir / "coach_call.json").read_text(encoding="utf-8"))
+            coach_attempt = coach_call["selected_attempt"]
+            coach_request = json.loads((reflection_dir / f"coach_request_attempt_{coach_attempt:03d}.json").read_text(encoding="utf-8"))["prompt"]
+            self.assertEqual(coach_request, next(item for item in backend.prompts if "ROLE: coach" in item))
+            coach_raw = json.loads((reflection_dir / f"coach_response_attempt_{coach_attempt:03d}.json").read_text(encoding="utf-8"))["response"]
             coach_output = json.loads((reflection_dir / "coach_output.json").read_text(encoding="utf-8"))
             self.assertEqual(coach_output, json.loads(coach_raw))
             self.assertEqual(coach_output["unconsumed_exact_field"], "coach-raw-value")
@@ -347,8 +347,8 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 (reflection_dir / "child_strategy_prompt.txt").read_text(encoding="utf-8"),
                 result.candidate.strategy_prompt,
             )
-            coach_request = json.loads((reflection_dir / "coach_request.json").read_text(encoding="utf-8"))
-            self.assertEqual(coach_request["parent_candidate_id"], "parent-source")
+            coach_call = json.loads((reflection_dir / "coach_call.json").read_text(encoding="utf-8"))
+            self.assertEqual(coach_call["parent_candidate_id"], "parent-source")
 
     def test_ten_selected_logs_have_ten_independent_commentator_calls(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -457,7 +457,10 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "commentary" / "match-1" / "match_analysis.json").exists())
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "commentary" / "match-1" / "commentary_status.json").exists())
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "coach_result.json").exists())
-            coach_request = json.loads((root / "child" / "mutation" / "strategy_reflection" / "coach_request.json").read_text(encoding="utf-8"))["prompt"]
+            reflection_dir = root / "child" / "mutation" / "strategy_reflection"
+            coach_call = json.loads((reflection_dir / "coach_call.json").read_text(encoding="utf-8"))
+            selected_attempt = coach_call["selected_attempt"]
+            coach_request = json.loads((reflection_dir / f"coach_request_attempt_{selected_attempt:03d}.json").read_text(encoding="utf-8"))["prompt"]
             self.assertIn("commentator_diagnoses_and_evaluation_metadata", coach_request)
             self.assertIn("stable opening", coach_request)
             self.assertNotIn("ROLE: manager", "\n".join(mutation.backend.prompts))
@@ -616,7 +619,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 (reflection_dir / "coach_request_attempt_002.json").read_text(encoding="utf-8")
             )
             self.assertIn("coach output must not contain Java", second_request["prompt"])
-            self.assertEqual(second_attempt["prompt"], second_request["prompt"])
+            self.assertNotIn("prompt", second_attempt)
 
     def test_gameplay_invalid_coach_policy_uses_short_contract_rewriter(self) -> None:
         class ContractRewriteBackend:

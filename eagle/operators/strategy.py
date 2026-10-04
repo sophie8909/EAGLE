@@ -23,6 +23,7 @@ from eagle.evaluation.match_trace import iter_match_trace
 from eagle.candidate import Candidate
 from eagle.llm import LLMCallLogger, truncate_prompt
 from eagle.operators.context import ReflectionContext
+from eagle.operators.reflection import _run_relative_artifact_base
 from eagle.llm import parse_json_object_response
 from eagle.timing import utc_now
 from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
@@ -32,7 +33,7 @@ from eagle.strategy_diversity import build_strategy_niche, normalize_strategy_si
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
-ROLE_SCHEMA_VERSION = "strategy-reflection-v5"
+ROLE_SCHEMA_VERSION = "strategy-reflection-v6"
 PROMPT_VERSION = "sports-team-v6"
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 
@@ -325,11 +326,10 @@ class StrategyReflectionPipeline:
                     "commentator_diagnoses_and_evaluation_metadata": coach_payload,
                 },
             })
-            _write_text(artifact_dir, "reflection/coach_prompt.txt", bounded_coach_request)
             coach_extra = {}
             if strategy_source_parent_id is not None:
                 coach_extra["parent_candidate_id"] = strategy_source_parent_id
-            coach_raw, validated_coach = self._call_role(
+            _, validated_coach = self._call_role(
                 "coach",
                 bounded_coach_request,
                 candidate,
@@ -340,7 +340,6 @@ class StrategyReflectionPipeline:
                     parent_strategy_prompt=candidate.strategy_prompt,
                 ),
             )
-            _write_text(artifact_dir, "reflection/coach_raw.txt", coach_raw)
             coach_output, coach = validated_coach
             _write_json(artifact_dir, "reflection/coach_output.json", coach_output)
             proposed_strategy = normalize_prompt(
@@ -368,12 +367,7 @@ class StrategyReflectionPipeline:
                     "proposed_strategy_prompt": proposed_strategy,
                     "validation_error": initial_validation_error,
                 })
-                _write_text(
-                    artifact_dir,
-                    "reflection/strategy_contract_rewriter_prompt.txt",
-                    contract_request,
-                )
-                contract_raw, validated_contract = self._call_role(
+                _, validated_contract = self._call_role(
                     "strategy_contract_rewriter",
                     contract_request,
                     candidate,
@@ -383,11 +377,6 @@ class StrategyReflectionPipeline:
                 )
                 contract_output, corrected_strategy = validated_contract
                 contract_rewrite_applied = True
-                _write_text(
-                    artifact_dir,
-                    "reflection/strategy_contract_rewriter_raw.txt",
-                    contract_raw,
-                )
                 _write_json(
                     artifact_dir,
                     "reflection/strategy_contract_rewriter_output.json",
@@ -495,9 +484,17 @@ class StrategyReflectionPipeline:
         trace = {"role": role, "candidate_id": candidate.id, "generation_index": candidate.generation, "request_id": request_id, "model_configuration_identity": self.model_identity, "prompt_version": PROMPT_VERSION, "schema_version": ROLE_SCHEMA_VERSION, **(extra or {})}
         if match_id is not None:
             trace["match_id"] = match_id
+        stage_dir = (
+            None
+            if artifact_dir is None
+            else artifact_dir / "mutation" / "strategy_reflection"
+        )
+        artifact_base = _run_relative_artifact_base(
+            stage_dir,
+            self.timing_logger,
+            fallback=f"candidates/{candidate.id}/mutation/strategy_reflection",
+        )
         bounded = truncate_prompt(prompt, max_chars=self.max_prompt_chars)
-        name = "request.json" if not suffix else f"request_{suffix}.json"
-        _write_json(artifact_dir, f"commentary/{match_id}/{name}" if match_id else f"reflection/{role}_{name}", {**trace, "prompt": bounded})
         last_error = ""
         last_response = ""
         for attempt in range(1, self.max_attempts + 1):
@@ -517,6 +514,17 @@ class StrategyReflectionPipeline:
                 )
             )
             attempt_request_name = f"request_attempt_{attempt:03d}.json"
+            attempt_request_ref = (
+                attempt_request_name
+                if match_id
+                else f"{role}_{attempt_request_name}"
+            )
+            attempt_name = f"response_attempt_{attempt:03d}.json"
+            attempt_response_ref = (
+                attempt_name
+                if match_id
+                else f"{role}_{attempt_name}"
+            )
             _write_json(
                 artifact_dir,
                 f"commentary/{match_id}/{attempt_request_name}"
@@ -527,6 +535,21 @@ class StrategyReflectionPipeline:
             try:
                 raw = self.backend.generate(attempt_prompt)
                 last_response = raw
+                # Persist the exact raw transport payload before any semantic
+                # parsing or validation can fail or be interrupted.
+                _write_json(
+                    artifact_dir,
+                    f"commentary/{match_id}/{attempt_name}"
+                    if match_id
+                    else f"reflection/{role}_{attempt_name}",
+                    {
+                        **trace,
+                        "attempt": attempt,
+                        "status": "received",
+                        "started_at": started_at,
+                        "response": raw,
+                    },
+                )
                 validated = validator(raw)
             except (OSError, RuntimeError, TypeError, ValueError) as exc:
                 last_error = str(exc) or type(exc).__name__
@@ -540,10 +563,8 @@ class StrategyReflectionPipeline:
                     "finished_at": finished_at,
                     "duration_seconds": duration_seconds,
                     "response": raw,
-                    "prompt": attempt_prompt,
                     "error": last_error,
                 }
-                attempt_name = f"response_attempt_{attempt:03d}.json"
                 _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
                 self._write_role_timing(
                     trace,
@@ -567,12 +588,32 @@ class StrategyReflectionPipeline:
                 "finished_at": finished_at,
                 "duration_seconds": duration_seconds,
                 "response": raw,
-                "prompt": attempt_prompt,
             }
-            response_name = "response.json" if not suffix else f"response_{suffix}.json"
-            _write_json(artifact_dir, f"commentary/{match_id}/{response_name}" if match_id else f"reflection/{role}_{response_name}", envelope)
-            attempt_name = f"response_attempt_{attempt:03d}.json"
             _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
+            result_name = "result.json" if not suffix else f"result_{suffix}.json"
+            result_path = (
+                f"commentary/{match_id}/{result_name}"
+                if match_id
+                else f"reflection/{role}_call.json"
+            )
+            _write_json(artifact_dir, result_path, {
+                **trace,
+                "status": "success",
+                "selected_attempt": attempt,
+                "representative_attempt": attempt,
+                "selected_attempt_artifacts": {
+                    "request": (
+                        f"{artifact_base}/commentary/{match_id}/{attempt_request_ref}"
+                        if match_id
+                        else f"{artifact_base}/{attempt_request_ref}"
+                    ),
+                    "response": (
+                        f"{artifact_base}/commentary/{match_id}/{attempt_response_ref}"
+                        if match_id
+                        else f"{artifact_base}/{attempt_response_ref}"
+                    ),
+                },
+            })
             self._write_role_timing(
                 trace,
                 role=role,
@@ -584,6 +625,32 @@ class StrategyReflectionPipeline:
                 failure_category=None,
             )
             return raw, validated
+        result_name = "result.json" if not suffix else f"result_{suffix}.json"
+        result_path = (
+            f"commentary/{match_id}/{result_name}"
+            if match_id
+            else f"reflection/{role}_call.json"
+        )
+        final_attempt = self.max_attempts
+        _write_json(artifact_dir, result_path, {
+            **trace,
+            "status": "failed",
+            "selected_attempt": None,
+            "representative_attempt": final_attempt,
+            "representative_attempt_artifacts": {
+                "request": (
+                    f"{artifact_base}/commentary/{match_id}/request_attempt_{final_attempt:03d}.json"
+                    if match_id
+                    else f"{artifact_base}/{role}_request_attempt_{final_attempt:03d}.json"
+                ),
+                "response": (
+                    f"{artifact_base}/commentary/{match_id}/response_attempt_{final_attempt:03d}.json"
+                    if match_id
+                    else f"{artifact_base}/{role}_response_attempt_{final_attempt:03d}.json"
+                ),
+            },
+            "error": last_error or f"{role} failed after {self.max_attempts} attempts",
+        })
         raise RuntimeError(last_error or f"{role} failed after {self.max_attempts} attempts")
 
     def _write_role_timing(

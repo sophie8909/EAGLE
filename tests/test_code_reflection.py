@@ -215,8 +215,11 @@ class CodeReflectionTests(unittest.TestCase):
             self.assertEqual(conclusion["strategy_fidelity"], "unfaithful")
             self.assertEqual(conclusion["code_simplicity"], "concise")
             self.assertEqual(conclusion["game_compliance"], "compliant")
-            self.assertTrue((mutation_dir / "revision_request.txt").exists())
-            self.assertTrue((mutation_dir / "revision_response_raw.txt").exists())
+            self.assertFalse((mutation_dir / "revision_request.txt").exists())
+            self.assertFalse((mutation_dir / "revision_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "revision_attempt_001_request.txt").exists())
+            self.assertTrue((mutation_dir / "revision_attempt_001_response_raw.txt").exists())
+            self.assertEqual(metadata["revision"]["selected_attempt"], 1)
 
     def test_code_diagnostics_are_omitted_for_a_different_java_source(self) -> None:
         backend = ScriptedJavaBackend((PARENT_JAVA,))

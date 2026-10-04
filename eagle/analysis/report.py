@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 
 from eagle.analysis.loader import RunData
+from eagle.opponent_archive import build_opponent_archive
 
 
 OUTPUT_FILES = (
@@ -23,7 +24,7 @@ OUTPUT_FILES = (
     "aos_operator_statistics.csv",
     "strategy_diversity.csv", "strategy_niches.csv",
     "objective_statistics.csv", "operator_statistics.csv",
-    "timing_statistics.csv", "error_statistics.csv",
+    "timing_statistics.csv", "error_statistics.csv", "opponent_representatives.json",
 )
 
 
@@ -58,6 +59,10 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     _write_csv(output / "operator_statistics.csv", operator_rows)
     _write_csv(output / "timing_statistics.csv", timing_rows)
     _write_csv(output / "error_statistics.csv", error_rows)
+    (output / "opponent_representatives.json").write_text(
+        json.dumps(build_opponent_archive(data.run_dir), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     summary = {
         "schema_version": "eagle-analysis-v2",
         "run_dir": str(data.run_dir),

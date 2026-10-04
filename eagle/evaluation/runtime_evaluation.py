@@ -177,11 +177,11 @@ class MatchResult:
             "persistence_error": self.persistence_error,
             "artifact_paths": {
                 "raw_result": "raw_result.json",
-                "stdout": "stdout.txt",
-                "stderr": "stderr.txt",
+                "stdout": "stdout.txt" if self.stdout else None,
+                "stderr": "stderr.txt" if self.stderr else None,
                 "telemetry": self.telemetry_path,
                 "performance_breakdown": self.summary_path,
-                "timing": "timing.json",
+                "timing": "result.json#/timing",
             },
             "timing": {
                 "started_at": self.started_at,
@@ -816,15 +816,16 @@ def validate_match_result(
 
 def _persist_result(match_dir: Path, result: MatchResult) -> None:
     try:
-        (match_dir / "stdout.txt").write_text(result.stdout, encoding="utf-8")
-        (match_dir / "stderr.txt").write_text(result.stderr, encoding="utf-8")
+        if result.stdout:
+            (match_dir / "stdout.txt").write_text(result.stdout, encoding="utf-8")
+        if result.stderr:
+            (match_dir / "stderr.txt").write_text(result.stderr, encoding="utf-8")
         payload = result.to_json_dict(include_telemetry=False)
         (match_dir / "result.json").write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        timing = payload["timing"]
-        (match_dir / "timing.json").write_text(json.dumps(timing, indent=2), encoding="utf-8")
+
     except OSError:
         # The caller receives the process/result evidence even if the filesystem fails.
         return

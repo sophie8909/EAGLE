@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-10-02. This file describes executable repository behavior.
+Snapshot: 2026-10-04. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -159,7 +159,7 @@ anchors run identity. A corrected display-only `experiment_name` is accepted;
 all execution-affecting fields remain strict. Direct config-plus-run resume
 continues to compare the name as well.
 
-New `eagle-run-v2` runs persist one fully resolved `config.yaml`. The root has
+New `eagle-run-v2` runs persist one fully resolved `config.yaml`; generation snapshots remain `eagle-generation-v3`, while candidate records use `eagle-candidate-v6` (`phase4-v6`). Subschemas are `reflection-v3`, `phase2b-v3`, `eagle-code-reflection-v5`, `strategy-reflection-v6`, and `eagle-llm-call-v2`. The root has
 only manifest/config/summary/timing plus canonical directories. Candidate,
 generation, match, archive, and config compatibility duplicates have been
 removed. Analysis and resume both require v2 and use the run-local model and
@@ -171,7 +171,7 @@ All executable prompt bodies live under `prompts/`, with exactly one UTF-8
 `.txt` file per prompt. `prompts/manifest.toml` stores only prompt metadata and
 placeholder contracts. This includes the reusable generation prompt, Code
 Reflection, the library Strategy Reflection/Rewrite
-path, Match Commentator, all four Coach intents, generation, Strategy Alignment,
+path, Match Commentator, all four Coach intents, generation,
 the compile-guided Java repair decoder, the action-API guide, and endpoint
 preflight. The manifest also owns one immutable strategy-level MicroRTS gameplay
 contract shared by policy generation and strategy-facing roles. Experiment YAML files reference
@@ -190,8 +190,8 @@ replicated to the configured population; the no-op source may also be selected
 as the immutable Generator scaffold. In inherited `llm_generated_policies` mode
 that one seed remains in slot one and policy-only LLM calls fill the other slots.
 Empty-policy
-candidates cannot enter Prompt Reflection, and Strategy Alignment is not
-applicable to them.
+candidates cannot enter Prompt Reflection. Normal evaluation does not call Function
+Capability or Strategy Alignment or write their diagnostic files or timing.
 
 The `0903_llm_initial_population` config uses the separately checked-in
 `eagle/java_seeds/worker_rush/CandidateAgent.java`. It preserves one configured Worker Rush policy,

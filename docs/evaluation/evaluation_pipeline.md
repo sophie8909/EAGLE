@@ -99,10 +99,7 @@ so an upstream defect can neither crash the JVM nor become a candidate win.
 ## Objective and diagnostics
 
 `eagle/evaluation/objectives.py` returns ten scores in fixed-roster mode. Self-play
-stores only aggregate `game_performance` as fitness. `code_quality`, compiler diagnostics, function coverage,
-strategy alignment, and runtime failure details remain in their diagnostic
-artifacts and reflection context; none is inserted into the evolutionary
-objective vector.
+stores only aggregate `game_performance` as fitness. `code_quality`, compiler diagnostics, and runtime failure details remain diagnostics; normal evaluation does not call Function Capability or Strategy Alignment or write their files or timing. Standalone helpers remain available to explicit tooling.
 
 ## Artifacts
 

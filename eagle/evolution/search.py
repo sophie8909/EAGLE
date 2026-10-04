@@ -21,7 +21,6 @@ from eagle.evaluation.pipeline import evaluate_population
 from eagle.evolution.generation import run_generation_step
 from eagle.evolution.runtime import build_search_runtime, preflight_llm_endpoint
 from eagle.generation.backend import InitialJavaSeedBackend
-from eagle.opponent_archive import ensure_opponent_archive, update_opponent_archive
 from eagle.operators.initialization import generation_zero_uses_fixed_java, initialize_population
 from eagle.operators.selection import best_candidate, population_signature
 from eagle.run_artifacts import (
@@ -126,7 +125,6 @@ def _run_search_impl(
         on_run_created(run_dir)
     write_run_config(run_dir, config, mock=mock)
     ensure_strategy_archive(run_dir)
-    ensure_opponent_archive(run_dir)
 
     runtime = build_search_runtime(
         config,
@@ -191,8 +189,6 @@ def _run_search_impl(
     )
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, evaluated_population)
-    if config.evaluation_mode == "fixed_roster":
-        update_opponent_archive(run_dir, evaluated_population)
     append_event(run_dir / "timing.jsonl", build_generation_event(
         run_id=active_run_id,
         generation=0,

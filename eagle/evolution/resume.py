@@ -21,7 +21,6 @@ from eagle.strategy_diversity import (
     ensure_strategy_archive,
     update_strategy_archive,
 )
-from eagle.opponent_archive import ensure_opponent_archive, update_opponent_archive
 from eagle.operators.selection import best_candidate, population_signature
 from eagle.evolution.runtime import build_search_runtime, preflight_llm_endpoint
 from eagle.self_play import (
@@ -81,13 +80,10 @@ def _resume_search_impl(
         preflight_evaluation_opponents(config, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
     ensure_strategy_archive(run_dir)
-    ensure_opponent_archive(run_dir)
     # Backfill the archive from the surviving snapshot when resuming a run
     # created before strategy_archive.json existed.  Older candidates retain
     # the explicit ``unknown`` fallback and are not inferred from prompt text.
     update_strategy_archive(run_dir, population)
-    if config.evaluation_mode == "fixed_roster":
-        update_opponent_archive(run_dir, population)
     if completed_generation >= config.generations:
         best = best_candidate(population)
         return SearchResult(run_dir, population, best, completed_generation)

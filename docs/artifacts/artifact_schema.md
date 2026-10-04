@@ -1,7 +1,7 @@
 # Artifact schema
 
 This document owns the current `eagle-run-v2`, `eagle-generation-v3`, and
-`eagle-candidate-v5` layout. Timing and lineage fields are defined by
+`eagle-candidate-v6` layout (`phase4-v6`). Timing and lineage fields are defined by
 `timing_schema.md` and `lineage_schema.md`.
 
 ## Run root
@@ -18,7 +18,6 @@ runs/<run_id>/
 ├── classes/
 ├── archives/
 │   ├── strategy.json
-│   ├── opponents.json
 │   ├── semantic_signature_cache/
 │   └── error_memory.jsonl       # created when failures exist
 ├── llm_logs/
@@ -113,32 +112,27 @@ candidates/<candidate_id>/
 │   ├── code_reflection/
 ├── aos/
 ├── generation/
-│   ├── request.txt
-│   ├── response_raw.txt
-│   ├── extracted_candidate.java
-│   ├── normalized_candidate.java
-│   ├── repair_ledger.json
 │   ├── attempts/
-│   │   └── attempt_<nnn>/
+│   │   └── attempt_NNN/
 │   │       ├── request.txt
 │   │       ├── response_raw.txt
 │   │       ├── extracted_candidate.java
 │   │       ├── normalized_candidate.java
-│   │       ├── repair_input.json       # compile_repair attempts only
+│   │       ├── repair_input.json       # compile_repair only
 │   │       ├── validation/
 │   │       ├── compilation/
 │   │       ├── timing.json
 │   │       └── result.json
-│   └── result.json
+│   ├── repair_ledger.json
+│   ├── failed_candidate.java           # source_without_generation only
+│   └── result.json                     # selected/final pointers
 ├── validation/validation_result.json
 ├── compilation/
 ├── integration/
 ├── matches/
-├── strategy_alignment/
 └── evaluation/
     ├── game_performance.json
     ├── commentary_aggregation.json
-    ├── function_capability.json
     ├── code_quality.json
     ├── semantic_signature.json
     └── objectives.json
@@ -155,20 +149,20 @@ compilation, and timing. `request_kind` distinguishes `initial_decode`,
 `repair_of_attempt`, the previous source SHA-256, and a `repair_input.json`
 containing only that previous attempt's structured diagnostics. The compact
 `repair_ledger.json` links the chain without duplicating source or diagnostics.
-Attempt directories are append-distinct and failed evidence is never replaced
-by a later attempt. The flat `generation/`, `validation/`, and `compilation/`
-files project the selected success or final representative failure. A
-`phenotype/CandidateAgent.java` exists only after compilation success; an
-exhausted final source remains `generation/normalized_candidate.java` and is
-indexed as `failed_generation_source`. `generation/result.json` records
+Attempt payloads are written once; only the final outcome is updated. The
+`generation/result.json` pointers identify selected and final attempts.
+`phenotype/CandidateAgent.java` exists only after compilation success;
+the candidate index's `failed_generation_source` references the representative
+attempt's normalized source. A
+`source_without_generation` failure points to `generation/failed_candidate.java`. `generation/result.json` records
 `max_attempts`, nullable `selected_attempt`, `final_attempt`, canonical attempt
 reference (null on exhaustion), representative selected/final-failure attempt
 reference, and the projected request SHA-256. Attempt class workspaces are transient and
 candidate-isolated; only promoted canonical classes remain for Integration and
 matches. A partial persisted attempt is audit-only and a rerun refuses to
 overwrite it; resume starts from the last atomic generation boundary rather than
-continuing a half-decoded candidate. Only default fixed-seed generation zero has
-no `generation/attempts/` Java LLM evidence.
+continuing a half-decoded candidate. Zero-LLM source paths (`initial_java_seed` and self-play refresh) have no
+attempts or `generation/attempts/` directory.
 
 `extracted_candidate.java` is the normalized text extracted from the model's
 complete-file response and therefore preserves model-authored fixed-region
@@ -182,7 +176,7 @@ source references all use `normalized_candidate.java`.
 For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
 retains the configured seed policy and `generation/result.json` records
 operation `initial_java_seed`, no attempts, and checked-in source provenance.
-Request/raw-response files are empty. In inherited `configured_seeds` mode,
+No Java LLM request/raw-response files are created. In inherited `configured_seeds` mode,
 `genotype/inherited_java.java` retains the exact pre-generation no-op Java input
 for each replicated seed candidate; each candidate then owns ordinary bounded
 generation attempts and a separately generated phenotype. Later children use
@@ -225,10 +219,9 @@ The resolved `evaluation.self_play_opponent_library_capacity` bounds this
 archive; FIFO eviction removes only the oldest library references and never a
 candidate artifact.
 
-When the policy prompt is empty, `strategy_alignment/result.json` records
-`status: not_applicable`, a null score, and no attempts; its request/raw files
-are empty. This is distinct from an Alignment blocked by an earlier evaluation
-failure.
+Normal evaluation does not call Function Capability or Strategy Alignment and
+does not write their diagnostic files or timing. The standalone helper modules
+remain available to explicitly invoked tooling.
 
 Prompt Reflection evidence is stored under `mutation/prompt_reflection/`. It
 retains the exact alignment-review request/raw response, the separately bounded
@@ -240,10 +233,8 @@ evidence. The Rewriter deterministically changes only
 `genotype/code_generation_prompt.txt`.
 
 Code Reflection evidence is stored under `mutation/code_reflection/`. It
-retains `reflector_request.txt`, the raw and parsed conclusion in
-`reflector_response_raw.txt` and `reflection_conclusion.json`, every transported
-diagnosis attempt, `revision_request.txt`, every Java-revision attempt/raw
-response, `parent_candidate.java`, `reflected_candidate.java`, hashes, attempt
+retains `reflection_conclusion.json`, numbered request/raw attempt files, and
+`representative_attempt_artifacts` pointers for Reflector and Revision calls, `parent_candidate.java`, `reflected_candidate.java`, hashes, attempt
 timing, and terminal status. The parsed conclusion independently records strategy
 fidelity, code simplicity, and game compliance. The revision request contains the
 exact parsed conclusion, the explicit interface/unit reference, and the
@@ -253,7 +244,7 @@ passes, revision status is `not_required` and the parent Java is preserved. A
 successful reflected source enters the normal generation attempt ledger as
 `code_reflection_output` but causes no additional final Generator LLM request.
 Between diagnosis and the generation-wide materialization phase, its schema is
-`eagle-code-reflection-v4` with `revision_status: pending`; materialization
+`eagle-code-reflection-v5` with `revision_status: pending`; materialization
 updates the same artifact to its terminal status without discarding the original
 diagnosis/evidence. `reflection_model` and `revision_model` separately identify
 the primary and generation-phase models.
@@ -265,15 +256,14 @@ fallback reads for old prompt/phenotype paths, but ignores legacy
 `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
 `evaluation/matches.json` are not written.
 
+Generic successful LLM-call records use `eagle-llm-call-v2` metadata with canonical run-relative request/response references. Raw bytes are persisted before parsing; failures without durable references retain inline payloads. Mutation requests and responses live in numbered attempt artifacts; selected request/raw convenience aliases are not emitted. Loader fallbacks remain limited to the documented legacy prompt and phenotype paths.
+
 Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
 request, raw response, UTC-bounded attempts, status, and failure evidence even
 when later generation fails. Strategy Coach parsed output preserves the model's
 parent-policy echo, while validated `coach_result.json` takes the parent policy
-from the authoritative input artifact. The base Rewrite request remains in
-`rewriter_request.txt`, while each bounded
-Rewrite attempt also retains the exact transported request and raw response as
-`rewriter_attempt_<NNN>_request.txt` and
-`rewriter_attempt_<NNN>_response_raw.txt`. A retry request includes the prior deterministic
+from the authoritative input artifact. Bounded Rewrite attempts retain their request/raw files; compact metadata points
+to the representative attempt. A retry request includes the prior deterministic
 validation error; raw invalid output is never rewritten in place.
 Mutation-role run timing references the candidate-owned evidence without
 duplicating its prompt/response under `llm_logs/`. Adaptively credited offspring
@@ -312,9 +302,8 @@ matches/<match_id>/
 ├── match_trace_integrity.json
 ├── telemetry.json.gz
 ├── performance_breakdown.json
-├── stdout.txt
-├── stderr.txt
-└── timing.json
+├── stdout.txt                         # present only when nonempty
+└── stderr.txt                         # present only when nonempty
 ```
 
 Every normal-evaluation `result.json` and `match_metadata.json` records a
@@ -325,7 +314,7 @@ and `match_metadata.json` `evaluation_configuration.tick_limit` must equal the
 resolved cap of the associated map. Final-test summary map entries likewise
 retain `tick_limit` beside map ID and path.
 
-Compact mode does not request the transient Java XML replay and removes round-state inputs after durable telemetry/trace creation. Full mode retains both replay and round-state inputs. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
+Compact mode does not request the transient Java XML replay and removes round-state inputs after durable telemetry/trace creation. Full mode retains both replay and round-state inputs. `result.json` owns match timing; there is no `timing.json`. Empty stdout/stderr files are absent and have null references. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
 
 Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
 

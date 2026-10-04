@@ -164,8 +164,10 @@ def generate_java_agent_result(
         return JavaAgentGenerationResult(validation_result=blocked, strategy_region_score_result=evaluate_agent_strategy_region("", error=reason), failure_category=classify_generation_error(reason), failure_reason=reason, failure_stage="generation", validation_timing=validation_timing("blocked", blocked.error))
     if attempt_artifact_dir is not None:
         attempt_artifact_dir.mkdir(parents=True, exist_ok=True)
-        (attempt_artifact_dir / "request.txt").write_text(request_text, encoding="utf-8")
-        (attempt_artifact_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
+        if not (attempt_artifact_dir / "request.txt").is_file():
+            (attempt_artifact_dir / "request.txt").write_text(request_text, encoding="utf-8")
+        if not (attempt_artifact_dir / "response_raw.txt").is_file():
+            (attempt_artifact_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
     try:
         source = normalize_java_agent_source(extract_code_from_output(raw))
     except (ValueError, OSError) as exc:
@@ -202,10 +204,9 @@ def generate_java_agent_result(
             # Keep the extracted source and its structured marker diagnostics.
             # A malformed or incomplete full-file response is not normalizable.
             pass
-    validation = validate_generated_java_source(
-        source,
-        "CandidateAgent",
-        template_paths=template_paths,
+    validation = (
+        extracted_validation if source == extracted_source else
+        validate_generated_java_source(source, "CandidateAgent", template_paths=template_paths)
     )
     if attempt_artifact_dir is not None:
         (attempt_artifact_dir / "normalized_candidate.java").write_text(
