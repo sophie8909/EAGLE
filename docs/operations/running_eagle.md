@@ -57,10 +57,12 @@ Generation 0 is initialization. `generations: 20` therefore records generation 0
 
 Set `runs: 3` to execute three independent replicates from a direct config
 path. Each replicate writes its own run directory and uses an incremented
-`random_seed` (`random_seed`, then `random_seed + 1`, and so on). The default
-is `runs: 1`. Folder batches keep one run per config so their generated
-`experiment.yaml` index remains one-to-one; invoke a multi-run config by its
-YAML file path.
+`random_seed` (`random_seed`, then `random_seed + 1`, and so on). To repeat
+each of several explicit seeds, provide `random_seeds` and use `runs` as the
+repeat count, for example `random_seeds: [7, 8, 9]` with `runs: 2` executes
+`7, 7, 8, 8, 9, 9`. The default is `runs: 1`. Folder batches keep one run per
+config so their generated `experiment.yaml` index remains one-to-one; invoke
+a multi-run config by its YAML file path.
 
 Match execution uses ten bounded workers by default on the current benchmarked
 host. Override it under `evaluation.match_workers` when changing the resource

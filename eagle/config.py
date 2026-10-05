@@ -121,6 +121,10 @@ class ExperimentConfig:
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
+    # When configured, ``runs`` is repeated for each listed seed.  With no
+    # explicit list, the legacy random_seed + replicate-index schedule stays
+    # unchanged.
+    random_seeds: tuple[int, ...] = ()
     algorithm: str = LEXICASE_SELECTION
     survivor_selection: str = MU_PLUS_LAMBDA_SELECTION
     execution_mode: str = "openai"
@@ -268,6 +272,15 @@ class ExperimentConfig:
         llm_settings = payload.get("llm", {})
         if not isinstance(llm_settings, dict):
             raise ValueError("Experiment llm settings must be a mapping.")
+        random_seeds_value = payload.get("random_seeds", ())
+        if random_seeds_value is None:
+            random_seeds_value = ()
+        if not isinstance(random_seeds_value, (list, tuple)):
+            raise ValueError("random_seeds must be a list of integers.")
+        try:
+            random_seeds = tuple(int(seed) for seed in random_seeds_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("random_seeds must be a list of integers.") from exc
         max_tokens = llm_settings.get("max_tokens")
         if "roles" in llm_settings:
             raise ValueError("llm.roles is obsolete; use llm.match_commentator for commentator settings.")
@@ -398,6 +411,7 @@ class ExperimentConfig:
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
+            random_seeds=random_seeds,
             algorithm=algorithm,
             survivor_selection=survivor_selection,
             execution_mode=str(payload.get("execution_mode", "openai")),
@@ -489,6 +503,8 @@ class ExperimentConfig:
             self.generation_model.validate()
         if self.runs < 1:
             raise ValueError("runs must be at least 1.")
+        if self.random_seeds and len(set(self.random_seeds)) != len(self.random_seeds):
+            raise ValueError("random_seeds must not contain duplicates.")
         if self.generations < 1:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
@@ -672,6 +688,24 @@ class ExperimentConfig:
         if self.generation_model is not None:
             self.generation_model.validate(require_files=True)
 
+    @property
+    def seed_schedule(self) -> tuple[int, ...]:
+        """Return the ordered effective seed for every direct-config run."""
+
+        if self.random_seeds:
+            return tuple(
+                seed
+                for seed in self.random_seeds
+                for _ in range(self.runs)
+            )
+        return tuple(self.random_seed + index for index in range(self.runs))
+
+    @property
+    def total_runs(self) -> int:
+        """Return the number of direct-config runs represented by this config."""
+
+        return len(self.seed_schedule)
+
     def to_mapping(self, *, mock: bool = False) -> dict[str, Any]:
         """Return the complete resolved experiment document persisted by a run."""
 
@@ -781,6 +815,8 @@ class ExperimentConfig:
             "unit_material_values": dict(self.unit_material_values),
             "stagnation_generations": self.stagnation_generations,
         }
+        if self.random_seeds:
+            mapping["random_seeds"] = list(self.random_seeds)
         if self.generation_model is not None:
             mapping["generation_model"] = _model_mapping(self.generation_model)
         return mapping

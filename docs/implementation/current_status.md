@@ -33,10 +33,11 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
   seed artifacts are removed; MicroRTS matches do not claim seeded
   reproducibility.
-- A direct config may set `runs` to execute independent replicates. Each run
-  uses the base `random_seed` plus its zero-based replicate index and writes a
-  separate run directory; folder batches retain one run per config for stable
-  `experiment.yaml` indexing.
+- A direct config may set `runs` to execute independent replicates. Without an
+  explicit list, each run uses the base `random_seed` plus its zero-based
+  replicate index. With `random_seeds`, `runs` repeats each listed seed in
+  order. Every run writes a separate run directory; folder batches retain one
+  run per config for stable `experiment.yaml` indexing.
 - The resolved replicate seed is also propagated to every OpenAI-compatible LLM
   request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw

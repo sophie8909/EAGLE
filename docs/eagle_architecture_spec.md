@@ -108,6 +108,13 @@ the server, model, and backend kernels may still be nondeterministic, so raw
 request/response artifacts and their hashes remain authoritative. Role-specific
 temperature still controls sampling diversity.
 
+For direct multi-run configs, omitting `random_seeds` preserves the legacy
+schedule of `random_seed`, then `random_seed + 1`, and so on. When
+`random_seeds` is provided, `runs` is the repeat count for each listed seed in
+list order; for example, `[7, 8, 9]` with `runs: 2` schedules
+`7, 7, 8, 8, 9, 9`. Each scheduled run still owns a separate run directory
+and receives its effective seed in the request/artifact metadata.
+
 ## 5. Crossover and lineage
 
 Uniform crossover independently selects `strategy_prompt` and

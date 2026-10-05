@@ -206,6 +206,29 @@ class ExperimentLauncherTests(unittest.TestCase):
 
             self.assertEqual(seeds, [40, 41, 42])
 
+    def test_direct_config_repeats_each_explicit_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "explicit-seeds.yaml", model_name="one", model_path=model)
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["runs"] = 2
+            payload["random_seeds"] = [40, 41, 42]
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            seeds: list[int] = []
+
+            def search(config, **_kwargs):
+                seeds.append(config.random_seed)
+                return SearchResult(root / f"run-{len(seeds)}", [], None)
+
+            ExperimentOrchestrator(
+                search_runner=search,
+                final_test_runner=lambda _argv: 0,
+            ).run(config_path=path, mock=True)
+
+            self.assertEqual(seeds, [40, 40, 41, 41, 42, 42])
+
     def test_direct_replicates_restart_runtime_between_seeds(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

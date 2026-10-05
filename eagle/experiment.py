@@ -176,10 +176,10 @@ def _run_final_test_if_eligible(
 
 
 def _reject_multi_run_directory_config(config: ExperimentConfig, config_dir: Path) -> None:
-    if config.runs > 1:
+    if config.total_runs > 1:
         raise ValueError(
-            f"runs={config.runs} is supported for a direct config path only; "
-            f"run the YAML file directly or set runs: 1 for a folder batch "
+            f"total_runs={config.total_runs} is supported for a direct config path only; "
+            f"run the YAML file directly or set runs: 1 with one random seed for a folder batch "
             f"({config_dir})."
         )
 
@@ -354,14 +354,14 @@ class ExperimentOrchestrator:
                         run_index_path, name, run_dir
                     )
                 )
-                for replicate_index in range(config.runs):
+                for replicate_index, effective_seed in enumerate(config.seed_schedule):
                     run_config = replace(
                         config,
-                        random_seed=config.random_seed + replicate_index,
+                        random_seed=effective_seed,
                     )
-                    if config.runs > 1:
+                    if config.total_runs > 1:
                         print(
-                            f"Run [{replicate_index + 1}/{config.runs}] "
+                            f"Run [{replicate_index + 1}/{config.total_runs}] "
                             f"random_seed={run_config.random_seed}"
                         )
                     if mock:
