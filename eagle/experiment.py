@@ -231,6 +231,19 @@ def _ensure_runtime_phase(
         )
 
 
+def _restart_runtime_for_run(
+    manager: RuntimeManager,
+    config: ExperimentConfig,
+    phase: str = "reflection",
+) -> None:
+    """Restart the owned server at a run boundary before the first LLM call."""
+
+    if manager.current_spec is not None:
+        print(f"Runtime: restarting {phase} model for new run")
+        manager.stop_owned()
+    _ensure_runtime_phase(manager, config, phase)
+
+
 def _print_batch_header(selected: Path, total: int) -> None:
     print(f"Experiment batch: {selected}")
     print(f"Configs: {total}")
@@ -288,7 +301,7 @@ class ExperimentOrchestrator:
             try:
                 if not mock:
                     manager = self.runtime_factory()
-                    _ensure_runtime_phase(manager, config, "reflection")
+                    _restart_runtime_for_run(manager, config, "reflection")
 
                 resume_kwargs = {}
                 if not mock and config.uses_distinct_generation_model:
@@ -365,7 +378,7 @@ class ExperimentOrchestrator:
 
                     if manager is None:
                         manager = self.runtime_factory()
-                    _ensure_runtime_phase(manager, run_config, "reflection")
+                    _restart_runtime_for_run(manager, run_config, "reflection")
                     search_kwargs = {}
                     if run_config.uses_distinct_generation_model:
                         search_kwargs["activate_model_phase"] = (
@@ -434,13 +447,21 @@ class ExperimentOrchestrator:
         last_result: SearchResult | None = None
         last_known_run: Path | None = None
 
-        def ensure_runtime(config: ExperimentConfig, phase: str = "reflection") -> None:
+        def ensure_runtime(
+            config: ExperimentConfig,
+            phase: str = "reflection",
+            *,
+            new_run: bool = False,
+        ) -> None:
             nonlocal manager
             if mock:
                 return
             if manager is None:
                 manager = self.runtime_factory()
-            _ensure_runtime_phase(manager, config, phase)
+            if new_run:
+                _restart_runtime_for_run(manager, config, phase)
+            else:
+                _ensure_runtime_phase(manager, config, phase)
 
         def phase_kwargs(config: ExperimentConfig) -> dict[str, object]:
             if mock or not config.uses_distinct_generation_model:
@@ -483,7 +504,7 @@ class ExperimentOrchestrator:
                             "Status: interrupted before generation 0; "
                             "creating a replacement run"
                         )
-                        ensure_runtime(requested)
+                        ensure_runtime(requested, new_run=True)
                         record_run = lambda run_dir, name=resolved_path.name: _record_experiment_run(
                             run_index_path,
                             name,
@@ -500,7 +521,7 @@ class ExperimentOrchestrator:
                     else:
                         print(f"Status: resuming {indexed_run}")
                         if not search_complete:
-                            ensure_runtime(persisted)
+                            ensure_runtime(persisted, new_run=True)
                         result = self.resume_runner(
                             None,
                             run_dir=indexed_run,
@@ -509,7 +530,7 @@ class ExperimentOrchestrator:
                         )
                 else:
                     print("Status: not started; creating a new run")
-                    ensure_runtime(requested)
+                    ensure_runtime(requested, new_run=True)
                     record_run = lambda run_dir, name=resolved_path.name: _record_experiment_run(
                         run_index_path,
                         name,

@@ -206,6 +206,35 @@ class ExperimentLauncherTests(unittest.TestCase):
 
             self.assertEqual(seeds, [40, 41, 42])
 
+    def test_direct_replicates_restart_runtime_between_seeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "replicated.yaml", model_name="one", model_path=model)
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["runs"] = 3
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            events: list[str] = []
+
+            self.orchestrator(events, root / "run").run(
+                config_path=path,
+                skip_final_test=True,
+            )
+
+            lifecycle = [
+                item for item in events
+                if item.startswith(("start:", "reuse:", "stop:"))
+            ]
+            self.assertEqual(
+                lifecycle,
+                [
+                    "start:model.gguf", "stop:model.gguf",
+                    "start:model.gguf", "stop:model.gguf",
+                    "start:model.gguf", "stop:model.gguf",
+                ],
+            )
+
     def test_folder_batch_rejects_multi_run_config(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -240,7 +269,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 "ea:model-a", f"final:{root / 'run'}", "stop:model.gguf",
             ])
 
-    def test_same_runtime_starts_once_reuses_and_stops_once(self):
+    def test_same_runtime_restarts_for_each_run(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "shared.gguf"
@@ -253,9 +282,9 @@ class ExperimentLauncherTests(unittest.TestCase):
                 skip_final_test=True,
             )
             self.assertEqual(events.count("manager:init"), 1)
-            self.assertEqual(events.count("start:shared.gguf"), 1)
-            self.assertEqual(events.count("reuse:shared.gguf"), 2)
-            self.assertEqual(events.count("stop:shared.gguf"), 1)
+            self.assertEqual(events.count("start:shared.gguf"), 3)
+            self.assertEqual(events.count("reuse:shared.gguf"), 0)
+            self.assertEqual(events.count("stop:shared.gguf"), 3)
             self.assertEqual(events.count("ea:shared"), 3)
 
     def test_distinct_generation_model_switches_only_at_phase_boundary(self):
@@ -320,8 +349,10 @@ class ExperimentLauncherTests(unittest.TestCase):
                 if item.startswith(("start:", "reuse:", "stop:"))
             ]
             self.assertEqual(lifecycle, [
-                "start:a.gguf", "reuse:a.gguf", "stop:a.gguf",
-                "start:b.gguf", "reuse:b.gguf", "stop:b.gguf",
+                "start:a.gguf", "stop:a.gguf",
+                "start:a.gguf", "stop:a.gguf",
+                "start:b.gguf", "stop:b.gguf",
+                "start:b.gguf", "stop:b.gguf",
                 "start:a.gguf", "stop:a.gguf",
             ])
 

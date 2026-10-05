@@ -467,7 +467,7 @@ The production entrypoint is:
 
 It delegates to `python -m eagle experiment`. Python owns sorted config
 discovery, validation of `model` and optional `generation_model`, llama.cpp
-start/reuse/switch/health checks, search,
+start/health checks, per-run restart, phase-boundary model switching, search,
 resume, final test, and owned-process cleanup. An occupied foreign endpoint is
 never adopted or killed. Mock mode does not construct a runtime manager.
 

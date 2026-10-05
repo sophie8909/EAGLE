@@ -44,11 +44,11 @@ generation_model:            # omit to use model for every phase
   port: 8080
 ```
 
-When a folder contains multiple YAML files, they run in filename order. Adjacent
-configs with an identical resolved model runtime reuse the already-started
-`llama-server`; the manager starts it only once, while each search still performs
-its normal LLM endpoint preflight. A changed model or server profile stops the
-owned runtime before starting the next one. Within a dual-model experiment,
+When a folder contains multiple YAML files, they run in filename order. Each
+direct experiment run, including every `runs` replicate, stops the previous
+owned `llama-server` and starts a fresh one from that run's resolved config
+before search. A changed model or server profile also stops the owned runtime
+before starting the replacement. Within a single dual-model experiment,
 all offspring assignments are first fixed, all reflection/rewrite work runs on
 `model`, and only then does the runtime switch to `generation_model` for final
 materialization. It switches back before the next generation.

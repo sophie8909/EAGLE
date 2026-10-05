@@ -61,6 +61,10 @@ artifact 與 hash 才是最終證據。MicroRTS match 不宣稱 seeded reproduci
 並重新啟動 llama-server，再測下一個 seed，並保存每個 seed 的 raw response、hash
 與 server lifecycle。
 
+正式 experiment 也採用相同的 run 邊界：每個 run（包含 `runs` replicate）開始前
+會停止上一個 EAGLE-owned llama-server，再依該 run 的 resolved config 啟動新的
+server；同一個 run 內的 reflection／generation phase switch 才允許 reuse。
+
 ## Reflection 與 Prompt
 
 Reflection operator mode 只有三種：

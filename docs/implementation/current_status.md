@@ -41,6 +41,8 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
   responses plus SHA-256 hashes for backend stability checks.
+- Formal experiment runs restart the owned llama-server at every run/replicate
+  boundary; model-phase reuse remains limited to the lifetime of that run.
 - `scripts/test_llm_seed_restarts.py` provides the stronger diagnostic: it
   fully restarts the owned llama-server between seeds and records the server
   lifecycle alongside per-seed raw responses and hashes.
