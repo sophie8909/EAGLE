@@ -9,9 +9,12 @@ from eagle.llm import EndpointConfigError, LLMClient, llm_request_progress
 
 class LLMClientTests(unittest.TestCase):
     def test_one_client_has_one_base_url_and_model(self):
-        client = LLMClient("http://127.0.0.1:8080", "qwen3.5-9b")
+        client = LLMClient("http://127.0.0.1:8080", "qwen3.5-9b", seed=19)
         self.assertEqual(client.base_url, "http://127.0.0.1:8080")
         self.assertEqual(client.model, "qwen3.5-9b")
+        self.assertEqual(client.seed, 19)
+        self.assertEqual(client.generation_backend().seed, 19)
+        self.assertEqual(client.prompt_backend(operation="test").seed, 19)
 
     def test_invalid_endpoint_rejected(self):
         with self.assertRaises(EndpointConfigError):

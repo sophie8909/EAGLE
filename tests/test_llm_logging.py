@@ -8,6 +8,7 @@ from unittest.mock import patch
 from eagle.candidate import Candidate
 from eagle.llm import LLMCallLogger, LLMServerError
 from eagle.generation.backend import OpenAICompatibleGenerationBackend
+from eagle.operators.reflection import OpenAICompatibleReflectionBackend
 
 
 class FakeResponse:
@@ -79,7 +80,7 @@ class LLMLoggingTests(unittest.TestCase):
             root = Path(temp)
             logger = LLMCallLogger(root / "llm_logs")
             backend = OpenAICompatibleGenerationBackend(
-                "http://localhost:8080", "test-model", max_retries=0, logger=logger
+                "http://localhost:8080", "test-model", max_retries=0, logger=logger, seed=37
             )
             candidate = Candidate(id="candidate-a", generation=3)
             backend.set_generation_attempt_context(2, "candidate-a:generation:002")
@@ -92,6 +93,7 @@ class LLMLoggingTests(unittest.TestCase):
                 )
             request_payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
             self.assertEqual(request_payload["chat_template_kwargs"], {"enable_thinking": False})
+            self.assertEqual(request_payload["seed"], 37)
             files = list((root / "llm_logs").glob("*.json"))
             self.assertEqual(len(files), 1)
             payload = json.loads(files[0].read_text(encoding="utf-8"))
@@ -100,6 +102,7 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertIsNone(payload["response"])
             self.assertFalse(payload["inline_evidence_retained"])
             self.assertEqual(payload["module_name"], "complete_java_agent")
+            self.assertEqual(payload["metadata"]["sampling_seed"], 37)
             self.assertEqual(payload["candidate_id"], "candidate-a")
             evidence_dir = root / "candidates" / "candidate-a" / "generation" / "attempts" / "attempt_002"
             self.assertEqual(
@@ -196,6 +199,19 @@ class LLMLoggingTests(unittest.TestCase):
         )
         request_payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
         self.assertTrue(request_payload["stream"])
+
+    def test_reflection_request_contains_sampling_seed(self):
+        backend = OpenAICompatibleReflectionBackend(
+            "http://localhost:8080", "test-model", seed=41
+        )
+        response = {"choices": [{"message": {"content": '{"ok": true}'}}]}
+        with patch(
+            "eagle.operators.reflection.urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as request:
+            self.assertEqual(backend.generate("repeat this prompt"), '{"ok": true}')
+        request_payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(request_payload["seed"], 41)
 
 if __name__ == "__main__":
     unittest.main()

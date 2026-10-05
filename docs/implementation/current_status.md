@@ -37,6 +37,10 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   uses the base `random_seed` plus its zero-based replicate index and writes a
   separate run directory; folder batches retain one run per config for stable
   `experiment.yaml` indexing.
+- The resolved replicate seed is also propagated to every OpenAI-compatible LLM
+  request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
+  `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
+  responses plus SHA-256 hashes for backend stability checks.
 - Fixed-roster candidate fitness is a ten-field opponent score mapping.
   Self-play candidate fitness contains only `game_performance`. Failed or
   incomplete candidates receive `-1000.0` for the active objective(s).

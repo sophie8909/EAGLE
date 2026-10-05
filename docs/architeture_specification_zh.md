@@ -49,7 +49,11 @@ replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
 舊／新 Java hash、fitness、status 與是否被選中，供診斷比較。
 
 `random_seed` 影響 EA 隨機、lexicase case 順序、operator、crossover、mutation
-intent 與 reflection sampling。MicroRTS match 不宣稱 seeded reproducibility；
+intent 與 reflection sampling。每個 replicate 的同一個 `random_seed` 也會作為
+OpenAI-compatible request 的 `seed` 傳給 initial policy、reflection、rewrite、Java
+generation、repair 與 preflight。這只是在要求 server/model 使用可重複取樣；
+server、模型或 backend kernel 仍可能非 deterministic，因此 raw request/response
+artifact 與 hash 才是最終證據。MicroRTS match 不宣稱 seeded reproducibility；
 重複比賽只用 `round_index` 識別。
 
 ## Reflection 與 Prompt

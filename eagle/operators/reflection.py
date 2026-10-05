@@ -389,7 +389,7 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.operation = operation
@@ -400,6 +400,7 @@ class OpenAICompatibleReflectionBackend:
             if max_output_tokens is None
             else max_output_tokens
         )
+        self.seed = seed
 
     @property
     def chat_completions_url(self) -> str:
@@ -419,6 +420,8 @@ class OpenAICompatibleReflectionBackend:
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
+        if self.seed is not None:
+            payload["seed"] = self.seed
         request = urllib.request.Request(
             self.chat_completions_url,
             data=json.dumps(payload).encode("utf-8"),
@@ -454,13 +457,14 @@ def build_reflection_backend(
     timeout_sec: float = 120,
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
+    seed: int | None = None,
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name == "openai":
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
+        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 
@@ -591,6 +595,7 @@ class ReflectionStage:
                     metadata={
                         "operation": self.operation,
                         "operation_type": "mutation",
+                        "sampling_seed": getattr(self.backend, "seed", None),
                         "token_counts": None,
                         "prompt_metadata": prompt_metadata,
                     },

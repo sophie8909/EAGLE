@@ -114,7 +114,7 @@ class ExistingJavaPhenotypeBackend(GenerationBackend):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.operation = operation
@@ -123,6 +123,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.logger = logger
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        self.seed = seed
         self._active_request_started_at: str | None = None
         self._active_request_started_monotonic: float | None = None
         self._generation_attempt = 1
@@ -200,6 +201,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
+        if self.seed is not None:
+            payload["seed"] = self.seed
         request = urllib.request.Request(
             self.chat_completions_url,
             data=json.dumps(payload).encode("utf-8"),
@@ -308,6 +311,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 "url": self.chat_completions_url,
                 "endpoint": self.base_url,
                 "operation": self.operation,
+                "sampling_seed": self.seed,
                 "operation_type": (
                     "mutation"
                     if self._generation_request_kind == "code_reflection"
@@ -410,11 +414,12 @@ def build_generation_backend(
     timeout_sec: float = 120,
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
+    seed: int | None = None,
 ) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "openai"}:
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed)
     raise ValueError(f"Unknown generation backend: {name}")

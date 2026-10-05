@@ -53,12 +53,13 @@ class MockStrategyAlignmentBackend(StrategyAlignmentBackend):
 
 
 class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
-    def __init__(self, base_url: str, model: str, *, timeout_seconds: float = 120.0, temperature: float = 0.0, max_output_tokens: int | None = None) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_seconds: float = 120.0, temperature: float = 0.0, max_output_tokens: int | None = None, seed: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        self.seed = seed
 
     @property
     def url(self) -> str:
@@ -76,6 +77,8 @@ class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
+        if self.seed is not None:
+            payload["seed"] = self.seed
         request = urllib.request.Request(
             self.url,
             data=json.dumps(payload).encode("utf-8"),
@@ -104,13 +107,14 @@ def build_strategy_alignment_backend(
     timeout_seconds: float = 120.0,
     temperature: float = 0.0,
     max_output_tokens: int | None = None,
+    seed: int | None = None,
 ) -> StrategyAlignmentBackend:
     if name == "mock":
         return MockStrategyAlignmentBackend()
     if name in {"openai"}:
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleStrategyAlignmentBackend(base_url, model, timeout_seconds=timeout_seconds, temperature=temperature, max_output_tokens=max_output_tokens)
+        return OpenAICompatibleStrategyAlignmentBackend(base_url, model, timeout_seconds=timeout_seconds, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed)
     raise ValueError(f"Unknown Strategy Alignment backend: {name}")
 
 

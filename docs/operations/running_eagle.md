@@ -103,8 +103,24 @@ LLM policy samples from the “Generate one RTS strategy” prompt; they are not
 `RandomAI` agents. Every policy then receives an independent Java Generator
 call; WorkerRush Java is inherited request context, not the phenotype.
 `initial_policy_max_attempts` bounds invalid or
-duplicate policy-output retries, and the role-specific temperature controls
-sampling diversity without changing EA randomness.
+duplicate policy-output retries. The replicate's `random_seed` is sent as the
+LLM request `seed` for all LLM roles, including initial policy generation and
+Java generation. This enables a stability check but does not guarantee bitwise
+identical output when the server/model is nondeterministic; role-specific
+temperature still controls sampling diversity.
+
+To test one exact prompt repeatedly against the configured endpoint, run:
+
+```bash
+python3 scripts/test_llm_stability.py \
+  --config configs/experiments/your_config.yaml \
+  --prompt-file prompts/your_prompt.txt \
+  --repeats 3
+```
+
+The command writes `stability_report.json` and raw responses under
+`runs/llm_stability/<UTC timestamp>/`. It returns exit code `0` when all hashes
+match and `2` when at least one response differs.
 
 To enable managed opponent-library self-play explicitly:
 

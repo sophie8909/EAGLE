@@ -56,6 +56,7 @@ class LLMClient:
     timeout_seconds: float = 120.0
     temperature: float = 0.2
     max_output_tokens: int | None = None
+    seed: int | None = None
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.base_url)
@@ -76,6 +77,7 @@ class LLMClient:
             timeout_sec=self.timeout_seconds,
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
+            seed=self.seed,
         )
 
     def prompt_backend(self, *, operation: str, temperature: float | None = None):
@@ -91,6 +93,7 @@ class LLMClient:
             timeout_sec=self.timeout_seconds,
             temperature=self.temperature if temperature is None else temperature,
             max_output_tokens=self.max_output_tokens,
+            seed=self.seed,
         )
 
 
@@ -338,6 +341,7 @@ class LLMCallLogger:
             "generation_attempt_id": details.get("generation_attempt_id"),
             "transport_attempt": details.get("transport_attempt"),
             "generation_request_kind": details.get("generation_request_kind"),
+            "sampling_seed": details.get("sampling_seed"),
             "input": input_text if owns_payload else None,
             "response": response_text if owns_payload else None,
             "artifact_refs": artifact_refs,
@@ -409,6 +413,7 @@ class LLMCallLogger:
             "generation_attempt_id": details.get("generation_attempt_id"),
             "transport_attempt": details.get("transport_attempt"),
             "generation_request_kind": details.get("generation_request_kind"),
+            "sampling_seed": details.get("sampling_seed"),
         }
         self.timing_path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:

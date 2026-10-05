@@ -238,6 +238,7 @@ def _generate_initial_policy(
                 "temperature": float(
                     getattr(backend, "temperature", config.initial_policy_temperature)
                 ),
+                "sampling_seed": getattr(backend, "seed", None),
                 "request_sha256": request_sha256,
                 "response_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
             },
@@ -322,6 +323,7 @@ def _record_policy_timing(
         metadata={
             "operation_type": "initialization",
             "endpoint": str(getattr(backend, "base_url", "unknown")),
+            "sampling_seed": getattr(backend, "seed", None),
             "failure_category": (
                 "initial_policy_generation" if timing["status"] != "success" else None
             ),

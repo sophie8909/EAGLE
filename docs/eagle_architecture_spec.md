@@ -100,10 +100,13 @@ rematerialization plus match resampling; it is not the production protocol.
 `random_seed` controls EA randomness, lexicase case ordering, operator choice,
 crossover choices, and deterministic reflection sampling. Match repetitions are
 identified by `round_index`; EAGLE does not claim seeded MicroRTS match
-reproducibility and does not pass a match-seed JVM property. It also does not
-make stochastic LLM sampling deterministic; initial policy generation is
-reconstructable from request/response artifacts rather than from `random_seed`
-alone. Its role-specific temperature controls sampling diversity.
+reproducibility and does not pass a match-seed JVM property. The same
+`random_seed` is also sent as the OpenAI-compatible `seed` field for every
+initial-policy, reflection, rewrite, Java-generation, repair, and preflight LLM
+request. This requests repeatable sampling from the configured server/model;
+the server, model, and backend kernels may still be nondeterministic, so raw
+request/response artifacts and their hashes remain authoritative. Role-specific
+temperature still controls sampling diversity.
 
 ## 5. Crossover and lineage
 

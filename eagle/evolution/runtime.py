@@ -49,6 +49,7 @@ def build_search_runtime(
         config.llm_model,
         temperature=config.llm_temperature,
         max_output_tokens=config.llm_max_tokens,
+        seed=config.random_seed,
     )
     if not mock:
         preflight_llm_endpoint(client)
@@ -58,6 +59,7 @@ def build_search_runtime(
         generation_model.name,
         temperature=config.llm_temperature,
         max_output_tokens=config.llm_max_tokens,
+        seed=config.random_seed,
     )
     logger = LLMCallLogger(
         run_dir / "llm_logs",
@@ -148,6 +150,7 @@ def preflight_llm_endpoint(client: LLMClient) -> None:
             "temperature": 0,
             "max_tokens": 1,
             "chat_template_kwargs": {"enable_thinking": False},
+            **({"seed": client.seed} if client.seed is not None else {}),
         }).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",

@@ -256,7 +256,7 @@ fallback reads for old prompt/phenotype paths, but ignores legacy
 `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
 `evaluation/matches.json` are not written.
 
-Generic successful LLM-call records use `eagle-llm-call-v2` metadata with canonical run-relative request/response references. Raw bytes are persisted before parsing; failures without durable references retain inline payloads. Mutation requests and responses live in numbered attempt artifacts; selected request/raw convenience aliases are not emitted. Loader fallbacks remain limited to the documented legacy prompt and phenotype paths.
+Generic successful LLM-call records use `eagle-llm-call-v2` metadata with canonical run-relative request/response references. The resolved replicate `random_seed` is recorded as `sampling_seed` and is sent as the OpenAI-compatible request `seed`. Raw bytes are persisted before parsing; failures without durable references retain inline payloads. Mutation requests and responses live in numbered attempt artifacts; selected request/raw convenience aliases are not emitted. Loader fallbacks remain limited to the documented legacy prompt and phenotype paths.
 
 Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
 request, raw response, UTC-bounded attempts, status, and failure evidence even
