@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from eagle.artifacts import write_run_config, write_summary
-from eagle.candidate import Candidate
+from eagle.candidate import Candidate, has_completed_evaluation
 from eagle.config import ExperimentConfig
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.evaluation.pipeline import evaluate_population
@@ -199,6 +199,17 @@ def _run_search_impl(
         evaluated_population,
         previous_archive_niches=archive_before,
     )
+    record_generation(
+        run_dir,
+        0,
+        evaluated_population,
+        diversity=generation_diversity,
+        aos=operator_controller.initial_generation_record(),
+    )
+    if not any(has_completed_evaluation(candidate) for candidate in evaluated_population):
+        raise ValueError(
+            "Generation 0 produced no candidate that completed evaluation."
+        )
     if config.evaluation_mode == "self_play":
         update_self_play_opponent_library(
             run_dir,
@@ -216,13 +227,6 @@ def _run_search_impl(
             candidates=self_play_opponent_snapshot,
             refresh_interval=config.self_play_refresh_interval,
         )
-    record_generation(
-        run_dir,
-        0,
-        evaluated_population,
-        diversity=generation_diversity,
-        aos=operator_controller.initial_generation_record(),
-    )
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
 

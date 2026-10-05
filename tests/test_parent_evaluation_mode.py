@@ -91,8 +91,8 @@ class ParentEvaluationModeTests(unittest.TestCase):
 
     def test_selection_pool_can_only_select_replicas_and_offspring(self) -> None:
         source = Candidate(id="old-parent", fitness_objectives={"passive": 100.0})
-        replica = Candidate(id="replica", fitness_objectives={"passive": 1.0})
-        offspring = Candidate(id="offspring", fitness_objectives={"passive": 2.0})
+        replica = Candidate(id="replica", fitness_objectives={"passive": 1.0}, status="evaluated")
+        offspring = Candidate(id="offspring", fitness_objectives={"passive": 2.0}, status="evaluated")
         selected = select_next_generation(
             [replica], [offspring], population_size=2, rng=random.Random(7)
         )

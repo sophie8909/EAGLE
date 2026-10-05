@@ -121,7 +121,9 @@ Generator；inherited 模式必須只有一個 seed policy，將同一份 policy
 no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次
 Generator。因此 population 10 會有 10 份 request／response，也可能得到 10 份
 不同 Java。三份 `static_0826_seed_variants` config 都使用此模式，後續每代以
-`10 + 10` joint pool 做 lexicase survivor selection。
+`10 + 10` joint pool 做 lexicase survivor selection。失敗子代仍保留在 joint
+pool 的診斷與 artifact 紀錄中，但在有效候選足以填滿族群時不得取代已完成評估的父代；
+因此整批子代失敗時會保留父代。若完成評估的候選少於目標族群大小，selection 會明確失敗。
 
 新增的 `initial_population_mode: llm_generated_policies` 是另一個明確的
 generation-0 邊界：第 1 個 candidate 保留設定檔中的 Worker Rush policy，第 2–10
@@ -231,7 +233,9 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 的加總，而不是第一個 candidate 的值。
 
 明確設定 `evaluation.mode: self_play` 時，系統維護一個 run-local、可持久化的
-opponent library。Generation 0 先把可執行 candidate 放入 library；之後只在
+opponent library。Generation 0 先把編譯成功、沒有 failure 狀態且完整跑完 match
+的 candidate 放入 library；如果沒有任何合格 candidate，run 會失敗而不建立
+污染的 context；之後只在
 `self_play_refresh_interval` 的刷新邊界更新（最小版本固定為每五代一次），把新
 的可執行 candidate 以 LISS 式完整 probe/action 向量做 exact equivalence 去重後
 合併進 library，再依穩定順序從 library 選出 immutable

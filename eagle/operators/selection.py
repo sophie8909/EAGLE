@@ -6,7 +6,7 @@ import random
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from eagle.candidate import Candidate
+from eagle.candidate import Candidate, has_completed_evaluation
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE, LEXICASE_CASES
 
 
@@ -102,6 +102,24 @@ def select_next_generation(
             f"requested {population_size}, found {len(available)} unique candidates."
         )
 
+    completed = [candidate for candidate in available if has_completed_evaluation(candidate)]
+    if len(completed) < population_size:
+        if not completed:
+            reason = "every parent and offspring candidate failed evaluation"
+        else:
+            reason = (
+                f"only {len(completed)} parent/offspring candidates completed "
+                "evaluation"
+            )
+        raise ValueError(
+            "Cannot select a fixed-size next generation: "
+            f"{reason}; requested {population_size} survivors."
+        )
+
+    # Failed candidates remain in the joint input for diagnostics, but cannot
+    # displace a valid parent when completed candidates can fill the generation.
+    available = completed
+
     if selection_mode == GAME_PERFORMANCE_SELECTION:
         return _select_scalar_survivors(
             available,
@@ -121,7 +139,7 @@ def select_next_generation(
 def best_candidate(population: list[Candidate]) -> Candidate | None:
     """Return the convenient aggregate-performance representative."""
 
-    runnable = [candidate for candidate in population if candidate.status != "failed"]
+    runnable = [candidate for candidate in population if has_completed_evaluation(candidate)]
     if not runnable:
         return None
     return max(

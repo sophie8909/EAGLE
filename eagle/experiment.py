@@ -9,7 +9,10 @@ from typing import Callable
 import yaml
 
 from eagle.config import ExperimentConfig
-from eagle.final_test import FINAL_TEST_SCHEMA_VERSION, main as final_test_main
+from eagle.final_test import (
+    SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS,
+    main as final_test_main,
+)
 from eagle.evolution.resume import load_resume_config, resume_search, validate_resume_config
 from eagle.run_artifacts import load_manifest
 from eagle.runtime.config import runtime_config_from_experiment
@@ -137,7 +140,7 @@ def _final_test_is_complete(run_dir: Path) -> bool:
         return False
     return (
         isinstance(payload, dict)
-        and payload.get("schema_version") == FINAL_TEST_SCHEMA_VERSION
+        and payload.get("schema_version") in SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS
     )
 
 
@@ -150,6 +153,26 @@ def _batch_entry_is_complete(
     if not _search_run_is_complete(run_dir):
         return False
     return mock or skip_final_test or _final_test_is_complete(run_dir)
+
+
+def _run_final_test_if_eligible(
+    runner: Callable[[list[str]], int],
+    result: SearchResult,
+    *,
+    mock: bool,
+    skip_final_test: bool,
+) -> None:
+    if mock or skip_final_test:
+        return
+    manifest_path = result.run_dir / "manifest.json"
+    if manifest_path.is_file():
+        manifest = load_manifest(result.run_dir)
+        if manifest.get("status") != "complete":
+            print("Status: evolutionary run failed; skipping final test.")
+            return
+    status = runner(["--run-dir", str(result.run_dir)])
+    if status:
+        raise RuntimeError(f"Final test failed with exit code {status}.")
 
 
 def _reject_multi_run_directory_config(config: ExperimentConfig, config_dir: Path) -> None:
@@ -279,10 +302,12 @@ class ExperimentOrchestrator:
                     mock=mock,
                     **resume_kwargs,
                 )
-                if not mock and not skip_final_test:
-                    status = self.final_test_runner(["--run-dir", str(result.run_dir)])
-                    if status:
-                        raise RuntimeError(f"Final test failed with exit code {status}.")
+                _run_final_test_if_eligible(
+                    self.final_test_runner,
+                    result,
+                    mock=mock,
+                    skip_final_test=skip_final_test,
+                )
                 return result
             finally:
                 if manager is not None:
@@ -358,10 +383,12 @@ class ExperimentOrchestrator:
                     if record_run is not None:
                         record_run(result.run_dir)
                     last_result = result
-                    if not skip_final_test:
-                        status = self.final_test_runner(["--run-dir", str(result.run_dir)])
-                        if status:
-                            raise RuntimeError(f"Final test failed with exit code {status}.")
+                    _run_final_test_if_eligible(
+                        self.final_test_runner,
+                        result,
+                        mock=mock,
+                        skip_final_test=skip_final_test,
+                    )
             if last_result is None:
                 raise RuntimeError("No configs were executed.")
         finally:
@@ -499,10 +526,12 @@ class ExperimentOrchestrator:
 
                 last_result = result
                 last_known_run = result.run_dir
-                if not mock and not skip_final_test:
-                    status = self.final_test_runner(["--run-dir", str(result.run_dir)])
-                    if status:
-                        raise RuntimeError(f"Final test failed with exit code {status}.")
+                _run_final_test_if_eligible(
+                    self.final_test_runner,
+                    result,
+                    mock=mock,
+                    skip_final_test=skip_final_test,
+                )
 
             if last_result is None:
                 if last_known_run is None:

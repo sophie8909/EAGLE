@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import Any
 import yaml
 
 from eagle.run_artifacts import RUN_SCHEMA_VERSION
+
+
+_CANONICAL_GENERATION_RE = re.compile(r"generation_(\d{4})\.json$")
 
 
 @dataclass(frozen=True)
@@ -68,10 +72,18 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
 
 def load_run(run_dir: Path) -> RunData:
     manifest = validate_run_dir(run_dir)
-    generations = [
-        _read_json(path) or {}
-        for path in sorted((run_dir / "generations").glob("generation_*.json"))
-    ] if (run_dir / "generations").is_dir() else []
+    generation_paths: list[Path] = []
+    generations_dir = run_dir / "generations"
+    if generations_dir.is_dir():
+        generation_paths = [
+            path
+            for path in generations_dir.glob("generation_*.json")
+            if _CANONICAL_GENERATION_RE.fullmatch(path.name)
+        ]
+        generation_paths.sort(
+            key=lambda path: int(_CANONICAL_GENERATION_RE.fullmatch(path.name).group(1))
+        )
+    generations = [_read_json(path) or {} for path in generation_paths]
     config = _read_yaml(run_dir / "config.yaml")
     generations = [_materialize_generation(run_dir, item) for item in generations]
     metrics = [

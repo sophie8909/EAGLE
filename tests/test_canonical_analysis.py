@@ -87,6 +87,46 @@ class CanonicalAnalysisTests(unittest.TestCase):
             match_rows = (output / "match_game_performance.csv").read_text(encoding="utf-8")
             self.assertIn("101.5", match_rows)
 
+    def test_loader_ignores_self_play_sidecars_and_uses_latest_canonical_generation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            (run / "generations").mkdir(parents=True)
+            (run / "archives").mkdir()
+            (run / "config.yaml").write_text(
+                yaml.safe_dump({"schema_version": "experiment-v2"}),
+                encoding="utf-8",
+            )
+            atomic_json(run / "manifest.json", {
+                "schema_version": "eagle-run-v2", "status": "complete",
+                "latest_generation": 1, "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            atomic_json(run / "generations" / "generation_0000.json", {
+                "schema_version": "eagle-generation-v3", "generation": 0,
+                "population": [{"candidate_id": "candidate-a", "status": "evaluated"}],
+                "metrics": {"generation": 0}, "aos": None,
+            })
+            atomic_json(run / "generations" / "generation_0001.json", {
+                "schema_version": "eagle-generation-v3", "generation": 1,
+                "population": [{"candidate_id": "candidate-b", "status": "failed", "failure_reason": "runtime"}],
+                "metrics": {"generation": 1, "failure_count": 1}, "aos": None,
+            })
+            atomic_json(run / "generations" / "generation_0001_self_play_snapshot.json", {
+                "schema_version": "eagle-self-play-snapshot-v2", "generation": 1,
+                "source_candidate_ids": [], "slots": [],
+            })
+
+            data = load_run(run)
+            self.assertEqual([item["generation"] for item in data.generations], [0, 1])
+            self.assertEqual(
+                [item["candidate_id"] for item in data.final_population["population"]],
+                ["candidate-b"],
+            )
+            output = generate_analysis(data, force=True)
+            summary = json.loads((output / "run_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["completed_generations"], [0, 1])
+            self.assertEqual(summary["candidate_count"], 1)
+            self.assertEqual(summary["failure_count"], 1)
+
     def test_operator_probability_plot_title_labels_mode(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(
             report.plt, "title"

@@ -47,8 +47,13 @@ behavior signatures only when scalar fitness is tied.
    `aos_head2head` runs the configured direct matrix against the recorded
    mutation-evidence parent. Both adaptive modes feed one shared
    generation-level EMA updater.
-7. From generation 1 onward, combine evaluated parents and offspring and fill
-   the fixed population with mode-specific selection without replacement.
+7. From generation 1 onward, combine parents and offspring and fill the fixed
+   population with mode-specific selection without replacement. Failed
+   offspring remain in the joint input for diagnostics, but are excluded from
+   survivor choice when completed parents/offspring can fill the population;
+   therefore an all-failed offspring batch leaves valid parents in place.
+   Selection fails explicitly if fewer than the configured population size
+   completed candidates remain.
    This is the `(mu + lambda)` environmental-selection model; when both sets
    have size `n`, it is the requested `(n + n)` form. The canonical default
    `parent_evaluation_mode: reuse_cached` uses the existing evaluated parents.

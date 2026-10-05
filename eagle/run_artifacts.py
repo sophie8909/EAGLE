@@ -12,7 +12,7 @@ from typing import Any
 from eagle.evaluation.objectives import OBJECTIVE_DIRECTIONS
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 
-from eagle.candidate import Candidate
+from eagle.candidate import Candidate, has_completed_evaluation
 from eagle.config import ExperimentConfig
 
 RUN_SCHEMA_VERSION = "eagle-run-v2"
@@ -247,7 +247,21 @@ def generation_policy_records(
 
 def finalize_run(run_dir: Path, population: list[Candidate], *, stop_reason: str | None) -> None:
     manifest = load_manifest(run_dir)
-    manifest.update(status="complete", stop_reason=stop_reason, updated_at=utc_now())
+    valid = [
+        candidate
+        for candidate in population
+        if has_completed_evaluation(candidate)
+    ]
+    if valid:
+        manifest.update(status="complete", stop_reason=stop_reason)
+    else:
+        manifest.update(
+            status="failed",
+            stop_reason=stop_reason or "all_candidates_failed",
+            failure_type="population_failure",
+            failure_reason="The final population contains no candidate that completed evaluation.",
+        )
+    manifest["updated_at"] = utc_now()
     atomic_json(run_dir / "manifest.json", manifest)
 
 

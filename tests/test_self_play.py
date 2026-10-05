@@ -61,6 +61,7 @@ class SelfPlayTests(unittest.TestCase):
                 generation=4,
                 generated_java=f"complete Java {index}",
                 compile_status="success",
+                status="evaluated",
             )
             for index in range(12)
         ]
@@ -119,6 +120,60 @@ class SelfPlayTests(unittest.TestCase):
             [candidate.id for candidate in selected],
         )
 
+    def test_failed_or_partial_candidates_never_enter_opponent_library(self) -> None:
+        good = Candidate(
+            id="good",
+            generation=0,
+            generated_java="complete good Java",
+            compile_status="success",
+            status="evaluated",
+            game_eval_result={"expected_match_count": 10, "completed_match_count": 10},
+        )
+        failed = Candidate(
+            id="failed",
+            generation=0,
+            generated_java="complete failed Java",
+            compile_status="success",
+            status="failed",
+            failure_stage="runtime",
+            failure_reason="runtime exception",
+        )
+        partial = Candidate(
+            id="partial",
+            generation=0,
+            generated_java="complete partial Java",
+            compile_status="success",
+            status="evaluated",
+            game_eval_result={"expected_match_count": 10, "completed_match_count": 9},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for candidate in (good, failed, partial):
+                write_candidate_inputs(root / "candidates", candidate)
+                phenotype = root / "candidates" / candidate.id / "phenotype"
+                phenotype.mkdir(parents=True)
+                (phenotype / "CandidateAgent.java").write_text(candidate.generated_java)
+                write_candidate_snapshot(root / "candidates", candidate)
+            update_self_play_opponent_library(root, [good, failed, partial], capacity=10)
+            payload = json.loads(
+                (root / "archives" / "self_play_opponents.json").read_text()
+            )
+
+        self.assertEqual([entry["candidate_id"] for entry in payload["opponents"]], ["good"])
+
+    def test_opponent_library_rejects_population_without_complete_phenotype(self) -> None:
+        failed = Candidate(
+            id="failed",
+            generation=0,
+            generated_java="complete failed Java",
+            compile_status="success",
+            status="failed",
+            failure_stage="runtime",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "evaluated, complete phenotype"):
+                update_self_play_opponent_library(Path(directory), [failed], capacity=10)
+
     def test_opponent_library_deduplicates_equal_behavior_vectors(self) -> None:
         candidates = [
             Candidate(
@@ -126,6 +181,7 @@ class SelfPlayTests(unittest.TestCase):
                 generation=0,
                 generated_java="first Java",
                 compile_status="success",
+                status="evaluated",
                 semantic_signature={
                     "status": "complete", "dataset_id": "d1",
                     "dataset_sha256": "state-set", "normalization_version": "v1",
@@ -138,6 +194,7 @@ class SelfPlayTests(unittest.TestCase):
                 generation=0,
                 generated_java="equivalent Java",
                 compile_status="success",
+                status="evaluated",
                 semantic_signature={
                     "status": "complete", "dataset_id": "d1",
                     "dataset_sha256": "state-set", "normalization_version": "v1",
@@ -150,6 +207,7 @@ class SelfPlayTests(unittest.TestCase):
                 generation=0,
                 generated_java="different Java",
                 compile_status="success",
+                status="evaluated",
                 semantic_signature={
                     "status": "complete", "dataset_id": "d1",
                     "dataset_sha256": "state-set", "normalization_version": "v1",
@@ -191,14 +249,15 @@ class SelfPlayTests(unittest.TestCase):
             )
             write_candidate_snapshot(root / "candidates", candidate)
 
-        first = Candidate(id="first", generated_java="same Java", compile_status="success")
-        second = Candidate(id="second", generated_java="second Java", compile_status="success")
+        first = Candidate(id="first", generated_java="same Java", compile_status="success", status="evaluated")
+        second = Candidate(id="second", generated_java="second Java", compile_status="success", status="evaluated")
         replacement = Candidate(
             id="replacement",
             generated_java="replacement Java",
             compile_status="success",
+            status="evaluated",
         )
-        reentry = Candidate(id="reentry", generated_java="same Java", compile_status="success")
+        reentry = Candidate(id="reentry", generated_java="same Java", compile_status="success", status="evaluated")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for item in (first, second, replacement, reentry):

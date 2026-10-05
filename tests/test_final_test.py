@@ -131,3 +131,6 @@ class FinalTestTests(unittest.TestCase):
             selected = _select_candidate(run_dir, None)
 
             self.assertEqual(selected["candidate_id"], "fallback-candidate")
+            self.assertTrue(selected["_selection"]["fallback"])
+            self.assertEqual(selected["_selection"]["requested_generation"], 2)
+            self.assertEqual(selected["_selection"]["selected_generation"], 1)

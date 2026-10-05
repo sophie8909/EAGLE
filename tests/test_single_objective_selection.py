@@ -112,6 +112,65 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
 
         self.assertEqual([item.id for item in selected], ["maximum", "within"])
 
+    def test_survivor_selection_rejects_an_all_failed_pool(self) -> None:
+        failed = [
+            Candidate(
+                id="failed-parent",
+                status="failed",
+                failure_stage="runtime",
+                failure_reason="runtime exception",
+                game_eval_result={"game_performance": -1000.0},
+            ),
+            Candidate(
+                id="failed-child",
+                status="failed",
+                failure_stage="runtime",
+                failure_reason="runtime exception",
+                game_eval_result={"game_performance": -1000.0},
+            ),
+        ]
+
+        with self.assertRaisesRegex(ValueError, "every parent and offspring"):
+            select_next_generation(
+                failed,
+                [],
+                population_size=1,
+                rng=random.Random(3),
+                selection_mode=GAME_PERFORMANCE_SELECTION,
+            )
+
+    def test_failed_offspring_cannot_replace_valid_parents(self) -> None:
+        parents = [
+            candidate("parent-a", 10.0, ("a", "a", "a")),
+            candidate("parent-b", 9.0, ("b", "b", "b")),
+        ]
+        failed_offspring = [
+            Candidate(
+                id="failed-child-a",
+                status="failed",
+                failure_stage="runtime",
+                failure_reason="runtime exception",
+                game_eval_result={"game_performance": -1000.0},
+            ),
+            Candidate(
+                id="failed-child-b",
+                status="failed",
+                failure_stage="runtime",
+                failure_reason="runtime exception",
+                game_eval_result={"game_performance": -1000.0},
+            ),
+        ]
+
+        selected = select_next_generation(
+            parents,
+            failed_offspring,
+            population_size=2,
+            rng=random.Random(3),
+            selection_mode=GAME_PERFORMANCE_SELECTION,
+        )
+
+        self.assertEqual({item.id for item in selected}, {"parent-a", "parent-b"})
+
     def test_survivor_keeps_better_tier_then_uses_boundary_novelty(self) -> None:
         best = candidate("best", 12.0, ("a", "a", "a"))
         same = candidate("same", 10.0, ("a", "a", "a"))

@@ -30,7 +30,8 @@ from eagle.evaluation.runtime_evaluation import run_microrts_match
 from eagle.config import ExperimentConfig
 
 
-FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v2"
+FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v3"
+SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS = {"eagle-final-test-v2", FINAL_TEST_SCHEMA_VERSION}
 FINAL_TEST_GAMES_PER_SIDE = 10
 AGENT_CLASS = "ai.generated.CandidateAgent"
 FINAL_TEST_OPPONENTS = SEARCH_OPPONENT_REGISTRY
@@ -51,6 +52,11 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         config = _load_config(config_path, repository_root)
+        manifest = _read_json(run_dir / "manifest.json")
+        if str(manifest.get("status") or "") != "complete":
+            raise ValueError(
+                f"Final test requires a complete evolutionary run: {run_dir}"
+            )
         candidate = _select_candidate(run_dir, args.candidate_id)
         classes_dir = run_dir / "classes" / candidate["candidate_id"]
         _validate_candidate_artifacts(classes_dir, candidate)
@@ -123,7 +129,12 @@ def _select_candidate(run_dir: Path, candidate_id: str | None) -> dict[str, Any]
             if selected is None:
                 continue
             if _candidate_is_runnable(run_dir, selected):
-                return selected
+                return _annotate_selection(
+                    selected,
+                    requested_generation=int(latest),
+                    selected_generation=generation,
+                    explicit_candidate=True,
+                )
             raise ValueError(f"Candidate {candidate_id!r} is not runnable in generation {generation}")
         raise ValueError(f"Candidate {candidate_id!r} is not in the run: {run_dir}")
 
@@ -139,18 +150,46 @@ def _select_candidate(run_dir: Path, candidate_id: str | None) -> dict[str, Any]
         if summary_best_id and generation == int(latest):
             selected = by_id.get(summary_best_id)
             if selected is not None and _candidate_is_runnable(run_dir, selected):
-                return selected
+                return _annotate_selection(
+                    selected,
+                    requested_generation=int(latest),
+                    selected_generation=generation,
+                    explicit_candidate=False,
+                )
         runnable = [item for item in candidates if _candidate_is_runnable(run_dir, item)]
         if runnable:
-            return max(
+            selected = max(
                 runnable,
                 key=lambda item: tuple(
                     float((item.get("fitness_objectives") or {}).get(case, -1000.0))
                     for case in ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")
                 ),
             )
+            return _annotate_selection(
+                selected,
+                requested_generation=int(latest),
+                selected_generation=generation,
+                explicit_candidate=False,
+            )
 
     raise ValueError(f"No runnable candidate found in run: {run_dir}")
+
+
+def _annotate_selection(
+    candidate: dict[str, Any],
+    *,
+    requested_generation: int,
+    selected_generation: int,
+    explicit_candidate: bool,
+) -> dict[str, Any]:
+    selected = dict(candidate)
+    selected["_selection"] = {
+        "requested_generation": requested_generation,
+        "selected_generation": selected_generation,
+        "fallback": selected_generation != requested_generation,
+        "mode": "explicit_candidate" if explicit_candidate else "latest_or_fallback",
+    }
+    return selected
 
 
 def _load_generation_candidates(run_dir: Path, generation: int) -> list[dict[str, Any]]:
@@ -376,6 +415,7 @@ def _build_summary(
             "status": candidate.get("status"),
             "fitness_objectives": candidate.get("fitness_objectives", {}),
         },
+        "selection": dict(candidate.get("_selection") or {}),
         "agent_class": AGENT_CLASS,
         "opponents": [
             {"id": item.opponent_id, "name": item.display_name, "class": item.class_name}

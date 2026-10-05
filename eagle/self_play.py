@@ -39,11 +39,40 @@ def runnable_self_play_candidates(candidates: list[Candidate]) -> list[Candidate
     runnable = [
         candidate
         for candidate in candidates
-        if candidate.generated_java and candidate.compile_status == "success"
+        if _is_self_play_opponent_ready(candidate)
     ]
     if not runnable:
-        raise ValueError("A self-play snapshot requires at least one compiled phenotype.")
+        raise ValueError(
+            "A self-play snapshot requires at least one evaluated, complete phenotype."
+        )
     return runnable
+
+
+def _is_self_play_opponent_ready(candidate: Candidate) -> bool:
+    """Reject failed or incomplete phenotypes before they enter the pool."""
+
+    if (
+        not candidate.generated_java
+        or candidate.compile_status != "success"
+        or candidate.status not in {"evaluated", "complete"}
+        or candidate.failure_stage is not None
+        or candidate.failure_reason is not None
+    ):
+        return False
+    game = candidate.game_eval_result or {}
+    expected = game.get("expected_match_count")
+    completed = game.get("completed_match_count")
+    if expected is not None or completed is not None:
+        if expected is None or completed is None or int(completed) != int(expected):
+            return False
+    opponent_results = game.get("opponent_results") or []
+    if any(
+        str(row.get("status") or "").lower() != "completed"
+        for row in opponent_results
+        if isinstance(row, dict)
+    ):
+        return False
+    return True
 
 
 def self_play_context_id(candidates: list[Candidate]) -> str:

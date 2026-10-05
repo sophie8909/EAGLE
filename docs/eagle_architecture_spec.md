@@ -76,8 +76,12 @@ Each later generation produces a fixed-size offspring population and performs:
    parent-plus-offspring (`mu_plus_lambda`) pool;
 7. atomic generation persistence.
 
-The fixed-size survivor population is selected from the joint evaluated parent
-and offspring pool. Fixed roster compares the same ten cases by lexicase.
+The fixed-size survivor population is selected from the joint parent and
+offspring pool. Failed candidates remain in that pool for diagnostics, but are
+not eligible to displace completed candidates; a failed offspring batch thus
+leaves valid parents in place. Selection fails explicitly when fewer than the
+configured population size completed candidates remain. Fixed roster compares
+the same ten cases by lexicase.
 Self-play compares scalar Game Performance and consults executable semantics
 only inside an inclusive `1.0` fitness tier. Generation age never breaks ties.
 
@@ -325,9 +329,10 @@ zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
 In `self_play`, the run owns a persisted opponent library. The library is
-seeded from the runnable current population at generation zero and is updated
+seeded from the current population's compiled candidates that have no failure
+state and completed the configured match batch at generation zero and is updated
 only at each `evaluation.self_play_refresh_interval` generation (the supported
-minimal protocol uses five generations). At an update, newly runnable
+minimal protocol uses five generations). At an update, newly eligible
 candidates are merged into the library after LISS-style exact behavior-vector
 deduplication: candidates with the same ordered probe/action vector share one
 retained representative. A deterministic stable-order selection from the

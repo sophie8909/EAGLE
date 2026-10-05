@@ -52,7 +52,10 @@ retry signal.
 `evaluation.mode: fixed_roster` is the default protocol below. With
 `evaluation.mode: self_play`, the evaluator materializes the immutable active
 context from the run-local opponent library as ten equally weighted
-`self_play_000`…`self_play_009` slots. The library is seeded at generation zero
+`self_play_000`…`self_play_009` slots. Only candidates with a successful compile,
+no failure stage/reason, and a complete match batch may enter the library. If
+generation zero has no such candidate, the run fails before creating a context.
+The library is seeded at generation zero
 and merged/reselected only at `self_play_refresh_interval` (five generations in
 the minimal protocol); a short library selection is cycled deterministically and
 self-matches remain valid. Every match records the context ID plus source

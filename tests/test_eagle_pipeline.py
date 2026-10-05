@@ -575,6 +575,7 @@ class EaglePipelineTests(unittest.TestCase):
                         id=f"evaluated-{generation}",
                         generation=generation,
                         fitness_objectives={case: 10.0 for case in LEXICASE_CASES},
+                        status="evaluated",
                     )
                 ]
 

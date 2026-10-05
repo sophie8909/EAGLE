@@ -214,6 +214,25 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["status"], "complete")
 
+    def test_finalize_marks_an_all_failed_population_as_failed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            run.mkdir()
+            self.initialize(run)
+            population = [
+                Candidate(
+                    id="failed",
+                    status="failed",
+                    failure_stage="runtime",
+                    failure_reason="runtime exception",
+                )
+            ]
+            finalize_run(run, population, stop_reason=None)
+            manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "failed")
+            self.assertEqual(manifest["stop_reason"], "all_candidates_failed")
+            self.assertEqual(manifest["failure_type"], "population_failure")
+
     def test_interrupted_manifest_remains_resumable(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"

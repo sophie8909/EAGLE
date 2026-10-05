@@ -63,11 +63,16 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         json.dumps(build_opponent_archive(data.run_dir), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    completed_generations = [
+        int(item["generation"])
+        for item in data.generations
+        if isinstance(item.get("generation"), int)
+    ]
     summary = {
         "schema_version": "eagle-analysis-v2",
         "run_dir": str(data.run_dir),
         "status": data.manifest.get("status"),
-        "completed_generations": data.manifest.get("completed_generations", []),
+        "completed_generations": completed_generations,
         "candidate_count": len(candidates),
         "agent_game_performance_count": len(agent_game_rows),
         "agent_win_rate_count": len(agent_win_rate_rows),

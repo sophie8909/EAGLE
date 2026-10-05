@@ -17,6 +17,16 @@ LINEAGE_SCHEMA_VERSION = "3.0"
 CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v5"
 
 
+def has_completed_evaluation(candidate: "Candidate") -> bool:
+    """Return whether a candidate completed evaluation without a failure."""
+
+    return (
+        candidate.status in {"evaluated", "complete"}
+        and candidate.failure_stage is None
+        and candidate.failure_reason is None
+    )
+
+
 @dataclass(frozen=True)
 class Candidate:
     """One evolutionary individual that generates one complete Java agent."""

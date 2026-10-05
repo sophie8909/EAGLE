@@ -90,7 +90,7 @@ flowchart TD
   `game_performance` value.
 - The reporting aggregate uses fixed `0.5/1/2` weights and denominator `12.5`,
   but does not participate in lexicase case filtering.
-- Failed candidates remain available to selection with `-1000.0` case scores.
+- Failed candidates remain in the joint parent-plus-offspring input and artifact records with the canonical failure sentinel and stage diagnostics, but cannot displace completed candidates during survivor selection. If fewer than the configured population size completed candidates remain, selection fails explicitly.
 - Survivor selection uses the joint parent-plus-offspring (`mu_plus_lambda`)
   pool. Fixed roster uses seeded lexicase without replacement. Self-play forms
   non-chained fitness tiers anchored at each current maximum; scores within

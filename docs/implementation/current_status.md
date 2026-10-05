@@ -42,8 +42,10 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   incomplete candidates receive `-1000.0` for the active objective(s).
 - Explicit `evaluation.mode: self_play` uses a persisted opponent library plus
   immutable snapshot contexts and `self_play_000`…`self_play_009` cases with
-  uniform weights. The library is seeded at generation zero and updated at the
-  five-generation refresh boundary; equivalent runnable phenotypes are collapsed
+  uniform weights. Only compiled candidates with no failure state and a complete
+  match batch enter the library; an empty valid pool fails the run instead of
+  creating a poisoned context. The library is seeded at generation zero and
+  updated at the five-generation refresh boundary; equivalent runnable phenotypes are collapsed
   by their complete semantic probe/action vector before selected library entries
   cycle to fill ten slots. Refresh generations re-evaluate phenotype-preserving fresh-ID
   parents before reflection and selection; resume reloads the last committed
@@ -54,6 +56,12 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   uses nine-probe full-agent behavior distance to preserve different semantics
   inside the tied tier. Survivor selection always uses the joint
   parent-plus-offspring (`mu_plus_lambda`) pool.
+- Survivor selection keeps failed candidates in the diagnostic parent-plus-
+  offspring pool but excludes them from survivor choice when completed
+  candidates can fill the population; a failed offspring batch therefore keeps
+  valid parents. It rejects pools with fewer than the configured number of
+  completed survivors, and a run with no valid final population is persisted as
+  `failed`, never `complete`.
 - `parent_evaluation_mode: reuse_cached` is the canonical default and never
   regenerates surviving parents. The non-canonical
   `regenerate_same_genotype` diagnostic is limited to inherited Java plus
