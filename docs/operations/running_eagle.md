@@ -122,6 +122,24 @@ The command writes `stability_report.json` and raw responses under
 `runs/llm_stability/<UTC timestamp>/`. It returns exit code `0` when all hashes
 match and `2` when at least one response differs.
 
+To compare seeds while fully restarting the configured llama-server before
+each seed, use:
+
+```bash
+python3 scripts/test_llm_seed_restarts.py \
+  --config configs/experiments/0920_self_play/self_play_10x20.yaml \
+  --prompt "Reply with exactly: STABILITY_OK" \
+  --seeds 7,8,9 \
+  --repeats 3
+```
+
+The script owns each server process, stops it after the seed's repetitions, and
+starts a fresh process for the next seed. It writes one raw-response report per
+seed plus `stability_matrix.json`, which separately reports
+`same_seed_stable` and `cross_seed_changed`. Do not leave a manually started
+server on the configured port; the runtime manager refuses to kill foreign
+processes.
+
 To enable managed opponent-library self-play explicitly:
 
 ```yaml

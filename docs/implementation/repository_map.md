@@ -12,6 +12,7 @@ kept as documentation entries.
 | `watchdog.sh` | Optional network-interface monitor; no model lifecycle ownership |
 | `scripts/run_gui_match.py` | Optional read-only visual match inspection |
 | `scripts/benchmark_match_workers.py` | Bounded mock/real MicroRTS match-worker benchmark |
+| `scripts/test_llm_seed_restarts.py` | Restart-owned-server LLM seed stability comparison |
 
 ## Experiment and search
 

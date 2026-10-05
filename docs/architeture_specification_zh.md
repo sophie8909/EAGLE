@@ -56,6 +56,11 @@ server、模型或 backend kernel 仍可能非 deterministic，因此 raw reques
 artifact 與 hash 才是最終證據。MicroRTS match 不宣稱 seeded reproducibility；
 重複比賽只用 `round_index` 識別。
 
+若要排除 server 內部狀態對 seed 實驗的影響，可使用
+`scripts/test_llm_seed_restarts.py`；它會在每個 seed 的重複 request 後完整停止
+並重新啟動 llama-server，再測下一個 seed，並保存每個 seed 的 raw response、hash
+與 server lifecycle。
+
 ## Reflection 與 Prompt
 
 Reflection operator mode 只有三種：

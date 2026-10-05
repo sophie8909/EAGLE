@@ -41,6 +41,9 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
   responses plus SHA-256 hashes for backend stability checks.
+- `scripts/test_llm_seed_restarts.py` provides the stronger diagnostic: it
+  fully restarts the owned llama-server between seeds and records the server
+  lifecycle alongside per-seed raw responses and hashes.
 - Fixed-roster candidate fitness is a ten-field opponent score mapping.
   Self-play candidate fitness contains only `game_performance`. Failed or
   incomplete candidates receive `-1000.0` for the active objective(s).

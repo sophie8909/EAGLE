@@ -11,6 +11,7 @@ from typing import Any
 
 
 STABILITY_SCHEMA_VERSION = "eagle-llm-stability-v1"
+STABILITY_MATRIX_SCHEMA_VERSION = "eagle-llm-stability-matrix-v1"
 
 
 @dataclass(frozen=True)
@@ -80,5 +81,50 @@ def write_stability_report(
         "responses": response_records,
     }
     report_path = output_dir / "stability_report.json"
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report_path
+
+
+def write_stability_matrix(
+    output_dir: Path,
+    results: Mapping[int, StabilityResult],
+    *,
+    metadata: Mapping[str, object] | None = None,
+    matrix_metadata: Mapping[str, object] | None = None,
+) -> Path:
+    """Persist per-seed reports and compare one response across seeds."""
+
+    if not results:
+        raise ValueError("results must contain at least one seed")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    seed_runs: list[dict[str, object]] = []
+    first_response_hashes: list[str] = []
+    for seed, result in results.items():
+        seed_dir = output_dir / f"seed_{seed}"
+        report_path = write_stability_report(
+            seed_dir,
+            result,
+            metadata={**dict(metadata or {}), "sampling_seed": seed},
+        )
+        first_hash = result.response_hashes[0]
+        first_response_hashes.append(first_hash)
+        seed_runs.append({
+            "seed": seed,
+            "stable_within_seed": result.stable,
+            "unique_response_count": len(set(result.response_hashes)),
+            "first_response_sha256": first_hash,
+            "report": report_path.relative_to(output_dir).as_posix(),
+        })
+    report = {
+        "schema_version": STABILITY_MATRIX_SCHEMA_VERSION,
+        **dict(metadata or {}),
+        **dict(matrix_metadata or {}),
+        "seeds": list(results),
+        "same_seed_stable": all(item["stable_within_seed"] for item in seed_runs),
+        "cross_seed_unique_response_count": len(set(first_response_hashes)),
+        "cross_seed_changed": len(set(first_response_hashes)) > 1,
+        "seed_runs": seed_runs,
+    }
+    report_path = output_dir / "stability_matrix.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report_path

@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.llm_stability import run_stability_test, write_stability_report
+from eagle.llm_stability import (
+    run_stability_test,
+    write_stability_matrix,
+    write_stability_report,
+)
 
 
 class LLMStabilityTests(unittest.TestCase):
@@ -29,6 +33,24 @@ class LLMStabilityTests(unittest.TestCase):
     def test_repeats_must_include_a_comparison(self):
         with self.assertRaises(ValueError):
             run_stability_test(lambda: "response", repeats=1)
+
+    def test_matrix_separates_same_seed_stability_from_cross_seed_change(self):
+        with tempfile.TemporaryDirectory() as temp:
+            results = {
+                7: run_stability_test(lambda: "response-a", repeats=2),
+                8: run_stability_test(lambda: "response-b", repeats=2),
+            }
+            report_path = write_stability_matrix(
+                Path(temp),
+                results,
+                matrix_metadata={"server_restart_per_seed": True},
+            )
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["same_seed_stable"])
+            self.assertTrue(payload["cross_seed_changed"])
+            self.assertTrue(payload["server_restart_per_seed"])
+            self.assertEqual(payload["seeds"], [7, 8])
+            self.assertTrue((Path(temp) / "seed_7" / "stability_report.json").is_file())
 
 
 if __name__ == "__main__":
