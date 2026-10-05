@@ -158,6 +158,14 @@ bundled build, not retroactively assumed for an unrecorded older binary.
 EAGLE uses `urllib.request` directly; no OpenAI SDK inserts client-side
 defaults. Immediately before the HTTP call, the current request bodies are:
 
+Before transport, EAGLE bounds every prompt at 80,000 characters with a
+deterministic head/tail truncation. This is a character bound, not a tokenizer
+bound; the configured llama.cpp context remains 32,768 tokens. The bound is
+intentionally below the observed context budget for current Java generation and
+reflection responses, while preserving more compile-repair and code-reflection
+evidence than the previous 60,000-character bound. Raw unbounded evidence is
+still retained in run artifacts.
+
 ### Generator
 
 ```json

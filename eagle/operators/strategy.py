@@ -21,7 +21,7 @@ from uuid import uuid4
 from eagle.evaluation.match_trace import iter_match_trace
 
 from eagle.candidate import Candidate
-from eagle.llm import LLMCallLogger, truncate_prompt
+from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, truncate_prompt
 from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection import _run_relative_artifact_base
 from eagle.llm import parse_json_object_response
@@ -180,7 +180,7 @@ class StrategyReflectionPipeline:
         backend: RoleBackend,
         *,
         max_attempts: int = 3,
-        max_prompt_chars: int = 60_000,
+        max_prompt_chars: int = DEFAULT_MAX_PROMPT_CHARS,
         model_identity: str | None = None,
         enabled_roles: set[str] | None = None,
         selection_seed: int = 0,

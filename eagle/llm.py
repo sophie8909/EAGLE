@@ -102,7 +102,9 @@ class LLMClient:
 # request below this bound leaves room for the configured response budget on a
 # 32K context server while still retaining substantially more than the normal
 # EAGLE prompts.  Large raw telemetry remains persisted in run artifacts.
-DEFAULT_MAX_PROMPT_CHARS = 60_000
+# The current 32K-token runtime has ample room for the observed ~6.5K-token
+# generator responses when requests are bounded at 80K characters.
+DEFAULT_MAX_PROMPT_CHARS = 80_000
 
 
 def truncate_prompt(prompt: str, *, max_chars: int = DEFAULT_MAX_PROMPT_CHARS) -> str:

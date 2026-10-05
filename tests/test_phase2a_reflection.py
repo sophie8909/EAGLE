@@ -255,6 +255,11 @@ class Phase2AReflectionTests(unittest.TestCase):
         self.assertEqual(truncate_prompt(oversized, max_chars=256), truncate_prompt(oversized, max_chars=256))
         self.assertLessEqual(len(truncate_prompt(oversized, max_chars=256)), 256)
 
+    def test_default_prompt_bound_is_80k_chars(self):
+        bounded = truncate_prompt("x" * 100_000)
+        self.assertEqual(len(bounded), 80_000)
+        self.assertIn("prompt truncated to fit the server context", bounded)
+
 
 if __name__ == "__main__":
     unittest.main()

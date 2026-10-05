@@ -14,7 +14,7 @@ from eagle.generation.backend import MockGenerationBackend
 from eagle.operators.adaptive import ReflectionOperatorController, build_reflection_operator_controller
 from eagle.operators.code import CodeReflectionMutation
 from eagle.config import ExperimentConfig
-from eagle.llm import LLMCallLogger, LLMClient, LLMServerError
+from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, LLMClient, LLMServerError
 from eagle.operators.initialization import MockInitialPolicyBackend
 from eagle.operators.reflection import build_reflection_backend
 from eagle.prompts import load_prompt
@@ -99,7 +99,7 @@ def build_search_runtime(
         "strategy": StrategyReflectionMutation(
             strategy_role_backend,
             max_attempts=config.mutation_max_attempts,
-            max_prompt_chars=60_000,
+            max_prompt_chars=DEFAULT_MAX_PROMPT_CHARS,
             model_identity=None if mock else client.model,
             enabled_roles=enabled_roles,
             selection_seed=config.random_seed,
