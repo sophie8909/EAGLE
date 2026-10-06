@@ -67,6 +67,7 @@ class MatchResult:
     candidate_id: str | None = None
     generation: int | None = None
     match_index: int = -1
+    match_seed: int | None = None
     candidate_player: int = 0
     opponent: str = "ai.abstraction.LightRush"
     opponent_name: str | None = None
@@ -120,6 +121,7 @@ class MatchResult:
             "candidate_id": self.candidate_id,
             "generation": self.generation,
             "match_index": self.match_index,
+            "match_seed": self.match_seed,
             "candidate_player": self.candidate_player,
             "opponent": self.opponent,
             "opponent_name": self.opponent_name or self.opponent,
@@ -232,6 +234,7 @@ def run_microrts_match(
     opponent_source_generation: int | None = None,
     opponent_source_candidate_id: str | None = None,
     opponent_weight: float = 1.0,
+    match_seed: int | None = None,
     java_system_properties: Mapping[str, str] | None = None,
 ) -> MatchResult:
     """Run one bounded match and persist its independent evidence immediately."""
@@ -259,6 +262,8 @@ def run_microrts_match(
     ai1 = agent_class if candidate_player == 0 else opponent
     ai2 = opponent if candidate_player == 0 else agent_class
     resolved_system_properties = dict(java_system_properties or {})
+    if match_seed is not None:
+        resolved_system_properties.setdefault("eagle.match.seed", str(int(match_seed)))
     if artifact_mode == "full":
         resolved_system_properties["microrts.trace.path"] = str(replay_path)
     system_properties = [
@@ -348,6 +353,7 @@ def run_microrts_match(
             opponent_source_generation=opponent_source_generation,
             opponent_source_candidate_id=opponent_source_candidate_id,
             opponent_weight=opponent_weight,
+            match_seed=match_seed,
         )
 
     try:
@@ -395,6 +401,7 @@ def run_microrts_match(
             opponent_source_generation=opponent_source_generation,
             opponent_source_candidate_id=opponent_source_candidate_id,
             opponent_weight=opponent_weight,
+            match_seed=match_seed,
         )
 
     raw_result = read_result_json(raw_result_path)
@@ -439,6 +446,7 @@ def run_microrts_match(
         opponent_source_generation=opponent_source_generation,
         opponent_source_candidate_id=opponent_source_candidate_id,
         opponent_weight=opponent_weight,
+        match_seed=match_seed,
     )
 
 
@@ -478,6 +486,7 @@ def _finish_match(
     opponent_source_generation: int | None = None,
     opponent_source_candidate_id: str | None = None,
     opponent_weight: float = 1.0,
+    match_seed: int | None = None,
 ) -> MatchResult:
     failure = forced_failure or classify_runtime_failure(
         returncode=returncode,
@@ -567,6 +576,7 @@ def _finish_match(
                 "evaluation_configuration": {
                     "tick_limit": tick_limit,
                     "candidate_player": candidate_player,
+                    "match_seed": match_seed,
                     "opponent_weight": opponent_weight,
                     "opponent_fault_contained": opponent_fault_contained,
                     "opponent_fault_recovered": opponent_fault_recovered,
@@ -606,6 +616,7 @@ def _finish_match(
         candidate_id=candidate_id,
         generation=generation,
         match_index=match_index,
+        match_seed=match_seed,
         candidate_player=candidate_player,
         opponent=opponent,
         opponent_id=opponent_id,

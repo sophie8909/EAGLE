@@ -6,9 +6,9 @@ model:
   path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
   llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   context_size: 32768
-  gpu_layers: -1
-  threads: 8
-  batch_size: 512
+  gpu_layers: 0
+  threads: 1
+  batch_size: 1
   parallel: 1
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
@@ -24,6 +24,7 @@ random_seeds: [7, 8, 9]
 generations: 10
 population_size: 4
 execution_mode: openai
+deterministic_mode: true
 mutation_max_attempts: 3
 generation_max_attempts: 5
 crossover_rate: 0.75
@@ -37,8 +38,10 @@ code_reflection_probability: 0.34
 aos_minimum_probability: 0.10
 
 llm:
-  temperature: 0.2
-  initial_policy_temperature: 0.8
+  temperature: 0.0
+  initial_policy_temperature: 0.0
+  match_commentator:
+    temperature: 0.0
   max_tokens: 8192
 
 microrts_dir: third_party/microrts
@@ -48,6 +51,14 @@ stagnation_generations: 25
 
 evaluation:
   mode: self_play
+  match_workers: 1
+  maps:
+    - path: maps/8x8/basesWorkers8x8.xml
+      tick_limit: 1500
+    - path: maps/16x16/basesWorkers16x16.xml
+      tick_limit: 3000
+    - path: maps/24x24/basesWorkers24x24.xml
+      tick_limit: 4000
   self_play_refresh_interval: 5
   self_play_opponent_library_capacity: 50
   semantic_probes:

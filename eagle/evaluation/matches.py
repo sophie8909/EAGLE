@@ -8,6 +8,7 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.game_performance import GamePerformanceConfig
+from eagle.evaluation.determinism import derive_match_seed
 from eagle.evaluation.match_matrix import (
     MatrixOpponent,
     MatchSpecification,
@@ -72,6 +73,17 @@ def evaluate_matches(
 
         def run_specification(specification: MatchSpecification) -> MatchResult:
             opponent = opponent_by_id[specification.opponent_id]
+            match_seed = None
+            if config.deterministic_mode:
+                match_seed = derive_match_seed(
+                    config.random_seed,
+                    candidate_id=candidate.id,
+                    opponent_id=opponent.opponent_id,
+                    map_id=specification.map_id,
+                    round_index=specification.round_index,
+                    candidate_player=specification.candidate_player,
+                    match_index=specification.match_index,
+                )
             try:
                 result = run_microrts_match(
                     microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
@@ -100,6 +112,7 @@ def evaluate_matches(
                     opponent_weight=specification.opponent_weight,
                     opponent_source_generation=opponent.source_generation,
                     opponent_source_candidate_id=opponent.source_candidate_id,
+                    match_seed=match_seed,
                 )
             except (RuntimeError, OSError) as exc:
                 result = MatchResult(
@@ -116,6 +129,7 @@ def evaluate_matches(
                     status="failed",
                     failure_category="runtime_match_failure",
                     failure_reason=str(exc),
+                    match_seed=match_seed,
                 )
             return replace(
                 result,

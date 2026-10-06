@@ -120,6 +120,7 @@ def run_generation_step(
         parent_replicas = build_self_play_fitness_refresh_replicas(
             source_parents,
             generation=generation,
+            random_seed=(config.random_seed if config.deterministic_mode else None),
         )
         parent_replicas = evaluate_population(
             parent_replicas,
@@ -185,6 +186,7 @@ def run_generation_step(
         parent_replicas = build_parent_evaluation_replicas(
             source_parents,
             generation=generation,
+            random_seed=(config.random_seed if config.deterministic_mode else None),
         )
         parent_replicas = evaluate_population(
             parent_replicas,

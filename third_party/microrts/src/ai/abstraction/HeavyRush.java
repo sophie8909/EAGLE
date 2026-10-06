@@ -13,6 +13,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import rts.GameState;
+import rts.RandomSource;
 import rts.PhysicalGameState;
 import rts.Player;
 import rts.PlayerAction;
@@ -24,7 +25,7 @@ import rts.units.*;
  */
 public class HeavyRush extends AbstractionLayerAI {
 
-    Random r = new Random();
+    Random r = RandomSource.create("ai.abstraction.HeavyRush");
     protected UnitTypeTable utt;
     UnitType workerType;
     UnitType baseType;

@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import unittest
+
+from eagle.config import ExperimentConfig
+from eagle.evaluation.determinism import derive_match_seed
+from eagle.operators.initialization import initialize_population
+
+
+class DeterminismTests(unittest.TestCase):
+    def test_match_seed_is_stable_and_identity_specific(self):
+        arguments = {
+            "random_seed": 7,
+            "candidate_id": "candidate-a",
+            "opponent_id": "lightrush",
+            "map_id": "map_1",
+            "round_index": 2,
+            "candidate_player": 1,
+            "match_index": 17,
+        }
+        first = derive_match_seed(**arguments)
+        self.assertEqual(first, derive_match_seed(**arguments))
+        self.assertGreaterEqual(first, 0)
+        self.assertLess(first, 2**63)
+        self.assertNotEqual(
+            first,
+            derive_match_seed(**{**arguments, "random_seed": 8}),
+        )
+
+    def test_deterministic_population_ids_do_not_use_uuid4(self):
+        config = ExperimentConfig.from_mapping({
+            "deterministic_mode": True,
+            "model": {
+                "name": "test",
+                "gpu_layers": 0,
+                "threads": 1,
+                "batch_size": 1,
+                "parallel": 1,
+            },
+            "llm": {
+                "temperature": 0,
+                "initial_policy_temperature": 0,
+                "match_commentator": {"temperature": 0},
+            },
+            "evaluation": {"match_workers": 1},
+            "candidate_java_mode": "inherited_genotype",
+            "population_size": 2,
+            "random_seed": 37,
+        })
+        first = [candidate.id for candidate in initialize_population(config)]
+        second = [candidate.id for candidate in initialize_population(config)]
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), len(set(first)))
+
+
+if __name__ == "__main__":
+    unittest.main()

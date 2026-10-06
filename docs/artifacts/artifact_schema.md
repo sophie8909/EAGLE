@@ -323,10 +323,11 @@ Compact mode does not request the transient Java XML replay and removes round-st
 
 Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
 
-Match records use `round_index` for repeated games and do not contain a
-`seed` field. Resolved run configuration likewise omits `match_seeds`: the
-removed JVM property was never consumed by MicroRTS and therefore could not
-support a reproducibility claim.
+Match records use `round_index` for repeated games. In
+`deterministic_mode`, `result.json` and trace metadata also contain the stable
+positive `match_seed` passed to MicroRTS as `-Deagle.match.seed`; default-mode
+matches leave this field null. Resolved run configuration omits the obsolete
+`match_seeds` list because deterministic seeds are derived per match.
 
 ## Failure and timing rules
 

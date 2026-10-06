@@ -10,6 +10,7 @@ from typing import Any
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
+from eagle.evaluation.determinism import derive_candidate_id
 from eagle.operators.adaptive import (
     OPERATOR_TO_MUTATION,
     STRATEGY_REFLECTION,
@@ -83,6 +84,7 @@ def plan_offspring(
                 index=context_index,
                 rng=rng,
                 inherit_java=config.candidate_java_mode == "inherited_genotype",
+                deterministic_seed=(config.random_seed if config.deterministic_mode else None),
             ))
             crossover_duration = max(0.0, time.monotonic() - crossover_started)
             child = replace(child, timing={
@@ -99,6 +101,17 @@ def plan_offspring(
             })
         else:
             child = Candidate(
+                id=(
+                    derive_candidate_id(
+                        config.random_seed,
+                        generation=generation,
+                        index=context_index,
+                        role="copy",
+                        parent_ids=(parent_a.id,),
+                    )
+                    if config.deterministic_mode
+                    else ""
+                ),
                 generation=generation,
                 parent_ids=(parent_a.id,),
                 strategy_prompt=normalize_prompt(

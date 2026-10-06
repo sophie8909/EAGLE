@@ -132,10 +132,12 @@ three configured maps, three round indices, and both player positions, producing
 compiled same-named `ai.generated.CandidateAgent`; it does not regenerate or
 recompile either generated source.
 
-MicroRTS match seeds are not part of the active contract. The old
-`match_seeds` values were only written to an unread JVM system property, so
-they never controlled MicroRTS randomness. Repeated games are identified by
-`round_index`; match artifacts do not claim seeded reproducibility.
+MicroRTS match seeds are optional. With `deterministic_mode: true`, EAGLE
+derives one stable seed from the effective run seed and immutable match
+identity, passes it to the vendored runtime as `-Deagle.match.seed`, and
+persists it in the match result and trace metadata. Repeated games remain
+identified by `round_index`; deterministic mode promises same-host, same-build
+reproducibility, not cross-hardware bitwise equivalence.
 
 The direct W/D/L summary is consumed only by AOS. It is not added to the ten
 opponent objectives, Game Performance, lexicase, or the opponent archive. An

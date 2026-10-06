@@ -39,6 +39,31 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(config.rounds_per_map, 3)
         self.assertEqual(config.match_workers, 10)
 
+    def test_deterministic_mode_requires_single_threaded_cpu_runtime(self):
+        with self.assertRaisesRegex(ValueError, "gpu_layers=0"):
+            ExperimentConfig.from_mapping({
+                "deterministic_mode": True,
+            }).validate()
+
+        config = ExperimentConfig.from_mapping({
+            "deterministic_mode": True,
+            "model": {
+                "name": "test",
+                "gpu_layers": 0,
+                "threads": 1,
+                "batch_size": 1,
+                "parallel": 1,
+            },
+            "llm": {
+                "temperature": 0,
+                "initial_policy_temperature": 0,
+                "match_commentator": {"temperature": 0},
+            },
+            "evaluation": {"match_workers": 1},
+        })
+        config.validate()
+        self.assertTrue(config.to_mapping()["deterministic_mode"])
+
     def test_parallel_workers_preserve_canonical_result_order(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -622,6 +647,29 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertNotIn("stdout", persisted)
         self.assertNotIn("stderr", persisted)
         self.assertEqual(stdout_text, result.stdout)
+
+    def test_explicit_match_seed_is_passed_to_jvm_and_persisted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            result = run_microrts_match(
+                microrts_dir=root,
+                classes_dir=root / "classes",
+                agent_class="ai.generated.CandidateAgent",
+                opponent="ai.abstraction.LightRush",
+                tick_limit=100,
+                match_index=0,
+                match_artifacts_dir=root / "matches",
+                mock=True,
+                artifact_mode="compact",
+                match_seed=123456,
+            )
+            persisted = json.loads(
+                (root / "matches" / "match_00" / "result.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(result.match_seed, 123456)
+        self.assertIn("-Deagle.match.seed=123456", result.command)
+        self.assertEqual(persisted["match_seed"], 123456)
 
     def test_full_artifact_mode_keeps_raw_replay_and_round_states(self):
         with tempfile.TemporaryDirectory() as temp_dir:

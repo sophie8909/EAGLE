@@ -300,8 +300,9 @@ def _prepare_worker_rush_opponent(config: ExperimentConfig, *, classes_dir: Path
     output.mkdir(parents=True, exist_ok=True)
     microrts_dir = config.microrts_dir.resolve()
     classpath = os.pathsep.join((str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")))
+    random_source = microrts_dir / "src" / "rts" / "RandomSource.java"
     completed = subprocess.run(
-        ["javac", "-cp", classpath, "-d", str(output), str(source)],
+        ["javac", "-cp", classpath, "-d", str(output), str(random_source), str(source)],
         cwd=microrts_dir,
         capture_output=True,
         text=True,

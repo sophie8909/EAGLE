@@ -29,10 +29,12 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   `evaluation.match_workers: 10`; result ordering remains canonical by
   `match_index`. Compact artifacts skip Java XML replay generation, while full
   artifacts retain replay and round-state evidence.
-- Match repetitions are identified by `round_index`. The obsolete
-  `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
-  seed artifacts are removed; MicroRTS matches do not claim seeded
-  reproducibility.
+- Match repetitions are identified by `round_index`. Optional
+  `deterministic_mode` derives a stable JVM seed from the effective run seed
+  and immutable match identity, passes `-Deagle.match.seed` into the vendored
+  MicroRTS runtime, and persists the seed with the match artifact. The mode
+  also forces CPU/single-threaded llama.cpp settings, zero-temperature LLM
+  requests, and one match worker for same-host, same-build reproducibility.
 - A direct config may set `runs` to execute independent replicates. Without an
   explicit list, each run uses the base `random_seed` plus its zero-based
   replicate index. With `random_seeds`, `runs` repeats each listed seed in

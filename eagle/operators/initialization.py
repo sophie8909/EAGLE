@@ -13,6 +13,7 @@ from typing import Protocol
 from eagle.artifacts import write_candidate_inputs, write_json
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
+from eagle.evaluation.determinism import derive_candidate_id
 from eagle.llm import LLMCallLogger, parse_json_object_response, truncate_prompt
 from eagle.prompts import load_prompt, normalize_prompt
 from eagle.timing import utc_now
@@ -72,6 +73,16 @@ def initialize_population(
             seed_prompts = tuple(seed_prompts[0] for _ in range(config.population_size))
         return [
             Candidate(
+                id=(
+                    derive_candidate_id(
+                        config.random_seed,
+                        generation=0,
+                        index=index,
+                        role="initial",
+                    )
+                    if config.deterministic_mode
+                    else ""
+                ),
                 generation=0,
                 strategy_prompt=prompt,
                 generation_prompt=config.generation_prompt,
@@ -98,6 +109,16 @@ def initialize_population(
 
     configured = [
         Candidate(
+            id=(
+                derive_candidate_id(
+                    config.random_seed,
+                    generation=0,
+                    index=index,
+                    role="initial",
+                )
+                if config.deterministic_mode
+                else ""
+            ),
             generation=0,
             strategy_prompt=prompt,
             generation_prompt=config.generation_prompt,
@@ -112,6 +133,16 @@ def initialize_population(
     ]
     drafts = [
         Candidate(
+            id=(
+                derive_candidate_id(
+                    config.random_seed,
+                    generation=0,
+                    index=index,
+                    role="initial",
+                )
+                if config.deterministic_mode
+                else ""
+            ),
             generation=0,
             generation_prompt=config.generation_prompt,
             inherited_java=inherited_java,

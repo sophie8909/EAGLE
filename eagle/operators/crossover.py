@@ -6,6 +6,7 @@ import random
 from dataclasses import dataclass
 
 from eagle.candidate import Candidate
+from eagle.evaluation.determinism import derive_candidate_id
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,7 @@ class CrossoverContext:
     index: int
     rng: random.Random
     inherit_java: bool = False
+    deterministic_seed: int | None = None
 
 
 def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContext) -> Candidate:
@@ -28,6 +30,17 @@ def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContex
         *(() if java_parent is None else (java_parent.id,)),
     )
     return Candidate(
+        id=(
+            derive_candidate_id(
+                context.deterministic_seed,
+                generation=context.generation,
+                index=context.index,
+                role="crossover",
+                parent_ids=(parent_a.id, parent_b.id),
+            )
+            if context.deterministic_seed is not None
+            else ""
+        ),
         generation=context.generation,
         parent_ids=(parent_a.id, parent_b.id),
         strategy_prompt=strategy_parent.strategy_prompt,

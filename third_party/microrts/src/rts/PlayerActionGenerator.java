@@ -12,7 +12,7 @@ import util.Pair;
  * @author santi
  */
 public class PlayerActionGenerator {
-    static Random r = new Random();
+    static Random r = RandomSource.create("rts.PlayerActionGenerator");
     
     GameState gameState;
     PhysicalGameState physicalGameState;
@@ -199,7 +199,6 @@ public class PlayerActionGenerator {
      * @return
      */
     public PlayerAction getRandom() {
-		Random r = new Random();
 		PlayerAction pa = new PlayerAction();
 		pa.setResourceUsage(base_ru.clone());
 		for (Pair<Unit, List<UnitAction>> unitChoices : choices) {

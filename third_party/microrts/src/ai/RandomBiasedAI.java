@@ -25,7 +25,7 @@ import util.Sampler;
 public class RandomBiasedAI extends AI {
     static final double REGULAR_ACTION_WEIGHT = 1;
     static final double BIASED_ACTION_WEIGHT = 5;
-    Random r = new Random();
+    Random r = RandomSource.create("ai.RandomBiasedAI");
 
 
     public RandomBiasedAI(UnitTypeTable utt) {

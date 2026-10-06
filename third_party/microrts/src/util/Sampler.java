@@ -13,8 +13,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
+import rts.RandomSource;
+
 public class Sampler {
-    static Random generator = new Random();
+    static Random generator = RandomSource.create("util.Sampler");
 
     /*
      * Returns a random element in the distribution

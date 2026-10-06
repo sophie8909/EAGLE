@@ -21,7 +21,7 @@ import util.XMLWriter;
  */
 public class UnitAction {
 
-    public static Random r = new Random();  // only used for non-deterministic events    
+    public static Random r = RandomSource.create("rts.UnitAction");  // only used for non-deterministic events
 
     /**
      * The 'no-op' action

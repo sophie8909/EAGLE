@@ -99,14 +99,20 @@ rematerialization plus match resampling; it is not the production protocol.
 
 `random_seed` controls EA randomness, lexicase case ordering, operator choice,
 crossover choices, and deterministic reflection sampling. Match repetitions are
-identified by `round_index`; EAGLE does not claim seeded MicroRTS match
-reproducibility and does not pass a match-seed JVM property. The same
-`random_seed` is also sent as the OpenAI-compatible `seed` field for every
-initial-policy, reflection, rewrite, Java-generation, repair, and preflight LLM
-request. This requests repeatable sampling from the configured server/model;
-the server, model, and backend kernels may still be nondeterministic, so raw
-request/response artifacts and their hashes remain authoritative. Role-specific
-temperature still controls sampling diversity.
+identified by `round_index`. In the default mode MicroRTS retains its historical
+runtime randomness. With `deterministic_mode: true`, EAGLE derives a stable
+positive JVM seed from the effective run seed and immutable match identity
+(candidate, opponent, map, round, side, and match index), passes it as
+`-Deagle.match.seed`, and records it in match artifacts. The vendored MicroRTS
+random sources consume that property.
+
+The same `random_seed` is also sent as the OpenAI-compatible `seed` field for
+every initial-policy, reflection, rewrite, Java-generation, repair, and
+preflight LLM request. `deterministic_mode` additionally requires CPU llama.cpp
+execution (`gpu_layers: 0`, `threads: 1`, `batch_size: 1`, `parallel: 1`),
+serial match workers, and zero temperature for every LLM role. This makes
+same-host, same-build reruns reproducible; different model files, llama.cpp
+builds, JVMs, or hardware are not promised to be bitwise compatible.
 
 For direct multi-run configs, omitting `random_seeds` preserves the legacy
 schedule of `random_seed`, then `random_seed + 1`, and so on. When

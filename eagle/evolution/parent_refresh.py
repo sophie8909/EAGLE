@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.evaluation.determinism import derive_candidate_id
 from eagle.run_artifacts import atomic_json
 
 
@@ -13,6 +14,7 @@ def build_parent_evaluation_replicas(
     parents: list[Candidate],
     *,
     generation: int,
+    random_seed: int | None = None,
 ) -> list[Candidate]:
     """Create unevaluated, separately identifiable parent re-materializations.
 
@@ -22,8 +24,19 @@ def build_parent_evaluation_replicas(
     """
 
     replicas: list[Candidate] = []
-    for parent in parents:
+    for index, parent in enumerate(parents):
         replicas.append(Candidate(
+            id=(
+                derive_candidate_id(
+                    random_seed,
+                    generation=generation,
+                    index=index,
+                    role="parent_rematerialization",
+                    parent_ids=(parent.id,),
+                )
+                if random_seed is not None
+                else ""
+            ),
             generation=generation,
             parent_ids=parent.parent_ids,
             strategy_prompt=parent.strategy_prompt,
@@ -53,11 +66,23 @@ def build_self_play_fitness_refresh_replicas(
     parents: list[Candidate],
     *,
     generation: int,
+    random_seed: int | None = None,
 ) -> list[Candidate]:
     """Create fresh identities that preserve parent genotypes and phenotypes exactly."""
 
     return [
         Candidate(
+            id=(
+                derive_candidate_id(
+                    random_seed,
+                    generation=generation,
+                    index=index,
+                    role="self_play_fitness_refresh",
+                    parent_ids=(parent.id,),
+                )
+                if random_seed is not None
+                else ""
+            ),
             generation=generation,
             parent_ids=(parent.id,),
             strategy_prompt=parent.strategy_prompt,
@@ -82,7 +107,7 @@ def build_self_play_fitness_refresh_replicas(
                 },
             },
         )
-        for parent in parents
+        for index, parent in enumerate(parents)
     ]
 
 

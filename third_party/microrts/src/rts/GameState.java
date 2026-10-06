@@ -34,7 +34,7 @@ import util.XMLWriter;
 public class GameState {
     public static final boolean REPORT_ILLEGAL_ACTIONS = false;
     
-    static Random r = new Random();         // only used if the action conflict resolution strategy is set to random
+    static Random r = RandomSource.create("rts.GameState"); // only used for random conflict resolution
     protected int unitCancelationCounter = 0;  // only used if the action conflict resolution strategy is set to alternating
     
     protected int time = 0;

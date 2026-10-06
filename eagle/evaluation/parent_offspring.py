@@ -9,6 +9,7 @@ from typing import Any
 
 from eagle.candidate import Candidate
 from eagle.evaluation.game_performance import GamePerformanceConfig
+from eagle.evaluation.determinism import derive_match_seed
 from eagle.evaluation.match_matrix import (
     MatchSpecification,
     MatrixOpponent,
@@ -116,6 +117,17 @@ def evaluate_parent_vs_offspring(
     references: list[dict[str, Any]] = []
 
     def run_specification(specification: MatchSpecification) -> MatchResult:
+        match_seed = None
+        if config.deterministic_mode:
+            match_seed = derive_match_seed(
+                config.random_seed,
+                candidate_id=offspring.id,
+                opponent_id=comparison_parent.id,
+                map_id=specification.map_id,
+                round_index=specification.round_index,
+                candidate_player=specification.candidate_player,
+                match_index=specification.match_index,
+            )
         try:
             return run_microrts_match(
                 microrts_dir=config.microrts_dir,
@@ -142,6 +154,7 @@ def evaluate_parent_vs_offspring(
                 opponent_source_generation=comparison_parent.generation,
                 opponent_source_candidate_id=comparison_parent.id,
                 java_system_properties={PARENT_CLASSES_PROPERTY: str(parent_classes.resolve())},
+                match_seed=match_seed,
             )
         except (RuntimeError, OSError, ValueError) as exc:
             return MatchResult(
@@ -158,6 +171,7 @@ def evaluate_parent_vs_offspring(
                 status="failed",
                 failure_category="parent_offspring_match_failure",
                 failure_reason=str(exc),
+                match_seed=match_seed,
                 opponent_source_generation=comparison_parent.generation,
                 opponent_source_candidate_id=comparison_parent.id,
             )

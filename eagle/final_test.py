@@ -22,6 +22,7 @@ from eagle.evaluation.opponents import (
     preflight_evaluation_opponents,
 )
 from eagle.evaluation.matches import scoring_config_from_experiment
+from eagle.evaluation.determinism import derive_match_seed
 from eagle.evaluation.runtime_evaluation import hash_class_directory, hash_file
 from eagle.opponents import SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from eagle.evaluation.match_matrix import canonical_evaluation_maps
@@ -296,6 +297,17 @@ def _run_final_matrix(
 
     def run_specification(item: tuple[Any, Any, int, int, int, Path]):
         opponent, evaluation_map, game_index, candidate_player, match_index, match_dir = item
+        match_seed = None
+        if config.deterministic_mode:
+            match_seed = derive_match_seed(
+                config.random_seed,
+                candidate_id=candidate_id,
+                opponent_id=opponent.opponent_id,
+                map_id=evaluation_map.map_id,
+                round_index=game_index,
+                candidate_player=candidate_player,
+                match_index=match_index,
+            )
         result = run_microrts_match(
             microrts_dir=config.microrts_dir,
             classes_dir=classes_dir,
@@ -319,6 +331,7 @@ def _run_final_matrix(
             artifact_mode="compact",
             map_id=evaluation_map.map_id,
             round_index=game_index,
+            match_seed=match_seed,
         )
         return item, result
 
