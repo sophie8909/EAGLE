@@ -109,7 +109,8 @@ random sources consume that property.
 The same `random_seed` is also sent as the OpenAI-compatible `seed` field for
 every initial-policy, reflection, rewrite, Java-generation, repair, and
 preflight LLM request. `deterministic_mode` additionally requires CPU llama.cpp
-execution (`gpu_layers: 0`, `threads: 1`, `batch_size: 1`, `parallel: 1`),
+execution (`gpu_layers: 0`, `threads: 1`, `batch_size: 512` or larger,
+`parallel: 1`),
 serial match workers, and zero temperature for every LLM role. This makes
 same-host, same-build reruns reproducible; different model files, llama.cpp
 builds, JVMs, or hardware are not promised to be bitwise compatible.

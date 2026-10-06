@@ -509,10 +509,10 @@ class ExperimentConfig:
                 self.generation_model,
             )
             for model in deterministic_models:
-                if (model.gpu_layers, model.threads, model.batch_size, model.parallel) != (0, 1, 1, 1):
+                if model.gpu_layers != 0 or model.threads != 1 or model.batch_size < 512 or model.parallel != 1:
                     raise ValueError(
                         "deterministic_mode requires model gpu_layers=0, threads=1, "
-                        "batch_size=1, and parallel=1."
+                        "batch_size>=512, and parallel=1."
                     )
         if self.runs < 1:
             raise ValueError("runs must be at least 1.")

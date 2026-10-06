@@ -51,7 +51,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 "name": "test",
                 "gpu_layers": 0,
                 "threads": 1,
-                "batch_size": 1,
+                "batch_size": 512,
                 "parallel": 1,
             },
             "llm": {

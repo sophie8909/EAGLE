@@ -109,7 +109,7 @@ duplicate policy-output retries. The replicate's `random_seed` is sent as the
 LLM request `seed` for all LLM roles, including initial policy generation and
 Java generation. For a same-host deterministic rerun, add
 `deterministic_mode: true`, use CPU single-threaded model settings
-(`gpu_layers: 0`, `threads: 1`, `batch_size: 1`, `parallel: 1`), set every LLM
+(`gpu_layers: 0`, `threads: 1`, `batch_size: 512` or larger, `parallel: 1`), set every LLM
 temperature to `0`, and use `evaluation.match_workers: 1`. EAGLE then derives
 and persists one JVM match seed per immutable match identity. This does not
 promise bitwise identity across different model files, llama.cpp builds, JVMs,
