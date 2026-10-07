@@ -12,7 +12,10 @@ behavior signatures only when scalar fitness is tied.
    `population_size`, and give every copy the same inherited Java input. In
    inherited `llm_generated_policies` mode, keep the configured policy in slot
    one and fill every other slot through one policy-only LLM call. Each such
-   call receives the immutable closed-world MicroRTS gameplay contract.
+   call receives the immutable closed-world MicroRTS gameplay contract and a
+   stable slot-specific strategy identity from `initial_policy_variants.txt`.
+   This keeps deterministic runs reproducible while preventing every slot from
+   receiving the same effective generation request.
 2. In inherited `configured_seeds` and `llm_generated_policies` modes, call the
    Generator independently for every generation-zero candidate. In the latter,
    WorkerRush Java is inherited prompt context rather than the phenotype. Later

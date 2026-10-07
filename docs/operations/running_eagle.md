@@ -100,10 +100,13 @@ llm:
   initial_policy_temperature: 0.8
 ```
 
-Slot 1 uses the configured Worker Rush policy. Slots 2–10 are nine independent
-LLM policy samples from the “Generate one RTS strategy” prompt; they are not
-`RandomAI` agents. Every policy then receives an independent Java Generator
-call; WorkerRush Java is inherited request context, not the phenotype.
+Slot 1 uses the configured Worker Rush policy. Slots 2–10 are nine LLM policy
+requests with stable, slot-specific strategy identities from
+`prompts/initial_policy_variants.txt`; they are not `RandomAI` agents. This
+produces different initial policy targets even with `temperature: 0`, while
+keeping same-seed reruns reproducible. Every policy then receives an independent
+Java Generator call; WorkerRush Java is inherited request context, not the
+phenotype.
 `initial_policy_max_attempts` bounds invalid or
 duplicate policy-output retries. The replicate's `random_seed` is sent as the
 LLM request `seed` for all LLM roles, including initial policy generation and

@@ -215,7 +215,8 @@ Capability or Strategy Alignment or write their diagnostic files or timing.
 
 The `0903_llm_initial_population` config uses the separately checked-in
 `eagle/java_seeds/worker_rush/CandidateAgent.java`. It preserves one configured Worker Rush policy,
-generates nine policy prompts through `initial_policy_generation.txt`, then
+generates nine policy prompts through `initial_policy_generation.txt`, each with
+a stable slot-specific strategy identity from `initial_policy_variants.txt`, then
 generates Java independently for all ten policies with WorkerRush as inherited
 context. Each generated policy call owns candidate-local request, raw
 response, validation, retry, and timing evidence. Initial policy generation uses

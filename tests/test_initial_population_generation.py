@@ -114,6 +114,14 @@ class InitialPopulationGenerationTests(unittest.TestCase):
             [candidate.metadata["initial_policy_sample_index"] for candidate in population[1:]],
             list(range(1, 10)),
         )
+        directives = [
+            candidate.metadata["initial_policy_diversity_directive"]
+            for candidate in population[1:]
+        ]
+        self.assertEqual(len(set(directives)), 9)
+        self.assertTrue(
+            all(directive in request for directive, request in zip(directives, backend.requests))
+        )
         self.assertEqual({candidate.inherited_java for candidate in population}, {worker_java})
         self.assertEqual(len(backend.requests), 9)
         self.assertTrue(all("Generate one RTS strategy" in request for request in backend.requests))
@@ -127,6 +135,12 @@ class InitialPopulationGenerationTests(unittest.TestCase):
             all("Opponent implementation name/class" in request for request in backend.requests)
         )
         self.assertTrue(all(result["status"] == "success" for result in results))
+        self.assertTrue(
+            all(
+                result["diversity_directive"] == candidate.metadata["initial_policy_diversity_directive"]
+                for result, candidate in zip(results, population[1:])
+            )
+        )
         self.assertTrue(all(json.loads(raw)["strategy_prompt"] for raw in raw_responses))
         self.assertEqual(
             candidate_snapshot["artifacts"]["initial_policy_generation"],

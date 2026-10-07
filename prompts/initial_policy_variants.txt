@@ -1,0 +1,9 @@
+1. Light-unit timing attack: prioritize an early Barracks and a coordinated Light-unit attack before investing in expensive technology or expansion.
+2. Ranged defensive counterattack: establish a safe economy, produce Ranged units, defend against the first pressure, then counterattack from protected positions.
+3. Barracks-first aggressive pressure: spend early resources on military production and maintain continuous pressure on enemy Workers and production buildings.
+4. Heavy-unit timing attack: stabilize the economy, transition deliberately into Heavy units, and launch a timed attack when the Heavy force reaches a meaningful size.
+5. Turtle and counterattack: build layered defense around the Base and resource line, absorb the opponent's attack, then punish the exposed surviving army.
+6. Expansion and economy: prioritize additional resource income and worker efficiency, while maintaining enough military presence to protect the expansion before attacking.
+7. Anti-rush defense: scout for early aggression, preserve Workers and production, use cost-effective defensive units, and convert a defended rush into a gradual advantage.
+8. Mixed-army map control: combine complementary unit types, contest the center and resource routes, and attack only after securing positional and economic control.
+9. Fast technology transition: use a minimal opening force to survive, reach advanced production quickly, and exploit the first technology-enabled timing window.

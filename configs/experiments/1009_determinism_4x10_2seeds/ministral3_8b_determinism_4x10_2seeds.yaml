@@ -13,11 +13,11 @@ model:
   parallel: 1
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
-initial_population_mode: configured_seeds
+initial_population_mode: llm_generated_policies
 initial_policy_generation_prompt_file: prompts/initial_policy_generation.txt
 initial_policy_max_attempts: 3
 generation_prompt_file: prompts/initial_generation.txt
-initial_java_seed_path: eagle/java_seeds/CandidateAgent.java
+initial_java_seed_path: eagle/java_seeds/worker_rush/CandidateAgent.java
 agent_template_path: eagle/java_seeds/CandidateAgent.java
 
 runs: 2

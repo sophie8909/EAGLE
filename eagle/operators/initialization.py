@@ -22,6 +22,11 @@ from eagle.timing import utc_now
 LLM_GENERATED_POLICIES = "llm_generated_policies"
 INITIAL_POLICY_SCHEMA_VERSION = "eagle-initial-policy-generation-v1"
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
+INITIAL_POLICY_VARIANTS = tuple(
+    line.removeprefix("- ").strip()
+    for line in load_prompt("initial_policy_variants").splitlines()
+    if line.strip()
+)
 
 
 class InitialPolicyBackend(Protocol):
@@ -151,6 +156,9 @@ def initialize_population(
                 "seed_index": index,
                 "initial_policy_source": "llm_generated",
                 "initial_policy_sample_index": index - len(configured) + 1,
+                "initial_policy_diversity_directive": _initial_policy_diversity_directive(
+                    index - len(configured) + 1
+                ),
             },
         )
         for index in range(len(configured), config.population_size)
@@ -205,6 +213,9 @@ def _generate_initial_policy(
         request = _render_initial_policy_request(
             config,
             sample_index=int(candidate.metadata["initial_policy_sample_index"]),
+            diversity_directive=str(
+                candidate.metadata["initial_policy_diversity_directive"]
+            ),
             selected_prompts=selected_prompts,
             prior_error=failure_reason or "none",
         )
@@ -290,6 +301,9 @@ def _generate_initial_policy(
             "schema_version": INITIAL_POLICY_SCHEMA_VERSION,
             "candidate_id": candidate.id,
             "sample_index": candidate.metadata["initial_policy_sample_index"],
+            "diversity_directive": candidate.metadata[
+                "initial_policy_diversity_directive"
+            ],
             "status": "success" if selected_attempt is not None else "failed",
             "max_attempts": config.initial_policy_max_attempts,
             "selected_attempt": selected_attempt,
@@ -315,6 +329,7 @@ def _render_initial_policy_request(
     config: ExperimentConfig,
     *,
     sample_index: int,
+    diversity_directive: str,
     selected_prompts: list[str],
     prior_error: str,
 ) -> str:
@@ -323,10 +338,24 @@ def _render_initial_policy_request(
         gameplay_contract=MICRORTS_GAMEPLAY_CONTRACT,
         sample_index=sample_index,
         population_size=config.population_size,
+        diversity_directive=diversity_directive,
         existing_strategy_prompts=selected,
         prior_error=prior_error,
     )
     return truncate_prompt(request)
+
+
+def _initial_policy_diversity_directive(sample_index: int) -> str:
+    """Return a stable strategy identity for one LLM-generated seed slot."""
+
+    if sample_index < 1:
+        raise ValueError("initial policy sample_index must be positive")
+    if sample_index <= len(INITIAL_POLICY_VARIANTS):
+        return INITIAL_POLICY_VARIANTS[sample_index - 1]
+    return (
+        f"Novel strategic identity {sample_index}: choose a coherent strategy that is "
+        "materially different from every listed identity and existing policy."
+    )
 
 
 def _record_policy_timing(

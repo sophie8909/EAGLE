@@ -49,6 +49,13 @@ Run directories：
 | 10/7 | deterministic 3×2 smoke | seed 7、8、9 各兩次 mock complete | 先通過 seed 7 gate，再跑 seed 8/9；行為一致 |
 | 10/7 | deterministic 4×10 | seed 7、8 各兩次 mock complete | 本報告的主要新實驗；行為一致 |
 
+後續初始化修正：`llm_generated_policies` 現在為每個非 WorkerRush slot
+加入固定的 strategy identity（見 `prompts/initial_policy_variants.txt`）。因此
+即使 deterministic mode 使用 `temperature: 0`，9 個 LLM 初始 policy 仍會收到
+不同的生成目標；同一 seed 重跑仍維持可重現。`1009`、`1007`、`1008` 的
+deterministic configs 已切換回 `llm_generated_policies`，不再把 WorkerRush
+複製到整個 generation 0。
+
 歷史實驗 artifact 位於 `/home/mhlab/EAGLE/runs/`，舊 run 必須依其 run-local `config.yaml` 判斷，不能用目前 config 回推當時設定。
 
 ## 4. 程式變更整理

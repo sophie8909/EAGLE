@@ -2,6 +2,11 @@ Initial Policy Generation stage.
 
 Generate one RTS strategy for MicroRTS. This is generated policy $sample_index in a population of $population_size.
 
+This policy has the following required strategic identity:
+$diversity_directive
+Follow this identity deliberately. Do not fall back to a generic mixed-army
+policy, and do not copy the strategic identity of an existing policy.
+
 Use the following domain contract as the complete game world. The policy may
 use a genuinely different strategy type, but every condition and action must be
 expressible under this contract:

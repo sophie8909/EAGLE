@@ -130,7 +130,13 @@ required_variables = []
 file = "initial_policy_generation.txt"
 role = "seed"
 stages = ["population_initialization"]
-required_variables = ["sample_index", "population_size", "gameplay_contract", "existing_strategy_prompts", "prior_error"]
+required_variables = ["sample_index", "population_size", "diversity_directive", "gameplay_contract", "existing_strategy_prompts", "prior_error"]
+
+[prompts.initial_policy_variants]
+file = "initial_policy_variants.txt"
+role = "reference"
+stages = ["population_initialization"]
+required_variables = []
 
 [prompts.initial_generation]
 file = "initial_generation.txt"
