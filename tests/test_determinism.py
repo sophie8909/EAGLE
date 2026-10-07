@@ -5,6 +5,8 @@ import unittest
 from eagle.config import ExperimentConfig
 from eagle.evaluation.determinism import derive_match_seed
 from eagle.operators.initialization import initialize_population
+from eagle.operators.strategy import _role_request_id
+from eagle.candidate import Candidate
 
 
 class DeterminismTests(unittest.TestCase):
@@ -51,6 +53,21 @@ class DeterminismTests(unittest.TestCase):
         second = [candidate.id for candidate in initialize_population(config)]
         self.assertEqual(first, second)
         self.assertEqual(len(first), len(set(first)))
+
+    def test_strategy_role_request_id_is_stable(self):
+        candidate = Candidate(id="candidate-a", generation=3)
+        arguments = {
+            "candidate": candidate,
+            "role": "coach",
+            "match_id": "match-2",
+            "suffix": "attempt-1",
+        }
+        first = _role_request_id(**arguments)
+        self.assertEqual(first, _role_request_id(**arguments))
+        self.assertNotEqual(
+            first,
+            _role_request_id(**{**arguments, "suffix": "attempt-2"}),
+        )
 
 
 if __name__ == "__main__":

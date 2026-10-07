@@ -16,7 +16,6 @@ import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Protocol
-from uuid import uuid4
 
 from eagle.evaluation.match_trace import iter_match_trace
 
@@ -480,7 +479,12 @@ class StrategyReflectionPipeline:
         suffix: str = "",
         extra: dict[str, Any] | None = None,
     ) -> tuple[str, Any]:
-        request_id = uuid4().hex
+        request_id = _role_request_id(
+            candidate,
+            role=role,
+            match_id=match_id,
+            suffix=suffix,
+        )
         trace = {"role": role, "candidate_id": candidate.id, "generation_index": candidate.generation, "request_id": request_id, "model_configuration_identity": self.model_identity, "prompt_version": PROMPT_VERSION, "schema_version": ROLE_SCHEMA_VERSION, **(extra or {})}
         if match_id is not None:
             trace["match_id"] = match_id
@@ -694,6 +698,32 @@ class StrategyReflectionMutation(StrategyReflectionPipeline):
     """Strategy mutation used by the offspring reflection phase."""
 
     pass
+
+
+def _role_request_id(
+    candidate: Candidate,
+    *,
+    role: str,
+    match_id: str | None,
+    suffix: str,
+) -> str:
+    """Return a stable role correlation ID for a deterministic candidate.
+
+    This identifier is metadata only; it is never sent to the model.  Deriving
+    it from the candidate identity keeps deterministic runs free of incidental
+    UUID4 differences while preserving unique IDs for every role invocation.
+    """
+
+    identity = "\x1f".join(
+        (
+            candidate.id,
+            str(candidate.generation),
+            role,
+            match_id or "",
+            suffix,
+        )
+    ).encode("utf-8")
+    return hashlib.sha256(identity).hexdigest()[:32]
 
 
 # Match selection and raw-log lifecycle -------------------------------------
