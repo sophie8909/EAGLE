@@ -18,7 +18,9 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/__main__.py` | Dispatches only `experiment` and `analyze` |
+| `eagle/__main__.py` | Dispatches `experiment`, `analyze`, and read-only `monitor` |
+| `eagle/cli/monitor.py` | Local experiment monitor arguments and server lifecycle |
+| `eagle/monitoring.py` | Canonical run status collection and read-only HTTP API |
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
 | `eagle/cli/analyze.py` | Run selection and report dispatch |
 | `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, owned runtime, search/resume, final test, cleanup |

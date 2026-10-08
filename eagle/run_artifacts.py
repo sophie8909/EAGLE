@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import statistics
 from datetime import datetime, timezone
@@ -45,10 +46,26 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "model_name": config.model.name,
             "generation_model_name": config.resolved_generation_model.name,
             "reflection_operator_mode": config.reflection_operator_mode.value,
+            "experiment_pid": os.getpid(),
             "latest_generation": None,
             "updated_at": utc_now(),
         },
     )
+
+
+def mark_run_started(run_dir: Path, *, pid: int | None = None) -> None:
+    """Associate a resumed run with the current experiment process."""
+
+    manifest = load_manifest(run_dir)
+    if manifest.get("status") == "complete":
+        return
+    manifest.update(
+        status="running",
+        experiment_pid=os.getpid() if pid is None else int(pid),
+        process_started_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    atomic_json(run_dir / "manifest.json", manifest)
 
 
 def mark_run_interrupted(run_dir: Path) -> None:

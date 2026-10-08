@@ -62,6 +62,7 @@ The [2026-10-02 refactor plan](implementation/maintainability_refactor_plan.md) 
 | Contract-to-code/test/artifact status and implementation checklist | [`implementation/architecture_traceability_matrix.md`](implementation/architecture_traceability_matrix.md) |
 | Architecture status and gaps | [`implementation/architecture_gaps.md`](implementation/architecture_gaps.md) |
 | Run commands and configuration checks | [`operations/running_eagle.md`](operations/running_eagle.md) |
+| Local experiment status agent and API | [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md) |
 | Run analysis and candidate debugging | [`operations/inspecting_runs.md`](operations/inspecting_runs.md) |
 | Required tests | [`testing/test_contracts.md`](testing/test_contracts.md) |
 

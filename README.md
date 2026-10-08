@@ -47,3 +47,20 @@ runs/<run_id>/
 Only `eagle-run-v2` is supported by writers, resume, and offline analysis.
 
 `watchdog.sh` remains an optional independent network-interface monitor. It does not manage the model server or experiment lifecycle.
+
+To run one resident read-only status endpoint for all experiments under `runs/`, run:
+
+```bash
+python -m eagle monitor --runs-root runs --host 0.0.0.0 --port 8765
+```
+
+New runs created by `python -m eagle experiment` are discovered automatically.
+The compact JSON snapshot is updated at `runs/monitor_status.json`; the HTTP
+URL is `http://<experiment-host>:8765/status.json`. The detailed diagnostic
+payload remains available at `/status`.
+
+Token protection remains available by adding `--token`, but is optional when
+the monitor is restricted to a trusted private network.
+
+See [`docs/operations/monitoring_experiment.md`](docs/operations/monitoring_experiment.md)
+for the endpoint contract and network-safety requirements.

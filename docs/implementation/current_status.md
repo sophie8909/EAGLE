@@ -4,6 +4,19 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
+- The resident `python -m eagle monitor --runs-root runs` command exposes a
+  read-only detailed `eagle-monitor-status-v1` HTTP snapshot for every
+  canonical run below the root, automatically discovering runs created later
+  by `experiment`. `/status.json` and the derived JSON snapshot use the compact
+  `eagle-monitor-summary-v1` schema with run/generation/PID/liveness fields.
+  Active runs whose recorded PID disappeared are reported as
+  `unexpected_termination`, distinct from normal `complete` runs and from
+  explicit `interrupted`/`failed` manifests. The monitor reads only atomic
+  manifest/latest generation artifacts, includes host resource telemetry and
+  bounded failure summaries in the detailed endpoint, defaults to loopback,
+  and optionally accepts a token for non-loopback binds. It has no
+  experiment-control operations.
+
 - `candidate_java_mode: generated_phenotype` preserves the two evolvable prompt
   components: `strategy_prompt` and `generation_prompt`; generated Java remains
   phenotype/evidence only. Opt-in `inherited_genotype` adds a complete Java
@@ -127,6 +140,7 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
 | Evolution loop | `eagle/evolution/search.py`, `eagle/evolution/resume.py` |
 | Generation-zero policy construction | `eagle/operators/initialization.py` |
 | Experiment/model lifecycle | `eagle/experiment.py`, `eagle/runtime/processes.py` |
+| Local experiment monitoring | `eagle/monitoring.py`, `eagle/cli/monitor.py` |
 | Fully resolved experiment schema | `eagle/config.py`, run-local `config.yaml` |
 | Per-opponent archive | `eagle/opponent_archive.py` |
 | Run/generation artifacts | `eagle/run_artifacts.py`, `eagle/artifacts.py` |
