@@ -10,6 +10,7 @@ import hmac
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -23,6 +24,7 @@ from urllib.parse import parse_qs, urlsplit
 from eagle.run_artifacts import GENERATION_SCHEMA_VERSION, RUN_SCHEMA_VERSION
 
 MONITOR_SCHEMA_VERSION = "eagle-monitor-status-v1"
+MONITOR_SUMMARY_SCHEMA_VERSION = "eagle-monitor-summary-v1"
 DEFAULT_STALE_AFTER_SECONDS = 180.0
 
 
@@ -196,6 +198,31 @@ def _process_status(pid: int | None) -> dict[str, Any]:
     return {"pid": pid, "running": True, "cmdline": cmdline}
 
 
+def _manifest_pid(manifest: dict[str, Any]) -> int | None:
+    value = manifest.get("experiment_pid")
+    if isinstance(value, bool):
+        return None
+    try:
+        pid = int(value)
+    except (TypeError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def _configured_generations(run_dir: Path) -> int | None:
+    path = run_dir / "config.yaml"
+    if not path.is_file():
+        return None
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^generations:\s*(\d+)\s*$", line)
+            if match:
+                return int(match.group(1))
+    except OSError:
+        return None
+    return None
+
+
 def _load_error_memory(run_dir: Path, limit: int = 5) -> list[dict[str, Any]]:
     path = run_dir / "archives" / "error_memory.jsonl"
     if not path.is_file():
@@ -260,7 +287,10 @@ class ExperimentStatusCollector:
             except OSError:
                 updated_at = None
         age = None if updated_at is None else max(0.0, (observed_at - updated_at).total_seconds())
-        run_status = str(manifest.get("status") or "unknown")
+        manifest_status = str(manifest.get("status") or "unknown")
+        process = _process_status(self.pid if self.pid is not None else _manifest_pid(manifest))
+        process["alive"] = manifest_status in {"initialized", "running"} and process["running"] is True
+        run_status = _monitor_status(manifest_status, process)
         metrics = generation.get("metrics") if generation else {}
         metrics = metrics if isinstance(metrics, dict) else {}
         game_performance = metrics.get("game_performance") or {}
@@ -283,19 +313,30 @@ class ExperimentStatusCollector:
                 "run_id": str(manifest.get("run_id") or self.run_dir.name),
                 "experiment_name": manifest.get("experiment_name"),
                 "status": run_status,
+                "manifest_status": manifest_status,
                 "created_at": manifest.get("created_at"),
                 "updated_at": manifest.get("updated_at"),
                 "latest_generation": latest_generation,
+                "total_generations": _configured_generations(self.run_dir),
                 "resumable": manifest.get("resumable"),
                 "failure_reason": manifest.get("failure_reason"),
                 "stop_reason": manifest.get("stop_reason"),
                 "last_update_age_seconds": None if age is None else round(age, 3),
                 "stale": run_status in {"initialized", "running"} and age is not None and age > self.stale_after_seconds,
             },
-            "process": _process_status(self.pid),
+            "process": process,
             "progress": progress,
             "errors": _load_error_memory(self.run_dir),
         }
+
+    def collect_summary(self, run_id: str | None = None) -> dict[str, Any]:
+        payload = self.collect(run_id=run_id)
+        summary = _summary_payload(payload)
+        return _summary_document(
+            observed_at=str(payload.get("observed_at") or _utc_now().isoformat()),
+            summaries=[summary],
+            current=summary,
+        )
 
 
 class RunsRootStatusCollector:
@@ -355,6 +396,76 @@ class RunsRootStatusCollector:
             "run_count": len(snapshots),
             "runs": snapshots,
         }
+
+    def collect_summary(self, run_id: str | None = None) -> dict[str, Any]:
+        if run_id is not None:
+            payload = self.collect(run_id=run_id)
+            summary = _summary_payload(payload)
+            return _summary_document(
+                observed_at=str(payload.get("observed_at") or _utc_now().isoformat()),
+                summaries=[summary],
+                current=summary,
+            )
+        detailed = self.collect()
+        summaries = [
+            _summary_payload(item)
+            for item in detailed.get("runs", [])
+            if isinstance(item, dict)
+        ]
+        active = [item for item in summaries if item.get("status") in {"initialized", "running"}]
+        current = (active or summaries or [None])[0]
+        return _summary_document(
+            observed_at=str(detailed.get("observed_at") or _utc_now().isoformat()),
+            summaries=summaries,
+            current=current,
+        )
+
+
+def _summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    experiment = payload.get("experiment")
+    experiment = experiment if isinstance(experiment, dict) else {}
+    process = payload.get("process")
+    process = process if isinstance(process, dict) else {}
+    return {
+        "run_id": experiment.get("run_id"),
+        "status": experiment.get("status"),
+        "generation": experiment.get("latest_generation"),
+        "total_generations": experiment.get("total_generations"),
+        "pid": process.get("pid"),
+        "alive": process.get("alive") is True,
+    }
+
+
+def _monitor_status(manifest_status: str, process: dict[str, Any]) -> str:
+    """Expose an explicit status when an active run's recorded PID vanished."""
+
+    if (
+        manifest_status in {"initialized", "running"}
+        and process.get("pid") is not None
+        and process.get("running") is False
+    ):
+        return "unexpected_termination"
+    return manifest_status
+
+
+def _summary_document(
+    *,
+    observed_at: str,
+    summaries: list[dict[str, Any]],
+    current: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": MONITOR_SUMMARY_SCHEMA_VERSION,
+        "observed_at": observed_at,
+        "total_runs": len(summaries),
+        "total_generations": None if current is None else current.get("total_generations"),
+        "current_run_id": None if current is None else current.get("run_id"),
+        "current_generation": None if current is None else current.get("generation"),
+        "current_pid": None if current is None else current.get("pid"),
+        "current_alive": False if current is None else current.get("alive") is True,
+        "current_status": None if current is None else current.get("status"),
+        "runs": summaries,
+    }
 
 
 def _progress_payload(
@@ -472,7 +583,11 @@ def create_status_server(
                 _json_response(self, 401, {"error": "unauthorized"})
                 return
             try:
-                payload = collector.collect(run_id=run_id)
+                payload = (
+                    collector.collect_summary(run_id=run_id)
+                    if path == "/status.json"
+                    else collector.collect(run_id=run_id)
+                )
             except MonitorDataError as exc:
                 _json_response(self, 503, {"error": "run_unavailable", "detail": str(exc)})
                 return
@@ -519,10 +634,10 @@ def serve_status(
         def publish_snapshot() -> None:
             while not writer_stop.is_set():
                 try:
-                    payload = collector.collect()
+                    payload = collector.collect_summary()
                 except MonitorDataError as exc:
                     payload = {
-                        "schema_version": MONITOR_SCHEMA_VERSION,
+                        "schema_version": MONITOR_SUMMARY_SCHEMA_VERSION,
                         "observed_at": _utc_now().isoformat(),
                         "error": "run_unavailable",
                         "detail": str(exc),

@@ -12,6 +12,7 @@ from eagle.run_artifacts import (
     load_error_memory,
     load_aos_state,
     load_resume_population,
+    mark_run_started,
     mark_run_failed,
     mark_run_interrupted,
 )
@@ -43,6 +44,7 @@ def resume_search(
         validate_resume_config(config, persisted, mock=mock)
     config = persisted
     try:
+        mark_run_started(run_dir)
         return _resume_search_impl(
             config,
             config_path=config_path,

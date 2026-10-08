@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         snapshot_root = args.runs_root if args.run_dir is None else args.run_dir.parent
         snapshot_path = snapshot_root / "monitor_status.json"
     if args.once:
-        payload = collector.collect()
+        payload = collector.collect_summary()
         write_status_snapshot(snapshot_path, payload)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0

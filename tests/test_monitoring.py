@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -11,6 +12,7 @@ from urllib.request import Request, urlopen
 from eagle.monitoring import (
     GENERATION_SCHEMA_VERSION,
     MONITOR_SCHEMA_VERSION,
+    MONITOR_SUMMARY_SCHEMA_VERSION,
     ExperimentStatusCollector,
     MonitorDataError,
     RunsRootStatusCollector,
@@ -30,10 +32,12 @@ class MonitoringTests(unittest.TestCase):
             "run_id": run_id,
             "experiment_name": "monitor fixture",
             "status": "running",
+            "experiment_pid": os.getpid(),
             "created_at": "2026-10-08T00:00:00+00:00",
             "updated_at": "2026-10-08T00:00:01+00:00",
             "latest_generation": 2,
         }), encoding="utf-8")
+        (run / "config.yaml").write_text("generations: 20\n", encoding="utf-8")
         (run / "generations" / "generation_0002.json").write_text(json.dumps({
             "schema_version": GENERATION_SCHEMA_VERSION,
             "generation": 2,
@@ -65,7 +69,9 @@ class MonitoringTests(unittest.TestCase):
             self.assertEqual(payload["progress"]["completion_ratio"], 0.5)
             self.assertEqual(payload["progress"]["best_fitness"], 0.75)
             self.assertEqual(payload["errors"][0]["signature"], "compile_failure:x")
-            self.assertIsNone(payload["process"]["pid"])
+            self.assertEqual(payload["process"]["pid"], os.getpid())
+            self.assertTrue(payload["process"]["alive"])
+            self.assertEqual(payload["experiment"]["status"], "running")
 
     def test_collector_rejects_unsupported_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -89,6 +95,23 @@ class MonitoringTests(unittest.TestCase):
                 {"run-a", "run-b"},
             )
             self.assertEqual(collector.collect(run_id="run-a")["experiment"]["run_id"], "run-a")
+
+    def test_summary_distinguishes_completed_and_unexpected_termination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = self.run_fixture(Path(directory), run_id="run-a")
+            manifest_path = run / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update(status="complete")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            completed = ExperimentStatusCollector(run).collect_summary()
+            self.assertEqual(completed["current_status"], "complete")
+            self.assertFalse(completed["current_alive"])
+
+            manifest.update(status="running", experiment_pid=999999)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            unexpected = ExperimentStatusCollector(run).collect_summary()
+            self.assertEqual(unexpected["current_status"], "unexpected_termination")
+            self.assertFalse(unexpected["current_alive"])
 
     def test_status_snapshot_is_written_as_json(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -151,7 +174,13 @@ class MonitoringTests(unittest.TestCase):
                 with urlopen(f"{base_url}/status") as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 1)
                 with urlopen(f"{base_url}/status.json") as response:
-                    self.assertEqual(json.loads(response.read())["run_count"], 1)
+                    summary = json.loads(response.read())
+                    self.assertEqual(summary["schema_version"], MONITOR_SUMMARY_SCHEMA_VERSION)
+                    self.assertEqual(summary["total_runs"], 1)
+                    self.assertEqual(summary["total_generations"], 20)
+                    self.assertEqual(summary["current_run_id"], "run-a")
+                    self.assertEqual(summary["current_generation"], 2)
+                    self.assertTrue(summary["current_alive"])
                 self.run_fixture(root, "run-b", run_id="run-b")
                 with urlopen(f"{base_url}/status") as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 2)
