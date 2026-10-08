@@ -15,7 +15,7 @@ class CrossoverContext:
     index: int
     rng: random.Random
     inherit_java: bool = False
-    deterministic_seed: int | None = None
+    random_seed: int = 0
 
 
 def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContext) -> Candidate:
@@ -32,14 +32,12 @@ def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContex
     return Candidate(
         id=(
             derive_candidate_id(
-                context.deterministic_seed,
+                context.random_seed,
                 generation=context.generation,
                 index=context.index,
                 role="crossover",
                 parent_ids=(parent_a.id, parent_b.id),
             )
-            if context.deterministic_seed is not None
-            else ""
         ),
         generation=context.generation,
         parent_ids=(parent_a.id, parent_b.id),

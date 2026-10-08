@@ -2,7 +2,7 @@ package rts;
 
 import java.util.Random;
 
-/** Opt-in deterministic randomness for EAGLE-owned MicroRTS matches. */
+/** Seeded deterministic randomness for EAGLE-owned MicroRTS matches. */
 public final class RandomSource {
     public static final String SEED_PROPERTY = "eagle.match.seed";
 
@@ -10,16 +10,9 @@ public final class RandomSource {
     }
 
     public static Random create(String namespace) {
-        String configured = System.getProperty(SEED_PROPERTY);
-        if (configured == null || configured.trim().isEmpty()) {
-            return new Random();
-        }
-        try {
-            long seed = Long.parseLong(configured.trim());
-            return new Random(mix(seed, namespace == null ? "" : namespace));
-        } catch (NumberFormatException ignored) {
-            return new Random();
-        }
+        String configured = System.getProperty(SEED_PROPERTY, "0");
+        long seed = Long.parseLong(configured.trim());
+        return new Random(mix(seed, namespace == null ? "" : namespace));
     }
 
     private static long mix(long seed, String namespace) {

@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from eagle.evaluation.determinism import derive_seed
 from eagle.candidate import Candidate
 from eagle.llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
 from eagle.timing import utc_now
@@ -123,7 +124,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.logger = logger
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
-        self.seed = seed
+        self.seed = 0 if seed is None else int(seed)
         self._active_request_started_at: str | None = None
         self._active_request_started_monotonic: float | None = None
         self._generation_attempt = 1
@@ -201,16 +202,20 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
-        if self.seed is not None:
-            payload["seed"] = self.seed
-        request = urllib.request.Request(
-            self.chat_completions_url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
         for attempt_index in range(self.max_retries + 1):
             attempt = attempt_index + 1
+            request_seed = derive_seed(
+                self.seed, "llm", self.operation or "generation", candidate.generation,
+                candidate.id, self._generation_request_kind, self._generation_attempt,
+                self._generation_attempt_id or "", attempt,
+            ) & 0x7FFF_FFFF
+            payload["seed"] = request_seed
+            request = urllib.request.Request(
+                self.chat_completions_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
             self._active_request_started_at = utc_now()
             self._active_request_started_monotonic = time.monotonic()
             try:
@@ -229,6 +234,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     response_text=content,
                     status="success",
                     attempt=attempt,
+                    sampling_seed=request_seed,
                 )
                 return content
             except urllib.error.HTTPError as exc:
@@ -247,6 +253,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     response_text=response_text,
                     status="error",
                     attempt=attempt,
+                    sampling_seed=request_seed,
                     error=message,
                 )
                 raise LLMServerError(f"llm server error: {message}") from exc
@@ -258,6 +265,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     prompt=prompt,
                     status="error",
                     attempt=attempt,
+                    sampling_seed=request_seed,
                     error=message,
                 )
                 raise LLMServerError(f"llm server error: {message}") from exc
@@ -270,6 +278,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     response_text=locals().get("response_text", ""),
                     status="error",
                     attempt=attempt,
+                    sampling_seed=request_seed,
                     error=message,
                 )
                 raise RuntimeError(message) from exc
@@ -283,6 +292,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         prompt: str,
         status: str,
         attempt: int,
+        sampling_seed: int,
         response_text: str = "",
         error: str | None = None,
     ) -> None:
@@ -311,7 +321,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 "url": self.chat_completions_url,
                 "endpoint": self.base_url,
                 "operation": self.operation,
-                "sampling_seed": self.seed,
+                "sampling_seed": sampling_seed,
                 "operation_type": (
                     "mutation"
                     if self._generation_request_kind == "code_reflection"

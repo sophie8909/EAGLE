@@ -10,7 +10,7 @@ from typing import Any
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation.determinism import derive_candidate_id
+from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.operators.adaptive import (
     OPERATOR_TO_MUTATION,
     STRATEGY_REFLECTION,
@@ -48,43 +48,54 @@ def plan_offspring(
     operator_controller: ReflectionOperatorController, artifact_root: Path | None = None,
     error_memory: tuple[dict[str, object], ...] = (),
 ) -> list[OffspringPlan]:
-    """Assign every child's parents, crossover, and mutation before LLM work."""
+    """Assign every child before LLM work using root-seeded task streams.
 
-    del artifact_root  # Planning is pure EA state assignment.
+    ``rng`` is accepted for embedded callers; its history cannot alter the EA.
+    """
+
+    del artifact_root, rng  # Streams use task identities, not call history.
+    population = sorted(population, key=lambda candidate: candidate.id)
     plans: list[OffspringPlan] = []
     generation_best = max(
         (item for item in population if item.game_eval_result),
-        key=lambda item: float(
-            (item.game_eval_result or {}).get("game_performance", float("-inf"))
+        key=lambda item: (
+            float((item.game_eval_result or {}).get("game_performance", float("-inf"))),
+            item.id,
         ),
         default=None,
     )
     while len(plans) < config.population_size:
         context_index = len(plans)
+        parent_a_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "parent_a"))
+        parent_b_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "parent_b"))
+        crossover_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "crossover"))
+        mutation_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "mutation"))
+        operator_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "operator"))
+        intent_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "intent"))
         parent_selection_started = time.monotonic()
         parent_a = select_parent(
             population,
-            rng,
+            parent_a_rng,
             selection_mode=config.algorithm,
             fitness_tolerance=config.fitness_tie_tolerance,
         )
         parent_b = select_parent(
             population,
-            rng,
+            parent_b_rng,
             selection_mode=config.algorithm,
             fitness_tolerance=config.fitness_tie_tolerance,
             semantic_reference=parent_a,
         )
         parent_selection_duration = max(0.0, time.monotonic() - parent_selection_started)
-        if len(population) > 1 and rng.random() < config.crossover_rate:
+        if len(population) > 1 and crossover_rng.random() < config.crossover_rate:
             crossover_started_at = utc_now()
             crossover_started = time.monotonic()
             child = crossover(parent_a, parent_b, CrossoverContext(
                 generation=generation,
                 index=context_index,
-                rng=rng,
+                rng=crossover_rng,
                 inherit_java=config.candidate_java_mode == "inherited_genotype",
-                deterministic_seed=(config.random_seed if config.deterministic_mode else None),
+                random_seed=config.random_seed,
             ))
             crossover_duration = max(0.0, time.monotonic() - crossover_started)
             child = replace(child, timing={
@@ -109,8 +120,6 @@ def plan_offspring(
                         role="copy",
                         parent_ids=(parent_a.id,),
                     )
-                    if config.deterministic_mode
-                    else ""
                 ),
                 generation=generation,
                 parent_ids=(parent_a.id,),
@@ -146,14 +155,14 @@ def plan_offspring(
         operator_used: str | None = None
         eligible_operators: tuple[str, ...] = ()
         feedback_parent: Candidate | None = None
-        if rng.random() < config.mutation_rate:
+        if mutation_rng.random() < config.mutation_rate:
             eligible_operators = (
                 (STRATEGY_REFLECTION,)
                 if not child.strategy_prompt.strip()
                 else config.reflection_operator_settings.enabled_operators
             )
             operator_used = operator_controller.select_operator(
-                rng,
+                operator_rng,
                 eligible=eligible_operators,
             )
             mutation_name = OPERATOR_TO_MUTATION[operator_used]
@@ -168,7 +177,7 @@ def plan_offspring(
                 parents=(parent_a, parent_b),
             )
             if mutation_name == "strategy":
-                mutation_intent = select_strategy_mutation_intent(rng=rng)
+                mutation_intent = select_strategy_mutation_intent(rng=intent_rng)
                 child = replace(
                     child,
                     mutation_intent=mutation_intent,

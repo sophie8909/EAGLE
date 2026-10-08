@@ -97,23 +97,46 @@ rematerialization plus match resampling; it is not the production protocol.
 
 ## 4. Reproducibility
 
-`random_seed` controls EA randomness, lexicase case ordering, operator choice,
-crossover choices, and deterministic reflection sampling. Match repetitions are
-identified by `round_index`. In the default mode MicroRTS retains its historical
-runtime randomness. With `deterministic_mode: true`, EAGLE derives a stable
-positive JVM seed from the effective run seed and immutable match identity
-(candidate, opponent, map, round, side, and match index), passes it as
-`-Deagle.match.seed`, and records it in match artifacts. The vendored MicroRTS
-random sources consume that property.
+`random_seed` is the EA-wide root seed. Execution always seeds controllable
+randomness; there is no deterministic/non-deterministic mode switch. Legacy
+`deterministic_mode` keys in saved configurations are ignored and omitted from
+new resolved configurations. Stable task identities and named streams derive
+seeds for candidate initialization/IDs, parent and survivor selection,
+lexicase case ordering, operator choice, mutation, crossover, reflection
+sampling, and LLM requests/retries. Streams do not depend on thread identity,
+completion order, wall-clock time, or Python's randomized `hash()`. Compiler-based
+LLM prompts retain filenames and diagnostic line numbers while removing
+incidental absolute run paths; raw compiler artifacts retain original evidence.
 
-The same `random_seed` is also sent as the OpenAI-compatible `seed` field for
-every initial-policy, reflection, rewrite, Java-generation, repair, and
-preflight LLM request. `deterministic_mode` additionally requires CPU llama.cpp
-execution (`gpu_layers: 0`, `threads: 1`, `batch_size: 512` or larger,
-`parallel: 1`),
-serial match workers, and zero temperature for every LLM role. This makes
-same-host, same-build reruns reproducible; different model files, llama.cpp
-builds, JVMs, or hardware are not promised to be bitwise compatible.
+Generated strategy code must use `rts.RandomSource.create` with stable namespaces
+for stochastic choices and game cycles for timing. The shared strategy-contract
+guard rejects standard entropy APIs and wall clocks; generation/repair prompts
+state this rule. It is a source contract check, not a general Java sandbox.
+
+Every normal, parent-offspring, and final-test match derives a positive JVM
+seed from the root seed and immutable candidate/opponent/map/round/side/match
+identity, passes `-Deagle.match.seed`, and records it in artifacts. Vendored
+MicroRTS random sources consume this property. Parallel workers return results
+in canonical matrix order, so seed assignment, fitness aggregation, and seeded
+tie-breaking are independent of scheduling. CPU/GPU settings, temperatures,
+and worker counts remain configurable. New generation checkpoints preserve
+stagnation and bounded EA archive state; independent generation streams allow
+same-version resumes to continue the same seeded trajectory. Uncommitted
+candidate/decoder/class artifacts and their LLM logs are retained under
+`archives/interrupted_work/attempt_<nnnn>` before replaying their stable IDs.
+The controller resumes from the manifest's exact completed checkpoint.
+
+Reproducibility requires the same code, inputs, configuration (apart from
+worker count), and deterministic task outputs. Request seeds ask an external
+LLM service to repeat its sampling; providers may ignore seeds or change
+models. GPU kernels, backend batching, floating-point reductions, different
+builds/hardware, external opponent binaries with private RNGs, and wall-clock
+search/timeout budgets can still change outputs. A differing LLM response or
+match result can change subsequent evolution. Persisted request/response
+hashes and match seeds provide evidence; timings, process IDs, and run-directory
+timestamps are operational metadata and are not bitwise reproducible.
+Historical runs created before this seed-stream change retain their artifacts
+but are not promised the same evolutionary trajectory when resumed.
 
 For direct multi-run configs, omitting `random_seeds` preserves the legacy
 schedule of `random_seed`, then `random_seed + 1`, and so on. When

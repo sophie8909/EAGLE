@@ -16,13 +16,14 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from eagle.evaluation.compiler import compile_generated_agent
 from eagle.evaluation.opponents import (
     _prepare_safe_allinbot_opponent,
     _prepare_worker_rush_opponent,
     preflight_evaluation_opponents,
 )
 from eagle.evaluation.matches import scoring_config_from_experiment
-from eagle.evaluation.determinism import derive_match_seed
+from eagle.evaluation.determinism import derive_match_seed, derive_seed
 from eagle.evaluation.runtime_evaluation import hash_class_directory, hash_file
 from eagle.opponents import SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from eagle.evaluation.match_matrix import canonical_evaluation_maps
@@ -62,6 +63,13 @@ def main(argv: list[str] | None = None) -> int:
         classes_dir = run_dir / "classes" / candidate["candidate_id"]
         _validate_candidate_artifacts(classes_dir, candidate)
         output_dir.mkdir(parents=True, exist_ok=True)
+        source_path = _candidate_source_path(classes_dir, candidate["candidate_id"])
+        classes_dir = output_dir / "classes" / candidate["candidate_id"]
+        compilation = compile_generated_agent(
+            source_path, microrts_dir=config.microrts_dir, output_dir=classes_dir,
+        )
+        if not compilation.ok:
+            raise RuntimeError(f"Final-test seeded runtime compilation failed: {compilation.stderr}")
 
         preflight_evaluation_opponents(config, mock=False, repository_root=repository_root)
         integration = integrate_microrts_agent(
@@ -70,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_class=AGENT_CLASS,
             integration_artifacts_dir=output_dir / "integration",
             mock=False,
+            seed=derive_seed(config.random_seed, "integration", candidate["candidate_id"]),
         )
         if not integration.ok:
             raise RuntimeError(
@@ -83,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
             candidate=candidate,
             classes_dir=classes_dir,
             output_dir=output_dir,
+            source_path=source_path,
         )
         summary = _build_summary(
             config=config,
@@ -160,7 +170,7 @@ def _select_candidate(run_dir: Path, candidate_id: str | None) -> dict[str, Any]
         runnable = [item for item in candidates if _candidate_is_runnable(run_dir, item)]
         if runnable:
             selected = max(
-                runnable,
+                sorted(runnable, key=lambda item: str(item.get("candidate_id") or item.get("id"))),
                 key=lambda item: tuple(
                     float((item.get("fitness_objectives") or {}).get(case, -1000.0))
                     for case in ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")
@@ -243,10 +253,11 @@ def _run_final_matrix(
     candidate: dict[str, Any],
     classes_dir: Path,
     output_dir: Path,
+    source_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
     candidate_generation = int(candidate.get("generation") or 0)
-    source_hash = hash_file(_candidate_source_path(classes_dir, candidate_id))
+    source_hash = hash_file(source_path or _candidate_source_path(classes_dir, candidate_id))
     class_hash = hash_class_directory(classes_dir)
     maps = canonical_evaluation_maps(
         config.evaluation_maps,
@@ -297,17 +308,15 @@ def _run_final_matrix(
 
     def run_specification(item: tuple[Any, Any, int, int, int, Path]):
         opponent, evaluation_map, game_index, candidate_player, match_index, match_dir = item
-        match_seed = None
-        if config.deterministic_mode:
-            match_seed = derive_match_seed(
-                config.random_seed,
-                candidate_id=candidate_id,
-                opponent_id=opponent.opponent_id,
-                map_id=evaluation_map.map_id,
-                round_index=game_index,
-                candidate_player=candidate_player,
-                match_index=match_index,
-            )
+        match_seed = derive_match_seed(
+            config.random_seed,
+            candidate_id=candidate_id,
+            opponent_id=opponent.opponent_id,
+            map_id=evaluation_map.map_id,
+            round_index=game_index,
+            candidate_player=candidate_player,
+            match_index=match_index,
+        )
         result = run_microrts_match(
             microrts_dir=config.microrts_dir,
             classes_dir=classes_dir,

@@ -256,7 +256,7 @@ fallback reads for old prompt/phenotype paths, but ignores legacy
 `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
 `evaluation/matches.json` are not written.
 
-Generic successful LLM-call records use `eagle-llm-call-v2` metadata with canonical run-relative request/response references. The resolved replicate `random_seed` is recorded as `sampling_seed` and is sent as the OpenAI-compatible request `seed`. Raw bytes are persisted before parsing; failures without durable references retain inline payloads. Mutation requests and responses live in numbered attempt artifacts; selected request/raw convenience aliases are not emitted. Loader fallbacks remain limited to the documented legacy prompt and phenotype paths.
+Generic successful LLM-call records use `eagle-llm-call-v2` metadata with canonical run-relative request/response references. The task-specific seed derived from the replicate root `random_seed` is recorded as `sampling_seed` and sent as the OpenAI-compatible request `seed`. Raw bytes are persisted before parsing; failures without durable references retain inline payloads. Mutation requests and responses live in numbered attempt artifacts; selected request/raw convenience aliases are not emitted. Loader fallbacks remain limited to the documented legacy prompt and phenotype paths.
 
 The standalone seed-restart diagnostic writes a versioned stability matrix
 outside the canonical run tree: each `seed_<n>/stability_report.json` owns its
@@ -323,11 +323,16 @@ Compact mode does not request the transient Java XML replay and removes round-st
 
 Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
 
-Match records use `round_index` for repeated games. In
-`deterministic_mode`, `result.json` and trace metadata also contain the stable
-positive `match_seed` passed to MicroRTS as `-Deagle.match.seed`; default-mode
-matches leave this field null. Resolved run configuration omits the obsolete
-`match_seeds` list because deterministic seeds are derived per match.
+Match records use `round_index` for repeated games. `result.json` and trace
+metadata always record the stable positive `match_seed` passed to MicroRTS as
+`-Deagle.match.seed`; the seed derives from the EA root seed and match identity.
+Resolved configuration omits the obsolete `match_seeds` list and
+`deterministic_mode` switch. Generation snapshots include `stagnation_count`
+and `resume_archives` (exact text or null for the strategy, error-memory, and
+self-play-opponent archives) so resumes preserve stopping and selection context.
+Uncommitted generation artifacts and associated LLM logs move to
+`archives/interrupted_work/attempt_<nnnn>` before replay; archived log references
+point to that preserved evidence. Timing events retain the chronological history.
 
 ## Failure and timing rules
 

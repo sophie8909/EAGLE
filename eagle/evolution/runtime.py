@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from eagle.generation.backend import MockGenerationBackend
+from eagle.evaluation.determinism import derive_seed
 
 from eagle.operators.adaptive import ReflectionOperatorController, build_reflection_operator_controller
 from eagle.operators.code import CodeReflectionMutation
@@ -150,7 +151,9 @@ def preflight_llm_endpoint(client: LLMClient) -> None:
             "temperature": 0,
             "max_tokens": 1,
             "chat_template_kwargs": {"enable_thinking": False},
-            **({"seed": client.seed} if client.seed is not None else {}),
+            "seed": derive_seed(
+                0 if client.seed is None else client.seed, "llm", "endpoint_preflight"
+            ) & 0x7FFF_FFFF,
         }).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",

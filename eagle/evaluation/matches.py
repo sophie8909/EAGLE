@@ -73,17 +73,15 @@ def evaluate_matches(
 
         def run_specification(specification: MatchSpecification) -> MatchResult:
             opponent = opponent_by_id[specification.opponent_id]
-            match_seed = None
-            if config.deterministic_mode:
-                match_seed = derive_match_seed(
-                    config.random_seed,
-                    candidate_id=candidate.id,
-                    opponent_id=opponent.opponent_id,
-                    map_id=specification.map_id,
-                    round_index=specification.round_index,
-                    candidate_player=specification.candidate_player,
-                    match_index=specification.match_index,
-                )
+            match_seed = derive_match_seed(
+                config.random_seed,
+                candidate_id=candidate.id,
+                opponent_id=opponent.opponent_id,
+                map_id=specification.map_id,
+                round_index=specification.round_index,
+                candidate_player=specification.candidate_player,
+                match_index=specification.match_index,
+            )
             try:
                 result = run_microrts_match(
                     microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,

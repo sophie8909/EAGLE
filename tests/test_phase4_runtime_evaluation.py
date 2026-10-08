@@ -39,30 +39,23 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(config.rounds_per_map, 3)
         self.assertEqual(config.match_workers, 10)
 
-    def test_deterministic_mode_requires_single_threaded_cpu_runtime(self):
-        with self.assertRaisesRegex(ValueError, "gpu_layers=0"):
-            ExperimentConfig.from_mapping({
-                "deterministic_mode": True,
-            }).validate()
-
+    def test_seeded_execution_allows_parallel_gpu_runtime(self):
         config = ExperimentConfig.from_mapping({
-            "deterministic_mode": True,
-            "model": {
-                "name": "test",
-                "gpu_layers": 0,
-                "threads": 1,
-                "batch_size": 512,
-                "parallel": 1,
-            },
-            "llm": {
-                "temperature": 0,
-                "initial_policy_temperature": 0,
-                "match_commentator": {"temperature": 0},
-            },
-            "evaluation": {"match_workers": 1},
+            "model": {"name": "test", "gpu_layers": -1, "threads": 4, "parallel": 2},
+            "evaluation": {"match_workers": 4},
+            "llm": {"temperature": 0.2, "initial_policy_temperature": 0.8},
         })
         config.validate()
-        self.assertTrue(config.to_mapping()["deterministic_mode"])
+        self.assertNotIn("deterministic_mode", config.to_mapping())
+        self.assertFalse(hasattr(config, "deterministic_mode"))
+        self.assertEqual(config.match_workers, 4)
+
+    def test_legacy_mode_flag_cannot_disable_seeded_execution(self):
+        for legacy_value in (True, False):
+            config = ExperimentConfig.from_mapping({"deterministic_mode": legacy_value})
+            config.validate()
+            self.assertNotIn("deterministic_mode", config.to_mapping())
+            self.assertFalse(hasattr(config, "deterministic_mode"))
 
     def test_parallel_workers_preserve_canonical_result_order(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -636,7 +629,9 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertIsNone(result.round_state_path)
         self.assertFalse(replay_exists)
         self.assertFalse(rounds_exist)
-        self.assertFalse(any(argument.startswith("-Deagle.match.seed=") for argument in result.command))
+        self.assertIn("-Deagle.match.seed=0", result.command)
+        self.assertEqual(result.match_seed, 0)
+        self.assertEqual(persisted["match_seed"], 0)
         self.assertFalse(any(argument.startswith("-Dmicrorts.trace.path=") for argument in result.command))
         self.assertNotIn("seed", persisted)
         self.assertNotIn("match_seed", result.raw_result)

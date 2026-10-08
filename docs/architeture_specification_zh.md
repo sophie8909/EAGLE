@@ -48,13 +48,18 @@ replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
 `generation_<nnnn>_parent_rematerialization.json` 會保存 source→replica、genotype hash、
 舊／新 Java hash、fitness、status 與是否被選中，供診斷比較。
 
-`random_seed` 影響 EA 隨機、lexicase case 順序、operator、crossover、mutation
-intent 與 reflection sampling。每個 replicate 的同一個 `random_seed` 也會作為
-OpenAI-compatible request 的 `seed` 傳給 initial policy、reflection、rewrite、Java
-generation、repair 與 preflight。這只是在要求 server/model 使用可重複取樣；
-server、模型或 backend kernel 仍可能非 deterministic，因此 raw request/response
-artifact 與 hash 才是最終證據。MicroRTS match 不宣稱 seeded reproducibility；
-重複比賽只用 `round_index` 識別。
+`random_seed` 是整個 EA 的根 seed；初始化、選擇、operator、crossover、mutation、
+reflection sampling、LLM request 與 retry 都依穩定任務身分衍生獨立 seed。
+可控的執行流程永遠採用此規則，不再提供 deterministic/non-deterministic 切換。
+一般評估、父子對戰及 final test 都傳遞並保存每場比賽的 JVM seed；多執行緒依固定
+match 順序彙整，seed 與決策不依完成順序或 thread 身分。CPU/GPU、溫度及 worker 數
+仍可設定。相同版本的新 checkpoint 保存 stagnation 狀態，resume 可延續相同軌跡。
+
+外部 LLM 可能忽略 seed 或改變模型；GPU kernel、batching、浮點運算、外部 opponent
+私有 RNG 與時間預算／timeout 仍可能造成差異。固定 seed 無法保證這些外部輸出相同；
+raw request/response hash 與 match seed 是追查差異的證據。時間戳、PID 與 run folder
+名稱屬於操作紀錄，不要求逐位元相同。舊版 run 的 artifacts 可讀取，但本次 seed stream
+規則改變後不保證沿用原本演化軌跡。
 
 若要排除 server 內部狀態對 seed 實驗的影響，可使用
 `scripts/test_llm_seed_restarts.py`；它會在每個 seed 的重複 request 後完整停止

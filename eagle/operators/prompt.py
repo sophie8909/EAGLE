@@ -14,7 +14,8 @@ from typing import Any, Protocol
 
 from eagle.candidate import Candidate, compact_mutation_record
 from eagle.config import ExperimentConfig
-from eagle.llm import LLMServerError
+from eagle.evaluation.determinism import derive_seed
+from eagle.llm import LLMServerError, generate_seeded
 from eagle.operators.reflection import REFLECTION_SCHEMA_VERSION, ReflectionAttempt, ReflectionBackend, ReflectionResult, ReflectionStage, _run_relative_artifact_base, _timing_payload
 from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection_prompts import build_prompt_reflection_prompt_bundle, build_strategy_reflection_prompt_bundle
@@ -165,8 +166,12 @@ class PromptRewriteStage:
                     / f"{artifact_prefix}{stage}_attempt_{attempt_number:03d}_request.txt",
                     attempt_request,
                 )
+            request_seed = derive_seed(
+                getattr(self.backend, "seed", 0) or 0, "llm", rewrite_type,
+                candidate.generation, candidate.id, artifact_prefix, attempt_number,
+            ) & 0x7FFF_FFFF
             try:
-                response = self.backend.generate(attempt_request)
+                response = generate_seeded(self.backend, attempt_request, request_seed)
                 last_response = response
                 if artifact_dir is not None:
                     assert stage_dir is not None
@@ -220,7 +225,7 @@ class PromptRewriteStage:
                     module_name=rewrite_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"operation": self.operation, "operation_type": "mutation", "token_counts": None},
+                    metadata={"operation": self.operation, "operation_type": "mutation", "sampling_seed": request_seed, "token_counts": None},
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),

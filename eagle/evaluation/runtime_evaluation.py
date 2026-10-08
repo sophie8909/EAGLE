@@ -261,9 +261,12 @@ def run_microrts_match(
     )
     ai1 = agent_class if candidate_player == 0 else opponent
     ai2 = opponent if candidate_player == 0 else agent_class
+    match_seed = 0 if match_seed is None else int(match_seed)
     resolved_system_properties = dict(java_system_properties or {})
-    if match_seed is not None:
-        resolved_system_properties.setdefault("eagle.match.seed", str(int(match_seed)))
+    supplied_seed = resolved_system_properties.get("eagle.match.seed")
+    if supplied_seed is not None and int(supplied_seed) != match_seed:
+        raise ValueError("eagle.match.seed must match the derived match_seed")
+    resolved_system_properties["eagle.match.seed"] = str(match_seed)
     if artifact_mode == "full":
         resolved_system_properties["microrts.trace.path"] = str(replay_path)
     system_properties = [

@@ -14,7 +14,7 @@ def build_parent_evaluation_replicas(
     parents: list[Candidate],
     *,
     generation: int,
-    random_seed: int | None = None,
+    random_seed: int = 0,
 ) -> list[Candidate]:
     """Create unevaluated, separately identifiable parent re-materializations.
 
@@ -34,8 +34,6 @@ def build_parent_evaluation_replicas(
                     role="parent_rematerialization",
                     parent_ids=(parent.id,),
                 )
-                if random_seed is not None
-                else ""
             ),
             generation=generation,
             parent_ids=parent.parent_ids,
@@ -66,7 +64,7 @@ def build_self_play_fitness_refresh_replicas(
     parents: list[Candidate],
     *,
     generation: int,
-    random_seed: int | None = None,
+    random_seed: int = 0,
 ) -> list[Candidate]:
     """Create fresh identities that preserve parent genotypes and phenotypes exactly."""
 
@@ -80,8 +78,6 @@ def build_self_play_fitness_refresh_replicas(
                     role="self_play_fitness_refresh",
                     parent_ids=(parent.id,),
                 )
-                if random_seed is not None
-                else ""
             ),
             generation=generation,
             parent_ids=(parent.id,),

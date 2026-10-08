@@ -199,13 +199,6 @@ def _run_search_impl(
         evaluated_population,
         previous_archive_niches=archive_before,
     )
-    record_generation(
-        run_dir,
-        0,
-        evaluated_population,
-        diversity=generation_diversity,
-        aos=operator_controller.initial_generation_record(),
-    )
     if not any(has_completed_evaluation(candidate) for candidate in evaluated_population):
         raise ValueError(
             "Generation 0 produced no candidate that completed evaluation."
@@ -229,6 +222,13 @@ def _run_search_impl(
         )
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
+    record_generation(
+        run_dir,
+        0,
+        evaluated_population,
+        diversity=generation_diversity,
+        aos=operator_controller.initial_generation_record(),
+    )
 
     population_state_signature = population_signature(
         evaluated_population,

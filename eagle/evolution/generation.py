@@ -10,6 +10,7 @@ from typing import Any, Callable
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.pipeline import evaluate_population
+from eagle.evaluation.determinism import derive_seed
 from eagle.evolution.offspring import (
     apply_offspring_mutations,
     materialize_code_reflections,
@@ -120,7 +121,7 @@ def run_generation_step(
         parent_replicas = build_self_play_fitness_refresh_replicas(
             source_parents,
             generation=generation,
-            random_seed=(config.random_seed if config.deterministic_mode else None),
+            random_seed=config.random_seed,
         )
         parent_replicas = evaluate_population(
             parent_replicas,
@@ -186,7 +187,7 @@ def run_generation_step(
         parent_replicas = build_parent_evaluation_replicas(
             source_parents,
             generation=generation,
-            random_seed=(config.random_seed if config.deterministic_mode else None),
+            random_seed=config.random_seed,
         )
         parent_replicas = evaluate_population(
             parent_replicas,
@@ -224,7 +225,7 @@ def run_generation_step(
         parent_replicas if parent_replicas else population,
         evaluated_offspring,
         population_size=config.population_size,
-        rng=rng,
+        rng=random.Random(derive_seed(config.random_seed, "evolution", generation, "survivors")),
         selection_mode=config.algorithm,
         fitness_tolerance=config.fitness_tie_tolerance,
     )
@@ -264,6 +265,7 @@ def run_generation_step(
         next_population,
         diversity=diversity,
         aos=aos_record,
+        stagnation_count=stagnation,
     )
     cleanup_retired_match_traces(
         candidates_dir,

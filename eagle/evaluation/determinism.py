@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
+
+
+def derive_seed(random_seed: int, *identity: str | int) -> int:
+    """Derive a stable independent stream from the EA root seed and task identity."""
+    payload = json.dumps([int(random_seed), *identity], ensure_ascii=False, separators=(",", ":"))
+    value = int.from_bytes(hashlib.sha256(payload.encode("utf-8")).digest()[:8], "big")
+    return value & 0x7FFF_FFFF_FFFF_FFFF
 
 
 def derive_match_seed(
@@ -45,7 +53,7 @@ def derive_candidate_id(
     role: str,
     parent_ids: tuple[str, ...] = (),
 ) -> str:
-    """Create a stable generation-qualified candidate identity for deterministic mode."""
+    """Create a stable generation-qualified candidate identity from the EA root seed."""
 
     identity = "\x1f".join(
         (

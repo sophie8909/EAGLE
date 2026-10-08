@@ -17,10 +17,11 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+from eagle.evaluation.determinism import derive_seed
 from eagle.evaluation.match_trace import iter_match_trace
 
 from eagle.candidate import Candidate
-from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, truncate_prompt
+from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, generate_seeded, truncate_prompt
 from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection import _run_relative_artifact_base
 from eagle.llm import parse_json_object_response
@@ -517,6 +518,11 @@ class StrategyReflectionPipeline:
                     max_chars=self.max_prompt_chars,
                 )
             )
+            request_seed = derive_seed(
+                self.selection_seed, "llm", candidate.generation, candidate.id,
+                role, match_id or "", suffix, attempt,
+            ) & 0x7FFF_FFFF
+            trace["sampling_seed"] = request_seed
             attempt_request_name = f"request_attempt_{attempt:03d}.json"
             attempt_request_ref = (
                 attempt_request_name
@@ -537,7 +543,7 @@ class StrategyReflectionPipeline:
                 {**trace, "attempt": attempt, "prompt": attempt_prompt},
             )
             try:
-                raw = self.backend.generate(attempt_prompt)
+                raw = generate_seeded(self.backend, attempt_prompt, request_seed)
                 last_response = raw
                 # Persist the exact raw transport payload before any semantic
                 # parsing or validation can fail or be interrupted.
@@ -689,6 +695,7 @@ class StrategyReflectionPipeline:
             metadata={
                 "operation_type": "mutation",
                 "endpoint": endpoint,
+                "sampling_seed": trace["sampling_seed"],
                 "failure_category": failure_category,
             },
         )
@@ -984,13 +991,11 @@ def _win_rate(rows: list[dict[str, Any]]) -> float:
 
 
 def _selection_seed(*, run_seed: int, generation_index: int, candidate_id: str, reflection_invocation: int) -> int:
-    material = f"{int(run_seed)}:{int(generation_index)}:{candidate_id}:{int(reflection_invocation)}:strategy_reflection".encode("utf-8")
-    return int.from_bytes(hashlib.sha256(material).digest()[:8], "big", signed=False)
+    return derive_seed(run_seed, "strategy_reflection", generation_index, candidate_id, reflection_invocation)
 
 
 def _intent_seed(run_seed: int, generation_index: int, candidate_id: str, invocation: int) -> int:
-    material = f"{int(run_seed)}:{int(generation_index)}:{candidate_id}:{int(invocation)}:strategy_mutation_intent".encode("utf-8")
-    return int.from_bytes(hashlib.sha256(material).digest()[:8], "big", signed=False)
+    return derive_seed(run_seed, "strategy_mutation_intent", generation_index, candidate_id, invocation)
 
 
 def _match_id(item: dict[str, Any]) -> str:

@@ -30,7 +30,7 @@ def lexicase_select(
     if not population:
         raise ValueError("Cannot select from an empty population.")
     cases = cases or _fitness_cases(population)
-    survivors = list(population)
+    survivors = sorted(population, key=lambda candidate: candidate.id)
     for case in rng.sample(list(cases), len(cases)):
         best = max(_case_score(candidate, case) for candidate in survivors)
         survivors = [candidate for candidate in survivors if _case_score(candidate, case) == best]
@@ -118,7 +118,7 @@ def select_next_generation(
 
     # Failed candidates remain in the joint input for diagnostics, but cannot
     # displace a valid parent when completed candidates can fill the generation.
-    available = completed
+    available = sorted(completed, key=lambda candidate: candidate.id)
 
     if selection_mode == GAME_PERFORMANCE_SELECTION:
         return _select_scalar_survivors(
@@ -186,7 +186,7 @@ def _select_scalar_survivors(
         tier = _top_score_tier(remaining, tolerance=tolerance)
         open_slots = population_size - len(selected)
         if len(tier) <= open_slots:
-            # Preserve stable parent-then-offspring input order when the whole
+            # Preserve canonical candidate-ID order when the whole
             # tier survives. Semantic evidence is unnecessary because no tied
             # candidate is being discarded.
             selected.extend(tier)
@@ -211,6 +211,7 @@ def _top_score_tier(
 ) -> list[Candidate]:
     """Return one tier anchored at the current maximum, without score chaining."""
 
+    candidates = sorted(candidates, key=lambda candidate: candidate.id)
     maximum = max(_game_performance(candidate) for candidate in candidates)
     return [
         candidate
@@ -251,6 +252,7 @@ def _choose_semantically_novel(
     if not candidates:
         raise ValueError("Cannot select from an empty candidate tier.")
 
+    candidates = sorted(candidates, key=lambda candidate: candidate.id)
     reference_summaries = [
         summary
         for reference in references

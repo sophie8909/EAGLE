@@ -19,6 +19,10 @@ import time
 from typing import Any, Iterable
 
 
+from eagle.evaluation.compiler import seeded_runtime_sources
+from eagle.evaluation.determinism import derive_seed
+
+
 DATASET_SCHEMA_VERSION = "eagle-semantic-probe-dataset-v1"
 SIGNATURE_SCHEMA_VERSION = "eagle-semantic-signature-v1"
 NORMALIZATION_VERSION = "microrts-player-action-v1"
@@ -121,6 +125,7 @@ def ensure_semantic_dataset(
     player_side: int,
     phase_fractions: tuple[float, float, float],
     timeout_seconds: float,
+    random_seed: int = 0,
 ) -> SemanticDataset:
     """Create or validate the immutable configured map × phase dataset."""
 
@@ -132,6 +137,9 @@ def ensure_semantic_dataset(
         raise ValueError("Semantic probe player_side must be 0 or 1.")
     specification = {
         "schema_version": DATASET_SCHEMA_VERSION,
+        "random_seed": int(random_seed),
+        "runtime_sources": _runtime_source_identity(microrts_dir),
+        "probe_source_sha256": _hash_file(JAVA_SOURCE),
         "normalization_version": NORMALIZATION_VERSION,
         "maps": [
             {
@@ -173,7 +181,8 @@ def ensure_semantic_dataset(
         map_output = dataset_root / "states" / item.map_id
         map_output.mkdir(parents=True, exist_ok=True)
         command = [
-            "java", "-cp", _classpath(microrts_dir, helper_classes),
+            "java", f"-Deagle.match.seed={derive_seed(random_seed, 'semantic-dataset', item.map_id)}",
+            "-cp", _classpath(microrts_dir, helper_classes),
             "EAGLESemanticProbe", "generate", str(_resolve_map(microrts_dir, item.path)),
             str(map_output), str(player_side), str(item.tick_limit),
             *(str(value) for value in targets), *reference_agents,
@@ -226,6 +235,7 @@ def evaluate_semantic_signature(
     microrts_dir: Path,
     cache_root: Path,
     timeout_seconds: float,
+    random_seed: int = 0,
 ) -> SemanticSignatureResult:
     """Evaluate one compiled full agent, with a phenotype+dataset cache."""
 
@@ -233,6 +243,9 @@ def evaluate_semantic_signature(
     cache_key = _sha256_json({
         "phenotype_sha256": phenotype_sha256,
         "dataset_sha256": dataset.dataset_sha256,
+        "random_seed": int(random_seed),
+        "runtime_sources": _runtime_source_identity(microrts_dir),
+        "probe_source_sha256": _hash_file(JAVA_SOURCE),
         "normalization_version": NORMALIZATION_VERSION,
     })
     cache_root = cache_root.resolve()
@@ -247,6 +260,7 @@ def evaluate_semantic_signature(
         "dataset_sha256": dataset.dataset_sha256,
         "normalization_version": NORMALIZATION_VERSION,
         "cache_key": cache_key,
+        "random_seed": int(random_seed),
         "cache_ref": cache_ref,
     }
     if cache_path.is_file():
@@ -273,7 +287,8 @@ def evaluate_semantic_signature(
         helper_classes = dataset.root / ".helper_classes"
         _compile_helper(microrts_dir.resolve(), helper_classes, timeout_seconds)
         command = [
-            "java", "-cp", _classpath(microrts_dir.resolve(), helper_classes, candidate_classes_dir.resolve()),
+            "java", f"-Deagle.match.seed={derive_seed(random_seed, 'semantic-signature', dataset.dataset_id)}",
+            "-cp", _classpath(microrts_dir.resolve(), helper_classes, candidate_classes_dir.resolve()),
             "EAGLESemanticProbe", "evaluate", agent_class,
         ]
         for probe in dataset.probes:
@@ -357,14 +372,13 @@ def _compile_helper(
     source_class_names: tuple[str, ...] = (),
 ) -> None:
     class_file = output_dir / "EAGLESemanticProbe.class"
-    supplemental_sources: list[Path] = []
-    supplemental_classes: list[Path] = []
+    supplemental_sources = list(seeded_runtime_sources(microrts_dir))
+    supplemental_classes = [(output_dir / path.relative_to(microrts_dir / "src")).with_suffix(".class") for path in supplemental_sources]
     for class_name in source_class_names:
         relative = Path(*class_name.split("."))
-        runtime_class = (microrts_dir / "bin" / relative).with_suffix(".class")
         source = (microrts_dir / "src" / relative).with_suffix(".java")
         helper_class = (output_dir / relative).with_suffix(".class")
-        if not runtime_class.is_file() and source.is_file():
+        if source.is_file() and source not in supplemental_sources:
             supplemental_sources.append(source)
             supplemental_classes.append(helper_class)
     if (
@@ -496,8 +510,8 @@ def _resolve_map(microrts_dir: Path, path: str) -> Path:
 def _reference_agent_identity(microrts_dir: Path, class_name: str) -> dict[str, str]:
     relative = Path(*class_name.split("."))
     candidates = (
-        (microrts_dir / "bin" / relative).with_suffix(".class"),
         (microrts_dir / "src" / relative).with_suffix(".java"),
+        (microrts_dir / "bin" / relative).with_suffix(".class"),
     )
     artifact = next((path for path in candidates if path.is_file()), None)
     if artifact is None:
@@ -508,6 +522,13 @@ def _reference_agent_identity(microrts_dir: Path, class_name: str) -> dict[str, 
         "class_name": class_name,
         "path": str(artifact.relative_to(microrts_dir)),
         "sha256": _hash_file(artifact),
+    }
+
+
+def _runtime_source_identity(microrts_dir: Path) -> dict[str, str]:
+    return {
+        str(path.relative_to(microrts_dir)): _hash_file(path)
+        for path in seeded_runtime_sources(microrts_dir)
     }
 
 

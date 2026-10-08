@@ -236,9 +236,10 @@ or reflection.
 | typical-p, XTC, DRY, Mirostat, dynamic temperature | omitted | omitted | supplied by llama.cpp server defaults |
 | system message | omitted | omitted | EAGLE sends no system-role message |
 
-`random_seed: 7` / `ea_random_seed: 7` is not an inference seed. It controls
-EA randomness and deterministic strategy-reflection selection. It never enters
-the llama.cpp command or HTTP payload.
+At the time of this audit, `random_seed` controlled EA decisions and reflection
+selection without entering inference payloads. Current execution instead uses
+`random_seed` as the EA-wide root and sends derived task seeds in every LLM
+request; see the [current contract](eagle_architecture_spec.md#4-reproducibility).
 
 ## Role-specific differences
 

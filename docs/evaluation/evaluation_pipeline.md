@@ -132,12 +132,16 @@ three configured maps, three round indices, and both player positions, producing
 compiled same-named `ai.generated.CandidateAgent`; it does not regenerate or
 recompile either generated source.
 
-MicroRTS match seeds are optional. With `deterministic_mode: true`, EAGLE
-derives one stable seed from the effective run seed and immutable match
-identity, passes it to the vendored runtime as `-Deagle.match.seed`, and
-persists it in the match result and trace metadata. Repeated games remain
-identified by `round_index`; deterministic mode promises same-host, same-build
-reproducibility, not cross-hardware bitwise equivalence.
+Every MicroRTS match derives a stable seed from the EA root `random_seed`
+and immutable match identity, passes it as `-Deagle.match.seed`, and persists
+it in results and trace metadata. Repetitions use `round_index`. Worker counts
+may differ: seed assignment and aggregation follow canonical matrix order.
+Candidate compilation includes the seeded runtime source overlay ahead of stale
+vendored bytecode. Integration and semantic probes receive derived root seeds;
+semantic dataset/signature caches include the root and runtime source identity.
+Final tests recompile preserved source into a separate final-test classes directory.
+Vendored stochastic sources consume the seed, while external opponent binaries
+and wall-clock search/timeout budgets can still be nondeterministic.
 
 The direct W/D/L summary is consumed only by AOS. It is not added to the ten
 opponent objectives, Game Performance, lexicase, or the opponent archive. An

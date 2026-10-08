@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from eagle.timing import utc_now
+from eagle.evaluation.determinism import derive_seed
+from eagle.llm import generate_seeded
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.llm import (
@@ -400,7 +402,7 @@ class OpenAICompatibleReflectionBackend:
             if max_output_tokens is None
             else max_output_tokens
         )
-        self.seed = seed
+        self.seed = 0 if seed is None else int(seed)
 
     @property
     def chat_completions_url(self) -> str:
@@ -409,6 +411,10 @@ class OpenAICompatibleReflectionBackend:
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, prompt: str) -> str:
+        seed = derive_seed(self.seed, "llm", self.operation or "reflection", prompt) & 0x7FFF_FFFF
+        return self.generate_seeded(prompt, seed)
+
+    def generate_seeded(self, prompt: str, seed: int) -> str:
         prompt = truncate_prompt(prompt)
         payload = {
             "model": self.model,
@@ -420,8 +426,7 @@ class OpenAICompatibleReflectionBackend:
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
-        if self.seed is not None:
-            payload["seed"] = self.seed
+        payload["seed"] = seed
         request = urllib.request.Request(
             self.chat_completions_url,
             data=json.dumps(payload).encode("utf-8"),
@@ -535,8 +540,12 @@ class ReflectionStage:
                     stage_dir / f"{stage}_attempt_{attempt_number:03d}_request.txt",
                     attempt_request,
                 )
+            request_seed = derive_seed(
+                getattr(self.backend, "seed", 0) or 0, "llm", reflection_type,
+                candidate.generation, candidate.id, attempt_number,
+            ) & 0x7FFF_FFFF
             try:
-                response = self.backend.generate(attempt_request)
+                response = generate_seeded(self.backend, attempt_request, request_seed)
                 last_response = response
                 if artifact_dir is not None:
                     assert stage_dir is not None
@@ -595,7 +604,7 @@ class ReflectionStage:
                     metadata={
                         "operation": self.operation,
                         "operation_type": "mutation",
-                        "sampling_seed": getattr(self.backend, "seed", None),
+                        "sampling_seed": request_seed,
                         "token_counts": None,
                         "prompt_metadata": prompt_metadata,
                     },

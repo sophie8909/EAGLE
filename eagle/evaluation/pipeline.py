@@ -20,6 +20,7 @@ from eagle.evaluation.code_quality import (
     evaluate_agent_strategy_region,
 )
 from eagle.evaluation.compiler import CompileResult
+from eagle.evaluation.determinism import derive_seed
 from eagle.evaluation.game_metrics import GameMetrics, compute_game_metrics
 from eagle.evaluation.microrts_runner import IntegrationResult, integrate_microrts_agent
 from eagle.evaluation.objectives import build_objectives, reporting_game_performance
@@ -85,6 +86,7 @@ def evaluate_population(
                 player_side=config.semantic_probe_player_side,
                 phase_fractions=config.semantic_phase_fractions,
                 timeout_seconds=config.semantic_probe_timeout_seconds,
+                random_seed=config.random_seed,
             )
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
             semantic_dataset_error = f"{type(exc).__name__}: {exc}"
@@ -343,6 +345,7 @@ def evaluate_candidate(
             classes_dir=classes_dir / candidate.id,
             agent_class=agent.qualified_class_name,
             integration_artifacts_dir=integration_dir,
+            seed=derive_seed(config.random_seed, "integration", candidate.id),
             mock=mock,
         )
         if integration_result.ok:
@@ -392,6 +395,7 @@ def evaluate_candidate(
                 else classes_dir.parent / "archives" / "semantic_signature_cache"
             ),
             timeout_seconds=config.semantic_probe_timeout_seconds,
+            random_seed=config.random_seed,
         )
 
     # Stage 5: classify the first blocking failure without discarding partial

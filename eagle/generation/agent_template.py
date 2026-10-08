@@ -160,6 +160,21 @@ def strategy_contract_errors(source: str) -> tuple[str, ...]:
     strategy = extract_strategy_region(source)
     code = _JAVA_NON_CODE_PATTERN.sub(" ", strategy)
     errors: list[str] = []
+    # ponytail: standard entropy API guard; bytecode analysis if arbitrary Java is supported.
+    if re.search(
+        r"\b(?:Math|StrictMath)\s*\.\s*random\s*\(|"
+        r"\bnew\s+(?:java\.(?:util|security)\.)?(?:Random|SplittableRandom|SecureRandom|Date)\s*\(|"
+        r"\b(?:ThreadLocalRandom|RandomGenerator|RandomGeneratorFactory)\s*\.|"
+        r"\bUUID\s*\.\s*randomUUID\s*\(|"
+        r"\bCollections\s*\.\s*shuffle\s*\([^,;]*\)|"
+        r"\bSystem\s*\.\s*(?:currentTimeMillis|nanoTime)\s*\(|"
+        r"\bCalendar\s*\.\s*getInstance\s*\(",
+        code,
+    ):
+        errors.append(
+            "strategy randomness must use rts.RandomSource.create with a stable namespace; "
+            "use game cycles rather than wall-clock time"
+        )
     if re.search(
         r"\bint\s*\[\s*\]\s+[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*"
         r"(?:new\s+int\s*\[\s*\]\s*)?\{\s*\{",

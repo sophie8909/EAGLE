@@ -16,6 +16,7 @@ from eagle.artifacts import (
 )
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
+from eagle.evaluation.compiler import normalize_compiler_paths
 from eagle.evaluation.compiler import CompileResult, compile_generated_agent
 from eagle.generation.agent_template import (
     JavaTemplatePaths,
@@ -351,7 +352,7 @@ def _compile_repair_request(
             "action_api_guide": load_prompt("action_api_guide"),
             "java_scaffold": load_java_template(JavaTemplatePaths(config.agent_template_path)),
             "previous_complete_source": previous_source,
-            "compile_evidence": json.dumps(evidence, ensure_ascii=False, indent=2),
+            "compile_evidence": normalize_compiler_paths(json.dumps(evidence, ensure_ascii=False, indent=2)),
             "inherited_java": candidate.inherited_java,
         },
     )

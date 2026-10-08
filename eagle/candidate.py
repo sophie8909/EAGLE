@@ -70,7 +70,7 @@ class Candidate:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Give new candidates a sortable generation-qualified identity."""
+        """Give standalone candidates an identity; EA factories always supply seeded IDs."""
 
         if not self.id:
             object.__setattr__(

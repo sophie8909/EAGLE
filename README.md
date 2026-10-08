@@ -19,6 +19,12 @@ Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and
 
 Offspring creation reports mutation progress as `[gen G cand I/N]`, including started, completed, failed, and skipped states. Blocking LLM requests also print start/completion messages and a waiting heartbeat every 30 seconds. Set `EAGLE_LLM_PROGRESS=0` to suppress successful-request LLM progress while retaining candidate progress and failure messages.
 
+`random_seed` controls all EA-owned stochastic streams, including LLM request
+and MicroRTS match seeds. Controllable execution is always deterministic;
+parallel match workers use stable task seeds and result ordering. External LLM,
+GPU/backend, private opponent RNG, and timing effects can still vary. See the
+[reproducibility contract](docs/eagle_architecture_spec.md#4-reproducibility).
+
 Resume does not require the original experiment folder:
 
 ```bash

@@ -20,6 +20,10 @@ RUN_SCHEMA_VERSION = "eagle-run-v2"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
 ERROR_MEMORY_SCHEMA_VERSION = "eagle-error-memory-v1"
 GENERATION_POLICY_SCHEMA_VERSION = "eagle-generation-policy-v2"
+RESUME_ARCHIVE_PATHS = (
+    "archives/strategy.json", "archives/error_memory.jsonl",
+    "archives/self_play_opponents.json",
+)
 
 
 def utc_now() -> str:
@@ -182,12 +186,19 @@ def record_generation(
     *,
     diversity: dict[str, Any] | None = None,
     aos: dict[str, Any] | None = None,
+    stagnation_count: int = 0,
 ) -> None:
     """Record the surviving population after selection exactly once."""
     metrics = generation_metrics(generation, population, diversity=diversity)
     snapshot = {
         "schema_version": GENERATION_SCHEMA_VERSION,
         "generation": generation,
+        "stagnation_count": stagnation_count,
+        "resume_archives": {
+            name: (run_dir / name).read_text(encoding="utf-8")
+            if (run_dir / name).is_file() else None
+            for name in RESUME_ARCHIVE_PATHS
+        },
         "population": [
             {
                 "candidate_id": candidate.id,
@@ -506,10 +517,11 @@ def _semantic_library_metrics(population: list[Candidate]) -> dict[str, Any]:
 def load_aos_state(run_dir: Path) -> dict[str, Any] | None:
     """Load the latest persisted AOS state for deterministic resume."""
 
-    generations = sorted((run_dir / "generations").glob("generation_*.json"))
-    if not generations:
+    latest = load_manifest(run_dir).get("latest_generation")
+    if latest is None:
         return None
-    payload = json.loads(generations[-1].read_text(encoding="utf-8"))
+    checkpoint = run_dir / "generations" / f"generation_{int(latest):04d}.json"
+    payload = json.loads(checkpoint.read_text(encoding="utf-8"))
     aos = payload.get("aos") or (payload.get("metrics") or {}).get("aos")
     return dict(aos["state"]) if isinstance(aos, dict) and isinstance(aos.get("state"), dict) else None
 
@@ -639,7 +651,7 @@ def _best_candidate_id(population: list[Candidate]) -> str | None:
     valid = [candidate for candidate in population if candidate.status != "failed"]
     if not valid:
         return None
-    return max(valid, key=lambda item: tuple(item.objective_vector())).id
+    return max(valid, key=lambda item: (tuple(item.objective_vector()), item.id)).id
 
 
 def atomic_json(path: Path, payload: object) -> None:

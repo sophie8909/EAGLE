@@ -233,6 +233,7 @@ def integrate_microrts_agent(
     agent_class: str,
     integration_artifacts_dir: Path | None = None,
     mock: bool = False,
+    seed: int = 0,
 ) -> IntegrationResult:
     started_at = _utc_now()
     started = time.monotonic()
@@ -246,6 +247,7 @@ def integrate_microrts_agent(
                     "classes_dir": str(classes_dir.resolve()),
                     "microrts_dir": str(microrts_dir.resolve()),
                     "check_order": list(INTEGRATION_CHECK_NAMES),
+                    "seed": seed,
                 },
                 indent=2,
             ),
@@ -276,7 +278,7 @@ def integrate_microrts_agent(
         [str(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
     )
     compile_command = ["javac", "-cp", classpath, "-d", str(artifact_dir), str(probe_source)]
-    run_command = ["java", "-cp", os.pathsep.join([classpath, str(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
+    run_command = ["java", f"-Deagle.match.seed={int(seed)}", "-cp", os.pathsep.join([classpath, str(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
     commands = (tuple(compile_command), tuple(run_command))
 
     try:

@@ -68,3 +68,12 @@ Before returning the file, check every private strategy helper independently:
 all referenced locals are declared in that method or its parameter list, every
 `context.` use has an `AgentContext context` parameter, and every array's declared
 dimension matches its initializer and enhanced-for element type.
+
+EA RANDOMNESS CONTRACT:
+- Use game cycles for timing and stable unit IDs for deterministic ties.
+- Any stochastic choice must use rts.RandomSource.create("strategy.<stable namespace>"),
+  which derives its stream from the EA-root-derived match seed. Do not construct
+  Random, SplittableRandom, SecureRandom, or ThreadLocalRandom yourself, or use
+  Math.random(), randomUUID(), wall-clock APIs, or an unseeded Collections.shuffle.
+- Keep a seeded java.util.Random field inside the editable strategy region when
+  successive choices need a stream; never derive its namespace from time or threads.

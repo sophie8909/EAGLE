@@ -25,7 +25,6 @@ random_seeds: [7, 8]
 generations: 4
 population_size: 10
 execution_mode: openai
-deterministic_mode: true
 mutation_max_attempts: 3
 generation_max_attempts: 5
 crossover_rate: 0.75

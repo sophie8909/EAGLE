@@ -121,7 +121,6 @@ class ExperimentConfig:
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
-    deterministic_mode: bool = False
     # When configured, ``runs`` is repeated for each listed seed.  With no
     # explicit list, the legacy random_seed + replicate-index schedule stays
     # unchanged.
@@ -412,7 +411,6 @@ class ExperimentConfig:
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
-            deterministic_mode=bool(payload.get("deterministic_mode", False)),
             random_seeds=random_seeds,
             algorithm=algorithm,
             survivor_selection=survivor_selection,
@@ -503,17 +501,6 @@ class ExperimentConfig:
         self.model.validate()
         if self.generation_model is not None:
             self.generation_model.validate()
-        if self.deterministic_mode:
-            deterministic_models = (self.model,) if self.generation_model is None else (
-                self.model,
-                self.generation_model,
-            )
-            for model in deterministic_models:
-                if model.gpu_layers != 0 or model.threads != 1 or model.batch_size < 512 or model.parallel != 1:
-                    raise ValueError(
-                        "deterministic_mode requires model gpu_layers=0, threads=1, "
-                        "batch_size>=512, and parallel=1."
-                    )
         if self.runs < 1:
             raise ValueError("runs must be at least 1.")
         if self.random_seeds and len(set(self.random_seeds)) != len(self.random_seeds):
@@ -667,8 +654,6 @@ class ExperimentConfig:
             raise ValueError("match_timeout_seconds must be greater than zero.")
         if self.match_workers < 1:
             raise ValueError("evaluation.match_workers must be at least 1.")
-        if self.deterministic_mode and self.match_workers != 1:
-            raise ValueError("deterministic_mode requires evaluation.match_workers=1.")
         if self.match_artifact_mode not in {"compact", "full"}:
             raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
@@ -681,14 +666,6 @@ class ExperimentConfig:
             raise ValueError("llm.temperature must not be negative.")
         if self.initial_policy_temperature < 0:
             raise ValueError("llm.initial_policy_temperature must not be negative.")
-        if self.deterministic_mode and (
-            self.llm_temperature != 0.0
-            or self.initial_policy_temperature != 0.0
-            or self.match_commentator_temperature != 0.0
-        ):
-            raise ValueError(
-                "deterministic_mode requires all LLM temperatures to be 0."
-            )
         if self.llm_max_tokens is not None and self.llm_max_tokens < 1:
             raise ValueError("llm.max_tokens must be positive.")
         if self.match_commentator_temperature < 0:
@@ -772,7 +749,6 @@ class ExperimentConfig:
             "crossover_rate": self.crossover_rate,
             "mutation_rate": self.mutation_rate,
             "random_seed": self.random_seed,
-            "deterministic_mode": self.deterministic_mode,
             "execution_mode": "mock" if mock else self.execution_mode,
             "reflection_operator_mode": self.reflection_operator_mode.value,
             "strategy_reflection_probability": self.strategy_reflection_probability,

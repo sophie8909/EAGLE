@@ -31,7 +31,6 @@ class DeterminismTests(unittest.TestCase):
 
     def test_deterministic_population_ids_do_not_use_uuid4(self):
         config = ExperimentConfig.from_mapping({
-            "deterministic_mode": True,
             "model": {
                 "name": "test",
                 "gpu_layers": 0,

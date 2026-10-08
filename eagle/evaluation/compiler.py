@@ -75,6 +75,15 @@ _DIAGNOSTIC_PATTERN = re.compile(
 _CODE_PATTERN = re.compile(r"^\[(?P<code>[^\]]+)\]\s*(?P<message>.*)$")
 
 
+def normalize_compiler_paths(text: str) -> str:
+    """Keep diagnostic filenames/line numbers while removing incidental run paths."""
+    return re.sub(
+        r"(?:[A-Za-z]:[\\/]|/)[^\"'\r\n:]*?\.java\b",
+        lambda match: match.group().replace("\\", "/").rsplit("/", 1)[-1],
+        text,
+    )
+
+
 def parse_compiler_diagnostics(output: str | Iterable[str]) -> tuple[CompilerDiagnostic, ...]:
     lines = output.splitlines() if isinstance(output, str) else list(output)
     diagnostics: list[CompilerDiagnostic] = []
@@ -113,6 +122,23 @@ def parse_compiler_diagnostics(output: str | Iterable[str]) -> tuple[CompilerDia
     return tuple(diagnostics)
 
 
+SEEDED_RUNTIME_SOURCES = (
+    "rts/RandomSource.java", "rts/GameState.java", "rts/UnitAction.java",
+    "rts/PlayerActionGenerator.java", "util/Sampler.java",
+    "ai/RandomBiasedAI.java", "ai/abstraction/LightRush.java",
+    "ai/abstraction/HeavyRush.java", "ai/abstraction/WorkerRush.java",
+    "ai/abstraction/AbstractionLayerAI.java",
+)
+
+
+def seeded_runtime_sources(microrts_dir: Path) -> tuple[Path, ...]:
+    """Compile seed-aware source ahead of potentially stale vendored bytecode."""
+    return tuple(
+        path for name in SEEDED_RUNTIME_SOURCES
+        if (path := microrts_dir / "src" / name).is_file()
+    )
+
+
 def compile_generated_agent(
     source_path: Path | tuple[Path, ...],
     *,
@@ -125,7 +151,7 @@ def compile_generated_agent(
     source_paths = tuple(path.resolve() for path in source_paths)
     opponent_support_dir = Path(__file__).resolve().parents[2] / "eagle/opponent_sources"
     opponent_support_paths = tuple(sorted(opponent_support_dir.glob("*.java")))
-    all_source_paths = source_paths + opponent_support_paths
+    all_source_paths = source_paths + opponent_support_paths + seeded_runtime_sources(microrts_dir)
     for path in all_source_paths:
         if "EAGLE_BODY" in path.read_text(encoding="utf-8"):
             raise ValueError(f"Refusing to compile unresolved Java behavior template: {path}")

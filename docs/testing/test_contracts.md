@@ -92,6 +92,11 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
   `opponent_results.match_scores` from the canonical evaluation artifact as
   narrow per-generation violin distributions while
   leaving bulky raw per-match payloads out of the in-memory analysis view.
+- Reproducibility checks compare repeated seeded mock EA trajectories, one versus
+  multiple match workers, deterministic tie-breaking under reordered inputs,
+  interruption/resume, root-seed changes, and independent request/retry seeds.
+  Java seed-source checks validate repeatability in the actual JVM; seeded
+  evaluator tests force out-of-order completion and compare canonical results.
 - A mock search is a smoke test, not proof of real Java/MicroRTS integration.
 - Java seed text hashes normalize checkout line endings; shell scripts use LF.
 - AlliBot metadata pinning tests use isolated fixtures and compile the real reflection adapter. Historical runtime regression requires its actual candidate and upstream assets.

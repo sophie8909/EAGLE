@@ -42,19 +42,19 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   `evaluation.match_workers: 10`; result ordering remains canonical by
   `match_index`. Compact artifacts skip Java XML replay generation, while full
   artifacts retain replay and round-state evidence.
-- Match repetitions are identified by `round_index`. Optional
-  `deterministic_mode` derives a stable JVM seed from the effective run seed
-  and immutable match identity, passes `-Deagle.match.seed` into the vendored
-  MicroRTS runtime, and persists the seed with the match artifact. The mode
-  also forces CPU/single-threaded llama.cpp settings, zero-temperature LLM
-  requests, and one match worker for same-host, same-build reproducibility.
+- Controllable randomness is always seeded from the EA root `random_seed`.
+  Stable task streams cover initialization, selection, operators, crossover,
+  mutation, LLM requests, and all evaluation matrices. Parallel match execution
+  preserves canonical result order and stable JVM match seeds. CPU/GPU settings,
+  temperatures, and worker counts remain configurable; external backends and
+  wall-clock budgets can still introduce nondeterminism.
 - A direct config may set `runs` to execute independent replicates. Without an
   explicit list, each run uses the base `random_seed` plus its zero-based
   replicate index. With `random_seeds`, `runs` repeats each listed seed in
   order. Every run writes a separate run directory; folder batches retain one
   run per config for stable `experiment.yaml` indexing.
-- The resolved replicate seed is also propagated to every OpenAI-compatible LLM
-  request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
+- A task-specific seed derived from the resolved replicate root is propagated
+  to every OpenAI-compatible LLM request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
   responses plus SHA-256 hashes for backend stability checks.
 - Formal experiment runs restart the owned llama-server at every run/replicate

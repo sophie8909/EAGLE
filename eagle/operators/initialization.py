@@ -13,8 +13,8 @@ from typing import Protocol
 from eagle.artifacts import write_candidate_inputs, write_json
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation.determinism import derive_candidate_id
-from eagle.llm import LLMCallLogger, parse_json_object_response, truncate_prompt
+from eagle.evaluation.determinism import derive_candidate_id, derive_seed
+from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
 from eagle.prompts import load_prompt, normalize_prompt
 from eagle.timing import utc_now
 
@@ -85,8 +85,6 @@ def initialize_population(
                         index=index,
                         role="initial",
                     )
-                    if config.deterministic_mode
-                    else ""
                 ),
                 generation=0,
                 strategy_prompt=prompt,
@@ -121,8 +119,6 @@ def initialize_population(
                     index=index,
                     role="initial",
                 )
-                if config.deterministic_mode
-                else ""
             ),
             generation=0,
             strategy_prompt=prompt,
@@ -145,8 +141,6 @@ def initialize_population(
                     index=index,
                     role="initial",
                 )
-                if config.deterministic_mode
-                else ""
             ),
             generation=0,
             generation_prompt=config.generation_prompt,
@@ -228,8 +222,11 @@ def _generate_initial_policy(
         raw = ""
         status = "failed"
         request_sha256 = hashlib.sha256(request.encode("utf-8")).hexdigest()
+        request_seed = derive_seed(
+            config.random_seed, "initial_policy_generation", candidate.generation, candidate.id, attempt
+        ) & 0x7FFF_FFFF
         try:
-            raw = backend.generate(request)
+            raw = generate_seeded(backend, request, request_seed)
             # Raw output is durable before JSON parsing or semantic validation.
             (attempt_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
             parsed = parse_json_object_response(raw)
@@ -280,7 +277,7 @@ def _generate_initial_policy(
                 "temperature": float(
                     getattr(backend, "temperature", config.initial_policy_temperature)
                 ),
-                "sampling_seed": getattr(backend, "seed", None),
+                "sampling_seed": request_seed,
                 "request_sha256": request_sha256,
                 "response_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
             },
@@ -291,6 +288,7 @@ def _generate_initial_policy(
             candidate=candidate,
             attempt=attempt,
             timing=timing,
+            request_seed=request_seed,
         )
         if selected_attempt is not None:
             break
@@ -365,6 +363,7 @@ def _record_policy_timing(
     candidate: Candidate,
     attempt: int,
     timing: dict[str, object],
+    request_seed: int,
 ) -> None:
     if logger is None:
         return
@@ -383,7 +382,7 @@ def _record_policy_timing(
         metadata={
             "operation_type": "initialization",
             "endpoint": str(getattr(backend, "base_url", "unknown")),
-            "sampling_seed": getattr(backend, "seed", None),
+            "sampling_seed": request_seed,
             "failure_category": (
                 "initial_policy_generation" if timing["status"] != "success" else None
             ),

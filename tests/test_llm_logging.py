@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eagle.candidate import Candidate
+from eagle.evaluation.determinism import derive_seed
 from eagle.llm import LLMCallLogger, LLMServerError
 from eagle.generation.backend import OpenAICompatibleGenerationBackend
 from eagle.operators.reflection import OpenAICompatibleReflectionBackend
@@ -93,7 +94,11 @@ class LLMLoggingTests(unittest.TestCase):
                 )
             request_payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
             self.assertEqual(request_payload["chat_template_kwargs"], {"enable_thinking": False})
-            self.assertEqual(request_payload["seed"], 37)
+            expected_seed = derive_seed(
+                37, "llm", "generation", 3, "candidate-a", "initial_decode", 2,
+                "candidate-a:generation:002", 1,
+            ) & 0x7FFF_FFFF
+            self.assertEqual(request_payload["seed"], expected_seed)
             files = list((root / "llm_logs").glob("*.json"))
             self.assertEqual(len(files), 1)
             payload = json.loads(files[0].read_text(encoding="utf-8"))
@@ -102,7 +107,7 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertIsNone(payload["response"])
             self.assertFalse(payload["inline_evidence_retained"])
             self.assertEqual(payload["module_name"], "complete_java_agent")
-            self.assertEqual(payload["metadata"]["sampling_seed"], 37)
+            self.assertEqual(payload["metadata"]["sampling_seed"], request_payload["seed"])
             self.assertEqual(payload["candidate_id"], "candidate-a")
             evidence_dir = root / "candidates" / "candidate-a" / "generation" / "attempts" / "attempt_002"
             self.assertEqual(
@@ -211,7 +216,7 @@ class LLMLoggingTests(unittest.TestCase):
         ) as request:
             self.assertEqual(backend.generate("repeat this prompt"), '{"ok": true}')
         request_payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
-        self.assertEqual(request_payload["seed"], 41)
+        self.assertEqual(request_payload["seed"], derive_seed(41, "llm", "reflection", "repeat this prompt") & 0x7FFF_FFFF)
 
 if __name__ == "__main__":
     unittest.main()

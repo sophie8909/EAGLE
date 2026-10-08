@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from eagle.generation.agent_template import extract_strategy_region
+from eagle.evaluation.compiler import normalize_compiler_paths
 
 from eagle.candidate import Candidate
 from eagle.prompts import load_prompt, render_prompt
@@ -121,6 +122,8 @@ def structural_code_evidence(
     if reviewed_source.strip() != context.candidate.generated_code.strip():
         return {}
     diagnostics = context.code_diagnostics.to_dict()
+    for key in ("compile_errors", "compile_warnings"):
+        diagnostics[key] = tuple(normalize_compiler_paths(str(item)) for item in diagnostics.get(key, ()))
     return {
         key: diagnostics.get(key)
         for key in STRUCTURAL_CODE_EVIDENCE_KEYS

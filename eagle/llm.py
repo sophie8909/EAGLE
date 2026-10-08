@@ -97,6 +97,13 @@ class LLMClient:
         )
 
 
+def generate_seeded(backend: Any, prompt: str, seed: int) -> str:
+    """Pass a task seed without changing shared clients; legacy mock backends still work."""
+
+    method = getattr(backend, "generate_seeded", None)
+    return method(prompt, seed) if callable(method) else backend.generate(prompt)
+
+
 # OpenAI-compatible response decoding and prompt bounds
 # llama.cpp context includes both prompt and generated output.  Keeping the
 # request below this bound leaves room for the configured response budget on a
