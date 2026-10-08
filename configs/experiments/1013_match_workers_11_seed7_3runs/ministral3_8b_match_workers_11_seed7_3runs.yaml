@@ -1,5 +1,5 @@
 schema_version: experiment-v2
-experiment_name: ministral3_8b_match_workers_11_seed7_3runs
+experiment_name: ministral3_8b_match_workers_9_seed7_3runs
 
 model:
   name: ministral3_8b
@@ -52,7 +52,7 @@ stagnation_generations: 25
 
 evaluation:
   mode: self_play
-  match_workers: 11
+  match_workers: 9
   maps:
     - path: maps/8x8/basesWorkers8x8.xml
       tick_limit: 1500
