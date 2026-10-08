@@ -330,14 +330,15 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 ./analyze.sh RUN_DIR
 ```
 
-實驗主機也提供唯讀的本地監控入口：
+實驗主機也提供常駐、唯讀的本地監控入口；它會自動發現 `runs/` 下現在與之後
+由 `experiment` 建立的 canonical run：
 
 ```bash
-python -m eagle monitor --run-dir runs/<run_id> --host 0.0.0.0 \
+python -m eagle monitor --runs-root runs --host 0.0.0.0 \
   --port 8765 --token '<shared-secret>'
 ```
 
-`/status` 只讀取 canonical manifest 與最新 atomic generation snapshot，回傳
+`/status` 回傳所有已發現的 run，`/status/<run_id>` 查詢單一 run；它們只讀取 canonical manifest 與最新 atomic generation snapshot，回傳
 世代、match、fitness、錯誤摘要，以及 CPU／記憶體／磁碟／NVIDIA GPU 資訊；不會
 解析 console log，也沒有重啟、停止或修改實驗的 API。非 loopback bind 必須提供
 token。完整端點與防火牆建議見

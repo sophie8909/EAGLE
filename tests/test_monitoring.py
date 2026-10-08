@@ -13,19 +13,20 @@ from eagle.monitoring import (
     MONITOR_SCHEMA_VERSION,
     ExperimentStatusCollector,
     MonitorDataError,
+    RunsRootStatusCollector,
     create_status_server,
 )
 from eagle.run_artifacts import RUN_SCHEMA_VERSION
 
 
 class MonitoringTests(unittest.TestCase):
-    def run_fixture(self, root: Path) -> Path:
-        run = root / "run"
+    def run_fixture(self, root: Path, name: str = "run", *, run_id: str = "test-run") -> Path:
+        run = root / name
         (run / "generations").mkdir(parents=True)
         (run / "archives").mkdir()
         (run / "manifest.json").write_text(json.dumps({
             "schema_version": RUN_SCHEMA_VERSION,
-            "run_id": "test-run",
+            "run_id": run_id,
             "experiment_name": "monitor fixture",
             "status": "running",
             "created_at": "2026-10-08T00:00:00+00:00",
@@ -73,6 +74,21 @@ class MonitoringTests(unittest.TestCase):
             with self.assertRaises(MonitorDataError):
                 ExperimentStatusCollector(run).collect()
 
+    def test_runs_root_collector_discovers_new_runs_automatically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "runs"
+            self.run_fixture(root, "run-a", run_id="run-a")
+            collector = RunsRootStatusCollector(root)
+            self.assertEqual(collector.collect()["run_count"], 1)
+            self.run_fixture(root, "run-b", run_id="run-b")
+            payload = collector.collect()
+            self.assertEqual(payload["run_count"], 2)
+            self.assertEqual(
+                {item["experiment"]["run_id"] for item in payload["runs"]},
+                {"run-a", "run-b"},
+            )
+            self.assertEqual(collector.collect(run_id="run-a")["experiment"]["run_id"], "run-a")
+
     def test_non_loopback_server_requires_token(self):
         with tempfile.TemporaryDirectory() as directory:
             run = self.run_fixture(Path(directory))
@@ -101,6 +117,33 @@ class MonitoringTests(unittest.TestCase):
                 with urlopen(request) as response:
                     self.assertEqual(response.status, 200)
                     self.assertEqual(json.loads(response.read())["experiment"]["run_id"], "test-run")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+    def test_root_status_endpoint_picks_up_a_run_created_after_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "runs"
+            self.run_fixture(root, "run-a", run_id="run-a")
+            try:
+                server = create_status_server(
+                    RunsRootStatusCollector(root), host="127.0.0.1", port=0, token="secret"
+                )
+            except PermissionError as exc:
+                self.skipTest(f"sandbox does not permit loopback sockets: {exc}")
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            headers = {"Authorization": "Bearer secret"}
+            try:
+                with urlopen(Request(f"{base_url}/status", headers=headers)) as response:
+                    self.assertEqual(json.loads(response.read())["run_count"], 1)
+                self.run_fixture(root, "run-b", run_id="run-b")
+                with urlopen(Request(f"{base_url}/status", headers=headers)) as response:
+                    self.assertEqual(json.loads(response.read())["run_count"], 2)
+                with urlopen(Request(f"{base_url}/status/run-a", headers=headers)) as response:
+                    self.assertEqual(json.loads(response.read())["experiment"]["run_id"], "run-a")
             finally:
                 server.shutdown()
                 server.server_close()

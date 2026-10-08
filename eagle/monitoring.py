@@ -231,7 +231,9 @@ class ExperimentStatusCollector:
         self.stale_after_seconds = float(stale_after_seconds)
         self.pid = pid
 
-    def collect(self) -> dict[str, Any]:
+    def collect(self, run_id: str | None = None) -> dict[str, Any]:
+        if run_id is not None and run_id != self.run_dir.name:
+            raise MonitorDataError(f"run is not available from this monitor: {run_id}")
         manifest = _read_json(self.run_dir / "manifest.json")
         if manifest.get("schema_version") != RUN_SCHEMA_VERSION:
             raise MonitorDataError(f"unsupported run manifest schema: {manifest.get('schema_version')!r}")
@@ -293,6 +295,65 @@ class ExperimentStatusCollector:
             "process": _process_status(self.pid),
             "progress": progress,
             "errors": _load_error_memory(self.run_dir),
+        }
+
+
+class RunsRootStatusCollector:
+    """Discover canonical runs below a root so one daemon covers new runs."""
+
+    def __init__(
+        self,
+        runs_root: str | Path,
+        *,
+        stale_after_seconds: float = DEFAULT_STALE_AFTER_SECONDS,
+        max_runs: int = 100,
+    ):
+        self.runs_root = Path(runs_root).expanduser().resolve()
+        if max_runs <= 0:
+            raise ValueError("max_runs must be positive")
+        self.stale_after_seconds = stale_after_seconds
+        self.max_runs = max_runs
+
+    def _run_dirs(self) -> list[Path]:
+        if not self.runs_root.is_dir():
+            return []
+        candidates = [
+            path for path in self.runs_root.iterdir()
+            if path.is_dir() and (path / "manifest.json").is_file()
+        ]
+        candidates.sort(key=lambda path: path.name, reverse=True)
+        return candidates[: self.max_runs]
+
+    def collect(self, run_id: str | None = None) -> dict[str, Any]:
+        run_dirs = self._run_dirs()
+        if run_id is not None:
+            if Path(run_id).name != run_id or "/" in run_id or "\\" in run_id:
+                raise MonitorDataError("run_id must be one direct child of the runs root")
+            run_dirs = [path for path in run_dirs if path.name == run_id]
+            if not run_dirs:
+                raise MonitorDataError(f"run was not found below {self.runs_root}: {run_id}")
+        snapshots: list[dict[str, Any]] = []
+        for run_dir in run_dirs:
+            try:
+                snapshots.append(
+                    ExperimentStatusCollector(
+                        run_dir,
+                        stale_after_seconds=self.stale_after_seconds,
+                    ).collect()
+                )
+            except MonitorDataError as exc:
+                snapshots.append({
+                    "schema_version": MONITOR_SCHEMA_VERSION,
+                    "experiment": {"run_id": run_dir.name, "status": "unavailable"},
+                    "error": str(exc),
+                })
+        if run_id is not None:
+            return snapshots[0]
+        return {
+            "schema_version": MONITOR_SCHEMA_VERSION,
+            "observed_at": _utc_now().isoformat(),
+            "run_count": len(snapshots),
+            "runs": snapshots,
         }
 
 
@@ -367,7 +428,7 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
 
 
 def create_status_server(
-    collector: ExperimentStatusCollector,
+    collector: ExperimentStatusCollector | RunsRootStatusCollector,
     *,
     host: str = "127.0.0.1",
     port: int = 8765,
@@ -388,14 +449,18 @@ def create_status_server(
             if path == "/health":
                 _json_response(self, 200, {"status": "ok", "schema_version": MONITOR_SCHEMA_VERSION})
                 return
-            if path != "/status":
+            if path in {"/status", "/runs"}:
+                run_id = None
+            elif path.startswith("/status/"):
+                run_id = path.removeprefix("/status/")
+            else:
                 _json_response(self, 404, {"error": "not_found"})
                 return
             if token and not _authorized(self, token):
                 _json_response(self, 401, {"error": "unauthorized"})
                 return
             try:
-                payload = collector.collect()
+                payload = collector.collect(run_id=run_id)
             except MonitorDataError as exc:
                 _json_response(self, 503, {"error": "run_unavailable", "detail": str(exc)})
                 return
@@ -419,7 +484,7 @@ def _authorized(handler: BaseHTTPRequestHandler, token: str) -> bool:
 
 
 def serve_status(
-    collector: ExperimentStatusCollector,
+    collector: ExperimentStatusCollector | RunsRootStatusCollector,
     *,
     host: str,
     port: int,

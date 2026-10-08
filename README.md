@@ -48,11 +48,13 @@ Only `eagle-run-v2` is supported by writers, resume, and offline analysis.
 
 `watchdog.sh` remains an optional independent network-interface monitor. It does not manage the model server or experiment lifecycle.
 
-To expose a read-only status endpoint for a local experiment host, run:
+To run one resident read-only status endpoint for all experiments under `runs/`, run:
 
 ```bash
-python -m eagle monitor --run-dir runs/<run_id> --host 0.0.0.0 --port 8765 --token '<shared-secret>'
+python -m eagle monitor --runs-root runs --host 0.0.0.0 --port 8765 --token '<shared-secret>'
 ```
+
+New runs created by `python -m eagle experiment` are discovered automatically.
 
 See [`docs/operations/monitoring_experiment.md`](docs/operations/monitoring_experiment.md)
 for the endpoint contract and network-safety requirements.

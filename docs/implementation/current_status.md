@@ -4,11 +4,13 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
-- The local `python -m eagle monitor` command exposes a read-only
-  `eagle-monitor-status-v1` HTTP status snapshot for one canonical run. It reads
-  only the atomic manifest/latest generation artifacts, includes host resource
-  telemetry and bounded failure summaries, defaults to loopback, and requires a
-  token for non-loopback binds. It has no experiment-control operations.
+- The resident `python -m eagle monitor --runs-root runs` command exposes a
+  read-only `eagle-monitor-status-v1` HTTP snapshot for every canonical run
+  below the root, automatically discovering runs created later by `experiment`.
+  It reads only atomic manifest/latest generation artifacts, includes host
+  resource telemetry and bounded failure summaries, defaults to loopback, and
+  requires a token for non-loopback binds. It has no experiment-control
+  operations.
 
 - `candidate_java_mode: generated_phenotype` preserves the two evolvable prompt
   components: `strategy_prompt` and `generation_prompt`; generated Java remains
