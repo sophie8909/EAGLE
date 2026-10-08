@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
+from eagle.monitoring import (
+    GENERATION_SCHEMA_VERSION,
+    MONITOR_SCHEMA_VERSION,
+    ExperimentStatusCollector,
+    MonitorDataError,
+    create_status_server,
+)
+from eagle.run_artifacts import RUN_SCHEMA_VERSION
+
+
+class MonitoringTests(unittest.TestCase):
+    def run_fixture(self, root: Path) -> Path:
+        run = root / "run"
+        (run / "generations").mkdir(parents=True)
+        (run / "archives").mkdir()
+        (run / "manifest.json").write_text(json.dumps({
+            "schema_version": RUN_SCHEMA_VERSION,
+            "run_id": "test-run",
+            "experiment_name": "monitor fixture",
+            "status": "running",
+            "created_at": "2026-10-08T00:00:00+00:00",
+            "updated_at": "2026-10-08T00:00:01+00:00",
+            "latest_generation": 2,
+        }), encoding="utf-8")
+        (run / "generations" / "generation_0002.json").write_text(json.dumps({
+            "schema_version": GENERATION_SCHEMA_VERSION,
+            "generation": 2,
+            "best_candidate_id": "gen_0002_best",
+            "population": [{"candidate_id": "gen_0002_best"}, {"candidate_id": "other"}],
+            "metrics": {
+                "expected_match_count": 360,
+                "completed_match_count": 180,
+                "failure_count": 1,
+                "game_performance": {"best": 0.75, "mean": 0.5},
+                "objectives": {"workerrush": {"best": 1.0, "mean": 0.5, "valid_count": 2, "failure_count": 0}},
+                "opponent_scores": {"by_opponent": {"workerrush": {"game_performance": 0.5, "sample_count": 2, "failure_count": 0}}},
+            },
+            "aos": {"mode": "static", "probabilities": {"Strategy": 0.2}},
+        }), encoding="utf-8")
+        (run / "archives" / "error_memory.jsonl").write_text(
+            json.dumps({"signature": "compile_failure:x", "count": 2}) + "\n", encoding="utf-8"
+        )
+        return run
+
+    def test_collector_reads_canonical_progress_and_error_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = self.run_fixture(Path(directory))
+            payload = ExperimentStatusCollector(run, stale_after_seconds=1).collect()
+            self.assertEqual(payload["schema_version"], MONITOR_SCHEMA_VERSION)
+            self.assertEqual(payload["experiment"]["latest_generation"], 2)
+            self.assertEqual(payload["progress"]["best_candidate_id"], "gen_0002_best")
+            self.assertEqual(payload["progress"]["completed_match_count"], 180)
+            self.assertEqual(payload["progress"]["completion_ratio"], 0.5)
+            self.assertEqual(payload["progress"]["best_fitness"], 0.75)
+            self.assertEqual(payload["errors"][0]["signature"], "compile_failure:x")
+            self.assertIsNone(payload["process"]["pid"])
+
+    def test_collector_rejects_unsupported_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            run.mkdir()
+            (run / "manifest.json").write_text(json.dumps({"schema_version": "old"}), encoding="utf-8")
+            with self.assertRaises(MonitorDataError):
+                ExperimentStatusCollector(run).collect()
+
+    def test_non_loopback_server_requires_token(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = self.run_fixture(Path(directory))
+            with self.assertRaises(ValueError):
+                create_status_server(ExperimentStatusCollector(run), host="0.0.0.0", port=8765)
+
+    def test_status_endpoint_requires_token_but_health_is_public(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = self.run_fixture(Path(directory))
+            try:
+                server = create_status_server(
+                    ExperimentStatusCollector(run), host="127.0.0.1", port=0, token="secret"
+                )
+            except PermissionError as exc:
+                self.skipTest(f"sandbox does not permit loopback sockets: {exc}")
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                with urlopen(f"{base_url}/health") as response:
+                    self.assertEqual(json.loads(response.read())["status"], "ok")
+                with self.assertRaises(HTTPError) as context:
+                    urlopen(f"{base_url}/status")
+                self.assertEqual(context.exception.code, 401)
+                request = Request(f"{base_url}/status", headers={"Authorization": "Bearer secret"})
+                with urlopen(request) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(json.loads(response.read())["experiment"]["run_id"], "test-run")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+
+if __name__ == "__main__":
+    unittest.main()

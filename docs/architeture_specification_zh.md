@@ -330,6 +330,19 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 ./analyze.sh RUN_DIR
 ```
 
+實驗主機也提供唯讀的本地監控入口：
+
+```bash
+python -m eagle monitor --run-dir runs/<run_id> --host 0.0.0.0 \
+  --port 8765 --token '<shared-secret>'
+```
+
+`/status` 只讀取 canonical manifest 與最新 atomic generation snapshot，回傳
+世代、match、fitness、錯誤摘要，以及 CPU／記憶體／磁碟／NVIDIA GPU 資訊；不會
+解析 console log，也沒有重啟、停止或修改實驗的 API。非 loopback bind 必須提供
+token。完整端點與防火牆建議見
+[`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
+
 `experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、
 llama.cpp start/reuse/switch、health check、EA、resume、final test 與 owned-process
 cleanup。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
@@ -358,4 +371,6 @@ git diff --check
 
 Python 統一於 `eagle/`。修改單一 EA operator 到 `eagle/operators/` 的 initialization、selection、crossover、adaptive、strategy、prompt 或 code；演化階段順序集中於 `eagle/evolution/generation.py`，offspring 與 parent refresh 各自分開。Java 生成位於 `eagle/generation/`；評估的 records、decoding、opponents、matches、pipeline 位於 `eagle/evaluation/`。既有演算法、設定、assets、run artifacts 與 checkpoint 契約保持不變。
 
-文件 map 新增：[可維護性重構計畫](implementation/maintainability_refactor_plan.md)，包含掃描結果、修改入口、實作順序與驗證記錄；完整 owner 表見 [repository map](implementation/repository_map.md)。
+文件 map 新增：[可維護性重構計畫](implementation/maintainability_refactor_plan.md) 與
+[本地實驗監控](operations/monitoring_experiment.md)，前者包含掃描結果、修改入口、
+實作順序與驗證記錄；完整 owner 表見 [repository map](implementation/repository_map.md)。
