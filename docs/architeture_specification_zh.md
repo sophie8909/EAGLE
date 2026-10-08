@@ -342,7 +342,8 @@ python -m eagle monitor --runs-root runs --host 0.0.0.0 \
 世代、match、fitness、錯誤摘要，以及 CPU／記憶體／磁碟／NVIDIA GPU 資訊；不會
 解析 console log，也沒有重啟、停止或修改實驗的 API。非 loopback bind 必須提供
 token。monitor 預設每 30 秒原子更新 `runs/monitor_status.json`，也可透過
-`http://<experiment-host>:8765/status.json` 讀取；完整端點與防火牆建議見
+`http://<experiment-host>:8765/status.json?token=<shared-secret>` 直接讀取；這會讓
+token 出現在網址與瀏覽器歷史紀錄，長期使用仍建議採用 Authorization header。完整端點與防火牆建議見
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
 `experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、

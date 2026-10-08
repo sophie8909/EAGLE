@@ -150,6 +150,8 @@ class MonitoringTests(unittest.TestCase):
                     self.assertEqual(json.loads(response.read())["run_count"], 1)
                 with urlopen(Request(f"{base_url}/status.json", headers=headers)) as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 1)
+                with urlopen(f"{base_url}/status.json?token=secret") as response:
+                    self.assertEqual(json.loads(response.read())["run_count"], 1)
                 self.run_fixture(root, "run-b", run_id="run-b")
                 with urlopen(Request(f"{base_url}/status", headers=headers)) as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 2)

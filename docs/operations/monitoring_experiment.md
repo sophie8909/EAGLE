@@ -48,6 +48,16 @@ python -m eagle monitor --runs-root runs --once
 - `GET /runs` is an alias for `/status`.
 - When a token is configured, send `Authorization: Bearer <shared-secret>`.
 
+For direct browser navigation, the token may also be supplied as a URL query:
+
+```text
+http://<experiment-host>:8765/status.json?token=<shared-secret>
+```
+
+This is convenient but less safe: the token can remain in browser history,
+bookmarks, proxy logs, or copied URLs. Prefer the Authorization header for
+long-term use.
+
 The status includes host CPU load, memory, disk, NVIDIA GPU telemetry when
 `nvidia-smi` is available, the run status and latest generation, match progress,
 fitness summaries, opponent summaries, AOS state, bounded error-memory records,

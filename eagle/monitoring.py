@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from eagle.run_artifacts import GENERATION_SCHEMA_VERSION, RUN_SCHEMA_VERSION
 
@@ -495,7 +495,10 @@ def _authorized(handler: BaseHTTPRequestHandler, token: str) -> bool:
     supplied = authorization.removeprefix("Bearer ").strip()
     if supplied == authorization.strip():
         supplied = handler.headers.get("X-EAGLE-Monitor-Token", "").strip()
-    return hmac.compare_digest(supplied, token)
+    if supplied and hmac.compare_digest(supplied, token):
+        return True
+    query_values = parse_qs(urlsplit(handler.path).query).get("token", [])
+    return any(hmac.compare_digest(value, token) for value in query_values)
 
 
 def serve_status(
