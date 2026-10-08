@@ -427,6 +427,21 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
     handler.wfile.write(body)
 
 
+def write_status_snapshot(path: str | Path, payload: dict[str, Any]) -> None:
+    """Atomically publish one derived JSON snapshot for external consumers."""
+
+    target = Path(path).expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(
+        f".{target.name}.tmp.{os.getpid()}.{threading.get_ident()}"
+    )
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(target)
+
+
 def create_status_server(
     collector: ExperimentStatusCollector | RunsRootStatusCollector,
     *,
@@ -449,7 +464,7 @@ def create_status_server(
             if path == "/health":
                 _json_response(self, 200, {"status": "ok", "schema_version": MONITOR_SCHEMA_VERSION})
                 return
-            if path in {"/status", "/runs"}:
+            if path in {"/status", "/status.json", "/runs"}:
                 run_id = None
             elif path.startswith("/status/"):
                 run_id = path.removeprefix("/status/")
@@ -490,19 +505,58 @@ def serve_status(
     port: int,
     token: str | None,
     stop_event: threading.Event | None = None,
+    snapshot_path: str | Path | None = None,
+    snapshot_interval: float = 30.0,
 ) -> None:
     """Serve status until interrupted or an optional stop event is set."""
 
+    if snapshot_interval <= 0:
+        raise ValueError("snapshot_interval must be positive")
     server = create_status_server(collector, host=host, port=port, token=token)
+    writer_stop = threading.Event()
+    writer_thread: threading.Thread | None = None
+    if snapshot_path is not None:
+        def publish_snapshot() -> None:
+            while not writer_stop.is_set():
+                try:
+                    payload = collector.collect()
+                except MonitorDataError as exc:
+                    payload = {
+                        "schema_version": MONITOR_SCHEMA_VERSION,
+                        "observed_at": _utc_now().isoformat(),
+                        "error": "run_unavailable",
+                        "detail": str(exc),
+                    }
+                try:
+                    write_status_snapshot(snapshot_path, payload)
+                except OSError:
+                    # The HTTP endpoint remains available if a configured
+                    # snapshot destination temporarily becomes unwritable.
+                    pass
+                writer_stop.wait(snapshot_interval)
+
+        writer_thread = threading.Thread(
+            target=publish_snapshot,
+            name="eagle-monitor-snapshot",
+            daemon=True,
+        )
+        writer_thread.start()
+
+    def close() -> None:
+        writer_stop.set()
+        if writer_thread is not None:
+            writer_thread.join(timeout=max(1.0, snapshot_interval + 1.0))
+        server.server_close()
+
     if stop_event is None:
         try:
             server.serve_forever()
         finally:
-            server.server_close()
+            close()
         return
     server.timeout = 0.5
     try:
         while not stop_event.is_set():
             server.handle_request()
     finally:
-        server.server_close()
+        close()

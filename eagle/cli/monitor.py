@@ -10,6 +10,7 @@ from eagle.monitoring import (
     ExperimentStatusCollector,
     RunsRootStatusCollector,
     serve_status,
+    write_status_snapshot,
 )
 
 
@@ -27,6 +28,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--token", help="Bearer token required for /status")
     parser.add_argument("--pid", type=int, help="optional experiment PID to report")
+    parser.add_argument(
+        "--snapshot-file",
+        type=Path,
+        help="derived JSON snapshot to update periodically (default: <runs-root>/monitor_status.json)",
+    )
+    parser.add_argument(
+        "--snapshot-interval",
+        default=30.0,
+        type=float,
+        metavar="SECONDS",
+        help="snapshot update interval (default: 30)",
+    )
     parser.add_argument(
         "--stale-after",
         default=DEFAULT_STALE_AFTER_SECONDS,
@@ -53,10 +66,24 @@ def main(argv: list[str] | None = None) -> int:
             args.runs_root,
             stale_after_seconds=args.stale_after,
         )
+    snapshot_path = args.snapshot_file
+    if snapshot_path is None:
+        snapshot_root = args.runs_root if args.run_dir is None else args.run_dir.parent
+        snapshot_path = snapshot_root / "monitor_status.json"
     if args.once:
-        print(json.dumps(collector.collect(), ensure_ascii=False, indent=2))
+        payload = collector.collect()
+        write_status_snapshot(snapshot_path, payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     print(f"EAGLE monitor listening on http://{args.host}:{args.port}", flush=True)
     print("GET /health for liveness; GET /status for all discovered runs", flush=True)
-    serve_status(collector, host=args.host, port=args.port, token=args.token)
+    print(f"JSON snapshot: {snapshot_path}", flush=True)
+    serve_status(
+        collector,
+        host=args.host,
+        port=args.port,
+        token=args.token,
+        snapshot_path=snapshot_path,
+        snapshot_interval=args.snapshot_interval,
+    )
     return 0

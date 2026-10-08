@@ -43,7 +43,7 @@ python -m eagle monitor --runs-root runs --once
 ## Endpoints
 
 - `GET /health` is an unauthenticated liveness check.
-- `GET /status` returns `eagle-monitor-status-v1` with all discovered runs.
+- `GET /status` and `GET /status.json` return `eagle-monitor-status-v1` with all discovered runs.
 - `GET /status/<run_id>` returns one discovered run.
 - `GET /runs` is an alias for `/status`.
 - When a token is configured, send `Authorization: Bearer <shared-secret>`.
@@ -53,6 +53,18 @@ The status includes host CPU load, memory, disk, NVIDIA GPU telemetry when
 fitness summaries, opponent summaries, AOS state, bounded error-memory records,
 and an optional experiment PID in single-run mode. A running or initialized run is marked `stale`
 when its manifest update is older than `--stale-after` seconds (180 by default).
+
+The resident process also atomically updates `runs/monitor_status.json` every
+30 seconds by default. Change the destination or interval with:
+
+```bash
+python -m eagle monitor \
+  --runs-root runs \
+  --snapshot-file /var/lib/eagle/monitor_status.json \
+  --snapshot-interval 10
+```
+
+The JSON file is derived monitoring output, not a canonical EAGLE run artifact.
 
 The monitor only reports the latest atomically recorded generation. A partially
 written candidate or console line is not treated as completed evidence.

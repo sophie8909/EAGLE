@@ -28,7 +28,7 @@ NSGA-II and `eagle-run-v1` rows were removed on 2026-08-19.
 | ART-01 | `eagle-run-v2` / `eagle-generation-v3` and `phase4-v6` / `eagle-candidate-v6` compact referenced artifacts are supported, with survivor-snapshot-aligned derived analysis | artifact schema | `eagle/run_artifacts.py`, `eagle/analysis/loader.py`, `eagle/analysis/report.py` | artifact/analysis tests | Implemented |
 | CFG-01 | File-only prompts, one execution mode, and optional separate final-generation model | config schema | `eagle/config.py`, `configs/experiments/` | config/prompt/runtime tests | Implemented |
 | OPS-01 | Unified experiment lifecycle, phase-boundary model switching, resumable folder-batch run index, and static analysis entrypoint | operations | `eagle/experiment.py`, `experiment.sh`, `analyze.sh` | launcher/runtime tests | Implemented |
-| OPS-02 | Resident read-only monitor discovers canonical runs below a root, reads manifest/latest generation artifacts, reports host telemetry, and requires a token for non-loopback binds | operations, artifact schema | `eagle/monitoring.py`, `eagle/cli/monitor.py` | monitoring tests | Implemented |
+| OPS-02 | Resident read-only monitor discovers canonical runs below a root, reads manifest/latest generation artifacts, publishes HTTP/JSON snapshots, reports host telemetry, and requires a token for non-loopback binds | operations, artifact schema | `eagle/monitoring.py`, `eagle/cli/monitor.py` | monitoring tests | Implemented |
 | TIME-01 | Candidate/stage/attempt/match timing plus one run event per mutation-role attempt | timing schema | `eagle/timing.py`, `eagle/llm.py`, evaluation/mutation modules | timing/logging tests | Partial: selection/crossover event detail remains optional hardening |
 
 ## Update rule

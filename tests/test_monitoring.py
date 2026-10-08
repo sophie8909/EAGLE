@@ -15,6 +15,7 @@ from eagle.monitoring import (
     MonitorDataError,
     RunsRootStatusCollector,
     create_status_server,
+    write_status_snapshot,
 )
 from eagle.run_artifacts import RUN_SCHEMA_VERSION
 
@@ -89,6 +90,14 @@ class MonitoringTests(unittest.TestCase):
             )
             self.assertEqual(collector.collect(run_id="run-a")["experiment"]["run_id"], "run-a")
 
+    def test_status_snapshot_is_written_as_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "nested" / "monitor_status.json"
+            write_status_snapshot(path, {"schema_version": MONITOR_SCHEMA_VERSION, "run_count": 2})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["run_count"], 2)
+            self.assertEqual(list(path.parent.glob("*.tmp.*")), [])
+
     def test_non_loopback_server_requires_token(self):
         with tempfile.TemporaryDirectory() as directory:
             run = self.run_fixture(Path(directory))
@@ -138,6 +147,8 @@ class MonitoringTests(unittest.TestCase):
             headers = {"Authorization": "Bearer secret"}
             try:
                 with urlopen(Request(f"{base_url}/status", headers=headers)) as response:
+                    self.assertEqual(json.loads(response.read())["run_count"], 1)
+                with urlopen(Request(f"{base_url}/status.json", headers=headers)) as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 1)
                 self.run_fixture(root, "run-b", run_id="run-b")
                 with urlopen(Request(f"{base_url}/status", headers=headers)) as response:

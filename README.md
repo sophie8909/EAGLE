@@ -55,6 +55,8 @@ python -m eagle monitor --runs-root runs --host 0.0.0.0 --port 8765 --token '<sh
 ```
 
 New runs created by `python -m eagle experiment` are discovered automatically.
+The JSON snapshot is updated at `runs/monitor_status.json`; the HTTP URL is
+`http://<experiment-host>:8765/status.json`.
 
 See [`docs/operations/monitoring_experiment.md`](docs/operations/monitoring_experiment.md)
 for the endpoint contract and network-safety requirements.

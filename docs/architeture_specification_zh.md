@@ -341,7 +341,8 @@ python -m eagle monitor --runs-root runs --host 0.0.0.0 \
 `/status` 回傳所有已發現的 run，`/status/<run_id>` 查詢單一 run；它們只讀取 canonical manifest 與最新 atomic generation snapshot，回傳
 世代、match、fitness、錯誤摘要，以及 CPU／記憶體／磁碟／NVIDIA GPU 資訊；不會
 解析 console log，也沒有重啟、停止或修改實驗的 API。非 loopback bind 必須提供
-token。完整端點與防火牆建議見
+token。monitor 預設每 30 秒原子更新 `runs/monitor_status.json`，也可透過
+`http://<experiment-host>:8765/status.json` 讀取；完整端點與防火牆建議見
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
 `experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、
