@@ -113,6 +113,19 @@ class MonitoringTests(unittest.TestCase):
             self.assertEqual(unexpected["current_status"], "unexpected_termination")
             self.assertFalse(unexpected["current_alive"])
 
+            manifest.pop("experiment_pid")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            no_process = ExperimentStatusCollector(run).collect_summary()
+            self.assertEqual(no_process["current_status"], "complete")
+            self.assertFalse(no_process["current_alive"])
+
+    def test_empty_runs_root_is_complete_and_not_alive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            summary = RunsRootStatusCollector(Path(directory) / "runs").collect_summary()
+            self.assertEqual(summary["total_runs"], 0)
+            self.assertEqual(summary["current_status"], "complete")
+            self.assertFalse(summary["current_alive"])
+
     def test_status_snapshot_is_written_as_json(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -73,6 +73,9 @@ plus one small entry per run. Normal completion is reported as `complete`.
 If an active run's recorded PID no longer exists, it is reported as
 `unexpected_termination`; Ctrl-C and handled exceptions remain
 `interrupted` and `failed` respectively.
+If no run has a live PID (including an empty runs root or a legacy manifest
+without a PID), the overall current status is `complete` and
+`current_alive` is `false`.
 
 The resident process also atomically updates `runs/monitor_status.json` every
 30 seconds by default. Change the destination or interval with:

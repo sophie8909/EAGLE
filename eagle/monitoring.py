@@ -437,14 +437,13 @@ def _summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _monitor_status(manifest_status: str, process: dict[str, Any]) -> str:
-    """Expose an explicit status when an active run's recorded PID vanished."""
+    """Expose terminal status when no process is associated with an active run."""
 
-    if (
-        manifest_status in {"initialized", "running"}
-        and process.get("pid") is not None
-        and process.get("running") is False
-    ):
-        return "unexpected_termination"
+    if manifest_status in {"initialized", "running"}:
+        if process.get("pid") is None:
+            return "complete"
+        if process.get("running") is False:
+            return "unexpected_termination"
     return manifest_status
 
 
@@ -463,7 +462,7 @@ def _summary_document(
         "current_generation": None if current is None else current.get("generation"),
         "current_pid": None if current is None else current.get("pid"),
         "current_alive": False if current is None else current.get("alive") is True,
-        "current_status": None if current is None else current.get("status"),
+        "current_status": "complete" if current is None else current.get("status"),
         "runs": summaries,
     }
 
