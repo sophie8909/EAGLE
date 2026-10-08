@@ -1,0 +1,3 @@
+.codex-build/
+.chart-data-*/
+__pycache__/

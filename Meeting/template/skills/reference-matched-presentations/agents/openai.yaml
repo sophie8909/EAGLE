@@ -1,0 +1,6 @@
+interface:
+  display_name: "研究簡報 PPT"
+  short_description: "Turn research MD into editable evidence-grounded PowerPoint slides"
+  default_prompt: "Use $reference-matched-presentations to turn this experiment MD into an editable PPT showing every change, required baselines, complete algorithm, result charts, measured timing and comparisons."
+policy:
+  allow_implicit_invocation: true

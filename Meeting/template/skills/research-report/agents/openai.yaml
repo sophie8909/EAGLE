@@ -1,0 +1,6 @@
+interface:
+  display_name: "實驗區間報告 MD"
+  short_description: "Compile experiment windows, changes, baselines and timing to MD"
+  default_prompt: "Use $research-report to compile this experiment date interval into concise Markdown with every change, required baselines, complete algorithm, measured results, timing and comparisons."
+policy:
+  allow_implicit_invocation: true

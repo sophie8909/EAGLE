@@ -1,0 +1,7 @@
+interface:
+  display_name: "EAGLE 0917 配色"
+  short_description: "Create presentations with the EAGLE 0917 配色 template"
+  icon_large: "./assets/preview.png"
+  default_prompt: "Use $artifact-template-eagle-0917 to create a presentation with this template."
+policy:
+  allow_implicit_invocation: true
