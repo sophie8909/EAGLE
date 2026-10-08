@@ -51,12 +51,15 @@ Only `eagle-run-v2` is supported by writers, resume, and offline analysis.
 To run one resident read-only status endpoint for all experiments under `runs/`, run:
 
 ```bash
-python -m eagle monitor --runs-root runs --host 0.0.0.0 --port 8765 --token '<shared-secret>'
+python -m eagle monitor --runs-root runs --host 0.0.0.0 --port 8765
 ```
 
 New runs created by `python -m eagle experiment` are discovered automatically.
 The JSON snapshot is updated at `runs/monitor_status.json`; the HTTP URL is
 `http://<experiment-host>:8765/status.json`.
+
+Token protection remains available by adding `--token`, but is optional when
+the monitor is restricted to a trusted private network.
 
 See [`docs/operations/monitoring_experiment.md`](docs/operations/monitoring_experiment.md)
 for the endpoint contract and network-safety requirements.

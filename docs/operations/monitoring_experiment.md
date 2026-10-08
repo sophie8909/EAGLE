@@ -15,8 +15,7 @@ Start one resident agent for all current and future runs:
 python -m eagle monitor \
   --runs-root runs \
   --host 0.0.0.0 \
-  --port 8765 \
-  --token '<shared-secret>'
+  --port 8765
 ```
 
 For a local-only agent, loopback does not need a token:
@@ -25,9 +24,9 @@ For a local-only agent, loopback does not need a token:
 python -m eagle monitor --runs-root runs --host 127.0.0.1 --port 8765
 ```
 
-The agent refuses a non-loopback bind without `--token`. Restrict the port in
-the host firewall to the monitor computer or VPN address. The API is read-only;
-`POST` requests are rejected. Keep this process running as a systemd service,
+Token protection is optional. Restrict the port in the host firewall to the
+monitor computer or VPN address, especially when no token is configured. The
+API is read-only; `POST` requests are rejected. Keep this process running as a systemd service,
 tmux session, or equivalent resident process.
 
 To inspect one run instead of the whole root, use `--run-dir runs/<run_id>`.
@@ -46,7 +45,8 @@ python -m eagle monitor --runs-root runs --once
 - `GET /status` and `GET /status.json` return `eagle-monitor-status-v1` with all discovered runs.
 - `GET /status/<run_id>` returns one discovered run.
 - `GET /runs` is an alias for `/status`.
-- When a token is configured, send `Authorization: Bearer <shared-secret>`.
+- When a token is configured, send `Authorization: Bearer <shared-secret>`;
+  without a token, the JSON URL can be opened directly in a browser.
 
 For direct browser navigation, the token may also be supplied as a URL query:
 

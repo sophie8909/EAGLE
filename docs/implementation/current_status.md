@@ -9,9 +9,9 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   below the root, automatically discovering runs created later by `experiment`.
   It reads only atomic manifest/latest generation artifacts, includes host
   resource telemetry and bounded failure summaries, defaults to loopback, and
-  requires a token for non-loopback binds. It also atomically updates a derived
-  JSON snapshot every 30 seconds by default. It has no experiment-control
-  operations.
+  optionally accepts a token for non-loopback binds. It also atomically updates
+  a derived JSON snapshot every 30 seconds by default. It has no
+  experiment-control operations.
 
 - `candidate_java_mode: generated_phenotype` preserves the two evolvable prompt
   components: `strategy_prompt` and `generation_prompt`; generated Java remains

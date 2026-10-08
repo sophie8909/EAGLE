@@ -24,9 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("runs"),
         help="root whose direct canonical run children are discovered automatically (default: runs)",
     )
-    parser.add_argument("--host", default="127.0.0.1", help="bind address; non-loopback requires --token")
+    parser.add_argument("--host", default="127.0.0.1", help="bind address; token protection is optional")
     parser.add_argument("--port", default=8765, type=int)
-    parser.add_argument("--token", help="Bearer token required for /status")
+    parser.add_argument("--token", help="optional Bearer token for /status")
     parser.add_argument("--pid", type=int, help="optional experiment PID to report")
     parser.add_argument(
         "--snapshot-file",

@@ -335,15 +335,15 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 
 ```bash
 python -m eagle monitor --runs-root runs --host 0.0.0.0 \
-  --port 8765 --token '<shared-secret>'
+  --port 8765
 ```
 
 `/status` 回傳所有已發現的 run，`/status/<run_id>` 查詢單一 run；它們只讀取 canonical manifest 與最新 atomic generation snapshot，回傳
 世代、match、fitness、錯誤摘要，以及 CPU／記憶體／磁碟／NVIDIA GPU 資訊；不會
-解析 console log，也沒有重啟、停止或修改實驗的 API。非 loopback bind 必須提供
-token。monitor 預設每 30 秒原子更新 `runs/monitor_status.json`，也可透過
-`http://<experiment-host>:8765/status.json?token=<shared-secret>` 直接讀取；這會讓
-token 出現在網址與瀏覽器歷史紀錄，長期使用仍建議採用 Authorization header。完整端點與防火牆建議見
+解析 console log，也沒有重啟、停止或修改實驗的 API。token 保護是可選的；若不
+設定 token，可直接用瀏覽器開啟 URL。monitor 預設每 30 秒原子更新
+`runs/monitor_status.json`，也可透過 `http://<experiment-host>:8765/status.json`
+讀取。若不使用 token，仍應限制防火牆只允許信任的區網電腦；完整端點與防火牆建議見
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
 `experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、

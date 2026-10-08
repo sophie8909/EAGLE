@@ -453,9 +453,6 @@ def create_status_server(
 
     if not 0 <= int(port) <= 65535:
         raise ValueError("port must be between 0 and 65535")
-    if host not in {"127.0.0.1", "localhost", "::1"} and not token:
-        raise ValueError("a token is required when the monitor is not loopback-bound")
-
     class Handler(BaseHTTPRequestHandler):
         server_version = "EAGLEMonitor/1"
 

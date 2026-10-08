@@ -98,11 +98,14 @@ class MonitoringTests(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["run_count"], 2)
             self.assertEqual(list(path.parent.glob("*.tmp.*")), [])
 
-    def test_non_loopback_server_requires_token(self):
+    def test_non_loopback_server_can_run_without_token(self):
         with tempfile.TemporaryDirectory() as directory:
             run = self.run_fixture(Path(directory))
-            with self.assertRaises(ValueError):
-                create_status_server(ExperimentStatusCollector(run), host="0.0.0.0", port=8765)
+            try:
+                server = create_status_server(ExperimentStatusCollector(run), host="0.0.0.0", port=0)
+            except PermissionError as exc:
+                self.skipTest(f"sandbox does not permit non-loopback sockets: {exc}")
+            server.server_close()
 
     def test_status_endpoint_requires_token_but_health_is_public(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -137,25 +140,22 @@ class MonitoringTests(unittest.TestCase):
             self.run_fixture(root, "run-a", run_id="run-a")
             try:
                 server = create_status_server(
-                    RunsRootStatusCollector(root), host="127.0.0.1", port=0, token="secret"
+                    RunsRootStatusCollector(root), host="127.0.0.1", port=0
                 )
             except PermissionError as exc:
                 self.skipTest(f"sandbox does not permit loopback sockets: {exc}")
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             base_url = f"http://127.0.0.1:{server.server_port}"
-            headers = {"Authorization": "Bearer secret"}
             try:
-                with urlopen(Request(f"{base_url}/status", headers=headers)) as response:
+                with urlopen(f"{base_url}/status") as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 1)
-                with urlopen(Request(f"{base_url}/status.json", headers=headers)) as response:
-                    self.assertEqual(json.loads(response.read())["run_count"], 1)
-                with urlopen(f"{base_url}/status.json?token=secret") as response:
+                with urlopen(f"{base_url}/status.json") as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 1)
                 self.run_fixture(root, "run-b", run_id="run-b")
-                with urlopen(Request(f"{base_url}/status", headers=headers)) as response:
+                with urlopen(f"{base_url}/status") as response:
                     self.assertEqual(json.loads(response.read())["run_count"], 2)
-                with urlopen(Request(f"{base_url}/status/run-a", headers=headers)) as response:
+                with urlopen(f"{base_url}/status/run-a") as response:
                     self.assertEqual(json.loads(response.read())["experiment"]["run_id"], "run-a")
             finally:
                 server.shutdown()
