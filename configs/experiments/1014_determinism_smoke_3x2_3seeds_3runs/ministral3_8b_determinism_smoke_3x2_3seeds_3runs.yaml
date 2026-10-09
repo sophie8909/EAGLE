@@ -8,7 +8,7 @@ model:
   port: 18080
   context_size: 32768
   gpu_layers: 0
-  threads: 1
+  threads: 8
   batch_size: 512
   parallel: 1
 
