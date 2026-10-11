@@ -20,7 +20,10 @@ $existing_strategy_prompts
 If a previous attempt failed validation, correct this issue: $prior_error
 
 Return only one valid JSON object with exactly this shape. Do not use Markdown
-fences or prose, and escape line breaks inside the JSON string as \n:
+fences or prose. Keep the nested strategy DSL minified on one line, with no
+literal line breaks inside the JSON string; escape any required line breaks as
+\\n. Use at most 8 concise rules. Before responding, verify that the outer
+response and the decoded strategy_prompt each parse as valid JSON:
 {"strategy_prompt":"the complete serialized JSON DSL policy"}
 
 The strategy_prompt/new_strategy_prompt/revised_strategy_prompt field is a JSON STRING containing a complete eagle-strategy-dsl-v1 object, never natural-language rules. Follow the finite DSL reference included in the gameplay contract. Preserve the outer response schema. Reject prose, code and unknown fields in the policy gene. Intrinsic action guards need not be restated in conditions.
