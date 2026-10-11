@@ -252,15 +252,20 @@ aggregate fitness, or other gameplay evidence. Strategy-facing roles also receiv
 immutable `microrts_gameplay_contract` as fixed domain context. It defines the
 complete entities, production relations, legal actions, and observable state,
 so a replacement may change strategy type without inventing non-game mechanics.
-Strategy Reflection samples up to 10 matches with opponent/map-aware
-coverage, calls one Commentator per selected log, and gives the Coach a
-deterministic all-match global summary. Coverage and fully-beaten diagnostics are
-stored under `mutation/strategy_reflection/`; this does not add a fitness objective
-or change AOS. Each Strategy Reflection candidate also retains the exact parent
-strategy prompt, selected matches in Commentator call order, individual parsed
-Commentator results, structured and rendered Coach input, raw and parsed Coach
-output, normalized child strategy prompt, and the strategy value passed to the
-Generator. Per-generation policy sidecars reference every population member's
+Strategy Reflection resolves evidence through recorded `strategy_parent_id`
+and selects exactly one worst completed match: lowest finite numeric per-match
+`performance`, with missing/non-finite values ranked by loss `-100`, draw `0`,
+win `100`; ties use stable `match_id` order independent of seed, and failed
+matches are excluded. Legacy positive `sample_count` and `sample_budget` values
+remain accepted, but the effective selection count is one. One Commentator
+diagnoses the selected match. The Coach receives the all-match global evaluation
+summary plus exactly that diagnosis. An unavailable selected trace or exhausted
+commentary retries follows the existing failure path and preserves the parent
+policy without choosing another match. This does not add a fitness objective or
+change AOS. Each Strategy Reflection candidate retains the exact parent strategy
+prompt, the selected match and its parsed Commentator diagnosis, structured and
+rendered Coach input, raw and parsed Coach output, normalized child strategy
+prompt, and the strategy value passed to the Generator. Per-generation policy sidecars reference every population member's
 canonical `genotype/policy_prompt.txt`, including candidates produced by other
 operators; no policy text is duplicated in the sidecar.
 Parent match traces remain available while all same-generation siblings are

@@ -18,7 +18,8 @@ component source:
 ```
 
 `java_parent_id` is an optional field present in inherited mode.
-`strategy_parent_id` is policy-gene provenance and
+`strategy_parent_id` is policy-gene provenance and identifies the evaluation
+parent used to select the single worst completed match for Strategy Reflection;
 `generation_prompt_parent_id` is code-generation-gene provenance. There is no
 Java parent in default mode. In `inherited_genotype` mode, `java_parent_id`
 identifies the candidate whose successful phenotype (or retained inherited

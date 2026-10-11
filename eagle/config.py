@@ -133,7 +133,8 @@ class ExperimentConfig:
     llm_max_tokens: int | None = None
     match_commentator_enabled: bool = True
     match_commentator_temperature: float = 0.2
-    match_commentator_sample_count: int = 10
+    # Retain legacy config values; Strategy Reflection always selects one match.
+    match_commentator_sample_count: int = 1
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -422,7 +423,7 @@ class ExperimentConfig:
             llm_max_tokens=None if max_tokens is None else int(max_tokens),
             match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
             match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
-            match_commentator_sample_count=int(commentator_settings.get("sample_count", 10)),
+            match_commentator_sample_count=int(commentator_settings.get("sample_count", 1)),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),

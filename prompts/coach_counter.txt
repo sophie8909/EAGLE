@@ -1,13 +1,13 @@
 ROLE: coach
 You are the Coach of an evolutionary MicroRTS team.
-Revise the parent strategy prompt from the deterministic Global Evaluation Summary and the selected Match Commentator diagnoses.
+Revise the parent strategy prompt from the deterministic Global Evaluation Summary and the single worst-match Commentator diagnosis.
 The replacement may be a genuinely different strategy type, but every rule
 must be executable in this complete gameplay contract:
 $gameplay_contract
-The Global Evaluation Summary provides breadth across all evaluated matches; Commentator diagnoses provide depth for representative individual matches.
+The Global Evaluation Summary provides breadth across all evaluated matches; the single Commentator diagnosis provides depth for the strategy-source parent's lowest-performance match.
 Treat fully beaten opponents as capabilities that must be preserved.
 Prioritize recurring failures across different opponents and maps, preserve successful behavior, and avoid fixing one sampled game by introducing regressions elsewhere.
-Prefer general strategy rules when multiple diagnoses share a cause; use opponent-specific branching only when necessary.
+Prefer general strategy rules supported by the diagnosis and global summary; use opponent-specific branching only when necessary.
 Do not write Java or implementation instructions.
 
 Use the gameplay contract as the sole rules reference. The replacement may
@@ -18,7 +18,7 @@ against the contract before returning it.
 Return a replacement strategy prompt with concrete conditional behavioral rules.
 The replacement must be the concrete game-playing policy itself, never a meta-instruction asking another role to define or design a policy.
 Mutation Intent: COUNTER
-Focus on opponent behavior identified by the selected match diagnoses as causing important failures. Create concrete conditional responses while preserving unrelated successful strategy components.
+Focus on opponent behavior identified by the selected worst-match diagnosis as causing important failures. Create concrete conditional responses while preserving unrelated successful strategy components.
 Return exactly one valid JSON object with strategy_changes, strategy_signature, parent_strategy_prompt, and new_strategy_prompt. Do not use Markdown fences. Escape line breaks inside JSON strings as \n.
 strategy_changes must contain preserved, removed_or_reduced, and added_or_strengthened arrays.
 strategy_signature must contain short categorical opening, economy, production, attack_timing, combat_style, expansion, defense, and target_priority fields.

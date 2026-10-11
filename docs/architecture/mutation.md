@@ -6,11 +6,18 @@ policy-to-Java translation gene, and Code changes the candidate Java directly.
 
 ## Strategy Reflection
 
-Strategy Reflection changes only `strategy_prompt`:
+Strategy Reflection changes only `strategy_prompt`. It resolves its evidence
+parent through the child's recorded `strategy_parent_id` and selects exactly
+one worst completed match from that parent's evaluation. The lowest finite
+numeric per-match `performance` is worst; if missing or non-finite, use outcome
+loss `-100`, draw `0`, win `100`. Ties use stable `match_id` order independent
+of seed, and failed matches are excluded. Legacy positive `sample_count` and
+`sample_budget` values remain accepted, but the effective selection count is one.
 
 ```text
-selected match traces
-  -> Match Commentator -> MatchAnalysis summaries
+one selected match trace
+  -> Match Commentator -> one MatchAnalysis diagnosis
+all-match global evaluation summary + selected diagnosis
   -> Coach -> replacement strategy_prompt
   -> final Java Generator
 ```
@@ -18,8 +25,12 @@ selected match traces
 The Match Commentator receives the current policy, opponent, map, side, result,
 allowlisted match record, canonical trace, and immutable closed-world MicroRTS
 gameplay contract. It receives no Java, generation prompt, compiler diagnostics,
-or fitness-writing task. The Coach receives the same gameplay contract, parent
-policy, selected analyses, and evaluation/selection metadata. Its replacement
+or fitness-writing task. If the selected worst match has no usable trace or its
+commentary exhausts retries, the existing Strategy Reflection failure path
+preserves the parent policy; it does not select another match. The Coach receives
+the same gameplay contract, parent policy, all-match global evaluation summary,
+exactly one selected-match diagnosis, and
+evaluation/selection metadata. Its replacement
 may change strategy type, but every condition must use observable state and every
 response must be a legal game action.
 

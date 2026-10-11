@@ -17,9 +17,10 @@ from eagle.operators.crossover import CrossoverContext, crossover
 from eagle.evaluation.pipeline import evaluate_candidate, print_progress
 from eagle.operators.context import ReflectionContext
 from eagle.prompts import normalize_prompt
-from eagle.evolution.offspring import create_offspring, mutation_evidence_parent
+from eagle.evolution.offspring import create_offspring, mutation_evidence_parent, plan_offspring
 from eagle.evolution.search import run_search
 from eagle.operators.selection import population_signature, select_parent
+from eagle.operators.strategy import select_reflection_matches
 from eagle.evaluation.compiler import CompileResult, compile_generated_agent
 from eagle.evaluation.game_performance import (
     GamePerformanceConfig,
@@ -109,6 +110,48 @@ class EaglePipelineTests(unittest.TestCase):
                     parents=(parent_a, parent_b),
                 )
                 self.assertEqual(resolved.id, expected)
+
+    def test_strategy_worst_match_comes_from_recorded_policy_parent(self) -> None:
+        # Equal policies must not make the generation-prompt parent an evidence source.
+        parent_a = Candidate(
+            id="parent-a", strategy_prompt="same policy", generation_prompt="prompt-a",
+            game_eval_result={"match_results": [
+                {"match_id": "a-worst", "candidate_player": 0, "winner": 1, "performance": -109.0},
+            ]},
+        )
+        parent_b = Candidate(
+            id="parent-b", strategy_prompt="same policy", generation_prompt="prompt-b",
+            game_eval_result={"match_results": [
+                {"match_id": "b-better", "candidate_player": 1, "winner": 0, "performance": -91.0},
+                {"match_id": "b-worst", "candidate_player": 1, "winner": 0, "performance": -105.0},
+            ]},
+        )
+        child = Candidate(
+            id="child", generation=1, parent_ids=(parent_a.id, parent_b.id),
+            strategy_prompt=parent_b.strategy_prompt, generation_prompt=parent_a.generation_prompt,
+            strategy_parent_id=parent_b.id, generation_prompt_parent_id=parent_a.id,
+        )
+        config = ExperimentConfig.from_mapping({
+            "population_size": 1, "crossover_rate": 1.0, "mutation_rate": 1.0,
+        })
+        controller = SimpleNamespace(
+            select_operator=lambda rng, *, eligible: "strategy_reflection",
+            probability=lambda operator: 1.0, mode=SimpleNamespace(value="static"),
+        )
+        with patch("eagle.evolution.offspring.select_parent", side_effect=[parent_a, parent_b]), patch(
+            "eagle.evolution.offspring.crossover", return_value=child,
+        ), redirect_stdout(StringIO()):
+            plan = plan_offspring(
+                [parent_a, parent_b], config=config, generation=1, rng=random.Random(0),
+                mutations={"strategy": object()}, operator_controller=controller,
+            )[0]
+        self.assertEqual(plan.mutation_context.candidate.candidate_id, parent_b.id)
+        self.assertEqual(plan.comparison_parent_id, parent_b.id)
+        selection = select_reflection_matches(
+            plan.mutation_context.per_match_results, run_seed=0, generation_index=1,
+            candidate_id=child.id,
+        )
+        self.assertEqual(selection["selected_match_ids"], ["b-worst"])
 
     def test_offspring_mutation_progress_includes_generation_and_candidate_ordinal(self) -> None:
         class StrategyOnlyController:
@@ -279,12 +322,12 @@ class EaglePipelineTests(unittest.TestCase):
         config = ExperimentConfig.from_mapping({})
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
-        self.assertEqual(config.match_commentator_sample_count, 10)
+        self.assertEqual(config.match_commentator_sample_count, 1)
         self.assertEqual(config.result_win_score, 100.0)
         self.assertEqual(config.result_draw_score, 0.0)
         self.assertEqual(config.result_loss_score, -100.0)
 
-    def test_strategy_reflection_sample_budget_is_configurable(self) -> None:
+    def test_strategy_reflection_legacy_sample_budget_remains_readable(self) -> None:
         config = ExperimentConfig.from_mapping({
             "llm": {"match_commentator": {"sample_count": 6}},
         })

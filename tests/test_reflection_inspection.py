@@ -35,7 +35,7 @@ class ReflectionInspectionTests(unittest.TestCase):
             self.assertTrue(all(item["same_pipeline_requests_across_trials"] for item in summary["groups"]))
             self.assertEqual(
                 sum(item["response_attempt_count"] for item in summary["groups"]),
-                45,
+                18,
             )
 
             strategy = summary["trials"][0]
@@ -44,7 +44,7 @@ class ReflectionInspectionTests(unittest.TestCase):
             self.assertEqual(strategy["actual_changed_fields"], ["strategy_prompt"])
             self.assertEqual(prompt["actual_changed_fields"], ["generation_prompt"])
             self.assertEqual(code["actual_changed_fields"], ["generated_java"])
-            self.assertEqual(strategy["response_attempt_count"], 11)
+            self.assertEqual(strategy["response_attempt_count"], 2)
             self.assertEqual(prompt["response_attempt_count"], 2)
             self.assertEqual(code["response_attempt_count"], 2)
 

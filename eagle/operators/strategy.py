@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 import re
 import time
@@ -184,7 +185,7 @@ class StrategyReflectionPipeline:
         model_identity: str | None = None,
         enabled_roles: set[str] | None = None,
         selection_seed: int = 0,
-        sample_budget: int = 10,
+        sample_budget: int = 1,
         timing_logger: LLMCallLogger | None = None,
     ) -> None:
         if max_attempts < 1:
@@ -197,7 +198,8 @@ class StrategyReflectionPipeline:
         self.model_identity = model_identity
         self.enabled_roles = frozenset(("match_commentator", "coach") if enabled_roles is None else enabled_roles)
         self.selection_seed = int(selection_seed)
-        self.sample_budget = int(sample_budget)
+        # Legacy sample budgets remain accepted; reflection always uses one match.
+        self.sample_budget = 1
         self.timing_logger = timing_logger
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
@@ -741,9 +743,9 @@ def select_reflection_matches(
     generation_index: int,
     candidate_id: str,
     reflection_invocation: int = 0,
-    sample_budget: int = 10,
+    sample_budget: int = 1,
 ) -> dict[str, Any]:
-    """Select a deterministic, coverage-aware sample without replacement."""
+    """Select the single lowest-performance match, with stable match-ID ties."""
 
     if sample_budget < 1:
         raise ValueError("sample_budget must be at least 1")
@@ -766,46 +768,13 @@ def select_reflection_matches(
         candidate_id=candidate_id,
         reflection_invocation=reflection_invocation,
     )
-    rng = random.Random(seed)
-    sample_size = min(sample_budget, len(eligible))
-    selected: list[dict[str, Any]] = []
-
-    # First cover every opponent with a failure if possible. A draw is the
-    # fallback only for an opponent with no loss; fully winning opponents wait
-    # until the map/fill passes when there is spare budget.
-    for opponent in _ordered_values(eligible, _match_opponent):
-        if len(selected) >= sample_size:
-            break
-        candidates = [item for item in eligible if _match_opponent(item) == opponent and item not in selected]
-        losses = [item for item in candidates if _match_outcome(item) == "loss"]
-        draws = [item for item in candidates if _match_outcome(item) == "draw"]
-        representative_pool = losses or draws
-        if representative_pool:
-            selected.append(_choose_coverage_candidate(representative_pool, selected, rng, prefer_map=True))
-
-    # Then introduce maps that have not appeared yet. Coverage wins this pass;
-    # result priority is used only among candidates with comparable coverage.
-    while len(selected) < sample_size:
-        remaining = [item for item in eligible if item not in selected]
-        unseen_maps = [item for item in remaining if _match_map(item) not in {_match_map(row) for row in selected}]
-        if not unseen_maps:
-            break
-        selected.append(_choose_coverage_candidate(unseen_maps, selected, rng, prefer_map=True))
-
-    # Finally fill the budget with diverse opponent/map/side combinations and
-    # LOSS > DRAW > WIN priority. The seeded RNG only breaks exact ties.
-    while len(selected) < sample_size:
-        remaining = [item for item in eligible if item not in selected]
-        if not remaining:
-            break
-        selected.append(_choose_coverage_candidate(remaining, selected, rng))
-
+    selected = sorted(eligible, key=lambda item: (_reflection_performance(item), _match_id(item)))[:1]
     selected_outcomes = [_match_outcome(item) for item in selected]
     sampled_opponents = [_match_opponent(item) for item in selected]
     sampled_maps = [_match_map(item) for item in selected]
     sampled_sides = [_player_position(item) for item in selected]
     return {
-        "schema_version": "strategy-reflection-match-selection-v2",
+        "schema_version": "strategy-reflection-match-selection-v3",
         "candidate_id": candidate_id,
         "generation_index": generation_index,
         "total_match_count": len(rows),
@@ -814,8 +783,8 @@ def select_reflection_matches(
         "eligible_match_ids": [_match_id(item) for item in eligible],
         "selected_match_ids": [_match_id(item) for item in selected],
         "selected_outcome_class": selected_outcomes[0] if selected_outcomes and len(set(selected_outcomes)) == 1 else ("mixed" if selected_outcomes else None),
-        "selection_rule": "opponent_coverage_then_map_coverage_then_loss_draw_win",
-        "sampling_priority": "opponent_coverage_then_map_coverage_then_loss_draw_win_then_seeded_random_ties",
+        "selection_rule": "lowest_performance_then_match_id",
+        "sampling_priority": "lowest_performance_then_match_id",
         "sample_count": len(selected),
         "sampled_match_ids": [_match_id(item) for item in selected],
         "sampled_opponents": sampled_opponents,
@@ -832,8 +801,8 @@ def select_reflection_matches(
             "maps": len(set(sampled_maps)),
             "opponent_map_side_combinations": len({_coverage_key(item) for item in selected}),
         },
-        "requested_sample_size": sample_budget,
-        "actual_sample_size": sample_size,
+        "requested_sample_size": 1,
+        "actual_sample_size": len(selected),
         "random_provenance": {
             "seed": seed,
             "run_seed": int(run_seed),
@@ -844,33 +813,15 @@ def select_reflection_matches(
     }
 
 
-def _choose_coverage_candidate(
-    candidates: list[dict[str, Any]],
-    selected: list[dict[str, Any]],
-    rng: random.Random,
-    *,
-    prefer_map: bool = False,
-) -> dict[str, Any]:
-    seen_maps = {_match_map(item) for item in selected}
-    seen_opponents = {_match_opponent(item) for item in selected}
-    seen_combinations = {_coverage_key(item) for item in selected}
-
-    def score(item: dict[str, Any]) -> tuple[int, int, int, int, float]:
-        outcome = _match_outcome(item)
-        result_priority = {"loss": 2, "draw": 1, "win": 0}.get(outcome or "win", 0)
-        combination_priority = int(_coverage_key(item) not in seen_combinations)
-        opponent_priority = int(_match_opponent(item) not in seen_opponents)
-        map_priority = int(_match_map(item) not in seen_maps)
-        if prefer_map:
-            return (map_priority, result_priority, combination_priority, opponent_priority, rng.random())
-        return (combination_priority, result_priority, opponent_priority, map_priority, rng.random())
-
-    return max(candidates, key=score)
-
-
-def _ordered_values(rows: list[dict[str, Any]], getter) -> list[str]:
-    values = {getter(item) for item in rows}
-    return sorted(values, key=lambda value: (LEXICASE_CASES.index(value) if value in LEXICASE_CASES else len(LEXICASE_CASES), value))
+def _reflection_performance(item: dict[str, Any]) -> float:
+    try:
+        performance = float(item.get("performance"))
+    except (TypeError, ValueError):
+        performance = float("nan")
+    if math.isfinite(performance):
+        return performance
+    # Older evidence may omit the canonical per-match performance score.
+    return {"loss": -100.0, "draw": 0.0, "win": 100.0}[_match_outcome(item)]
 
 
 def _match_opponent(item: dict[str, Any]) -> str:
@@ -1087,7 +1038,7 @@ def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: l
         "total_draws": (selection.get("available_results") or {}).get("draw", 0),
         "total_wins": (selection.get("available_results") or {}).get("win", 0),
         "commentary_failures": list(failures),
-        "selection_is_coverage_aware": True,
+        "selection_is_coverage_aware": False,
     })
     return {
         "candidate_id": candidate.id,

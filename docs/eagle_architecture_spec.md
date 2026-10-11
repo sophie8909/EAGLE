@@ -175,9 +175,17 @@ provenance, rather than direct-parent position or prompt-text equality, selects
 this parent. Both reward providers consume the resulting
 `comparison_parent_id`.
 
-Strategy mutation performs Match Commentator sampling and Coach reflection. It
-changes only `strategy_prompt`, after which the normal final Generator decodes
-the child. Initial policy generation, Match Commentator, Coach, the library
+Strategy mutation resolves evidence through recorded `strategy_parent_id` and
+selects exactly one worst completed match from that parent's evaluation. The
+lowest finite numeric per-match `performance` is worst; if missing or
+non-finite, use loss `-100`, draw `0`, win `100`. Ties use stable `match_id`
+order independent of seed, and failed matches are excluded. One Match
+Commentator diagnoses that match; the Coach receives the all-match global
+evaluation summary and exactly that one diagnosis. If its trace is unavailable
+or commentary exhausts retries, the existing failure path preserves the parent
+policy without selecting a replacement match. Strategy mutation changes only
+`strategy_prompt`, after which the normal final Generator decodes the child.
+Initial policy generation, Match Commentator, Coach, the library
 Strategy path, and Strategy Alignment receive the immutable closed-world
 MicroRTS gameplay contract. The contract permits arbitrary legal strategy types.
 
@@ -483,10 +491,13 @@ so diversity sampling is not limited to Worker Rush but remains inside actual
 MicroRTS mechanics.
 
 Strategy Reflection candidates additionally retain under
-`mutation/strategy_reflection/` the exact parent strategy
-prompt, ordered selected-match records, each parsed Commentator response, the
-structured and rendered Coach input, raw and parsed Coach output, the normalized
-child strategy prompt, and the strategy value supplied to Generator. These are
+`mutation/strategy_reflection/` the exact parent strategy prompt, the single
+selected worst-match record and its parsed Commentator diagnosis, the structured
+and rendered Coach input (including the all-match global evaluation summary),
+raw and parsed Coach output, the normalized child strategy prompt, and the
+strategy value supplied to Generator. Selection uses the parent resolved by
+lineage `strategy_parent_id`; unavailable trace or exhausted commentary retains
+the parent policy through the existing failure artifact. These are
 observability artifacts only and do not introduce a separate policy state.
 
 `resolved_config.json`, `generation_metrics.jsonl`, `final_population.json`,

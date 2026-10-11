@@ -196,7 +196,9 @@ timing records needed by resume and analysis.
 
 ## Strategy Reflection role timing
 
-Strategy Reflection attempt records use the canonical role names
+Strategy Reflection selects one logical match diagnosis. Commentator retries
+may create multiple attempt timing records for that match; they do not increase
+the selected-match count. Attempt records use the canonical role names
 `match_commentator`, `coach`, and `generator`. The Generator timing
 is the existing Java-generation timing; Commentator and Coach timing
 is stored in their role request/response envelopes with UTC start/finish fields

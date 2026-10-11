@@ -116,8 +116,16 @@ game performance、對手分數、W/D/L、match result、trace、log、aggregate
 policy。這份 contract 是固定 domain context，不是比賽 evidence；Strategy 與 Code
 Reflection 使用它來限制輸出為可執行的遊戲規則，而不是根據勝負調整策略。
 
-Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
-Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Prompt
+Strategy Reflection 只使用 policy 與 match evidence，並依記錄的
+`strategy_parent_id` 從該 parent evaluation 挑選恰好一場最差的已完成比賽：
+優先採用最低的有限數字 per-match `performance`；缺少或非有限時，以 loss
+`-100`、draw `0`、win `100` 作為分數；同分依穩定 `match_id` 排序，不受 seed
+影響，失敗比賽不參與。正數 legacy `sample_count` 與 `sample_budget` 仍可接受，
+但實際選取數固定為一場。Match Commentator 只診斷該場；Coach 收到全部比賽的
+global evaluation summary 與恰好一份該場診斷。若該場 trace 無法使用或
+Commentator 重試耗盡，沿用既有失敗處理並保留 parent policy，不改選其他比賽。
+Match Commentator 不會收到 Java 或 generation prompt；Coach 不會收到 Java
+或 compiler diagnostics。Prompt
 Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
 比較 child 當前 policy 與 independently selected Java component。兩者皆可選用
 static/compiler evidence，但不使用 raw game logs；Prompt Rewriter 只收到
@@ -205,15 +213,15 @@ bounds 擋下非法座標，避免抽象 action 帶著地圖外座標進入 Micr
 
 Strategy Reflection 的 candidate artifact 會在 `mutation/strategy_reflection/`
 保存：parent
-`strategy_prompt`、按 Commentator 呼叫順序排列的 match、各次 Commentator
-解析結果、Coach 的結構化與最終 render input、Coach raw／parsed output、正規化後的
+`strategy_prompt`、唯一選出的最差比賽及其 Commentator 解析結果、Coach 的結構化
+與最終 render input（含全部比賽的 global evaluation summary）、Coach
+raw／parsed output、正規化後的
 child `strategy_prompt`，以及實際交給 Generator 的 strategy 值。系統沒有另設
 `policy` 欄位；可重用策略就是 genotype 的 `strategy_prompt`。每代另有只保存
 artifact reference 的 policy JSONL sidecar，其他 mutation operator 的 candidate
 也不會被排除。Coach parsed output 會原樣保留模型回顯，但 validated
 `coach_result.parent_strategy_prompt` 一律取自權威的 input gene，不信任模型回顯。
-這些新增內容只供觀測，不改變 prompt、sampling、selection、fitness 或
-evaluation。
+這些 artifact 不新增 fitness objective，也不改變 AOS 或 policy state。
 
 新 candidate artifact 將兩個 prompt gene 放在 `genotype/policy_prompt.txt` 與
 `genotype/code_generation_prompt.txt`；inherited 模式另保存

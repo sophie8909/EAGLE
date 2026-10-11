@@ -263,6 +263,15 @@ outside the canonical run tree: each `seed_<n>/stability_report.json` owns its
 raw responses and hashes, while `stability_matrix.json` records cross-seed
 comparison and the server restart lifecycle.
 
+Strategy Reflection selection metadata uses `strategy-reflection-match-selection-v3`.
+It records `selection_rule` and `sampling_priority`, both set to
+`lowest_performance_then_match_id`, `requested_sample_size: 1`, and
+`actual_sample_size` of zero or one. The selected parent is resolved by lineage `strategy_parent_id`.
+Legacy `sample_count` configuration remains readable but does not change the
+requested count; retained `random_provenance` is audit metadata and does not
+break equal-score ties. Missing/non-finite performance uses outcome score loss
+`-100`, draw `0`, win `100`; failed matches are excluded.
+
 Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
 request, raw response, UTC-bounded attempts, status, and failure evidence even
 when later generation fails. Strategy Coach parsed output preserves the model's
