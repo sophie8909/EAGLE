@@ -13,7 +13,7 @@ model:
   parallel: 1
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
-initial_population_mode: seed_prompts
+initial_population_mode: configured_seeds
 initial_policy_generation_prompt_file: prompts/initial_policy_generation.txt
 initial_policy_max_attempts: 3
 max_prompt_chars: 16000
