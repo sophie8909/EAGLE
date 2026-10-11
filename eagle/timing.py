@@ -74,6 +74,9 @@ def build_generation_event(
         duration(item.timing.get("generation_llm"))
         + duration(item.timing.get("reflection_llm"))
         + duration(item.timing.get("rewrite_llm"))
+        + duration(item.timing.get("pre_crossover_code_checks_llm"))
+        + duration(item.timing.get("code_reflector_llm"))
+        + duration(item.timing.get("code_revision_llm"))
         for item in values
     )
     return {

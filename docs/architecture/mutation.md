@@ -1,8 +1,8 @@
 # Mutation responsibility boundaries
 
-EAGLE has exactly three mutually exclusive reflection operators: Strategy,
-Prompt, and Code. Strategy changes the policy gene, Prompt changes the reusable
-policy-to-Java translation gene, and Code changes the candidate Java directly.
+Normal mutation has exactly two mutually exclusive operators: Strategy changes the
+DSL policy gene and Prompt changes the reusable policy-to-Java translation gene.
+Independent Code Reflection gates reproduction sources before actual variation.
 
 ## Strategy Reflection
 
@@ -18,7 +18,7 @@ of seed, and failed matches are excluded. Legacy positive `sample_count` and
 one selected match trace
   -> Match Commentator -> one MatchAnalysis diagnosis
 all-match global evaluation summary + selected diagnosis
-  -> Coach -> replacement strategy_prompt
+  -> Coach -> validated canonical DSL strategy_prompt
   -> final Java Generator
 ```
 
@@ -69,64 +69,50 @@ deterministically. A failed attempt does not partially modify the gene.
 (policy A1, prompt B1, Java C1) -> (policy A1, prompt B2, Java C1) -> Java C2
 ```
 
-## Code Reflection
+## Code Reflection source gate
 
-Code Reflection first diagnoses the selected parent Java. Its conditional Java
-revision is deferred until every child in the generation has completed its
-assigned reflection/rewrite work:
+`strategy_prompt` remains the policy gene, serialized as canonical versioned JSON
+DSL (`version: "eagle-strategy-dsl-v1"`). Its ordered `rules` contain `actor`,
+`when`, and `action`; `eagle/strategy_dsl.py` validates and normalizes the closed
+vocabulary. Legal-action guards are intrinsic, and zero rules mean idle. The DSL
+is translated into Java offline; there is no runtime interpreter. New runs reject
+natural-language policies. Historical natural-language artifacts remain read-only;
+incompatible old checkpoints fail resume clearly, without silent conversion.
 
-```text
-current strategy_prompt + selected parent Java
-+ immutable gameplay/API contracts + concise interface/unit reference + canonical scaffold
-+ source-matching validation/compiler diagnostics
-  -> three-part structured diagnosis: strategy fidelity, code simplicity,
-     and game compliance
-  -> generation-wide materialization boundary
-  -> diagnosis + the same authoritative inputs
-  -> complete corrected CandidateAgent.java
-  -> validation -> javac -> integration -> evaluation
-```
+Every selected reproduction source passes an independent Code Reflection gate
+against its own policy and exact Java before actual crossover or mutation. All
+contributors must be healthy. A diagnosed defect instead creates a one-parent
+corrective Java child with unchanged policy/generation genes and source provenance,
+skipping crossover and ordinary mutation. Failed/unusable diagnosis is never a
+healthy pass and cannot enter crossover/mutation. Healthy sources follow normal
+crossover and Strategy/Prompt mutation. Code gating has no adaptive probability
+or AOS reward. Corrective revision runs at the `generation_model` boundary (or
+primary model when absent) and bypasses ordinary Generator overwrite.
 
-The Reflector independently reports whether the Java is faithful to the strategy,
-concise, and compliant with the game setting, and records concrete code changes
-plus behaviors to preserve; it never returns Java. The two Code calls also receive
-an explicit list of the fixed interfaces and every available entity/unit with its
-Java symbol and mechanics. The Java revision stage receives the exact parsed
-conclusion only when at least one dimension requires correction; an all-passing
-conclusion preserves the parent Java without a second LLM call. Neither stage receives
-`generation_prompt`, game performance, opponent scores, W/D/L summaries, match
-results, traces, logs, aggregate fitness, or other gameplay evidence. The
-revision output must be one complete Java source. Both prompt genes and the
-pre-mutation inherited Java remain byte-identical. The output is sent directly
-to validation and compilation and is not overwritten by a final Generator
-call. If either the diagnosis or Java response is unusable, the selected parent
-Java is preserved. A structurally complete response that fails validation or
-javac may enter the existing bounded diagnostic-only compile-repair chain.
-
-```text
-(policy A1, prompt B1, Java C1) -> (policy A1, prompt B1, reflected Java C2)
-```
-
-In `generated_phenotype` mode the source is the recorded mutation-evidence
-parent phenotype. In `inherited_genotype` mode it is the independently selected
-`inherited_java` component. The latter remains the recorded input/provenance;
-the validated reflected source becomes the child's phenotype and
-next-generation inheritable Java.
+Code diagnosis schema `eagle-code-reflection-v6` has exactly two independent
+dimensions: `strategy_fidelity` (`faithful`, `unfaithful`, `ambiguous_strategy`)
+and `code_correctness` (`correct`, `incorrect`). Only failing dimensions may have
+diagnosis entries, each with concrete evidence and a minimum required correction.
+Correctness covers real compilation/runtime/control-flow defects and game/API
+violations. Unknown fields, cosmetic/simplification dimensions, and extra
+directives are rejected. Ambiguous strategy with correct Java needs no revision.
+No win/loss optimization or cosmetic refactoring is allowed. Strategy Reflection
+continues to use exactly one worst completed match; its Coach returns validated
+DSL while changing only the policy gene.
 
 ## Selection and persistence
 
-Before any mutation LLM call, search constructs a complete generation plan that
-records every child's selected parents, component crossover/copy result, and
-assigned mutation. The configured static/AOS controller selects exactly one operator. Strategy uses
-policy-parent provenance. Prompt and Code use generation-prompt provenance in
-default mode and Java-parent provenance in inherited mode. This evaluated source
-parent is also the AOS `comparison_parent_id`.
+Select source candidates before the independent Code gate. Actual component
+crossover and normal mutation assignment use only healthy source contributors.
+The static/AOS controller selects only Strategy or Prompt; policy provenance
+selects Strategy evidence, and generation-prompt (default) or Java (inherited)
+provenance selects Prompt evidence and the comparison parent. Corrective children
+have one source parent and receive no ordinary mutation or adaptive credit.
 
 | Mutation | Probability key | Operator ID | Owned output |
 | --- | --- | --- | --- |
-| Strategy | `strategy_reflection_probability` | `strategy_reflection` | `strategy_prompt` |
+| Strategy | `strategy_reflection_probability` | `strategy_reflection` | canonical DSL `strategy_prompt` |
 | Prompt | `prompt_reflection_probability` | `prompt_reflection` | `generation_prompt` |
-| Code | `code_reflection_probability` | `code_reflection` | complete Java |
 
 New artifacts live under:
 
@@ -143,7 +129,7 @@ source, extracted reflected source, hashes, attempts, and status. The
 validated/compiled result remains canonical at
 `phenotype/CandidateAgent.java`.
 
-The standalone inspection runs all three operators independently from one fixed
+The standalone inspection exercises all three reflection workflows independently from one fixed
 Worker Rush subject. Its expected scopes are `strategy_prompt`,
 `generation_prompt`, and `generated_java`, respectively.
 
@@ -152,8 +138,8 @@ Worker Rush subject. Its expected scopes are `strategy_prompt`,
 - Strategy preserves `generation_prompt` and inherited Java.
 - Prompt preserves `strategy_prompt` and inherited Java.
 - Code preserves both prompt genes and inherited Java input.
-- Every offspring assignment is complete before the first reflection/rewrite
-  request, and every reflection/rewrite is complete before Java materialization.
+- Every selected source is gated before actual crossover/mutation; normal
+  reflection/rewrite work completes before Java materialization.
 - A successful Code Reflection source bypasses the final Generator.
 - Optional `generation_model` owns ordinary final Java generation, deferred
   Code revision, and compile-guided repair; otherwise the primary `model` owns

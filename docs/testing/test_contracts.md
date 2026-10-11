@@ -1,5 +1,15 @@
 # Test contracts
 
+## DSL and pre-crossover source contract (2026-10-11)
+
+Test canonical DSL validation, ordered rules, intrinsic legality guards, idle
+empty rules, unknown-field rejection, and seed/LLM/rewrite boundaries. Verify each
+contributor uses its own policy/exact Java before variation; defects/failed checks
+yield one-parent unchanged-gene branches, and Code receives no AOS reward. Code
+v6 tests cover defect/fidelity repair, ambiguous/all-pass no repair, cosmetic-field
+rejection, retries/raw retention, generation-model correction without overwrite,
+and incompatible resume rejection.
+
 Tests must prove the normative architecture, not preserve accidental current structure. Read the canonical document for every changed responsibility.
 
 ## Standard command
@@ -23,8 +33,8 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Crossover | independent whole-component choices for both prompts and, when enabled, Java; exact provenance; equal-text case; default mode has no Java inheritance |
 | Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
 | Prompt Mutation | Strategy-region Policy-Code Reviewer → exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; only code-generation prompt changes; no raw game logs |
-| Code Mutation | Policy + selected parent Java + immutable gameplay/API/scaffold context → structured diagnosis during reflection phase → deferred complete corrected Java during final materialization → direct validation/compilation; both prompt genes and inherited Java input are preserved; no W/D/L, matches, traces, fitness, compiler evidence, or reusable generation prompt; successful output is not overwritten by Generator |
-| Generation | every offspring parent/crossover/mutation assignment precedes the first mutation request; all reflection/rewrite work precedes final Java materialization; optional distinct generation model switches only at that boundary; resolved experiment seed is present in every OpenAI-compatible LLM request; default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one Java decode per policy with WorkerRush only as inherited context; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
+| Independent Code source gate | Policy + selected parent Java + immutable gameplay/API/scaffold context → structured diagnosis during reflection phase → deferred complete corrected Java during final materialization → direct validation/compilation; both prompt genes and inherited Java input are preserved; no W/D/L, matches, traces, fitness, or reusable generation prompt; source-matching compiler diagnostics are allowed; successful output is not overwritten by Generator |
+| Generation | each source-policy/Java check precedes actual crossover/mutation; all contributors must pass; all reflection/rewrite work precedes final Java materialization; optional distinct generation model switches only at that boundary; resolved experiment seed is present in every OpenAI-compatible LLM request; default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one Java decode per policy with WorkerRush only as inherited context; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, direct strategy-map reads rejected in favor of bounds-safe `isFreeCell`, and no fixed internal layout |
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |

@@ -6,7 +6,7 @@ Every candidate has two evolvable prompt components:
 
 | Concept | Current field | Meaning |
 | --- | --- | --- |
-| Policy gene | `strategy_prompt` | Concrete MicroRTS game-playing policy (`policy_prompt` conceptually). |
+| Policy gene | `strategy_prompt` | Canonical versioned JSON DSL policy (`policy_prompt` conceptually). |
 | Translation gene | `generation_prompt` | Canonically rendered, bounded reusable rules for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
 
 In the default `generated_phenotype` mode, the complete
@@ -17,6 +17,11 @@ parent ID. The Generator revises it into the candidate's new Java phenotype;
 that successful phenotype is eligible for independent Java-component
 inheritance by children.
 
+Code checks and corrective children retain their exact source Java in
+`inherited_java` with `java_parent_id` for repair provenance in either mode.
+In default mode this is operator input/evidence; ordinary crossover still
+inherits only the two prompt genes.
+
 Default-mode generation-zero seeds use one checked-in callable no-op phenotype.
 Inherited `configured_seeds` mode requires one seed policy, copies it to
 `population_size`, gives every copy the same Java component, and invokes the
@@ -26,6 +31,16 @@ call, and gives every candidate WorkerRush Java as the same inherited component.
 Every policy then independently invokes the Generator, so its generated Java is
 the generation-zero phenotype. Subsequent variation operates on the normal
 three-component genotype.
+
+## Policy contract
+
+`strategy_prompt` stores canonical `eagle-strategy-dsl-v1` JSON, validated by
+`eagle/strategy_dsl.py`. Ordered rules contain `actor`, `when`, `action`; intrinsic
+legality guards are fixed, and empty rules idle. Java generation implements this
+policy offline without a runtime DSL interpreter. New runs reject natural language.
+Every selected source is gated against its own policy/exact Java before variation.
+Corrective children preserve one parent's genes and provenance; failed checks
+cannot enter crossover/mutation. See [mutation](mutation.md) for the gate contract.
 
 ## Required logical fields
 
@@ -67,6 +82,5 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 
 New candidate artifacts use `genotype/policy_prompt.txt`,
 `genotype/code_generation_prompt.txt`, and `phenotype/CandidateAgent.java`.
-The resume loader may read old prompt/phenotype paths. Missing Java-component
-fields mean default mode; compatibility never silently opts an old run into
-`inherited_genotype`.
+Historical artifacts remain read-only. Resume rejects incompatible natural-language
+policy and old reproduction/operator contracts; it never silently converts them.

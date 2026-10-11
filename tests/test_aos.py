@@ -94,6 +94,15 @@ def config_for(mode: str, **overrides) -> ExperimentConfig:
 
 
 class ReflectionOperatorModeTests(unittest.TestCase):
+    def test_legacy_code_weight_is_excluded_and_normal_weights_renormalized(self):
+        config = config_for("static", strategy_reflection_probability=0.2,
+                            prompt_reflection_probability=0.3, code_reflection_probability=0.5)
+        controller = build_reflection_operator_controller(config)
+        self.assertEqual(controller.probabilities, {STRATEGY_REFLECTION: 0.4,
+                         PROMPT_REFLECTION: 0.6, CODE_REFLECTION: 0.0})
+        with self.assertRaisesRegex(ValueError, "independent gate"):
+            controller.select_operator(random.Random(0), eligible=(CODE_REFLECTION,))
+
     def test_static_selection_uses_fixed_config_and_never_updates(self):
         controller = build_reflection_operator_controller(config_for("static"))
         self.assertIsInstance(controller, StaticOperatorSelector)
@@ -110,7 +119,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             self.assertIsNone(record["code_reward"])
             self.assertEqual(record["strategy_probability_before"], record["strategy_probability_after"])
             self.assertEqual(record["code_probability_before"], record["code_probability_after"])
-            self.assertEqual(record["schema_version"], "eagle-reflection-operator-v5")
+            self.assertEqual(record["schema_version"], "eagle-reflection-operator-v6")
             self.assertIsNone(record["prompt_reward"])
             self.assertTrue({
                 "mode", "reward_source",
@@ -351,7 +360,7 @@ class ReflectionOperatorConfigTests(unittest.TestCase):
 
     def test_removed_balance_operator_state_cannot_resume_under_new_semantics(self):
         config = config_for("static")
-        with self.assertRaisesRegex(ValueError, "retired reflection-operator semantics"):
+        with self.assertRaisesRegex(ValueError, "predates the independent pre-crossover"):
             build_reflection_operator_controller(
                 config,
                 state={

@@ -30,7 +30,7 @@ PROMPT_BUDGETS = {
     "structural_evidence": 9_000,
     "action_api_guide": 12_000,
 }
-MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract") + "\n" + load_prompt("strategy_dsl_reference")
 STRUCTURAL_CODE_EVIDENCE_KEYS = (
     "generation_failure",
     "validation_failure",
@@ -199,6 +199,7 @@ def build_prompt_reflection_prompt_bundle(candidate: Candidate, context: Reflect
     )
     sections = {
         "policy_prompt": policy_prompt,
+        "strategy_dsl_reference": load_prompt("strategy_dsl_reference"),
         "editable_strategy_java": editable_strategy_java,
         "structural_evidence": structural_evidence,
         "action_api_guide": _bounded_text(

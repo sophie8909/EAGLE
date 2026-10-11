@@ -101,6 +101,7 @@ def build_search_runtime(
             strategy_role_backend,
             max_attempts=config.mutation_max_attempts,
             max_prompt_chars=DEFAULT_MAX_PROMPT_CHARS,
+            max_policy_chars=config.max_prompt_chars,
             model_identity=None if mock else client.model,
             enabled_roles=enabled_roles,
             selection_seed=config.random_seed,

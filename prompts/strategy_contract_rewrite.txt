@@ -17,4 +17,6 @@ Validation error to correct:
 $validation_error
 
 Return exactly one raw JSON object with no prose, Markdown, or extra keys:
-{"revised_strategy_prompt":"<complete corrected policy>"}
+{"revised_strategy_prompt":"<complete serialized JSON DSL policy>"}
+
+The strategy_prompt/new_strategy_prompt/revised_strategy_prompt field is a JSON STRING containing a complete eagle-strategy-dsl-v1 object, never natural-language rules. Follow the finite DSL reference included in the gameplay contract. Preserve the outer response schema. Reject prose, code and unknown fields in the policy gene. Intrinsic action guards need not be restated in conditions.

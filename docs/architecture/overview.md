@@ -9,7 +9,7 @@ opt-in inherited mode adds complete Java as a third component. The active evolut
 
 In scope:
 
-- a game-playing policy prompt, a policy-to-Java code-generation prompt, and
+- a canonical versioned JSON DSL policy gene, a policy-to-Java code-generation prompt, and
   optionally inherited Java;
 - crossover, Strategy Reflection, Prompt Reflection, Code Reflection, and Java
   generation;
@@ -33,11 +33,13 @@ flowchart TD
     RT --> Z["Generation 0: configured or LLM-generated policies"]
     Z --> P
     P["Evaluated population"] --> S["Mode-specific parent selection"]
-    S --> X["Plan every child's parents, crossover/copy, and mutation"]
+    S --> CG{"Gate every selected source: own DSL policy + Java"}
+    CG -->|Healthy contributors| X["Crossover/copy + Strategy/Prompt assignment"]
+    CG -->|Defect| CR["One-parent corrective child; preserve genes"]
+    CG -->|Diagnosis failure| FAIL["Failed child; no crossover/mutation"]
     X --> M{"Run assigned reflection/rewrite work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Prompt| PR["Prompt Reflection + prompt rewrite"]
-    M -->|Code| CR["Code Reflection diagnosis"]
     M -->|No| SW["Generation-model phase"]
     SR --> SW
     PR --> SW
@@ -71,13 +73,15 @@ flowchart TD
   immutable closed-world MicroRTS gameplay contract; it permits strategy
   diversity while grounding every rule in legal entities, actions, and
   observable state.
-- Every generation assigns all offspring parent, crossover/copy, and mutation
-  decisions before the first mutation LLM request. Reflection and prompt
-  rewriting then finish before a common final Java-materialization phase.
-- Prompt Reflection audits policy/Java alignment and changes only the reusable
-  generation prompt. Code Reflection first records a structured diagnosis;
-  its conditional Java correction is deferred to the common materialization
-  phase and bypasses the ordinary prompt-to-Java decode.
+- New policy genes are validated canonical `eagle-strategy-dsl-v1` JSON with
+  ordered actor/when/action rules, intrinsic legal-action guards, and idle empty
+  rules. Java generation implements the DSL; no runtime interpreter exists.
+- Every selected source passes its own independent Code gate before actual
+  crossover/mutation. Defective sources yield one-parent corrective children;
+  failed diagnosis cannot qualify as healthy. Normal mutation/AOS covers only
+  Strategy and Prompt. Corrective Java bypasses ordinary Generator overwrite.
+- Code diagnosis has only strategy fidelity and code correctness; cosmetic
+  simplification is forbidden and ambiguous/correct Java needs no revision.
 - `model` handles initialization and reflection/rewrite work. Optional
   `generation_model` handles final Java generation, Code Reflection revision,
   and compile-guided generation repair; when omitted, `model` handles both

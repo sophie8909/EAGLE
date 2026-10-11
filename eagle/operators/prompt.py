@@ -22,6 +22,7 @@ from eagle.operators.reflection_prompts import build_prompt_reflection_prompt_bu
 from eagle.llm import parse_json_object_response
 from eagle.timing import utc_now
 from eagle.prompts import normalize_prompt
+from eagle.strategy_dsl import normalize_strategy_dsl
 from eagle.operators.reflection_prompts import structural_code_evidence
 from eagle.operators.reusable_prompt import (
     apply_reusable_rule_delta,
@@ -360,11 +361,20 @@ class PromptRewriteMutation:
                 original_strategy=original_strategy,
                 original_generation=original_generation,
             )
-        rewritten = normalize_prompt(
-            rewrite.rewritten_prompt,
-            max_chars=self.config.max_prompt_chars,
-            max_lines=self.config.max_prompt_lines,
-        )
+        try:
+            rewritten = (
+                normalize_strategy_dsl(rewrite.rewritten_prompt, max_chars=self.config.max_prompt_chars)
+                if self.mutation_type == "strategy"
+                else normalize_prompt(rewrite.rewritten_prompt, max_chars=self.config.max_prompt_chars, max_lines=self.config.max_prompt_lines)
+            )
+        except ValueError as exc:
+            return self._result_candidate(
+                candidate, context=context, reflection=reflection,
+                rewrite=replace(rewrite, status="failed", error=str(exc), rewritten_prompt=""),
+                strategy_prompt=original_strategy, generation_prompt=original_generation,
+                applied=False, target_dir=target_dir,
+                original_strategy=original_strategy, original_generation=original_generation,
+            )
         result = self._result_candidate(
             candidate,
             context=context,
@@ -511,7 +521,7 @@ def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionRe
     from eagle.prompts import load_prompt, render_prompt
 
     return render_prompt("strategy_rewrite", {
-        "gameplay_contract": load_prompt("microrts_gameplay_contract"),
+        "gameplay_contract": load_prompt("microrts_gameplay_contract") + "\n" + load_prompt("strategy_dsl_reference"),
         "strategy_prompt": candidate.strategy_prompt,
         "reflection": json.dumps({"analysis": reflection.parsed_response.get("analysis", {}) if reflection.parsed_response else {}, "proposed_revised_strategy_prompt": reflection.revised_prompt}, ensure_ascii=False),
         "game_summary": context.objectives.to_dict(),
@@ -565,7 +575,7 @@ def _build_rewrite_retry_prompt(
             from eagle.prompts import load_prompt, render_prompt
 
             return render_prompt("strategy_contract_rewrite", {
-                "gameplay_contract": load_prompt("microrts_gameplay_contract"),
+                "gameplay_contract": load_prompt("microrts_gameplay_contract") + "\n" + load_prompt("strategy_dsl_reference"),
                 "proposed_strategy_prompt": proposed.strip(),
                 "validation_error": error,
             })

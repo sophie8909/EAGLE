@@ -21,4 +21,6 @@ If a previous attempt failed validation, correct this issue: $prior_error
 
 Return only one valid JSON object with exactly this shape. Do not use Markdown
 fences or prose, and escape line breaks inside the JSON string as \n:
-{"strategy_prompt":"the complete generated RTS policy prompt"}
+{"strategy_prompt":"the complete serialized JSON DSL policy"}
+
+The strategy_prompt/new_strategy_prompt/revised_strategy_prompt field is a JSON STRING containing a complete eagle-strategy-dsl-v1 object, never natural-language rules. Follow the finite DSL reference included in the gameplay contract. Preserve the outer response schema. Reject prose, code and unknown fields in the policy gene. Intrinsic action guards need not be restated in conditions.

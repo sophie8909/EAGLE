@@ -7,6 +7,7 @@ from pathlib import Path
 
 from eagle.artifacts import write_candidate_snapshot
 from eagle.config import ExperimentConfig
+from eagle.strategy_dsl import worker_rush_policy
 from eagle.operators.initialization import generation_zero_uses_fixed_java
 from eagle.llm import LLMCallLogger
 from eagle.evolution.search import run_search
@@ -44,10 +45,7 @@ class InitialPopulationGenerationTests(unittest.TestCase):
             [
                 json.dumps(
                     {
-                        "strategy_prompt": (
-                            f"Generated RTS strategy {index}: expand economy, train units, "
-                            "defend the base, then attack."
-                        )
+                        "strategy_prompt": worker_rush_policy(index + 1)
                     }
                 )
                 for index in range(1, 10)
@@ -180,7 +178,7 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         backend = ScriptedPolicyBackend(
             [
                 json.dumps({"strategy_prompt": worker_policy}),
-                json.dumps({"strategy_prompt": "Build a Barracks and use a timed Ranged attack."}),
+                json.dumps({"strategy_prompt": worker_rush_policy(2)}),
             ]
         )
 
@@ -205,7 +203,7 @@ class InitialPopulationGenerationTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(population[1].strategy_prompt, "Build a Barracks and use a timed Ranged attack.")
+        self.assertEqual(population[1].strategy_prompt, worker_rush_policy(2))
         self.assertEqual(summary["selected_attempt"], 2)
         self.assertEqual(first["status"], "failed")
         self.assertIn("duplicates", first["error"])
@@ -223,11 +221,7 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         )
         backend = ScriptedPolicyBackend(
             [
-                """```json
-{"strategy_prompt":"Train Workers.
-Harvest resources.
-Attack the nearest enemy Base."}
-```"""
+                "```json\n" + json.dumps({"strategy_prompt": worker_rush_policy(2)}) + "\n```"
             ]
         )
 
@@ -240,10 +234,29 @@ Attack the nearest enemy Base."}
 
         self.assertEqual(
             population[1].strategy_prompt,
-            "Train Workers.\nHarvest resources.\nAttack the nearest enemy Base.",
+            worker_rush_policy(2),
         )
         self.assertIn("Do not use Markdown", backend.requests[0])
         self.assertIn("escape line breaks", backend.requests[0])
+
+    def test_oversized_dsl_is_rejected_after_raw_response_is_persisted(self) -> None:
+        config = ExperimentConfig.from_mapping({
+            "candidate_java_mode": "inherited_genotype",
+            "initial_population_mode": "llm_generated_policies",
+            "population_size": 2,
+            "seed_prompt_files": ["seeds/worker_rush_policy.txt"],
+            "initial_policy_max_attempts": 1,
+        })
+        policy = worker_rush_policy(2) + " " * 20000
+        raw = json.dumps({"strategy_prompt": policy})
+        backend = ScriptedPolicyBackend([raw])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "candidates"
+            with self.assertRaisesRegex(RuntimeError, "size limit"):
+                initialize_population(config, policy_backend=backend, candidates_dir=root)
+            responses = list(root.glob("*/initialization/policy_generation/attempts/attempt_001/response_raw.txt"))
+            self.assertEqual(len(responses), 1)
+            self.assertEqual(responses[0].read_text(encoding="utf-8"), raw)
 
     def test_llm_population_mode_rejects_incompatible_boundaries(self) -> None:
         for payload, message in (

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
+from eagle.strategy_dsl import worker_rush_policy
 from eagle.config import ExperimentConfig
 from eagle.operators.crossover import CrossoverContext, crossover
 from eagle.evaluation.decoding import decode_validate_compile_candidate
@@ -54,7 +55,7 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         })
         population = initialize_population(config)
         self.assertEqual(len(population), 10)
-        self.assertEqual({candidate.strategy_prompt for candidate in population}, {""})
+        self.assertEqual({candidate.strategy_prompt for candidate in population}, {Candidate().strategy_prompt})
         self.assertEqual({candidate.metadata["seed_index"] for candidate in population}, {0})
         self.assertEqual(
             [candidate.metadata["replicate_index"] for candidate in population],
@@ -129,17 +130,17 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
 
     def test_inherited_request_contains_all_active_components(self) -> None:
         request = Candidate(
-            strategy_prompt="POLICY_SENTINEL",
+            strategy_prompt=worker_rush_policy(),
             generation_prompt="GENERATION_SENTINEL",
             inherited_java="INHERITED_JAVA_SENTINEL",
         ).generation_input()
-        self.assertIn("POLICY_SENTINEL", request)
+        self.assertIn(worker_rush_policy(), request)
         self.assertIn("GENERATION_SENTINEL", request)
         self.assertIn("INHERITED_JAVA_SENTINEL", request)
 
     def test_inherited_mode_rejects_multiple_seed_policies(self) -> None:
         config = ExperimentConfig(
-            seed_prompts=("first", "second"),
+            seed_prompts=(worker_rush_policy(1), worker_rush_policy(2)),
             candidate_java_mode="inherited_genotype",
         )
         with self.assertRaisesRegex(ValueError, "exactly one seed_prompt_files"):

@@ -25,31 +25,24 @@ behavior signatures only when scalar fitness is tied.
 3. In default `fixed_roster` evaluation, store one score for each opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.
-4. Plan the entire offspring population before any mutation LLM call. For each
-   slot, perform the configured mode's parent selection, assign crossover or copy for
-   every active component, and assign either Strategy, Prompt, Code, or no
-   mutation. Operator probabilities therefore describe one generation-level
-   assignment boundary rather than an interleaving of planning and LLM work.
-5. Run the assigned pre-materialization work for every child. Strategy changes
-   only the policy prompt. Prompt completes its review and reusable-generation-
-   prompt rewrite. Code records its structured diagnosis but defers the
-   conditional parent-Java revision.
-6. Enter one final materialization phase only after all children finish step 5.
-   Decode Strategy/Prompt/no-mutation children with the generation model, and
-   apply diagnosis-guided parent-Java revision to Code children with that same
-   phase's model. Send a successful Code Reflection source directly to
-   validation/compilation without allowing the ordinary Generator to overwrite
-   it. When `generation_model` is absent this is the primary `model`; when it
-   is present the owned llama.cpp runtime switches after step 5 and switches
-   back before the next generation's reflection work. In either path, use the
-   structured validation/javac evidence only after a complete source fails;
-   promote the first validation+compilation success, then evaluate that single
-   promoted phenotype through the complete pipeline. Integration/runtime
-   failure never re-enters the decoder. `static` performs no credit update;
-   `aos_opponent` reuses the ten normal opponent summaries;
-   `aos_head2head` runs the configured direct matrix against the recorded
-   mutation-evidence parent. Both adaptive modes feed one shared
-   generation-level EMA updater.
+4. Select reproduction sources and independently gate each against its own DSL
+   policy and exact Java before actual crossover/mutation. Every contributing
+   source must pass. A defect creates a one-parent corrective child with unchanged
+   genes; diagnosis failure creates no healthy source and cannot enter variation.
+   Healthy-check LLM time is retained under `pre_crossover_code_checks_llm` with
+   check IDs and full diagnosis timing; a defective child retains its own
+   diagnosis/revision timing separately. Generation aggregates include all three
+   streams without double-counting.
+5. For healthy sources, assign normal component crossover/copy and Strategy,
+   Prompt, or no mutation. Strategy changes only canonical DSL policy; Prompt
+   changes only reusable generation rules. Corrective children skip both.
+6. After all diagnosis/reflection/rewrite work, switch to the optional
+   `generation_model` boundary and materialize ordinary children or corrective
+   Java children. Corrective Java bypasses ordinary Generator overwrite; all
+   candidates enter validation, compilation, integration, and evaluation.
+   Compile repair remains bounded and diagnostic-only. AOS credit covers normal
+   Strategy/Prompt mutation only; the independent gate earns no reward.
+
 7. From generation 1 onward, combine parents and offspring and fill the fixed
    population with mode-specific selection without replacement. Failed
    offspring remain in the joint input for diagnostics, but are excluded from
@@ -123,8 +116,7 @@ opponent archive, lexicase, weighted Game Performance, or final testing.
 `static` performs neither form of credit assignment.
 
 Both adaptive modes use the mutation context's evidence parent as the
-comparison parent. Strategy uses `strategy_parent_id`; default-mode Prompt and
-Code use `generation_prompt_parent_id`; inherited-mode Prompt and Code use
+comparison parent. Strategy uses `strategy_parent_id`; default-mode Prompt uses `generation_prompt_parent_id`; inherited-mode Prompt uses
 `java_parent_id`. Therefore component-wise crossover may select either direct
 parent without silently assigning AOS credit to the other one.
 

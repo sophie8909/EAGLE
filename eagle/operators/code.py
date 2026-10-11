@@ -15,7 +15,7 @@ from eagle.generation.java_agent_generator import extract_code_from_output, norm
 from eagle.candidate import Candidate, compact_mutation_record
 from eagle.config import ExperimentConfig
 from eagle.llm import LLMServerError
-from eagle.operators.reflection import ReflectionAttempt, ReflectionResult, ReflectionStage, _run_relative_artifact_base, _timing_payload
+from eagle.operators.reflection import ReflectionAttempt, ReflectionResult, ReflectionStage, parse_reflection_response, _run_relative_artifact_base, _timing_payload
 from eagle.operators.context import ReflectionContext
 from eagle.timing import utc_now
 from eagle.prompts import load_prompt, render_prompt
@@ -23,7 +23,7 @@ from eagle.operators.context import coerce_structured_context
 from eagle.operators.reflection_prompts import structural_code_evidence
 
 
-CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v5"
+CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v6"
 
 
 class CodeReflectionMutation:
@@ -233,6 +233,15 @@ class CodeReflectionMutation:
             reflection_conclusion = {}
         diagnostics = structural_code_evidence(context, reviewed_source=parent_java)
         reflection_succeeded = mutation_record.get("reflection_status") == "success"
+        if reflection_succeeded:
+            try:
+                reflection_conclusion, _, _ = parse_reflection_response(
+                    json.dumps(reflection_conclusion), "code"
+                )
+            except ValueError as exc:
+                reflection_succeeded = False
+                mutation_record["reflection_status"] = "failed"
+                mutation_record["reflection_error"] = str(exc)
         revision_required = bool(
             reflection_succeeded and _revision_required(reflection_conclusion)
         )
@@ -441,6 +450,7 @@ class CodeReflectionMutation:
             "code_reflection",
             {
                 "strategy_prompt": candidate.strategy_prompt,
+                "strategy_dsl_reference": load_prompt("strategy_dsl_reference"),
                 "parent_java": parent_java,
                 "structural_evidence": json.dumps(
                     diagnostics,
@@ -469,6 +479,7 @@ class CodeReflectionMutation:
             "code_revision",
             {
                 "strategy_prompt": candidate.strategy_prompt,
+                "strategy_dsl_reference": load_prompt("strategy_dsl_reference"),
                 "parent_java": parent_java,
                 "reflection_conclusion": json.dumps(
                     reflection_conclusion,
@@ -536,8 +547,7 @@ def _revision_required(conclusion: dict[str, object]) -> bool:
         conclusion.get(dimension) == failing_value
         for dimension, failing_value in (
             ("strategy_fidelity", "unfaithful"),
-            ("code_simplicity", "needs_simplification"),
-            ("game_compliance", "noncompliant"),
+            ("code_correctness", "incorrect"),
         )
     )
 

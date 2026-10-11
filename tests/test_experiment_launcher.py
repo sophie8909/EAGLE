@@ -531,7 +531,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             source = self.config(root, "source.yaml", model_name="resume-model", model_path=model)
             run_dir = root / "run"
             run_dir.mkdir()
-            (run_dir / "config.yaml").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            (run_dir / "config.yaml").write_text(yaml.safe_dump(ExperimentConfig.from_file(source).to_mapping()), encoding="utf-8")
             observed: list[str] = []
 
             class Manager:

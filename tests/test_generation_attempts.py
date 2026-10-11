@@ -4,6 +4,7 @@ import json
 import hashlib
 import tempfile
 import unittest
+from eagle.strategy_dsl import worker_rush_policy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,7 +88,7 @@ class GenerationAttemptTests(unittest.TestCase):
         candidate = Candidate(
             id="bounded-success",
             generation=1,
-            strategy_prompt="POLICY_GENE_SENTINEL",
+            strategy_prompt=worker_rush_policy(),
             generation_prompt="GENERATION_GENE_SENTINEL",
         )
         with tempfile.TemporaryDirectory() as temp, patch(
@@ -114,7 +115,7 @@ class GenerationAttemptTests(unittest.TestCase):
             )
             self.assertEqual(len(set(backend.requests)), 3)
             for repair_request in backend.requests[1:]:
-                self.assertIn("POLICY_GENE_SENTINEL", repair_request)
+                self.assertIn(worker_rush_policy(), repair_request)
                 self.assertIn("GENERATION_GENE_SENTINEL", repair_request)
                 self.assertIn("IMMUTABLE MICRORTS ACTION/JAVA API CONTRACT", repair_request)
                 self.assertIn("UNTRUSTED PREVIOUS COMPLETE", repair_request)
@@ -203,7 +204,7 @@ class GenerationAttemptTests(unittest.TestCase):
                 Candidate(
                     id="previous-only",
                     generation=1,
-                    strategy_prompt="AUTHORITATIVE_POLICY_GENE",
+                    strategy_prompt=worker_rush_policy(),
                     generation_prompt="AUTHORITATIVE_GENERATION_GENE",
                 ),
                 config=ExperimentConfig.from_mapping({"generation_max_attempts": 3}),
@@ -219,7 +220,7 @@ class GenerationAttemptTests(unittest.TestCase):
         self.assertIn("PREVIOUS_SOURCE_TWO_ONLY", backend.requests[2])
         self.assertNotIn("PREVIOUS_SOURCE_ONE_ONLY", backend.requests[2])
         for request in backend.requests[1:]:
-            self.assertIn("AUTHORITATIVE_POLICY_GENE", request)
+            self.assertIn(worker_rush_policy(), request)
             self.assertIn("AUTHORITATIVE_GENERATION_GENE", request)
             self.assertIn("IMMUTABLE MICRORTS ACTION/JAVA API CONTRACT", request)
             self.assertIn("CANONICAL CHECKED-IN SCAFFOLD", request)
@@ -542,7 +543,7 @@ class GenerationAttemptTests(unittest.TestCase):
             id="state-invariants",
             generation=2,
             parent_ids=("parent-a", "parent-b"),
-            strategy_prompt="authoritative policy",
+            strategy_prompt=worker_rush_policy(),
             generation_prompt="authoritative translation",
             operator="crossover+mutation",
             mutation_type="strategy",
@@ -588,7 +589,7 @@ class GenerationAttemptTests(unittest.TestCase):
                 "eagle.evaluation.decoding.write_generation_attempt_artifacts", wraps=write_generation_attempt_artifacts
             ) as persist:
                 evaluation = evaluate_candidate(
-                    Candidate(id="single-write", strategy_prompt="Worker Rush"), config=config,
+                    Candidate(id="single-write", strategy_prompt=worker_rush_policy()), config=config,
                     backend=MockGenerationBackend(), generated_agents_dir=root / "generated",
                     classes_dir=root / "classes", match_artifacts_dir=root / "candidates/single-write/matches",
                     mock=True, ordinal=0,

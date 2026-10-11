@@ -8,19 +8,19 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.operators.adaptive import (
     OPERATOR_TO_MUTATION,
-    STRATEGY_REFLECTION,
     ReflectionOperatorController,
 )
 from eagle.operators.context import ReflectionContext, build_reflection_context
 from eagle.operators.crossover import CrossoverContext, crossover
 from eagle.operators.selection import select_parent
 from eagle.operators.strategy import select_strategy_mutation_intent
-from eagle.prompts import normalize_prompt
+from eagle.strategy_dsl import normalize_strategy_dsl
 from eagle.timing import utc_now
 
 
@@ -53,7 +53,9 @@ def plan_offspring(
     ``rng`` is accepted for embedded callers; its history cannot alter the EA.
     """
 
-    del artifact_root, rng  # Streams use task identities, not call history.
+    del rng  # Streams use task identities, not call history.
+    if "code" not in mutations:
+        raise ValueError("Reproduction requires the independent Code Reflection gate.")
     population = sorted(population, key=lambda candidate: candidate.id)
     plans: list[OffspringPlan] = []
     generation_best = max(
@@ -87,7 +89,70 @@ def plan_offspring(
             semantic_reference=parent_a,
         )
         parent_selection_duration = max(0.0, time.monotonic() - parent_selection_started)
-        if len(population) > 1 and crossover_rng.random() < config.crossover_rate:
+        use_crossover = len(population) > 1 and crossover_rng.random() < config.crossover_rate
+        checked = []
+        healthy_check_timings = []
+        blocked = None
+        for role, source in (("source", parent_a), ("donor", parent_b)) if use_crossover else (("source", parent_a),):
+            gate_child = replace(
+                source,
+                id=derive_candidate_id(config.random_seed, generation=generation, index=context_index,
+                                       role="code_gate_" + role, parent_ids=(source.id,)),
+                generation=generation, parent_ids=(source.id,), source_candidate_ids=(source.id,),
+                strategy_parent_id=source.id, generation_prompt_parent_id=source.id,
+                java_parent_id=source.id, inherited_java=source.generated_java or source.inherited_java,
+                generated_java="", generated_java_path=None, metadata={}, timing={}, artifacts={}, operator="code_check",
+                mutation_type="code", mutation_intent=None, parent_strategy_niche=None, niche_changed=None,
+                status="pending", compile_status="pending",
+                game_eval_result={}, code_quality_result={}, fitness_objectives={}, semantic_signature={},
+                failure_stage=None, failure_reason=None,
+            )
+            gate_context = mutation_context_from_candidate(
+                source, generation=generation, index=context_index, reflection_type="code",
+                error_memory=error_memory, evolution_candidate=gate_child,
+            )
+            if artifact_root is not None:
+                write_candidate_inputs(artifact_root, gate_child)
+                write_candidate_snapshot(artifact_root, gate_child)
+            gate_child = mutations["code"].mutate(
+                gate_child, gate_context,
+                artifact_dir=None if artifact_root is None else artifact_root / gate_child.id,
+            )
+            if artifact_root is not None:
+                write_candidate_snapshot(artifact_root, gate_child)
+            gate_record = dict(gate_child.metadata.get("mutation") or {})
+            healthy = (gate_record.get("reflection_status") == "success"
+                       and gate_record.get("revision_required") is False
+                       and gate_record.get("revision_status") == "not_required")
+            checked.append({"source_candidate_id": source.id, "gate_candidate_id": gate_child.id,
+                            "healthy": healthy, "reflection_status": gate_record.get("reflection_status"),
+                            "revision_required": gate_record.get("revision_required"),
+                            "artifact_path": f"../{gate_child.id}/mutation/code_reflection"})
+            if healthy:
+                healthy_check_timings.append({"gate_candidate_id": gate_child.id,
+                                              **(gate_child.timing.get("code_reflector_llm") or {})})
+            check_timing = {
+                "duration_seconds": sum(float(item.get("duration_seconds") or 0.0)
+                                        for item in healthy_check_timings),
+                "checks": list(healthy_check_timings),
+            }
+            if not healthy:
+                gate_child = replace(gate_child, operator="mutation", mutation_type="code",
+                                     generated_java=source.generated_java or source.inherited_java,
+                                     metadata={**gate_child.metadata, "pre_crossover_code_checks": checked},
+                                     timing={**gate_child.timing, "pre_crossover_code_checks_llm": check_timing})
+                if artifact_root is not None:
+                    write_candidate_inputs(artifact_root, gate_child)
+                    write_candidate_snapshot(artifact_root, gate_child)
+                blocked = OffspringPlan(candidate=gate_child, context_index=context_index,
+                                        mutation_name="code", mutation=mutations["code"],
+                                        mutation_context=gate_context,
+                                        parent_selection_duration=parent_selection_duration)
+                break
+        if blocked is not None:
+            plans.append(blocked)
+            continue
+        if use_crossover:
             crossover_started_at = utc_now()
             crossover_started = time.monotonic()
             child = crossover(parent_a, parent_b, CrossoverContext(
@@ -123,10 +188,8 @@ def plan_offspring(
                 ),
                 generation=generation,
                 parent_ids=(parent_a.id,),
-                strategy_prompt=normalize_prompt(
-                    parent_a.strategy_prompt,
-                    max_chars=config.max_prompt_chars,
-                    max_lines=config.max_prompt_lines,
+                strategy_prompt=normalize_strategy_dsl(
+                    parent_a.strategy_prompt, max_chars=config.max_prompt_chars,
                 ),
                 strategy_signature=dict(parent_a.strategy_signature),
                 strategy_niche=parent_a.strategy_niche,
@@ -144,6 +207,8 @@ def plan_offspring(
                 ),
                 source_candidate_ids=(parent_a.id,),
             )
+        child = replace(child, metadata={**child.metadata, "pre_crossover_code_checks": checked},
+                        timing={**child.timing, "pre_crossover_code_checks_llm": check_timing})
         progress_prefix = (
             f"[gen {generation} cand {context_index + 1}/{config.population_size}] "
             f"{child.id}"
@@ -155,12 +220,8 @@ def plan_offspring(
         operator_used: str | None = None
         eligible_operators: tuple[str, ...] = ()
         feedback_parent: Candidate | None = None
-        if mutation_rng.random() < config.mutation_rate:
-            eligible_operators = (
-                (STRATEGY_REFLECTION,)
-                if not child.strategy_prompt.strip()
-                else config.reflection_operator_settings.enabled_operators
-            )
+        if mutation_rng.random() < config.mutation_rate and config.reflection_operator_settings.enabled_operators:
+            eligible_operators = config.reflection_operator_settings.enabled_operators
             operator_used = operator_controller.select_operator(
                 operator_rng,
                 eligible=eligible_operators,
@@ -245,7 +306,7 @@ def apply_offspring_mutations(
             f"[gen {child.generation} cand {plan.context_index + 1}/{len(plans)}] "
             f"{child.id}"
         )
-        if plan.mutation is None or plan.mutation_name is None:
+        if plan.mutation is None or plan.mutation_name is None or plan.mutation_name == "code":
             print(
                 f"{progress_prefix} stage=mutation status=skipped operator=none",
                 flush=True,

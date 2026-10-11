@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from eagle.strategy_dsl import worker_rush_policy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -205,7 +206,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             root = Path(temp_dir)
             run_dir = root / "run"
             candidates_dir = run_dir / "candidates"
-            candidate = Candidate(id="runtime-timing", strategy_prompt="strategy")
+            candidate = Candidate(id="runtime-timing", strategy_prompt=worker_rush_policy())
             config = ExperimentConfig.from_mapping({})
 
             def fake_match(**kwargs):

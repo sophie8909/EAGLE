@@ -7,7 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from eagle.candidate import Candidate
-from eagle.operators.code import CodeReflectionMutation
+from eagle.operators.code import CodeReflectionMutation, _revision_required
+from eagle.operators.reflection import parse_reflection_response
 from eagle.config import ExperimentConfig
 from eagle.evaluation.decoding import decode_validate_compile_candidate
 from eagle.operators.context import (
@@ -84,8 +85,7 @@ class ScriptedReflectionBackend:
 def reflection_response(*, requires_revision: bool = True) -> str:
     return json.dumps({
         "strategy_fidelity": "unfaithful" if requires_revision else "faithful",
-        "code_simplicity": "concise",
-        "game_compliance": "compliant",
+        "code_correctness": "correct",
         "diagnosis": ([{
             "dimension": "strategy_fidelity",
             "evidence": "The editable strategy does not implement Worker attacks.",
@@ -126,6 +126,25 @@ def context() -> ReflectionContext:
 
 
 class CodeReflectionTests(unittest.TestCase):
+    def test_missing_code_gate_source_never_calls_ordinary_generator(self):
+        class ForbiddenGenerator:
+            def authoritative_request(self, *args):
+                raise AssertionError("ordinary generator request")
+            def generate(self, *args):
+                raise AssertionError("ordinary generator call")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = decode_validate_compile_candidate(
+                Candidate(id="empty-code-gate", mutation_type="code"),
+                config=ExperimentConfig.from_mapping({"generation_max_attempts": 3}),
+                backend=ForbiddenGenerator(), generated_agents_dir=root / "agents",
+                classes_dir=root / "classes", candidate_artifact_dir=root / "candidate",
+                mock=True,
+            )
+        self.assertEqual(len(result.attempts), 1)
+        self.assertIsNone(result.selected_attempt)
+        self.assertEqual(result.attempts[0].request_kind, "code_reflection_output")
+
     def test_direct_code_reflection_changes_java_and_preserves_both_prompts(self) -> None:
         revised = PARENT_JAVA.replace(
             "// EAGLE_AGENT_STRATEGY_START",
@@ -213,8 +232,8 @@ class CodeReflectionTests(unittest.TestCase):
                 (mutation_dir / "reflection_conclusion.json").read_text(encoding="utf-8")
             )
             self.assertEqual(conclusion["strategy_fidelity"], "unfaithful")
-            self.assertEqual(conclusion["code_simplicity"], "concise")
-            self.assertEqual(conclusion["game_compliance"], "compliant")
+            self.assertEqual(conclusion["code_correctness"], "correct")
+            self.assertEqual(metadata["schema_version"], "eagle-code-reflection-v6")
             self.assertFalse((mutation_dir / "revision_request.txt").exists())
             self.assertFalse((mutation_dir / "revision_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "revision_attempt_001_request.txt").exists())
@@ -308,55 +327,6 @@ class CodeReflectionTests(unittest.TestCase):
         self.assertEqual(child.metadata["mutation"]["revision_status"], "not_run")
         self.assertEqual(backend.requests, [])
 
-    def test_code_diagnosis_normalizes_structured_preservation_descriptions(self) -> None:
-        backend = ScriptedJavaBackend((PARENT_JAVA,))
-        reflector = ScriptedReflectionBackend((json.dumps({
-            "strategy_fidelity": "faithful",
-            "code_simplicity": "needs_simplification",
-            "game_compliance": "compliant",
-            "diagnosis": [{
-                "dimension": "code_simplicity",
-                "evidence": "A duplicate branch is unreachable.",
-                "required_code_change": "Remove only the duplicate branch.",
-            }],
-            "behaviors_to_preserve": [{
-                "description": "Preserve continuous legal Worker production.",
-                "evidence": [{"method": "trainWorkers"}],
-            }, {
-                "rule": "Worker harvesting",
-                "implementation": "Preserve the legal harvest-and-return loop.",
-            }],
-        }),))
-        candidate = Candidate(
-            id="child",
-            generation=1,
-            strategy_prompt="Worker Rush.",
-            generation_prompt="prompt gene",
-            inherited_java=PARENT_JAVA,
-            java_parent_id="parent",
-        )
-
-        mutation = CodeReflectionMutation(
-            config(), backend=backend, reflection_backend=reflector
-        )
-        child = mutation.mutate(candidate, context())
-        self.assertEqual(backend.requests, [])
-        child = mutation.materialize(child, context())
-
-        conclusion = child.metadata["mutation"]["reflection_conclusion"]
-        self.assertEqual(
-            conclusion["behaviors_to_preserve"],
-            [
-                "Preserve continuous legal Worker production.",
-                "Preserve the legal harvest-and-return loop.",
-            ],
-        )
-        self.assertIn(
-            "Preserve continuous legal Worker production.",
-            backend.requests[0],
-        )
-        self.assertIn("Preserve the legal harvest-and-return loop.", backend.requests[0])
-
     def test_all_passing_conclusions_preserve_parent_without_revision_call(self) -> None:
         backend = ScriptedJavaBackend((RuntimeError("revision must not run"),))
         reflector = ScriptedReflectionBackend((reflection_response(requires_revision=False),))
@@ -383,6 +353,94 @@ class CodeReflectionTests(unittest.TestCase):
             child.metadata["mutation"]["revision_status"],
             "not_required",
         )
+
+    def test_actual_code_defect_requests_corrective_revision(self) -> None:
+        payload = json.loads(reflection_response(requires_revision=False))
+        payload["code_correctness"] = "incorrect"
+        payload["diagnosis"] = [{
+            "dimension": "code_correctness",
+            "evidence": "A null Unit dereference can throw before an action is returned.",
+            "required_code_change": "Guard the null Unit before dereferencing it.",
+        }]
+        backend = ScriptedJavaBackend((PARENT_JAVA,))
+        mutation = CodeReflectionMutation(
+            config(), backend=backend,
+            reflection_backend=ScriptedReflectionBackend((json.dumps(payload),)),
+        )
+        candidate = Candidate(id="defect", inherited_java=PARENT_JAVA)
+        diagnosed = mutation.mutate(candidate, context())
+        self.assertTrue(diagnosed.metadata["mutation"]["revision_required"])
+        repaired = mutation.materialize(diagnosed, context())
+        self.assertEqual(len(backend.requests), 1)
+        self.assertIn("Guard the null Unit", backend.requests[0])
+        self.assertEqual(repaired.metadata["mutation"]["revision_status"], "success")
+
+    def test_ambiguous_strategy_with_correct_code_never_revises(self) -> None:
+        payload = json.loads(reflection_response(requires_revision=False))
+        payload["strategy_fidelity"] = "ambiguous_strategy"
+        backend = ScriptedJavaBackend(())
+        mutation = CodeReflectionMutation(
+            config(), backend=backend,
+            reflection_backend=ScriptedReflectionBackend((json.dumps(payload),)),
+        )
+        candidate = Candidate(id="ambiguous", inherited_java=PARENT_JAVA)
+        child = mutation.materialize(mutation.mutate(candidate, context()), context())
+        self.assertEqual(child.generated_java, PARENT_JAVA)
+        self.assertEqual(backend.requests, [])
+        self.assertEqual(child.metadata["mutation"]["revision_status"], "not_required")
+
+    def test_strict_diagnosis_boundary_rejects_forbidden_directives(self) -> None:
+        valid = json.loads(reflection_response())
+        invalid_payloads = []
+        for extra in ("code_simplicity", "game_compliance", "revised_strategy_prompt"):
+            invalid_payloads.append(valid | {extra: "needs_simplification"})
+        invalid_payloads.append(valid | {"diagnosis": [valid["diagnosis"][0] | {"cleanup": "simplify"}]})
+        invalid_payloads.append(valid | {"diagnosis": [valid["diagnosis"][0] | {"evidence": {"description": "mismatch"}}]})
+        invalid_payloads.append(valid | {"diagnosis": []})
+        invalid_payloads.append(valid | {"diagnosis": valid["diagnosis"] * 6})
+        invalid_payloads.append(valid | {"code_correctness": {"incorrect": True}})
+        invalid_payloads.append(valid | {"diagnosis": [valid["diagnosis"][0] | {"dimension": "code_simplicity"}]})
+        invalid_payloads.append(valid | {"behaviors_to_preserve": [{"description": "Worker training", "instruction": "cleanup"}]})
+        invalid_payloads.append(valid | {"strategy_fidelity": "faithful"})
+        invalid_payloads.append(valid | {"strategy_fidelity": "ambiguous_strategy"})
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                parse_reflection_response(json.dumps(payload), "code")
+        self.assertFalse(_revision_required({"code_simplicity": "needs_simplification"}))
+
+    def test_simplicity_only_response_retains_raw_artifacts_without_revision(self) -> None:
+        payload = json.loads(reflection_response(requires_revision=False))
+        payload["code_simplicity"] = "needs_simplification"
+        raw = json.dumps(payload)
+        backend = ScriptedJavaBackend(())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mutation = CodeReflectionMutation(
+                config(), backend=backend, artifact_root=root,
+                reflection_backend=ScriptedReflectionBackend((raw, raw)),
+            )
+            candidate = Candidate(id="cosmetic", inherited_java=PARENT_JAVA)
+            child = mutation.materialize(mutation.mutate(candidate, context()), context())
+            self.assertEqual(child.generated_java, PARENT_JAVA)
+            self.assertEqual(child.metadata["mutation"]["reflection_status"], "failed")
+            self.assertEqual(backend.requests, [])
+            artifact = root / candidate.id / "mutation" / "code_reflection"
+            for attempt in (1, 2):
+                self.assertEqual((artifact / f"reflector_attempt_{attempt:03d}_response_raw.txt").read_text(), raw)
+
+    def test_persisted_conclusion_is_revalidated_before_revision(self) -> None:
+        backend = ScriptedJavaBackend(())
+        mutation = CodeReflectionMutation(
+            config(), backend=backend,
+            reflection_backend=ScriptedReflectionBackend((reflection_response(),)),
+        )
+        candidate = Candidate(id="tampered", inherited_java=PARENT_JAVA)
+        diagnosed = mutation.mutate(candidate, context())
+        diagnosed.metadata["mutation"]["reflection_conclusion"]["cleanup"] = "simplify"
+        child = mutation.materialize(diagnosed, context())
+        self.assertEqual(child.generated_java, PARENT_JAVA)
+        self.assertEqual(child.metadata["mutation"]["reflection_status"], "failed")
+        self.assertEqual(backend.requests, [])
 
     def test_direct_code_output_skips_final_generator(self) -> None:
         backend = ScriptedJavaBackend((RuntimeError("final Generator must not run"),))

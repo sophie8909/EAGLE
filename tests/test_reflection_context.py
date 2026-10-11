@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from eagle.strategy_dsl import worker_rush_policy
 from pathlib import Path
 
 from eagle.candidate import Candidate
@@ -24,7 +25,7 @@ class ReflectionContextTests(unittest.TestCase):
 
     def test_evaluation_propagates_canonical_evidence_to_next_reflection(self):
         config = ExperimentConfig.from_mapping({})
-        candidate = Candidate(strategy_prompt="Use economy before combat.")
+        candidate = Candidate(strategy_prompt=worker_rush_policy())
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             evaluation = evaluate_candidate(
@@ -80,7 +81,7 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertIn("missing symbol: commandAttack", prompt)
 
     def test_strategy_template_keeps_canonical_envelope_in_stable_field(self):
-        candidate = Candidate(id="strategy-parent", strategy_prompt="play economy")
+        candidate = Candidate(id="strategy-parent", strategy_prompt=worker_rush_policy())
         context = ReflectionContext(
             generation=1,
             index=0,

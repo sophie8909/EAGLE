@@ -167,6 +167,25 @@ class SemanticSignatureTests(unittest.TestCase):
             self.assertEqual(global_all["duplicate_candidate_count"], "1")
             self.assertTrue((output / "semantic_library.json").is_file())
 
+    def test_offline_analysis_excludes_gate_audits_but_keeps_corrections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            for identity, operator in (("healthy-check", "code_check"), ("correction", "mutation")):
+                candidate_dir = run / "candidates" / identity
+                candidate_dir.mkdir(parents=True)
+                (candidate_dir / "candidate.json").write_text(json.dumps({
+                    "candidate_id": identity, "operator": operator, "mutation_type": "code",
+                }), encoding="utf-8")
+            data = RunData(run_dir=run, manifest={}, resolved_config={}, generation_metrics=[],
+                           generations=[], final_population=None, timing=[], errors=[])
+            output = analyze_semantics(data)
+            library = json.loads((output / "semantic_library.json").read_text())
+            self.assertEqual(library["candidate_count"], 1)
+            self.assertEqual(library["unavailable_candidate_count"], 1)
+            with (output / "semantic_candidates.csv").open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual([row["candidate_id"] for row in rows], ["correction"])
+
 
 if __name__ == "__main__":
     unittest.main()

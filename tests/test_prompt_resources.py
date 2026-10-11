@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from eagle.config import DEFAULT_SEED_POLICY_PATH, ExperimentConfig
+from eagle.strategy_dsl import validate_strategy_dsl, worker_rush_policy
 from eagle.prompts import (
     DEFAULT_PROMPT_DIR,
     load_prompt,
@@ -18,10 +19,8 @@ from eagle.prompts import (
 class PromptResourceTests(unittest.TestCase):
     def test_initial_strategy_is_a_concrete_worker_rush_policy(self) -> None:
         policy = load_prompt("initial_strategy")
-        self.assertIn("continuously produce Workers", policy)
-        self.assertIn("harvest", policy)
-        self.assertIn("attack the enemy Base", policy)
-        self.assertNotIn("Define a concrete", policy)
+        self.assertEqual(policy, worker_rush_policy())
+        self.assertEqual(validate_strategy_dsl(policy)["rules"][0]["action"]["unit"], "Worker")
         for coach_name in ("coach_refine", "coach_counter", "coach_structural", "coach_alternative"):
             coach = load_prompt_templates()[coach_name].template
             self.assertIn("concrete game-playing policy itself", coach)
@@ -137,9 +136,9 @@ class PromptResourceTests(unittest.TestCase):
         self.assertEqual(config.prompt_reflection_probability, 0.5)
         self.assertEqual(config.code_reflection_probability, 0.0)
         self.assertEqual(config.initial_java_seed_path, Path("eagle/java_seeds/CandidateAgent.java").resolve())
-        self.assertEqual(config.seed_prompts[0], "")
-        self.assertIn("continuous Worker-rush", config.seed_prompts[1])
-        self.assertIn("deterministic pseudo-random policy", config.seed_prompts[2])
+        self.assertEqual(validate_strategy_dsl(config.seed_prompts[0])["rules"], [])
+        self.assertEqual(config.seed_prompts[1], worker_rush_policy())
+        self.assertTrue(all(rule["action"]["type"] == "choose" for rule in validate_strategy_dsl(config.seed_prompts[2])["rules"]))
 
     def test_static_0826_seed_variants_generate_ten_individuals_from_one_policy(self) -> None:
         config_dir = Path("configs/experiments/static_0826_seed_variants")

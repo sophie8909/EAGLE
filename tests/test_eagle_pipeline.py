@@ -50,6 +50,14 @@ from eagle.generation.java_agent_generator import (
 )
 
 
+class PassingCodeGate:
+    def mutate(self, candidate, context, *, artifact_dir=None):
+        return replace(candidate, metadata={"mutation": {
+            "reflection_status": "success", "revision_required": False,
+            "revision_status": "not_required",
+        }})
+
+
 class RecordingMutationBackend:
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
@@ -143,7 +151,7 @@ class EaglePipelineTests(unittest.TestCase):
         ), redirect_stdout(StringIO()):
             plan = plan_offspring(
                 [parent_a, parent_b], config=config, generation=1, rng=random.Random(0),
-                mutations={"strategy": object()}, operator_controller=controller,
+                mutations={"code": PassingCodeGate(), "strategy": object()}, operator_controller=controller,
             )[0]
         self.assertEqual(plan.mutation_context.candidate.candidate_id, parent_b.id)
         self.assertEqual(plan.comparison_parent_id, parent_b.id)
@@ -189,7 +197,7 @@ class EaglePipelineTests(unittest.TestCase):
         })
         parent = Candidate(
             id="parent",
-            strategy_prompt="worker rush",
+            strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}),
             generation_prompt="generate Java",
             fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
         )
@@ -204,7 +212,7 @@ class EaglePipelineTests(unittest.TestCase):
                 config=config,
                 generation=7,
                 rng=random.Random(3),
-                mutations={"strategy": SuccessfulMutation()},
+                mutations={"code": PassingCodeGate(), "strategy": SuccessfulMutation()},
                 operator_controller=StrategyOnlyController(),
             )
 
@@ -266,7 +274,7 @@ class EaglePipelineTests(unittest.TestCase):
         })
         parent = Candidate(
             id="parent",
-            strategy_prompt="worker rush",
+            strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}),
             generation_prompt="generate Java",
             fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
         )
@@ -276,7 +284,7 @@ class EaglePipelineTests(unittest.TestCase):
                 config=config,
                 generation=2,
                 rng=random.Random(9),
-                mutations={"strategy": ObservedMutation()},
+                mutations={"code": PassingCodeGate(), "strategy": ObservedMutation()},
                 operator_controller=StrategyOnlyController(),
             )
 
@@ -423,7 +431,7 @@ class EaglePipelineTests(unittest.TestCase):
 
     def test_mock_generation_returns_valid_java_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            candidate = Candidate(strategy_prompt="Generate an agent.")
+            candidate = Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertIn("package ai.generated;", agent.source)
             self.assertIn("extends AbstractionLayerAI", agent.source)
@@ -446,7 +454,7 @@ class EaglePipelineTests(unittest.TestCase):
             root = Path(temp_dir)
             config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
-                Candidate(strategy_prompt="Generate an agent."),
+                Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})),
                 config=config,
                 backend=StaticGenerationBackend(),
                 generated_agents_dir=root / "generated_agents",
@@ -474,7 +482,7 @@ class EaglePipelineTests(unittest.TestCase):
             root = Path(temp_dir)
             config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
-                Candidate(strategy_prompt="Generate an agent."),
+                Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})),
                 config=config,
                 backend=NonJavaBackend(),
                 generated_agents_dir=root / "generated_agents",
@@ -568,20 +576,11 @@ class EaglePipelineTests(unittest.TestCase):
             self.assertAlmostEqual(
                 sum(generation_one_aos["post_update_probabilities"].values()), 1.0
             )
-            self.assertTrue(list((result.run_dir / "candidates").glob("*/aos/reward.json")))
-            aos_reward_path = next((result.run_dir / "candidates").glob("*/aos/reward.json"))
-            aos_reward = json.loads(aos_reward_path.read_text(encoding="utf-8"))
-            self.assertEqual(aos_reward["schema_version"], "eagle-aos-reward-v3")
-            self.assertEqual(aos_reward["offspring_id"], aos_reward_path.parents[1].name)
-            self.assertIn(aos_reward["operator"], {"strategy", "prompt", "code"})
-            self.assertIn(aos_reward["operator_id"], generation_one_aos["operators"])
-            self.assertTrue(
-                aos_reward_path.parents[2].joinpath(aos_reward["comparison_parent_id"]).is_dir()
-            )
-            self.assertEqual(aos_reward["head_to_head"]["total_matches"], 18)
-            self.assertEqual(aos_reward["reward_source"], "head2head")
-            self.assertIn("operator_quality_before", aos_reward)
-            self.assertIn("operator_quality_after", aos_reward)
+            self.assertTrue(list((result.run_dir / "candidates").glob("*/mutation/code_reflection/reflection_conclusion.json")))
+            self.assertEqual(generation_one_aos["code_probability_after"], 0.0)
+            self.assertEqual(generation_one_aos["operators"]["code_reflection"]["reward_count"], 0)
+            # Mock diagnostics request repairs; independent gate repairs receive no AOS reward.
+            self.assertFalse(list((result.run_dir / "candidates").glob("*/aos/reward.json")))
 
     def test_population_signature_tracks_opponent_cases_not_candidate_ids(self) -> None:
         first = [
@@ -655,7 +654,7 @@ class EaglePipelineTests(unittest.TestCase):
 
     def test_generate_java_agent_uses_stable_template_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            candidate = Candidate(strategy_prompt="Generate a Java MicroRTS agent.")
+            candidate = Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertEqual(agent.class_name, "CandidateAgent")
             self.assertTrue(agent.source_path.exists())
@@ -956,7 +955,7 @@ class EaglePipelineTests(unittest.TestCase):
                 raise RuntimeError("backend down")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
+            evaluation = evaluate_candidate(Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})), config=ExperimentConfig.from_mapping({}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
@@ -968,7 +967,7 @@ class EaglePipelineTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            candidate = Candidate(id="badjson", strategy_prompt="Generate an agent.")
+            candidate = Candidate(id="badjson", strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
             evaluation = evaluate_candidate(
                 candidate,
                 config=ExperimentConfig.from_mapping({}),

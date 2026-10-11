@@ -81,11 +81,8 @@ def decode_validate_compile_candidate(
         "initial_java_seed",
         "self_play_fitness_refresh",
     }
-    direct_code_source = (
-        candidate.generated_java
-        if candidate.mutation_type == "code" and candidate.generated_java
-        else ""
-    )
+    is_code_reflection = candidate.mutation_type == "code"
+    direct_code_source = candidate.generated_java if is_code_reflection else ""
     max_attempts = 1 if source_without_generation else config.generation_max_attempts
     if max_attempts < 1:
         raise ValueError("generation_max_attempts must be at least 1.")
@@ -93,7 +90,7 @@ def decode_validate_compile_candidate(
         ""
         if source_without_generation
         else "Direct Java source from mutation/code_reflection/reflected_candidate.java"
-        if direct_code_source
+        if is_code_reflection
         else backend.authoritative_request(candidate, "CandidateAgent")
         if hasattr(backend, "authoritative_request")
         else candidate.generation_input(class_name="CandidateAgent")
@@ -128,7 +125,7 @@ def decode_validate_compile_candidate(
             attempt_name = f"attempt_{attempt_number:03d}"
             request_kind = (
                 "code_reflection_output"
-                if direct_code_source and attempt_number == 1
+                if is_code_reflection and attempt_number == 1
                 else "compile_repair"
                 if not source_without_generation and repair_parent is not None
                 else "initial_decode_retry"
@@ -162,7 +159,7 @@ def decode_validate_compile_candidate(
                 (attempt_artifact_dir / "request.txt").write_text(request, encoding="utf-8")
             attempt_backend = (
                 _DirectCodeReflectionBackend(direct_code_source)
-                if direct_code_source and attempt_number == 1
+                if is_code_reflection and attempt_number == 1
                 else backend
             )
             if hasattr(attempt_backend, "set_generation_attempt_context"):
@@ -297,7 +294,7 @@ def decode_validate_compile_candidate(
                     attempts,
                     initial_seed_source=source_without_generation,
                 )
-            if selected_attempt is not None:
+            if selected_attempt is not None or (is_code_reflection and not generation.assembled_java):
                 break
             repair_parent = (
                 attempt
@@ -348,6 +345,7 @@ def _compile_repair_request(
         prompt_id,
         {
             "policy_prompt": candidate.strategy_prompt.strip(),
+            "strategy_dsl_reference": load_prompt("strategy_dsl_reference"),
             "code_generation_prompt": candidate.generation_prompt.strip(),
             "action_api_guide": load_prompt("action_api_guide"),
             "java_scaffold": load_java_template(JavaTemplatePaths(config.agent_template_path)),

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.strategy_dsl import worker_rush_policy
 from eagle.config import ExperimentConfig
 from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection import ReflectionStage
@@ -74,7 +75,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
     def test_strategy_rewrite_call_order_and_component_isolation(self):
         backend = ScriptedRewriteBackend((
             self._strategy_reflection(),
-            strategy_rewrite("new strategy prompt"),
+            strategy_rewrite(worker_rush_policy(2)),
         ))
         mutation = PromptRewriteMutation(
             self.config,
@@ -86,7 +87,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual(len(backend.calls), 2)
         self.assertIn("Strategy Reflection stage", backend.calls[0])
         self.assertIn("Strategy Prompt Rewrite stage", backend.calls[1])
-        self.assertEqual(child.strategy_prompt, "new strategy prompt")
+        self.assertEqual(child.strategy_prompt, worker_rush_policy(2))
         self.assertEqual(child.generation_prompt, self.candidate.generation_prompt)
         self.assertEqual(child.operator, "crossover+mutation")
         self.assertTrue(child.metadata["mutation"]["applied"])
@@ -232,7 +233,7 @@ EAGLE_REUSABLE_RULES_END"""
     def test_rewrite_output_rejects_java_and_retries(self):
         backend = ScriptedRewriteBackend((
             "package ai.generated; class CandidateAgent {}",
-            strategy_rewrite("usable revised prompt"),
+            strategy_rewrite(worker_rush_policy(2)),
         ))
         result = PromptRewriteStage(backend, max_attempts=2).run(
             rewrite_type="strategy_prompt_rewrite",
@@ -240,7 +241,7 @@ EAGLE_REUSABLE_RULES_END"""
             request="rewrite request",
         )
         self.assertTrue(result.succeeded)
-        self.assertEqual(result.rewritten_prompt, "usable revised prompt")
+        self.assertEqual(result.rewritten_prompt, worker_rush_policy(2))
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
 
     def test_strategy_rewrite_requires_exact_json_string_contract(self):
@@ -263,7 +264,7 @@ EAGLE_REUSABLE_RULES_END"""
             json.dumps({
                 "revised_strategy_prompt": ["First legal rule.", "Second legal rule."]
             }),
-            strategy_rewrite("usable revised prompt"),
+            strategy_rewrite(worker_rush_policy(2)),
         ))
         result = PromptRewriteStage(backend, max_attempts=2).run(
             rewrite_type="strategy_prompt_rewrite",

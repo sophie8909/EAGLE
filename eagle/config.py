@@ -10,6 +10,9 @@ from typing import Any
 
 import yaml
 
+from eagle.strategy_dsl import VERSION as STRATEGY_POLICY_FORMAT, normalize_strategy_dsl
+
+
 from eagle.generation.agent_template import (
     DEFAULT_AGENT_TEMPLATE_PATH,
     DEFAULT_INITIAL_JAVA_SEED_PATH,
@@ -19,6 +22,9 @@ from eagle.candidate import DEFAULT_GENERATION_PROMPT
 from eagle.operators.adaptive import ReflectionOperatorMode, ReflectionOperatorSettings
 from eagle.opponent_cases import LEXICASE_CASES, SELF_PLAY_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
 from eagle.prompts import DEFAULT_PROMPT_DIR, PromptTemplate
+
+
+EVOLUTION_PROTOCOL = "eagle-dsl-pre-crossover-v1"
 
 
 DEFAULT_EVALUATION_MAPS = (
@@ -236,7 +242,10 @@ class ExperimentConfig:
             "seed_prompt_files",
             allow_empty=True,
         )
-        seed_prompts = tuple(path.read_text(encoding="utf-8").strip() for path in seed_prompt_files)
+        seed_prompts = tuple(
+            normalize_strategy_dsl(path.read_text(encoding="utf-8"), max_chars=int(payload.get("max_prompt_chars", 4000)))
+            for path in seed_prompt_files
+        )
         if not seed_prompts:
             raise ValueError("Experiment config must define at least one seed_prompt_files entry.")
         initial_policy_generation_prompt_file = _parse_prompt_files(
@@ -497,6 +506,8 @@ class ExperimentConfig:
         )
 
     def validate(self) -> None:
+        for policy in self.seed_prompts:
+            normalize_strategy_dsl(policy, max_chars=self.max_prompt_chars)
         if not self.experiment_name.strip():
             raise ValueError("experiment_name must not be empty.")
         self.model.validate()
@@ -713,6 +724,8 @@ class ExperimentConfig:
 
         mapping = {
             "schema_version": "experiment-v2",
+            "evolution_protocol": EVOLUTION_PROTOCOL,
+            "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "experiment_name": self.experiment_name,
             "algorithm": self.algorithm,
             "survivor_selection": self.survivor_selection,

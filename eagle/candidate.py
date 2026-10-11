@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from eagle.opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
 from eagle.prompts import load_prompt
+from eagle.strategy_dsl import VERSION as STRATEGY_POLICY_FORMAT, normalize_strategy_dsl
 
 
 ACTION_API_GUIDE = load_prompt("action_api_guide")
@@ -38,7 +39,7 @@ class Candidate:
     # genes.  ``inherited_genotype`` additionally carries the complete Java
     # input chosen before generation; it is deliberately separate from the
     # generated phenotype below so failures do not erase inherited state.
-    strategy_prompt: str = ""
+    strategy_prompt: str = '{"rules":[],"version":"eagle-strategy-dsl-v1"}'
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
     inherited_java: str = ""
     java_parent_id: str | None = None
@@ -106,7 +107,8 @@ class Candidate:
         from eagle.prompts import render_prompt
 
         values = {
-            "policy_prompt": self.strategy_prompt.strip(),
+            "policy_prompt": normalize_strategy_dsl(self.strategy_prompt),
+            "strategy_dsl_reference": load_prompt("strategy_dsl_reference"),
             "action_api_guide": ACTION_API_GUIDE,
             "code_generation_prompt": self.generation_prompt.strip(),
             "java_scaffold": current_source,
@@ -129,6 +131,7 @@ class Candidate:
 
         payload = {
             "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "id": self.id,
             "candidate_id": self.id,
             "generation": self.generation,
@@ -179,6 +182,7 @@ class Candidate:
 
         return {
             "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "candidate_id": self.id,
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
@@ -289,6 +293,7 @@ def compact_candidate_metadata(
 
     compact: dict[str, Any] = {}
     for key in (
+        "pre_crossover_code_checks",
         "seed_index",
         "replicate_index",
         "initial_policy_source",

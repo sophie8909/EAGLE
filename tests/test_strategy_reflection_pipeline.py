@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.strategy_dsl import worker_rush_policy, normalize_strategy_dsl
 from eagle.llm import LLMCallLogger
 from eagle.operators.context import ReflectionContext
 from eagle.operators.context import CandidateReflectionSummary, EvolutionContext
@@ -180,11 +181,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
 
     def test_strategy_reflection_persists_exact_observation_flow_without_extra_calls(self) -> None:
         parent_strategy = "Parent policy.\nKeep this exact trailing space.  "
-        raw_child_strategy = (
-            "If no higher-priority legal action applies, leave each idle friendly Worker idle.  "
-            "\n\n\nIf a friendly Base is idle, the stockpile is at least 1, and a free adjacent "
-            "cell exists, have that Base train a Worker into that cell.   "
-        )
+        raw_child_strategy = json.dumps(json.loads(worker_rush_policy(2)), indent=2)
 
         class ExactBackend:
             def __init__(self) -> None:
@@ -346,9 +343,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(result.coach.parent_strategy_prompt, parent_strategy)
             self.assertEqual(
                 result.candidate.strategy_prompt,
-                "If no higher-priority legal action applies, leave each idle friendly Worker idle."
-                "\n\nIf a friendly Base is idle, the stockpile is at least 1, and a free adjacent "
-                "cell exists, have that Base train a Worker into that cell.",
+                normalize_strategy_dsl(raw_child_strategy),
             )
             self.assertEqual(
                 (reflection_dir / "child_strategy_prompt.txt").read_text(encoding="utf-8"),
@@ -477,7 +472,23 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertIn("commentator_diagnoses_and_evaluation_metadata", coach_request)
             self.assertIn("stable opening", coach_request)
             self.assertNotIn("ROLE: manager", "\n".join(mutation.backend.prompts))
-            self.assertIn("nearest current enemy Base", result.candidate.strategy_prompt)
+            self.assertEqual(result.candidate.strategy_prompt, worker_rush_policy(2))
+
+    def test_oversized_dsl_coach_and_repair_preserve_parent_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            trace = root / "match_trace.jsonl.gz"
+            _write_trace(trace, metadata={"match_id": "match-1"}, round_state_dir=states, raw_result={}, tick_limit=0)
+            parent = Candidate(id="parent", strategy_prompt=worker_rush_policy())
+            context = ReflectionContext(candidate_id="parent", per_match_results=({"match_id": "match-1", "match_trace_path": str(trace)},))
+            mutation = StrategyReflectionMutation(MockRoleBackend(), max_attempts=1, max_policy_chars=50)
+            result = mutation.run(parent, context, artifact_dir=root / "child")
+            self.assertEqual(result.status, "failed")
+            self.assertEqual(result.candidate.strategy_prompt, parent.strategy_prompt)
+            self.assertIn("size limit", result.error)
+            self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "coach_output.json").is_file())
 
     def test_repeated_siblings_can_reuse_the_same_parent_trace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -689,7 +700,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 (reflection_dir / "strategy_contract_rewrite.json").read_text()
             )
             self.assertTrue(rewrite_record["applied"])
-            self.assertIn("enemy territory", rewrite_record["initial_validation_error"])
+            self.assertIn("versioned JSON strategy DSL", rewrite_record["initial_validation_error"])
             self.assertTrue(
                 (reflection_dir / "strategy_contract_rewriter_output.json").exists()
             )

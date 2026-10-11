@@ -1,5 +1,6 @@
 import json
 import unittest
+from eagle.strategy_dsl import worker_rush_policy
 import urllib.error
 from unittest.mock import patch
 
@@ -75,7 +76,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(LLMServerError, "llm server error"):
                 evaluate_strategy_alignment(
-                    strategy_prompt="strategy",
+                    strategy_prompt=worker_rush_policy(),
                     generated_java="public class CandidateAgent {}",
                     behavior_summary={},
                     backend=backend,
@@ -185,7 +186,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
     def test_strategy_alignment_persists_raw_and_parsed_response(self):
         backend = FixedAlignmentBackend('{"score": 7.5, "reason": "Production matches."}')
         result = evaluate_strategy_alignment(
-            strategy_prompt="Build workers before attacking.",
+            strategy_prompt=worker_rush_policy(),
             generated_java="public class CandidateAgent {}",
             behavior_summary={"units_produced": 4},
             backend=backend,
@@ -196,7 +197,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.parsed_response, {"score": 7.5, "reason": "Production matches."})
         self.assertEqual(result.raw_response, backend.response)
         self.assertEqual(len(result.attempts), 1)
-        self.assertIn("Build workers before attacking.", backend.requests[0])
+        self.assertIn(worker_rush_policy(), backend.requests[0])
         self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", backend.requests[0])
 
     def test_strategy_alignment_accepts_full_json_fence_and_literal_newline(self):
@@ -209,7 +210,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
             parse_strategy_alignment_response('{"score": 11, "reason": "too high"}')
         backend = FixedAlignmentBackend('{"score": "bad", "reason": "invalid"}')
         result = evaluate_strategy_alignment(
-            strategy_prompt="strategy",
+            strategy_prompt=worker_rush_policy(),
             generated_java="source",
             behavior_summary=None,
             backend=backend,

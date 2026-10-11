@@ -1,6 +1,14 @@
 # Migration plan
 
-## Completed migrations
+## DSL and pre-crossover source contract (2026-10-11)
+
+The [integration plan](dsl_pre_crossover_reflection_plan.md) migrates policy seeds
+and producers to canonical JSON DSL, gates every source before variation, preserves
+one-worst-match Strategy Reflection, limits normal mutation/AOS to Strategy/Prompt,
+and rejects incompatible resume. Corrective Java preserves source genes and
+bypasses ordinary Generator. Historical artifacts are not converted.
+
+## Completed prior migrations
 
 - complete-file candidate model and first-class lineage;
 - Strategy/Prompt Reflection → Rewrite → Generation mutations and diagnosis-guided direct-Java Code Reflection;

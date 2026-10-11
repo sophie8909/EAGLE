@@ -189,6 +189,7 @@ def build_alignment_request(
     return render_prompt("strategy_alignment", {
         "gameplay_contract": load_prompt("microrts_gameplay_contract"),
         "strategy_prompt": strategy_prompt,
+        "strategy_dsl_reference": load_prompt("strategy_dsl_reference"),
         "generated_java": generated_java,
         "behavior_summary": behavior,
     })

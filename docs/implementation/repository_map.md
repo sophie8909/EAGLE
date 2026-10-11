@@ -30,7 +30,7 @@ kept as documentation entries.
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/evolution/search.py` | Fresh run initialization, generation loop, and finalization |
 | `eagle/evolution/generation.py` | Shared fresh/resume generation ordering, evaluation, credit, selection, and persistence |
-| `eagle/evolution/offspring.py` | Whole-generation assignment, reflection/rewrite, deferred Code materialization, evidence-parent lookup |
+| `eagle/evolution/offspring.py` | Selected-source Code gate before variation, healthy crossover/normal reflection, corrective Java materialization, evidence-parent lookup |
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/self_play.py` | Managed self-play opponent library, five-generation context selection, context hashes, resume loading, and selection guards |
 | `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
@@ -42,6 +42,8 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
+| `eagle/strategy_dsl.py` | Versioned closed-vocabulary strategy DSL validation and canonical JSON normalization; no runtime interpreter |
+| `docs/implementation/dsl_pre_crossover_reflection_plan.md` | Staged DSL and independent reproduction-source gate integration plan |
 | `eagle/candidate.py` | Candidate genotype, phenotype, lineage, failure, fitness, references |
 | `eagle/operators/crossover.py` | Independent prompt and optional inherited-Java crossover with provenance |
 | `eagle/operators/reflection.py` | Reflection context and transport contracts |
@@ -113,7 +115,7 @@ kept as documentation entries.
 | Reflection choice or adaptive credit | `eagle/operators/adaptive.py` |
 | Strategy mutation | `eagle/operators/strategy.py` |
 | Prompt mutation | `eagle/operators/prompt.py` |
-| Code mutation | `eagle/operators/code.py` |
+| Independent Code source gate / corrective Java | `eagle/operators/code.py` |
 | Operator evidence | `eagle/operators/context.py`, `eagle/operators/reflection_prompts.py` |
 | Phase order | `eagle/evolution/generation.py`, `eagle/evolution/offspring.py` |
 

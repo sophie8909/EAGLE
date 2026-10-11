@@ -26,3 +26,7 @@ FINAL OUTPUT CONTRACT (highest priority):
 Your response must contain one complete CandidateAgent.java file and nothing else.
 The first non-whitespace text must be package ai.generated; and the final non-whitespace character must be the class closing brace.
 Never return JSON, a functions object, individual method bodies, a patch, an explanation, or Markdown fences.
+
+
+Normative strategy DSL semantics (the policy is executable rules, not prose):
+$strategy_dsl_reference

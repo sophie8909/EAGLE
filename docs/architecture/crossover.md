@@ -1,5 +1,11 @@
 # Uniform crossover
 
+Every source contributor first passes independent Code Reflection against its
+own canonical DSL policy and exact Java. Check A first, then donor B when
+crossover is requested, before actual variation. A defective/failed check emits
+a diagnosed one-parent child and skips crossover/mutation; lambda is preserved.
+Corrective Java is deferred to generation-model materialization.
+
 Uniform crossover always operates on two whole prompt components:
 
 ```text

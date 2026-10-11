@@ -26,3 +26,7 @@ STRUCTURED VALIDATION/COMPILATION DIAGNOSTICS:
 $compile_evidence
 
 Return one complete CandidateAgent.java file and nothing else. Copy every token outside EAGLE_AGENT_STRATEGY_START/END from the canonical scaffold; only the strategy region may differ. Preserve every fixed method even when it appears unused. Preserve the policy; do not return a patch, Markdown, JSON, or explanation.
+
+
+Normative strategy DSL semantics (the policy is executable rules, not prose):
+$strategy_dsl_reference

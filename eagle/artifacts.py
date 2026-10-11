@@ -606,6 +606,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         )
     payload = {
         "candidate_schema_version": "eagle-candidate-v6",
+        "strategy_policy_format": "eagle-strategy-dsl-v1",
         "candidate_id": candidate.id,
         "generation": candidate.generation,
         "parent_ids": list(candidate.parent_ids),

@@ -1,5 +1,34 @@
 # Artifact schema
 
+## DSL and pre-crossover source contract (2026-10-11)
+
+New `strategy_prompt` payloads are canonical `eagle-strategy-dsl-v1` JSON;
+historical natural-language artifacts are read-only and incompatible resume is
+rejected. Each source check owns candidate/check-ID `mutation/code_reflection/`
+evidence; source-parent files are never overwritten. Normal children retain
+compact `pre_crossover_code_checks` references. Code gate/controller state is v6;
+normal AOS rewards cover Strategy and Prompt only.
+
+Each normal child stores `pre_crossover_code_checks` entries with
+`source_candidate_id`, `gate_candidate_id`, `healthy`, `reflection_status`,
+`revision_required`, and `artifact_path` (`../{gate_id}/mutation/code_reflection`).
+Source A uses a deterministic source-check ID; donor B, when needed,
+uses a deterministic donor-check ID. Evidence belongs to check candidates, never
+the evaluated source-parent directory. A defective/failed check emits its
+one-parent diagnosed child, preserving the fixed offspring count.
+Healthy audit-only check snapshots use `operator: code_check` (with
+`mutation_type: code`); actual corrective offspring use `operator: mutation`.
+Semantic analysis excludes `code_check` audits from candidate/unavailable counts,
+so population statistics describe actual individuals. Source parents remain unchanged.
+
+Resolved configs carry `evolution_protocol: eagle-dsl-pre-crossover-v1` and
+`strategy_policy_format: eagle-strategy-dsl-v1`. Resume requires the protocol
+marker before touching run artifacts. Candidate/artifact schema versions remain
+current, with an additional `strategy_policy_format` field; operator state uses
+`eagle-reflection-operator-v6`. Historical runs remain inspectable, but cannot
+resume under the changed algorithm.
+
+
 This document owns the current `eagle-run-v2`, `eagle-generation-v3`, and
 `eagle-candidate-v6` layout (`phase4-v6`). Timing and lineage fields are defined by
 `timing_schema.md` and `lineage_schema.md`.
@@ -70,8 +99,8 @@ three genotype component hashes, source/new Java hashes, replica fitness and
 status, corresponding source fitness/status, direct genotype/Java-change flags,
 and survivor flag. The old parent candidate directory remains immutable.
 
-The `eagle-reflection-operator-v5` AOS record contains `mode`, probabilities before/after, nullable
-Strategy/Prompt/Code rewards, `reward_source`, operator state, and transitions.
+The `eagle-reflection-operator-v6` AOS record contains `mode`, probabilities before/after, nullable
+Strategy/Prompt rewards, `reward_source`, operator state, and transitions.
 Static mode records `reward_source: static`, null rewards, and unchanged
 probabilities. Resume restores adaptive state from the latest generation file.
 There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
@@ -236,7 +265,7 @@ Code Reflection evidence is stored under `mutation/code_reflection/`. It
 retains `reflection_conclusion.json`, numbered request/raw attempt files, and
 `representative_attempt_artifacts` pointers for Reflector and Revision calls, `parent_candidate.java`, `reflected_candidate.java`, hashes, attempt
 timing, and terminal status. The parsed conclusion independently records strategy
-fidelity, code simplicity, and game compliance. The revision request contains the
+fidelity and code correctness. The revision request contains the
 exact parsed conclusion, the explicit interface/unit reference, and the
 source-matching validation/compiler diagnostics supplied to the diagnosis; neither
 Code Reflection stage receives gameplay-performance evidence. When every dimension
@@ -244,7 +273,7 @@ passes, revision status is `not_required` and the parent Java is preserved. A
 successful reflected source enters the normal generation attempt ledger as
 `code_reflection_output` but causes no additional final Generator LLM request.
 Between diagnosis and the generation-wide materialization phase, its schema is
-`eagle-code-reflection-v5` with `revision_status: pending`; materialization
+`eagle-code-reflection-v6` with `revision_status: pending`; materialization
 updates the same artifact to its terminal status without discarding the original
 diagnosis/evidence. `reflection_model` and `revision_model` separately identify
 the primary and generation-phase models.

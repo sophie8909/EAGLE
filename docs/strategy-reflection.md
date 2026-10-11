@@ -126,10 +126,13 @@ Coach receives compact analyses, the all-match global summary, parent strategy,
 and selection metadata but never raw ticks. Generator budgeting is
 unchanged.
 
-Prompt and Code Reflection remain separate mutation paths: Prompt rewrites the
-generation prompt, while Code records a diagnosis and then directly revises
-parent Java from it before validation, compilation, integration, and
-code-quality evidence.
+Prompt Reflection is the other normal mutation and rewrites the generation
+prompt. Independent Code Reflection gates each reproduction source against its
+own policy and exact Java before crossover/mutation; corrective children preserve
+one source's genes and skip normal variation/AOS credit. Code v6 permits only
+fidelity/correctness repair, never cosmetic simplification. Strategy Coach output
+is validated canonical `eagle-strategy-dsl-v1` JSON; one-worst-match evidence and
+its failure-preserves-policy boundary remain unchanged.
 
 ## Strategy diversity metadata
 

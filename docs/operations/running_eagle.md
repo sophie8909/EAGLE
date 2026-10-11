@@ -223,17 +223,24 @@ code_reflection_probability: 0.00
 aos_minimum_probability: 0.10
 ```
 
-Strategy/Prompt/Code probabilities must sum to 1.0; they are fixed in `static`
-and initial in either AOS mode. Prompt Reflection rewrites reusable generation
-rules; Code Reflection diagnoses during reflection work and defers direct parent-
-Java revision to the final materialization phase. Every YAML creates fresh population, RNG, operator controller/AOS state,
-archives, IDs, and run directory; only a compatible LLM process may be reused.
+Normal mutation/AOS has only Strategy and Prompt. Supplied legacy weights are
+normalized over Strategy/Prompt with Code probability fixed at zero; all-zero
+weights skip normal mutation. Independent Code Reflection still checks every
+selected reproduction source before actual crossover/mutation, with each
+contributor's own DSL policy and exact Java. Defective/failed checks emit
+one-parent diagnosed children and skip normal variation. Corrective Java is
+materialized at the generation-model boundary without Generator overwrite.
 
-Historical configs without `prompt_reflection_probability` are migrated on
-load: the old `code_reflection_probability` becomes Prompt Reflection and the
-old compliance/balance probability becomes direct Code Reflection. New configs
-must use only the three canonical keys above. Runs containing retired operator
-state cannot resume under the new semantics; start a new run instead.
+New policies must be canonical `eagle-strategy-dsl-v1` JSON. Resolved configs
+record `strategy_policy_format: eagle-strategy-dsl-v1` and
+`evolution_protocol: eagle-dsl-pre-crossover-v1`. Resume checks this protocol
+before touching the run. Historical runs remain inspectable, but incompatible
+policy/protocol or old controller state cannot resume; start a new run rather
+than silently converting natural-language policies. Controller state is
+`eagle-reflection-operator-v6`.
+
+Every YAML creates fresh population, RNG, operator/AOS state, archives, IDs, and
+run directory; only a compatible LLM process may be reused.
 
 There are no separate `run` or `runtime` compatibility entrypoints. The
 experiment orchestrator is the only model/search lifecycle owner.

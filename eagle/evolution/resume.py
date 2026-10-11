@@ -6,8 +6,11 @@ import random
 import re
 from pathlib import Path
 
+import yaml
+
 from eagle.artifacts import write_summary
-from eagle.config import ExperimentConfig
+from eagle.config import ExperimentConfig, EVOLUTION_PROTOCOL, STRATEGY_POLICY_FORMAT
+from eagle.strategy_dsl import normalize_strategy_dsl
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.run_artifacts import (
     finalize_run,
@@ -69,6 +72,13 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
     run_config_path = run_dir / "config.yaml"
     if not run_config_path.is_file():
         raise ValueError(f"Resume run has no canonical config.yaml: {run_dir}")
+    payload = yaml.safe_load(run_config_path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(payload, dict)
+        or payload.get("evolution_protocol") != EVOLUTION_PROTOCOL
+        or payload.get("strategy_policy_format") != STRATEGY_POLICY_FORMAT
+    ):
+        raise ValueError("Resume requires the DSL/pre-crossover evolution protocol; start a new run for legacy experiments.")
     return ExperimentConfig.from_file(run_config_path)
 
 
@@ -84,6 +94,8 @@ def _resume_search_impl(
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
+    for candidate in population:
+        normalize_strategy_dsl(candidate.strategy_prompt, max_chars=config.max_prompt_chars)
     _restore_completed_generation(run_dir, completed_generation)
     ensure_strategy_archive(run_dir)
     # Backfill the archive from the surviving snapshot when resuming a run

@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-09-08 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-10-11 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -15,7 +15,7 @@ runtime LLM policy。
 Candidate 有兩種明確模式。預設 `generated_phenotype` 的 genotype 包含兩個
 可演化 prompt：
 
-1. `strategy_prompt`：遊戲 policy gene
+1. `strategy_prompt`：canonical versioned JSON DSL policy gene
 2. `generation_prompt`：policy-to-Java translation gene
 
 在預設模式，Java `CandidateAgent.java` 只屬於 phenotype／evidence，不會傳給
@@ -28,12 +28,22 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 `gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
 辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
-每一代先替全部子代完成 parent selection、crossover／copy 與 Strategy／Prompt／
-Code／無 mutation 的分配，第一個 mutation LLM request 只能在整代分配完成後開始。
-接著完成所有 Strategy／Prompt 的 reflection 與 rewrite，以及 Code Reflection 的
-結構化診斷；最後才進入整代共用的 Java materialization 階段：Strategy／Prompt／
-無 mutation 走一般 Generator，Code 則依診斷決定是否直接改寫父代 Java。之後依序
-執行 validation、compilation、integration、180 場 evaluation、AOS credit，以及
+新 run 的 policy 只接受 `eagle-strategy-dsl-v1` JSON，由
+`eagle/strategy_dsl.py` 驗證與正規化。`rules` 依順序包含 `actor`、`when`、`action`；
+合法動作 guard 為內建語意，空 rules 表示 idle。DSL 在離線 Java generation 階段
+實作，不新增 runtime interpreter。歷史自然語言 artifact 僅供唯讀；不相容舊 run
+resume 必須清楚失敗，不能默默轉換 policy。Resolved config 保存
+`evolution_protocol: eagle-dsl-pre-crossover-v1` 與
+`strategy_policy_format: eagle-strategy-dsl-v1`，resume 在修改 artifact 前先檢查。
+Controller state 使用 `eagle-reflection-operator-v6`。
+
+每代先選 reproduction sources，再對每個來源以自身 policy 與精確 Java 執行
+獨立 Code Reflection gate，通過後才允許實際 crossover／mutation。所有 contributor
+都必須通過。缺陷來源改產生保留 policy／generation genes 的單一父代修正子代，
+跳過 crossover／一般 mutation；診斷失敗不等於健康，也不能進入 variation。
+健康來源才執行一般 Strategy／Prompt mutation。全部反思完成後進入 generation_model
+materialization 邊界，修正 Java 直接進 validation／javac，不讓一般 Generator 覆寫。
+之後執行 integration、180 場 evaluation、正常 mutation 的 AOS credit，以及
 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
@@ -79,8 +89,7 @@ Reflection operator mode 只有三種：
 - `aos_head2head`
 
 兩種 adaptive mode 都以 mutation context 實際使用的 evidence parent 作為
-`comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Prompt／
-Code 依 generation-prompt provenance；inherited 模式的 Prompt／Code 依 Java
+`comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Prompt 依 generation-prompt provenance；inherited 模式的 Prompt 依 Java
 component provenance。Crossover 後即使 component 來自第二個 direct parent，也不會
 再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 180 場 evaluation，
 `aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
@@ -88,20 +97,14 @@ component provenance。Crossover 後即使 component 來自第二個 direct pare
 Strategy Mutation 只修改 `strategy_prompt`。Prompt Mutation 是舊 Code Reflection
 行為：只用 policy、父代 Java 的可編輯策略區、不可變 API 指南，以及與該 Java
 來源完全對應的 validation／compiler 錯誤，經 Reviewer 與 Rewriter 只修改
-`generation_prompt`。Code Mutation 是舊 Compliance operator 的位置，但新行為是直接
-把選定父代 Java 修正成一份完整 `CandidateAgent.java`；兩個 prompt gene 與原始
-inherited Java input 都不變。Code Reflection 同樣只用策略、父代完整 Java 和對應的
-validation／compiler 錯誤，先保存結構化反思結論；第二次 LLM 改寫不在此時立刻
-執行，而是等整代其他 reflection／rewrite 都完成後，在最後的 materialization
-階段才把該結論連同同一份父代 Java 與 immutable contract 交給模型修正程式。
-Code Reflection 的兩階段都會明確收到可用 action／lookup 介面，以及 Resource、
-Base、Barracks、Worker、Light、Heavy、Ranged 的完整列表與能力說明。反思結論分別
-回報策略忠實度、程式碼精簡度、遊戲設定相容性；只有任一項需要修正才呼叫第二次
-LLM，全數通過則直接保留父代 Java。
-成功的 Code Reflection 直接進 validation／javac，
-不再呼叫 Generator 覆蓋結果。Prompt Reflection 和 Code Reflection 都不接收
-game performance、對手分數、W/D/L、match result、trace、log、aggregate fitness
-或其他對戰表現資訊。
+`generation_prompt`。Code Reflection 是 reproduction source 的獨立 gate，不是第三個一般 mutation，
+不參與 adaptive probability 或 reward。v6 結論只有兩個獨立維度：
+`strategy_fidelity`（faithful／unfaithful／ambiguous_strategy）與
+`code_correctness`（correct／incorrect）。只允許失敗維度提出具體證據與最小修正；
+correctness 包含真正 compilation、runtime、control-flow 缺陷與 game／API 違規。
+拒絕未知欄位、精簡或美化重構指令；ambiguous policy 且 Java correct 不需修正。
+兩階段不接收勝負、fitness、match 或 trace 作為優化依據。Strategy Reflection
+仍使用恰好一場最差 completed match，Coach 的新 policy 必須通過 DSL 驗證。
 
 設定中的 `model` 負責 initial policy、reflection 與 prompt rewrite。可選的
 `generation_model` 負責最後 Java generation、延後的 Code Reflection revision，

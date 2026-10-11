@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.strategy_dsl import worker_rush_policy
 from eagle.config import ExperimentConfig
 from eagle.operators.crossover import CrossoverContext, crossover
 from eagle.operators.context import ReflectionContext
@@ -87,7 +88,7 @@ class CompleteJavaGenerationTests(unittest.TestCase):
     def test_generation_prompt_requires_complete_java_only(self):
         evolved_prompt = "EVOLVABLE_TRANSLATION_SENTINEL"
         prompt = Candidate(
-            strategy_prompt="balanced",
+            strategy_prompt=worker_rush_policy(),
             generation_prompt=evolved_prompt,
         ).generation_input(class_name="CandidateAgent")
         self.assertIn("Generate the complete Java source file", prompt)
@@ -100,11 +101,11 @@ class CompleteJavaGenerationTests(unittest.TestCase):
         self.assertLess(prompt.index(evolved_prompt), prompt.index("IMMUTABLE MICRORTS ACTION AND JAVA API CONTRACT"))
         self.assertIn("This contract overrides every conflicting reusable", prompt)
         self.assertNotIn("All six strategy methods must be present", prompt)
-        self.assertTrue(prompt.rstrip().endswith("Markdown fences."))
+        self.assertIn("Markdown fences.", prompt)
 
     def test_mock_generation_writes_only_complete_candidate_agent(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
-            agent = generate_java_agent(Candidate(strategy_prompt="balanced"), MockGenerationBackend(), Path(temp))
+            agent = generate_java_agent(Candidate(strategy_prompt=worker_rush_policy()), MockGenerationBackend(), Path(temp))
             self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertEqual(agent.source_path.name, "CandidateAgent.java")
             self.assertEqual(agent.source_path.read_text(encoding="utf-8"), agent.source)
@@ -123,7 +124,7 @@ class CompleteJavaGenerationTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("javac"), "javac is required for the real template compile test")
     def test_complete_marked_template_compiles(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
-            agent = generate_java_agent(Candidate(strategy_prompt="balanced"), MockGenerationBackend(), Path(temp))
+            agent = generate_java_agent(Candidate(strategy_prompt=worker_rush_policy()), MockGenerationBackend(), Path(temp))
             result = compile_generated_agent(agent.source_paths, microrts_dir=Path("third_party/microrts"), output_dir=Path(temp) / "classes")
             self.assertTrue(result.ok, result.stderr)
 

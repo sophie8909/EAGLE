@@ -13,6 +13,23 @@ from eagle.evolution.search import run_search
 
 
 class ResumeWorkflowTests(unittest.TestCase):
+    def test_legacy_protocol_is_rejected_without_touching_run(self):
+        from eagle.evolution.resume import load_resume_config
+        import yaml
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = ExperimentConfig.from_mapping({"generations": 1})
+            payload = config.to_mapping(mock=True)
+            payload.pop("evolution_protocol")
+            config_path = root / "config.yaml"
+            config_path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text('{"status":"interrupted"}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "legacy"):
+                resume_search(run_dir=root, mock=True)
+            self.assertEqual(manifest.read_text(), '{"status":"interrupted"}')
+            self.assertFalse((root / "resume_archives").exists())
+
     def test_indexed_resume_may_correct_only_the_experiment_name(self):
         persisted = ExperimentConfig.from_mapping({
             "experiment_name": "self_play_5x40",

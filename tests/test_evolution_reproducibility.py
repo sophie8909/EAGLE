@@ -171,10 +171,14 @@ class EvolutionReproducibilityTests(unittest.TestCase):
             "population_size": 6, "mutation_rate": 1.0, "crossover_rate": 0.65,
             "random_seed": 19,
         })
-        parents = [Candidate(id=f"parent-{index}", strategy_prompt=f"policy-{index}",
+        from eagle.strategy_dsl import worker_rush_policy
+        parents = [Candidate(id=f"parent-{index}", strategy_prompt=worker_rush_policy(worker_limit=index),
             fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
             game_eval_result={"game_performance": 0.0}, status="evaluated") for index in range(4)]
-        mutations = {name: object() for name in ("strategy", "prompt", "code")}
+        class HealthyGate:
+            def mutate(self, candidate, context, **kwargs):
+                return replace(candidate, metadata={"mutation": {"reflection_status": "success", "revision_required": False, "revision_status": "not_required"}})
+        mutations = {"strategy": object(), "prompt": object(), "code": HealthyGate()}
         def assignments(items, settings, supplied_rng):
             with contextlib.redirect_stdout(io.StringIO()):
                 plans = plan_offspring(items, config=settings, generation=2,

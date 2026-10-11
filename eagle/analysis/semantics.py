@@ -144,6 +144,8 @@ def _load_candidates(
         key=lambda path: path.name,
     ):
         candidate = _read_object(candidate_dir / "candidate.json") or {}
+        if candidate.get("operator") == "code_check":
+            continue
         lineage = _read_object(candidate_dir / "lineage.json") or {}
         candidate_id = str(
             candidate.get("candidate_id") or candidate.get("id") or candidate_dir.name

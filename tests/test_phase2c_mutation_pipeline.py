@@ -5,6 +5,7 @@ from pathlib import Path
 
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate
+from eagle.strategy_dsl import worker_rush_policy
 from eagle.config import ExperimentConfig
 from eagle.evaluation.pipeline import evaluate_candidate
 from eagle.operators.context import ReflectionContext
@@ -43,7 +44,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             id="phase2c-child",
             generation=3,
             parent_ids=("parent-1", "parent-2"),
-            strategy_prompt="original strategy prompt",
+            strategy_prompt=worker_rush_policy(1),
             generation_prompt="original generation prompt",
             operator="crossover",
             strategy_parent_id="parent-1",
@@ -62,7 +63,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
     def test_strategy_mutation_rewrite_generation_persists_complete_pipeline(self):
         self._assert_complete_pipeline(
             mutation_type="strategy",
-            rewritten="rewritten strategy prompt",
+            rewritten=worker_rush_policy(2),
             untouched="original generation prompt",
         )
 
@@ -70,7 +71,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         self._assert_complete_pipeline(
             mutation_type="prompt",
             rewritten="rewritten generation prompt",
-            untouched="original strategy prompt",
+            untouched=worker_rush_policy(1),
         )
 
 
@@ -109,6 +110,17 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             self.assertTrue((candidate_dir / "generation/attempts/attempt_001/response_raw.txt").exists())
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "error")
+
+    def test_oversized_dsl_rewrite_preserves_parent_gene_and_failure_evidence(self):
+        from eagle.strategy_dsl import worker_rush_policy
+        backend = ScriptedMutationBackend((self._strategy_reflection(), json.dumps({"revised_strategy_prompt": worker_rush_policy(2)})))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 1, "max_prompt_chars": 100})
+        candidate = self._candidate()
+        mutated = PromptRewriteMutation(config, mutation_type="strategy", reflection_backend=backend,
+                                        rewrite_backend=backend).mutate(candidate, self._context())
+        self.assertEqual(mutated.strategy_prompt, candidate.strategy_prompt)
+        self.assertFalse(mutated.metadata["mutation"]["applied"])
+        self.assertIn("size limit", mutated.metadata["mutation"]["rewrite_error"])
 
     def _assert_complete_pipeline(self, *, mutation_type, rewritten, untouched):
         reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()

@@ -1,5 +1,14 @@
 # Current implementation status
 
+## DSL and pre-crossover source contract (2026-10-11)
+
+Canonical `eagle-strategy-dsl-v1` policies are validated by `eagle/strategy_dsl.py`.
+Every reproduction source is independently gated before actual variation. Defects
+yield corrective one-parent children; failed checks cannot enter variation. Normal
+mutation/AOS covers Strategy/Prompt. Code v6 permits fidelity/correctness repair
+only. Historical policies remain read-only; incompatible resume fails. See the
+[integration plan](dsl_pre_crossover_reflection_plan.md) for verification.
+
 Snapshot: 2026-10-04. This file describes executable repository behavior.
 
 ## Active evolutionary contract
@@ -93,12 +102,10 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   static reflection; it evaluates fresh-ID, same-genotype parent replicas and
   selects from replicas plus offspring while retaining immutable source-parent
   artifacts and a generation audit sidecar.
-- Each evolutionary generation now fixes every offspring's parents,
-  crossover/copy result, and mutation assignment before the first mutation LLM
-  request. All Strategy/Prompt reflection and rewrite work plus Code diagnosis
-  completes before one final Java-materialization phase. Code revision is
-  deferred into that phase alongside ordinary Strategy/Prompt/no-mutation Java
-  generation.
+- Every selected source passes its own policy/Java gate before actual variation.
+  Healthy contributors undergo Strategy/Prompt variation; defects/failures yield
+  one-parent diagnosed children. Reflection/rewrite finishes before final Java
+  materialization; corrective Java bypasses ordinary Generator overwrite.
 - Fresh search and v2 resume now execute that generation lifecycle through the
   same `eagle.evolution.search.run_generation_step` owner; only initialization, snapshot
   loading, and finalization remain entrypoint-specific.
@@ -107,7 +114,7 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   the experiment orchestrator switches its single owned llama.cpp process only
   at those phase boundaries.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
-  and `aos_head2head`. Strategy/Prompt/Code probabilities mean fixed probabilities in
+  and `aos_head2head`. Strategy/Prompt probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
   work. Opponent AOS uses execution-first ten-case W/D/L-rank change.
   Head-to-head AOS preserves the configured direct comparison matrix and
@@ -193,7 +200,7 @@ anchors run identity. A corrected display-only `experiment_name` is accepted;
 all execution-affecting fields remain strict. Direct config-plus-run resume
 continues to compare the name as well.
 
-New `eagle-run-v2` runs persist one fully resolved `config.yaml`; generation snapshots remain `eagle-generation-v3`, while candidate records use `eagle-candidate-v6` (`phase4-v6`). Subschemas are `reflection-v3`, `phase2b-v3`, `eagle-code-reflection-v5`, `strategy-reflection-v6`, and `eagle-llm-call-v2`. The root has
+New `eagle-run-v2` runs persist one fully resolved `config.yaml`; generation snapshots remain `eagle-generation-v3`, while candidate records use `eagle-candidate-v6` (`phase4-v6`). Subschemas are `reflection-v3`, `phase2b-v3`, `eagle-code-reflection-v6`, `strategy-reflection-v6`, and `eagle-llm-call-v2`. The root has
 only manifest/config/summary/timing plus canonical directories. Candidate,
 generation, match, archive, and config compatibility duplicates have been
 removed. Analysis and resume both require v2 and use the run-local model and
@@ -299,8 +306,7 @@ conclusion, followed by the conclusion-guided Java revision request/raw
 responses, parent source, and extracted reflected source under
 `mutation/code_reflection/`. Its immutable context now explicitly lists every
 available action/lookup interface and every available entity/unit. The parsed
-conclusion separately reports strategy fidelity, code simplicity, and game
-compliance. A revision call runs only when one of those dimensions requires a
+conclusion separately reports strategy fidelity, code correctness. A revision call runs only when one of those dimensions requires a
 correction; otherwise the parent Java is preserved with `not_required` status.
 Neither call receives the reusable generation prompt, W/D/L, matches, traces, or fitness;
 only source-matching validation/compiler diagnostics are allowed. A complete

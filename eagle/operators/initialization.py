@@ -15,8 +15,9 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
-from eagle.prompts import load_prompt, normalize_prompt
+from eagle.prompts import load_prompt
 from eagle.timing import utc_now
+from eagle.strategy_dsl import normalize_strategy_dsl, worker_rush_policy
 
 
 LLM_GENERATED_POLICIES = "llm_generated_policies"
@@ -50,10 +51,7 @@ class MockInitialPolicyBackend:
         sample = len(self.requests)
         return json.dumps(
             {
-                "strategy_prompt": (
-                    f"Use mock RTS strategy variant {sample}: maintain economy, "
-                    "produce a mixed army, and attack the nearest enemy structure."
-                )
+                "strategy_prompt": worker_rush_policy(sample + 1),
             }
         )
 
@@ -238,13 +236,7 @@ def _generate_initial_policy(
                 raise ValueError(
                     "response must contain exactly one string field: strategy_prompt"
                 )
-            final_prompt = normalize_prompt(
-                parsed["strategy_prompt"],
-                max_chars=config.max_prompt_chars,
-                max_lines=config.max_prompt_lines,
-            )
-            if not final_prompt:
-                raise ValueError("strategy_prompt must not be empty")
+            final_prompt = normalize_strategy_dsl(parsed["strategy_prompt"], max_chars=config.max_prompt_chars)
             if final_prompt in selected_prompts:
                 raise ValueError("strategy_prompt duplicates an existing population policy")
             status = "success"
@@ -333,7 +325,7 @@ def _render_initial_policy_request(
 ) -> str:
     selected = "\n\n---\n\n".join(selected_prompts) or "none"
     request = string.Template(config.initial_policy_generation_prompt).substitute(
-        gameplay_contract=MICRORTS_GAMEPLAY_CONTRACT,
+        gameplay_contract=MICRORTS_GAMEPLAY_CONTRACT + "\n" + load_prompt("strategy_dsl_reference"),
         sample_index=sample_index,
         population_size=config.population_size,
         diversity_directive=diversity_directive,

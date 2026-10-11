@@ -45,6 +45,9 @@ def _select_eligible_operator(
 
     if not eligible or any(operator not in OPERATORS for operator in eligible):
         raise ValueError(f"eligible operators must be a non-empty subset of {OPERATORS!r}.")
+    eligible = tuple(operator for operator in eligible if operator != CODE_REFLECTION)
+    if not eligible:
+        raise ValueError("Code Reflection is an independent gate, not a selectable mutation.")
     draw_unit = rng.random()
     if len(eligible) == 1:
         return eligible[0]
@@ -113,10 +116,11 @@ class ReflectionOperatorSettings:
 
     @property
     def initial_probabilities(self) -> dict[str, float]:
+        total = self.strategy_probability + self.prompt_probability
         return {
-            STRATEGY_REFLECTION: self.strategy_probability,
-            PROMPT_REFLECTION: self.prompt_probability,
-            CODE_REFLECTION: self.code_probability,
+            STRATEGY_REFLECTION: self.strategy_probability / total if total else 0.0,
+            PROMPT_REFLECTION: self.prompt_probability / total if total else 0.0,
+            CODE_REFLECTION: 0.0,
         }
 
     @property
@@ -145,11 +149,9 @@ class ReflectionOperatorSettings:
         if not math.isfinite(self.minimum_probability):
             raise ValueError("aos_minimum_probability must be finite.")
         enabled_count = len(self.enabled_operators)
-        if enabled_count == 0:
-            raise ValueError("At least one reflection operator probability must be positive.")
-        if self.mode.adaptive and not 0.0 <= self.minimum_probability <= 1.0 / enabled_count:
+        if self.mode.adaptive and not 0.0 <= self.minimum_probability <= (1.0 / enabled_count if enabled_count else 1.0):
             raise ValueError(
-                f"aos_minimum_probability must be in [0, {1.0 / enabled_count:.12g}] for "
+                f"aos_minimum_probability must be in [0, {(1.0 / enabled_count if enabled_count else 1.0):.12g}] for "
                 f"{enabled_count} enabled operators "
                 f"in {self.mode.value} mode; got {self.minimum_probability!r}."
             )
@@ -227,6 +229,8 @@ class AdaptiveOperatorSelection:
         opponent_comparison = {operator: _empty_opponent_totals() for operator in OPERATORS}
         transition_counts = {transition: 0 for transition in TRANSITIONS}
         for reward in rewards:
+            if reward.operator == CODE_REFLECTION:
+                raise ValueError("Code Reflection gate cannot receive adaptive mutation credit.")
             if reward.operator in grouped:
                 grouped[reward.operator].append(float(reward.reward))
                 for key in head_to_head[reward.operator]:
@@ -270,6 +274,7 @@ class AdaptiveOperatorSelection:
 
     def state_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": "eagle-reflection-operator-v6",
             "probabilities": dict(self.probabilities),
             "credits": dict(self.credits),
             "total_usage": dict(self.total_usage),
@@ -284,7 +289,7 @@ class AdaptiveOperatorSelection:
             for operator in OPERATORS
         }
         if any(not math.isfinite(value) or value < 0.0 for value in restored.values()) or not math.isclose(
-            sum(restored.values()), 1.0, rel_tol=0.0, abs_tol=1e-9
+            sum(restored.values()), 1.0 if self.settings.enabled_operators else 0.0, rel_tol=0.0, abs_tol=1e-9
         ):
             raise ValueError("Persisted reflection-operator probabilities are invalid.")
         self.probabilities = restored
@@ -304,6 +309,8 @@ class AdaptiveOperatorSelection:
 
     def _normalize_with_floor(self, values: dict[str, float]) -> dict[str, float]:
         enabled = self.settings.enabled_operators
+        if not enabled:
+            return {operator: 0.0 for operator in OPERATORS}
         positive = {
             operator: max(0.0, values[operator]) if operator in enabled else 0.0
             for operator in OPERATORS
@@ -639,6 +646,8 @@ def build_reflection_operator_controller(
     """Create the only mode-specific object used by search and resume."""
 
     settings = config.reflection_operator_settings
+    if state and state.get("schema_version") != "eagle-reflection-operator-v6":
+        raise ValueError("This run predates the independent pre-crossover Code Reflection gate; start a new run.")
     retired_operators = {
         "balance_reflection",
         "generate_code_reflection",
@@ -884,7 +893,7 @@ def _canonical_generation_record(
     cumulative_transitions: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     return {
-        "schema_version": "eagle-reflection-operator-v5",
+        "schema_version": "eagle-reflection-operator-v6",
         "mode": settings.mode.value,
         "reward_source": settings.mode.reward_source,
         "strategy_probability_before": before[STRATEGY_REFLECTION],
@@ -901,5 +910,5 @@ def _canonical_generation_record(
         "operators": operators,
         "transition_counts": transitions,
         "cumulative_transition_counts": cumulative_transitions or {transition: 0 for transition in TRANSITIONS},
-        "state": state,
+        "state": {"schema_version": "eagle-reflection-operator-v6", **state},
     }

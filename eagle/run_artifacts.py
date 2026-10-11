@@ -14,7 +14,7 @@ from eagle.evaluation.objectives import OBJECTIVE_DIRECTIONS
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 
 from eagle.candidate import Candidate, has_completed_evaluation
-from eagle.config import ExperimentConfig
+from eagle.config import ExperimentConfig, EVOLUTION_PROTOCOL, STRATEGY_POLICY_FORMAT
 
 RUN_SCHEMA_VERSION = "eagle-run-v2"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
@@ -43,6 +43,8 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
         run_dir / "manifest.json",
         {
             "schema_version": RUN_SCHEMA_VERSION,
+            "evolution_protocol": EVOLUTION_PROTOCOL,
+            "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "run_id": run_dir.name,
             "created_at": utc_now(),
             "status": "initialized",

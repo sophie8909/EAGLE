@@ -80,19 +80,21 @@ reruns Integration and matches. Its generation operation is
 `self_play_fitness_refresh`, with source provenance pointing to the source
 parent phenotype and no decoder attempts.
 
-During the pre-materialization phase, Code Reflection first sends the policy, selected parent Java, immutable gameplay
+Before actual crossover/mutation, every selected reproduction source independently sends the policy, selected parent Java, immutable gameplay
 and action/API contracts, a concise interface/unit reference, canonical scaffold,
 and source-matching validation/compiler diagnostics to a structured Reflector.
-The conclusion separately reports strategy fidelity, code simplicity, and game
-compliance. At the final materialization boundary, when any dimension requires correction, a separate Java revision call
+The v6 conclusion independently reports strategy fidelity and code correctness.
+Only actual defects and policy/Java mismatches authorize repair; simplification
+or cosmetic refactoring is forbidden. Ambiguous/correct needs no revision. At the final materialization boundary, when any dimension requires correction, a separate Java revision call
 receives the parsed conclusion plus those same authoritative inputs; otherwise the
 parent Java is retained without that call. Neither receives the reusable generation prompt, game performance,
 opponent scores, W/D/L summaries, match results, traces, logs, aggregate fitness,
 or other gameplay evidence. The revision's complete output is validated as attempt
 1 under `code_reflection_output`; a validation or javac failure may enter the
-same bounded compile-repair chain. A failed diagnosis or unextractable revision
-preserves the selected parent Java rather than falling through to a fresh
-Generator call.
+same bounded compile-repair chain. Failed diagnosis cannot qualify as healthy
+for variation. Failed/unextractable revision retains source evidence and never
+falls through to ordinary Generator overwrite. Corrective children have one
+source parent and unchanged policy/generation genes.
 
 ## Processing sequence
 

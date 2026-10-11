@@ -173,21 +173,23 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
     elif reflection_type == "code":
         dimension_values = {
             "strategy_fidelity": {"faithful", "unfaithful", "ambiguous_strategy"},
-            "code_simplicity": {"concise", "needs_simplification"},
-            "game_compliance": {"compliant", "noncompliant"},
+            "code_correctness": {"correct", "incorrect"},
         }
+        if set(payload) != set(dimension_values) | {"diagnosis", "behaviors_to_preserve"}:
+            raise ValueError("Code Reflection must contain only the two conclusions, diagnosis, and behaviors_to_preserve.")
         for dimension, allowed_values in dimension_values.items():
-            if payload.get(dimension) not in allowed_values:
+            if not isinstance(payload.get(dimension), str) or payload[dimension] not in allowed_values:
                 raise ValueError(
                     f"Code Reflection must report a valid {dimension} conclusion."
                 )
         diagnosis = payload.get("diagnosis")
-        if not isinstance(diagnosis, list):
-            raise ValueError("Code Reflection must contain a diagnosis array.")
+        if not isinstance(diagnosis, list) or len(diagnosis) > 5:
+            raise ValueError("Code Reflection must contain a diagnosis array with at most five corrections.")
         normalized_diagnosis: list[dict[str, str]] = []
         for item in diagnosis:
-            if not isinstance(item, dict):
-                raise ValueError("Each Code Reflection diagnosis item must be an object.")
+            if (not isinstance(item, dict) or set(item) != {"dimension", "evidence", "required_code_change"}
+                    or any(not isinstance(value, str) or not value.strip() for value in item.values())):
+                raise ValueError("Each Code Reflection diagnosis item must contain only dimension, evidence, and required_code_change strings.")
             try:
                 dimension = _alignment_review_text(item["dimension"], field="dimension")
                 if dimension not in dimension_values:
@@ -207,6 +209,8 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         preserve = payload.get("behaviors_to_preserve")
         if not isinstance(preserve, list):
             raise ValueError("Code Reflection must contain a behaviors_to_preserve array.")
+        if any(not isinstance(item, str) or not item.strip() for item in preserve):
+            raise ValueError("Code Reflection behaviors_to_preserve items must be non-empty strings.")
         try:
             normalized_preserve = [
                 _alignment_review_text(item, field="behaviors_to_preserve")
@@ -218,8 +222,7 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
             dimension
             for dimension, failing_value in (
                 ("strategy_fidelity", "unfaithful"),
-                ("code_simplicity", "needs_simplification"),
-                ("game_compliance", "noncompliant"),
+                ("code_correctness", "incorrect"),
             )
             if payload[dimension] == failing_value
         }
@@ -339,8 +342,7 @@ class MockReflectionBackend:
         if "Code Reflection diagnosis stage" in prompt:
             return json.dumps({
                 "strategy_fidelity": "unfaithful",
-                "code_simplicity": "concise",
-                "game_compliance": "compliant",
+                "code_correctness": "correct",
                 "diagnosis": [{
                     "dimension": "strategy_fidelity",
                     "evidence": "Mock Java omits one required strategy behavior.",

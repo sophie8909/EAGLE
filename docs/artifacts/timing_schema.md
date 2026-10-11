@@ -1,5 +1,20 @@
 # Timing schema
 
+## DSL and pre-crossover source contract (2026-10-11)
+
+Source Code diagnosis completes before actual crossover/mutation. Corrective
+Java revision is deferred to the generation-model boundary, retaining separate
+`code_reflector_llm` and `code_revision_llm` attempt streams. Healthy source checks
+need no Java revision, and gate work receives no AOS reward.
+
+Offspring `timing.pre_crossover_code_checks_llm` aggregates healthy source-check
+LLM time. Each retained check has its `gate_candidate_id` and complete
+`code_reflector_llm` timing. A defective child records its own
+`code_reflector_llm` and `code_revision_llm` separately; its diagnosis is not
+counted again as a healthy check. Generation aggregates include all three timing
+streams without double-counting.
+
+
 This is the canonical owner of candidate and LLM-attempt timing fields. Normative source: specification section 25.
 
 ## Requirements

@@ -11,6 +11,7 @@ import yaml
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs, write_run_config
 from eagle.candidate import Candidate, LINEAGE_SCHEMA_VERSION
 from eagle.config import ExperimentConfig
+from eagle.strategy_dsl import worker_rush_policy, validate_strategy_dsl
 from eagle.operators.crossover import CrossoverContext, crossover
 from eagle.evaluation.pipeline import evaluate_candidate
 from eagle.evolution.search import run_search
@@ -47,7 +48,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
     def test_evaluation_does_not_mutate_two_gene_genotype(self) -> None:
         candidate = Candidate(
             id="candidate-a",
-            strategy_prompt="defend then expand",
+            strategy_prompt=worker_rush_policy(),
             generation_prompt="translate every policy condition explicitly",
         )
         before = (candidate.strategy_prompt, candidate.generation_prompt)
@@ -72,7 +73,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
     def test_generator_uses_checked_in_scaffold_not_parent_phenotype(self) -> None:
         parent_java = "package ai.generated;\n// PARENT_PHENOTYPE_SENTINEL\n"
         candidate = Candidate(
-            strategy_prompt="policy",
+            strategy_prompt=worker_rush_policy(),
             generation_prompt="translation",
             generated_java=parent_java,
         )
@@ -139,7 +140,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertTrue(all("previous_code_parent_id" not in payload for payload in payloads))
 
     def test_candidate_artifacts_separate_two_gene_genotype_and_java_phenotype(self) -> None:
-        candidate = Candidate(id="candidate-a", strategy_prompt="policy", generation_prompt="translation")
+        candidate = Candidate(id="candidate-a", strategy_prompt=worker_rush_policy(), generation_prompt="translation")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
@@ -153,7 +154,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             )
             write_candidate_artifacts(root / "candidates", evaluation)
             candidate_dir = root / "candidates" / candidate.id
-            self.assertEqual((candidate_dir / "genotype" / "policy_prompt.txt").read_text(), "policy")
+            self.assertEqual((candidate_dir / "genotype" / "policy_prompt.txt").read_text(), worker_rush_policy())
             self.assertEqual((candidate_dir / "genotype" / "code_generation_prompt.txt").read_text(), "translation")
             self.assertEqual((candidate_dir / "phenotype" / "CandidateAgent.java").read_text(), evaluation.candidate.generated_java)
             self.assertFalse((candidate_dir / "genotype" / "previous_code.java").exists())
@@ -184,7 +185,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         population = initialize_population(ExperimentConfig.from_mapping({"population_size": 4}))
         self.assertEqual(len(population), 1)
         self.assertTrue(all(candidate.lineage_to_json_dict()["source_candidate_ids"] == [] for candidate in population))
-        self.assertTrue(all(candidate.strategy_prompt == "" for candidate in population))
+        self.assertTrue(all(validate_strategy_dsl(candidate.strategy_prompt)["rules"] == [] for candidate in population))
 
     def test_three_distinct_seed_policies_share_the_no_llm_generation_zero_java(self) -> None:
         config = ExperimentConfig.from_file(
@@ -198,7 +199,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             tuple(candidate.strategy_prompt for candidate in population),
             config.seed_prompts,
         )
-        self.assertEqual(population[0].strategy_prompt, "")
+        self.assertEqual(validate_strategy_dsl(population[0].strategy_prompt)["rules"], [])
         self.assertTrue(all(candidate.strategy_prompt for candidate in population[1:]))
         self.assertEqual(backend.operation, "initial_java_seed")
         self.assertIsNone(backend.model)
@@ -226,7 +227,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "generation-zero only"):
             backend.generate(Candidate(generation=1), "CandidateAgent")
 
-    def test_blank_policy_bootstrap_forces_strategy_reflection_before_prompt(self) -> None:
+    def test_zero_rule_idle_policy_uses_independent_code_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = ExperimentConfig.from_mapping({
                 "runs_dir": temp_dir,
@@ -249,12 +250,10 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
 
         self.assertEqual(len(result.final_population), 3)
         self.assertEqual(len(offspring), 3)
-        self.assertTrue(all(item.mutation_type == "strategy" for item in offspring))
-        self.assertTrue(all(item.strategy_prompt.strip() for item in offspring))
-        self.assertTrue(all(
-            item.metadata["aos"]["eligible_operator_ids"] == ["strategy_reflection"]
-            for item in offspring
-        ))
+        self.assertTrue(all(item.mutation_type == "code" for item in offspring))
+        self.assertTrue(all(json.loads(item.strategy_prompt)["rules"] == [] for item in offspring))
+        self.assertTrue(all("aos" not in item.metadata for item in offspring))
+        self.assertTrue(all(item.metadata["pre_crossover_code_checks"] for item in offspring))
 
     def test_initial_java_seed_artifacts_record_no_llm_call_and_source_provenance(self) -> None:
         config = ExperimentConfig.from_mapping({})

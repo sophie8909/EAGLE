@@ -34,9 +34,16 @@ $java_scaffold
 Preserve the package, class, constructors, lifecycle methods, fixed fields, helpers, and
 the exact strategy-region markers from the canonical scaffold. Make only the minimum
 coherent changes inside the editable strategy region for dimensions explicitly marked
-unfaithful, needs_simplification, or noncompliant, while preserving its listed correct
+unfaithful or incorrect, while preserving its listed correct
 behaviors. Every condition must use observable state and every action must be legal under
-the supplied contracts. Do not change a dimension marked faithful, concise, or compliant.
+the supplied contracts. Preserve every already correct behavior, both prompt genes, and the inherited input Java.
+Do not simplify, cosmetically refactor, deduplicate, or clean up unrelated code.
+Ambiguous strategy never authorizes invented behavior. Implement only evidenced program
+defect or policy/Java mismatch corrections; do not optimize win/loss outcomes.
 
 Return exactly one complete CandidateAgent.java source file with no prose, JSON, diff, or
 Markdown fence.
+
+
+Normative strategy DSL semantics (the policy is executable rules, not prose):
+$strategy_dsl_reference

@@ -27,16 +27,17 @@ from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection import _run_relative_artifact_base
 from eagle.llm import parse_json_object_response
 from eagle.timing import utc_now
+from eagle.strategy_dsl import normalize_strategy_dsl, worker_rush_policy
 from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
 from eagle.opponent_cases import LEXICASE_CASES
-from eagle.prompts import load_prompt, normalize_prompt, render_prompt
+from eagle.prompts import load_prompt, render_prompt
 from eagle.strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
 ROLE_SCHEMA_VERSION = "strategy-reflection-v6"
 PROMPT_VERSION = "sports-team-v6"
-MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract") + "\n" + load_prompt("strategy_dsl_reference")
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("REFINE", 0.40),
@@ -122,19 +123,7 @@ class MockRoleBackend:
         self.prompts.append(prompt)
         if "ROLE: strategy_contract_rewriter" in prompt:
             return json.dumps({
-                "revised_strategy_prompt": (
-                    "If a friendly Worker is idle, carries no resource, and a reachable "
-                    "Resource exists, have that Worker harvest the nearest reachable Resource. "
-                    "If a friendly Worker is idle, carries a resource, and a friendly Base "
-                    "exists, have that Worker return it to the nearest friendly Base. If a "
-                    "friendly Base is idle, stockpile >= 1, and a free adjacent cell exists, "
-                    "have that Base train a Worker into that cell. If a friendly Worker is "
-                    "idle and an enemy Base exists, have that Worker target the nearest current "
-                    "enemy Base, move toward it, and attack when in range. If no enemy Base "
-                    "exists, a current enemy unit or building exists, and a friendly Worker is "
-                    "idle, have that Worker target the nearest current enemy unit or building, "
-                    "move toward it, and attack when in range."
-                ),
+                "revised_strategy_prompt": worker_rush_policy(2),
             })
         if "ROLE: match_commentator" in prompt:
             match_id = _json_value(prompt, "match_id") or "match"
@@ -154,19 +143,7 @@ class MockRoleBackend:
                 "strategy_changes": {"preserved": ["stable opening"], "removed_or_reduced": [], "added_or_strengthened": ["attack after the first combat group is ready"]},
                 "strategy_signature": {"opening": "worker_first", "economy": "balanced_worker", "production": ["worker", "light"], "attack_timing": "mid", "combat_style": "pressure", "expansion": "conditional", "defense": "reactive", "target_priority": "workers"},
                 "parent_strategy_prompt": parent,
-                "new_strategy_prompt": (
-                    "If a friendly Worker is idle, carries no resource, and a reachable "
-                    "Resource exists, have that Worker harvest the nearest reachable Resource. "
-                    "If a friendly Worker is idle, carries a resource, and a friendly Base "
-                    "exists, have that Worker return it to the nearest friendly Base. If a "
-                    "friendly Base is idle, stockpile >= 1, and a free adjacent cell exists, "
-                    "have that Base train a Worker into that cell. If a friendly Worker is "
-                    "idle and an enemy Base exists, have that Worker target the nearest current "
-                    "enemy Base, move toward it, and attack when in range. If no enemy Base "
-                    "exists, a current enemy unit or building exists, and a friendly Worker is "
-                    "idle, have that Worker target the nearest current enemy unit or building, "
-                    "move toward it, and attack when in range."
-                ),
+                "new_strategy_prompt": worker_rush_policy(2),
             })
         return ""
 
@@ -182,6 +159,7 @@ class StrategyReflectionPipeline:
         *,
         max_attempts: int = 3,
         max_prompt_chars: int = DEFAULT_MAX_PROMPT_CHARS,
+        max_policy_chars: int = 4000,
         model_identity: str | None = None,
         enabled_roles: set[str] | None = None,
         selection_seed: int = 0,
@@ -195,6 +173,7 @@ class StrategyReflectionPipeline:
         self.backend = backend
         self.max_attempts = max_attempts
         self.max_prompt_chars = max_prompt_chars
+        self.max_policy_chars = max_policy_chars
         self.model_identity = model_identity
         self.enabled_roles = frozenset(("match_commentator", "coach") if enabled_roles is None else enabled_roles)
         self.selection_seed = int(selection_seed)
@@ -344,11 +323,7 @@ class StrategyReflectionPipeline:
             )
             coach_output, coach = validated_coach
             _write_json(artifact_dir, "reflection/coach_output.json", coach_output)
-            proposed_strategy = normalize_prompt(
-                coach.new_strategy_prompt,
-                max_chars=4000,
-                max_lines=80,
-            )
+            proposed_strategy = coach.new_strategy_prompt
             _write_text(
                 artifact_dir,
                 "reflection/coach_proposed_strategy_prompt.txt",
@@ -357,7 +332,7 @@ class StrategyReflectionPipeline:
             contract_rewrite_applied = False
             try:
                 validate_strategy_prompt_contract(proposed_strategy)
-                corrected_strategy = proposed_strategy
+                corrected_strategy = normalize_strategy_dsl(proposed_strategy, max_chars=self.max_policy_chars)
                 _write_json(artifact_dir, "reflection/strategy_contract_rewrite.json", {
                     "applied": False,
                     "initial_validation_error": None,
@@ -388,6 +363,7 @@ class StrategyReflectionPipeline:
                     "applied": True,
                     "initial_validation_error": initial_validation_error,
                 })
+            corrected_strategy = normalize_strategy_dsl(corrected_strategy, max_chars=self.max_policy_chars)
             coach = replace(coach, new_strategy_prompt=corrected_strategy)
             child_signature = normalize_strategy_signature(coach.strategy_signature)
             child_niche = build_strategy_niche(child_signature)
@@ -1117,8 +1093,8 @@ def _parse_commentary(payload: dict[str, Any], match_id: str) -> MatchAnalysis:
 
 def _parse_coach(payload: str, *, parent_strategy_prompt: str) -> CoachResult:
     data = _parse_json(payload)
-    prompt = str(data.get("new_strategy_prompt") or "").strip()
-    if not prompt:
+    prompt = data.get("new_strategy_prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("coach output must contain new_strategy_prompt")
     if "class " in prompt or "public void" in prompt or "```java" in prompt:
         raise ValueError("coach output must not contain Java")
@@ -1160,7 +1136,7 @@ def _validate_strategy_contract_rewrite_response(
         raise ValueError(
             "Strategy contract rewrite revised_strategy_prompt must be a non-empty string."
         )
-    normalized = normalize_prompt(prompt, max_chars=4000, max_lines=80)
+    normalized = normalize_strategy_dsl(prompt)
     validate_strategy_prompt_contract(normalized)
     return payload, normalized
 

@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-09-23.
+Status: authoritative current contract, 2026-10-11.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -20,7 +20,7 @@ fixed roster or immutable-snapshot self-play.
 
 Every candidate has two evolving prompt values:
 
-1. `strategy_prompt` — the game-playing policy gene (`policy_prompt` conceptually)
+1. `strategy_prompt` — canonical versioned JSON DSL policy gene (`policy_prompt` conceptually)
 2. `generation_prompt` — the reusable policy-to-Java translation gene (`code_generation_prompt` conceptually)
 
 `candidate_java_mode` selects the Java state boundary. The default
@@ -31,6 +31,11 @@ seed. The Generator consumes that inherited source and produces the candidate's
 new Java component and phenotype. Evaluation does not overwrite either prompt
 gene or the persisted pre-generation Java input.
 
+Code checks and corrective children retain their exact source Java in
+`inherited_java` with `java_parent_id` for repair provenance in either mode.
+In default mode this is operator input/evidence; ordinary crossover still
+inherits only the two prompt genes.
+
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
 compile status, active-mode fitness, executable semantic summary, diagnostics, failure state, artifact
@@ -40,6 +45,37 @@ New candidate identities are generation-qualified as
 `gen_<zero-padded-generation>_<random-suffix>` so run artifacts remain unique
 and easy to navigate. Persisted IDs are opaque references and are never renamed
 while loading or resuming a run.
+
+### Policy DSL and reproduction gate
+
+`strategy_prompt` remains the policy gene, serialized as canonical versioned JSON
+DSL (`version: "eagle-strategy-dsl-v1"`). Its ordered `rules` contain `actor`,
+`when`, and `action`; `eagle/strategy_dsl.py` validates and normalizes the closed
+vocabulary. Legal-action guards are intrinsic, and zero rules mean idle. The DSL
+is translated into Java offline; there is no runtime interpreter. New runs reject
+natural-language policies. Historical natural-language artifacts remain read-only;
+incompatible old checkpoints fail resume clearly, without silent conversion.
+
+Every selected reproduction source passes an independent Code Reflection gate
+against its own policy and exact Java before actual crossover or mutation. All
+contributors must be healthy. A diagnosed defect instead creates a one-parent
+corrective Java child with unchanged policy/generation genes and source provenance,
+skipping crossover and ordinary mutation. Failed/unusable diagnosis is never a
+healthy pass and cannot enter crossover/mutation. Healthy sources follow normal
+crossover and Strategy/Prompt mutation. Code gating has no adaptive probability
+or AOS reward. Corrective revision runs at the `generation_model` boundary (or
+primary model when absent) and bypasses ordinary Generator overwrite.
+
+Code diagnosis schema `eagle-code-reflection-v6` has exactly two independent
+dimensions: `strategy_fidelity` (`faithful`, `unfaithful`, `ambiguous_strategy`)
+and `code_correctness` (`correct`, `incorrect`). Only failing dimensions may have
+diagnosis entries, each with concrete evidence and a minimum required correction.
+Correctness covers real compilation/runtime/control-flow defects and game/API
+violations. Unknown fields, cosmetic/simplification dimensions, and extra
+directives are rejected. Ambiguous strategy with correct Java needs no revision.
+No win/loss optimization or cosmetic refactoring is allowed. Strategy Reflection
+continues to use exactly one worst completed match; its Coach returns validated
+DSL while changing only the policy gene.
 
 ## 3. Evolution lifecycle
 
@@ -60,16 +96,15 @@ initial policy is materialized into its own validated and compiled Java agent.
 
 Each later generation produces a fixed-size offspring population and performs:
 
-1. a complete generation plan: mode-specific parent selection, optional
-   uniform component crossover (two prompt components, plus an independent
-   Java-component choice in `inherited_genotype` mode), and optional Strategy,
-   Prompt, or Code mutation assignment for every offspring slot before any
-   mutation LLM call;
-2. all assigned reflection and prompt-rewrite work; Code Reflection records its
-   structured diagnosis here but does not yet revise Java;
-3. one final materialization phase: complete-file Java generation for Strategy,
-   Prompt, and unmutated children, or diagnosis-guided parent-Java revision for
-   Code Reflection children;
+1. select reproduction sources for every offspring slot;
+2. gate each source against its own policy and exact Java before any actual
+   crossover/mutation; retain one-parent corrective/failure children for sources
+   that do not pass, and use only healthy contributors for normal crossover/copy
+   and optional Strategy/Prompt mutation assignment;
+3. complete normal reflection/rewrite work, then enter one materialization phase:
+   ordinary Java generation for healthy variation or evidence-guided corrective
+   Java revision for defective-source children;
+
 4. validation, compilation, integration, and evaluation;
 5. optional AOS reward collection;
 6. mode-specific survivor selection without replacement from the joint
@@ -157,7 +192,7 @@ component values are equal. Default-mode lineage has no Java parent.
 
 The reflection operator is chosen by exactly one configured mode:
 
-- `static`: fixed Strategy/Prompt/Code probabilities and no reward work;
+- `static`: fixed Strategy/Prompt probabilities and no reward work;
 - `aos_opponent`: execution-first ten-case rank-change reward against the
   recorded mutation-evidence parent;
 - `aos_head2head`: configured mutation-evidence-parent versus offspring match
@@ -169,8 +204,8 @@ active fitness contract; adaptive modes apply to fixed-roster lexicase runs.
 
 The adaptive comparison parent is the same evaluated candidate used to build
 the mutation context: the policy-component parent for Strategy mutation; the
-generation-prompt parent for Prompt and Code mutation in default mode; and the
-Java-component parent for Prompt and Code mutation in inherited mode. Component
+generation-prompt parent for Prompt mutation in default mode; and the
+Java-component parent for Prompt mutation in inherited mode. Component
 provenance, rather than direct-parent position or prompt-text equality, selects
 this parent. Both reward providers consume the resulting
 `comparison_parent_id`.
@@ -200,41 +235,39 @@ Rewriter then returns one validated reusable-rule delta and changes only
 `generation_prompt`; the normal final Generator decodes the child from the
 updated prompt gene.
 
-Code mutation first reflects on the selected parent Java, then defers revision
-until every child has completed its reflection/rewrite work. The
-Reflector receives the child's `strategy_prompt`, the complete selected parent
-Java, the immutable gameplay and action/API contracts, the canonical fixed
-scaffold, a concise fixed-interface and complete-unit reference, and source-matching
-validation/compiler diagnostics. It independently reports strategy fidelity, code
-simplicity, and game compliance, with required changes and behaviors to preserve.
-The Java revision call receives that exact parsed conclusion plus the same
-authoritative inputs only when at least one dimension requires correction. An
-all-passing conclusion preserves the parent Java without a revision call. Neither call receives game performance, opponent scores,
-W/D/L summaries, match results, traces, logs, aggregate fitness, other gameplay
-evidence, or `generation_prompt`. The revision response
-must be exactly one complete `CandidateAgent.java`; both prompt genes and the
-pre-mutation inherited Java remain unchanged. The returned source enters the
-normal validation and compilation stages directly, so a successful Code
-Reflection is not overwritten by a third final Generator call. If diagnosis or
-extraction fails, the selected parent Java is preserved. Validation or javac
-failure may enter the existing bounded diagnostic-only compile-repair chain.
+Code Reflection is the independent pre-crossover source gate described above,
+not an ordinary mutation or AOS action. It permits only evidenced defect and
+policy/Java mismatch correction. Its two-stage diagnostic/revision artifacts
+preserve raw responses and both prompt genes.
 
-The canonical probability keys are `strategy_reflection_probability`,
-`prompt_reflection_probability`, and `code_reflection_probability`; operator
-IDs are `strategy_reflection`, `prompt_reflection`, and `code_reflection`.
-Reflection-operator state uses `eagle-reflection-operator-v5`; state containing
-`balance_reflection`, `generate_code_reflection`, or
-`prompt_compliance_reflection` cannot resume under the new semantics.
+Normal mutation probabilities and adaptive credit cover only
+`strategy_reflection` and `prompt_reflection`. Operator state is `eagle-reflection-operator-v6`. Legacy probability inputs
+normalize Strategy/Prompt weights with Code fixed at zero; all-zero weights skip
+normal mutation. The independent source gate still runs.
+
+Each normal child stores `pre_crossover_code_checks` entries with
+`source_candidate_id`, `gate_candidate_id`, `healthy`, `reflection_status`,
+`revision_required`, and `artifact_path` (`../{gate_id}/mutation/code_reflection`).
+Source A uses a deterministic source-check ID; donor B, when needed,
+uses a deterministic donor-check ID. Evidence belongs to check candidates, never
+the evaluated source-parent directory. A defective/failed check emits its
+one-parent diagnosed child, preserving the fixed offspring count.
+
+Resolved configs carry `evolution_protocol: eagle-dsl-pre-crossover-v1` and
+`strategy_policy_format: eagle-strategy-dsl-v1`. Resume requires the protocol
+marker before touching run artifacts. Candidate/artifact schema versions remain
+current, with an additional `strategy_policy_format` field; operator state uses
+`eagle-reflection-operator-v6`. Historical runs remain inspectable, but cannot
+resume under the changed algorithm.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
 prompt resources but may not contain alternate executable prompt bodies.
 
-In `inherited_genotype` mode crossover/copy chooses the Java component before
-mutation. Strategy and Prompt preserve it for the final Generator. Code uses it
-as the parent source and directly produces the child's candidate Java during
-the common final materialization phase while retaining the selected input as
-lineage evidence.
+In `inherited_genotype` mode, only gated healthy sources participate in independent
+component crossover. Strategy and Prompt preserve the selected Java input for the
+final Generator. Corrective children instead retain one source's complete genotype
+and revise its exact Java at materialization, preserving source provenance.
 
 ## 7. Java generation and validation
 

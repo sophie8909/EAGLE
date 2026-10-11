@@ -4,7 +4,18 @@
 
 *Strategy, Prompt, and Code Reflection for Evolving Game-Playing Agents*
 
-EAGLE evolves prompts that generate complete Java MicroRTS agents.
+EAGLE evolves versioned JSON DSL policies and reusable translation prompts that
+generate complete Java MicroRTS agents. The DSL is validated offline and compiled
+through Java generation; matches use no DSL runtime interpreter.
+
+Every selected reproduction source passes independent Code Reflection before
+crossover or mutation. Defects create one-parent corrective Java children with
+unchanged genes; healthy sources undergo Strategy/Prompt variation. Code gating
+is independent of adaptive mutation credit and permits no cosmetic simplification.
+
+New policies use canonical `eagle-strategy-dsl-v1` JSON. Historical natural-language
+artifacts remain read-only; incompatible old runs cannot resume through silent conversion.
+See the [implementation plan](docs/implementation/dsl_pre_crossover_reflection_plan.md).
 
 ## Canonical workflow
 
@@ -31,7 +42,10 @@ Resume does not require the original experiment folder:
 ./experiment.sh --resume runs/<run_id>
 ```
 
-It reloads `runs/<run_id>/config.yaml`, including the exact model and reflection mode.
+It reloads `runs/<run_id>/config.yaml`, including the exact model and reflection
+mode, and requires `evolution_protocol: eagle-dsl-pre-crossover-v1` plus
+`strategy_policy_format: eagle-strategy-dsl-v1`. Incompatible historical runs
+remain inspectable but cannot resume under the changed algorithm.
 
 New runs use one resolved config snapshot and a compact root:
 

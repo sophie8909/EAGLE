@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from eagle.strategy_dsl import worker_rush_policy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,7 +20,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
     def test_successful_evaluation_persists_complete_artifacts_and_timing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            candidate = Candidate(id="phase4-success", strategy_prompt="Build an economy, produce units, and attack intelligently.")
+            candidate = Candidate(id="phase4-success", strategy_prompt=worker_rush_policy())
             config = ExperimentConfig.from_mapping({
                 "evaluation": {
                     "maps": [
@@ -86,7 +87,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
     def test_partial_runtime_failure_uses_progress_score_and_retains_evidence(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            candidate = Candidate(id="phase4-partial", strategy_prompt="strategy")
+            candidate = Candidate(id="phase4-partial", strategy_prompt=worker_rush_policy())
             config = ExperimentConfig.from_mapping({})
             candidates_dir = root / "candidates"
             write_candidate_inputs(candidates_dir, candidate)

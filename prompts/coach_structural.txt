@@ -15,7 +15,7 @@ change strategy type, but each rule must use current observable state, an idle
 friendly actor, and a legal action with its required target, cost, and placement
 conditions. Keep the replacement to at most 10 stand-alone rules and check it
 against the contract before returning it.
-Return a replacement strategy prompt with concrete conditional behavioral rules.
+Return a replacement strategy prompt encoding ordered JSON DSL rules with concrete conditions and typed actions.
 The replacement must be the concrete game-playing policy itself, never a meta-instruction asking another role to define or design a policy.
 Mutation Intent: STRUCTURAL
 You may substantially reorganize the opening, economy, production, attack timing, expansion, or defense strategy. Do not merely rewrite the parent using different wording; use the evidence to create a materially different strategic structure.
@@ -26,3 +26,5 @@ Do not append reflection history recursively.
 Do not write Java, discuss implementation details, or return analysis outside the schema.
 parent_strategy_prompt: $parent_strategy_prompt
 commentator_diagnoses_and_evaluation_metadata: $commentator_diagnoses_and_evaluation_metadata
+
+The strategy_prompt/new_strategy_prompt/revised_strategy_prompt field is a JSON STRING containing a complete eagle-strategy-dsl-v1 object, never natural-language rules. Follow the finite DSL reference included in the gameplay contract. Preserve the outer response schema. Reject prose, code and unknown fields in the policy gene. Intrinsic action guards need not be restated in conditions.

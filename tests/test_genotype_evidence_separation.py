@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.strategy_dsl import worker_rush_policy
 from eagle.config import ExperimentConfig
 from eagle.operators.context import ReflectionContext
 from eagle.operators.context import build_reflection_context
@@ -226,7 +228,7 @@ Attack the enemy Base."}
         self.assertNotIn(POLICY_SENTINEL, result.generation_prompt)
 
     def test_generator_request_does_not_mutate_genotype(self) -> None:
-        candidate = self.candidate()
+        candidate = replace(self.candidate(), strategy_prompt=worker_rush_policy())
         before = (candidate.strategy_prompt, candidate.generation_prompt)
         candidate.generation_input(class_name="CandidateAgent")
         self.assertEqual((candidate.strategy_prompt, candidate.generation_prompt), before)

@@ -10,19 +10,19 @@ required_variables = ["gameplay_contract", "current_strategy_prompt", "aggregate
 file = "code_reflection.txt"
 role = "reflector"
 stages = ["code_reflection"]
-required_variables = ["strategy_prompt", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "code_reflection_reference", "java_scaffold"]
+required_variables = ["strategy_prompt", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "code_reflection_reference", "java_scaffold", "strategy_dsl_reference"]
 
 [prompts.code_revision]
 file = "code_revision.txt"
 role = "generator"
 stages = ["code_reflection"]
-required_variables = ["strategy_prompt", "reflection_conclusion", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "code_reflection_reference", "java_scaffold"]
+required_variables = ["strategy_prompt", "reflection_conclusion", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "code_reflection_reference", "java_scaffold", "strategy_dsl_reference"]
 
 [prompts.prompt_reflection]
 file = "prompt_reflection.txt"
 role = "reflector"
 stages = ["prompt_reflection"]
-required_variables = ["policy_prompt", "editable_strategy_java", "action_api_guide", "structural_evidence"]
+required_variables = ["policy_prompt", "editable_strategy_java", "action_api_guide", "structural_evidence", "strategy_dsl_reference"]
 
 [prompts.strategy_rewrite]
 file = "strategy_rewrite.txt"
@@ -64,31 +64,31 @@ required_variables = ["original_request", "previous_response", "validation_error
 file = "java_generation.txt"
 role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation"]
-required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold"]
+required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold", "strategy_dsl_reference"]
 
 [prompts.java_generation_inherited]
 file = "java_generation_inherited.txt"
 role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation"]
-required_variables = ["policy_prompt", "code_generation_prompt", "inherited_java", "action_api_guide", "java_scaffold"]
+required_variables = ["policy_prompt", "code_generation_prompt", "inherited_java", "action_api_guide", "java_scaffold", "strategy_dsl_reference"]
 
 [prompts.java_compile_repair]
 file = "java_compile_repair.txt"
 role = "generator"
 stages = ["java_compile_repair"]
-required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold", "previous_complete_source", "compile_evidence"]
+required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold", "previous_complete_source", "compile_evidence", "strategy_dsl_reference"]
 
 [prompts.java_compile_repair_inherited]
 file = "java_compile_repair_inherited.txt"
 role = "generator"
 stages = ["java_compile_repair"]
-required_variables = ["policy_prompt", "code_generation_prompt", "inherited_java", "action_api_guide", "java_scaffold", "previous_complete_source", "compile_evidence"]
+required_variables = ["policy_prompt", "code_generation_prompt", "inherited_java", "action_api_guide", "java_scaffold", "previous_complete_source", "compile_evidence", "strategy_dsl_reference"]
 
 [prompts.strategy_alignment]
 file = "strategy_alignment.txt"
 role = "reflector"
 stages = ["strategy_alignment"]
-required_variables = ["gameplay_contract", "strategy_prompt", "generated_java", "behavior_summary"]
+required_variables = ["gameplay_contract", "strategy_prompt", "generated_java", "behavior_summary", "strategy_dsl_reference"]
 
 [prompts.match_commentator]
 file = "match_commentator.txt"
@@ -166,4 +166,10 @@ required_variables = []
 file = "endpoint_preflight.txt"
 role = "preflight"
 stages = ["endpoint_preflight"]
+required_variables = []
+
+[prompts.strategy_dsl_reference]
+file = "strategy_dsl_reference.txt"
+role = "reference"
+stages = ["population_initialization", "strategy_reflection", "code_reflection", "seed_generation", "mutation_generation", "crossover_generation"]
 required_variables = []
