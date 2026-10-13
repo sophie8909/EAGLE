@@ -1,0 +1,868 @@
+# EAGLE 當前版本完整流程
+
+來源版本：1fa6662e (ea9c588d DSL / pre-crossover Code Reflection)。截點：2026-10-13（Asia/Taipei）。
+
+本文件逐頁保留簡報內容與詳細解說。示例均為機制教學，不代表實驗量測。
+
+## 1. EAGLE 當前版本完整流程
+
+
+
+- Opponent pool、父代選擇與倖存者選擇
+- 2026-10-13　程式版本 1fa6662e
+
+
+
+詳細解說：本簡報說明2026-10-13本地HEAD實作。主線使用self-play與inherited_genotype，以1013設定說明參數。另外解釋fixed_roster、lexicase與AOS替代模式。例子只說明機制，沒有當作實驗量測。
+
+來源：eagle/config.py:27-40；eagle/evolution/search.py:159-303
+
+## 2. 版本與本簡報的設定主線
+
+
+
+
+| 項目 | 目前實作與主線設定 |
+| --- | --- |
+| 演化協定 | eagle-dsl-pre-crossover-v1，策略使用DSL JSON |
+| 主線模式 | 1013 YAML：self_play、inherited_genotype、static |
+| 搜尋規模 | population 2，演化3代，seed 7各執行3 runs |
+| 實際平行度 | YAML為match_workers=9，檔名仍含workers_11 |
+
+
+
+詳細解說：來源是configs/experiments/1013_match_workers_11_seed7_3runs/ministral3_8b_match_workers_11_seed7_3runs.yaml。檔名含11但內容名稱與workers實際為9，不能依檔名宣稱11。這是具體設定範例，並非所有EAGLE實驗設定。ExperimentConfig預設是fixed_roster、generated_phenotype、lexicase與AOS。
+
+來源：configs/experiments/1013_match_workers_11_seed7_3runs/ministral3_8b_match_workers_11_seed7_3runs.yaml:1-66；eagle/config.py:111-188
+
+## 3. 完整搜尋流程
+
+
+
+
+流程節點：config=設定、seed、模型；init=初始化generation 0；eval=Java生成與初始評估；iterate=繁殖、反思、子代評估；state=選倖存者、記錄狀態；stop=停止？；test=完成run，Final Test；output=摘要、代理與對戰紀錄
+連線：config → init；init → eval；eval → iterate；iterate → state；state → stop；stop → iterate；stop → test；test → output
+
+
+
+詳細解說：第0代只建立與評估初始個體。第1代起先處理必要的對手快照更新與父代重新計分，再選父代、檢查來源Java、形成及變異子代、生成或修復Java、評估子代、更新operator狀態，最後從父代與子代選下一代。指定代數或停滯門檻觸發完成搜尋。ExperimentOrchestrator可再做獨立Final Test，mock或skip-final-test會跳過實際最終對戰。
+
+來源：eagle/evolution/search.py:159-303；eagle/evolution/generation.py:91-288；eagle/experiment.py
+
+## 4. 一個Candidate的組成
+
+
+
+
+| 層次 | 內容 | 用途 |
+| --- | --- | --- |
+| 策略基因 | strategy_prompt：有序DSL規則 | 決定應採取的遊戲行為 |
+| 生成基因 | generation_prompt：可重用生成指示 | 指導LLM如何實作策略 |
+| Java基因 | inherited_java、java_parent_id | 主線保留可遺傳的完整程式 |
+| 表型與證據 | Java表型、評分、signature、來源 | 執行評估與追蹤來源 |
+
+
+
+詳細解說：Candidate把生成前基因與生成後Java表型分開保存。generated_phenotype遺傳兩個prompt；inherited_genotype再加inherited_java。失敗不清除既有基因。strategy_parent_id、generation_prompt_parent_id與java_parent_id分別記錄元件來源，因此三個元件可來自不同父代。策略反思沿策略元件的來源找證據。
+
+來源：eagle/candidate.py:31-99；eagle/operators/crossover.py:21-56
+
+## 5. 策略DSL的規則與執行語意
+
+
+
+- 每條規則包含actor、when、action，規則陣列順序就是優先順序。
+- 依單位ID處理閒置友軍，選第一條條件成立且能合法發出動作的規則。
+- 缺目標、路徑不可達、資源不足或位置衝突時，繼續嘗試後面的規則。
+- 每個actor每cycle最多一個動作，同步預留資源與目的格。
+
+
+
+詳細解說：DSL v1最多16000字元、32規則、條件深度6、all/any分支8。actor限Worker、Base、Barracks、Light、Heavy、Ranged。條件只可引用定義好的當前狀態，動作需符合單位能力與遊戲守衛。空規則為閒置，idle明確停止該actor檢查。Generator負責將語意實作成Java，執行時沒有DSL interpreter或LLM即時決策。
+
+來源：eagle/strategy_dsl.py:5-181；prompts/strategy_dsl_reference.txt:1-11
+
+## 6. WorkerRush策略的規則順序
+
+
+
+
+| Actor／順序 | 條件 | 動作 |
+| --- | --- | --- |
+| Base／1 | true | 合法且資源足夠時訓練Worker |
+| Worker／2、3 | actor_id_rank < 1 | 依序嘗試return、harvest |
+| Worker／4 | true | engage最近的敵方Base |
+| Worker／5 | true | engage最近的任一敵方單位 |
+
+
+
+詳細解說：worker_rush_policy預設worker_limit=1，ID排名第一的Worker承擔經濟。return隱含守衛要求攜帶資源，harvest要求未攜帶資源，因此靠合法動作分流。其他Worker走向敵方Base；若目標或路徑不可用才落到最後規則。actor_id_rank包含忙碌中的同型單位。此表是程式內seed策略，不應簡化成所有Worker無條件攻擊。
+
+來源：eagle/strategy_dsl.py:172-181；prompts/strategy_dsl_reference.txt:3-8
+
+## 7. 第0代的初始化
+
+
+
+- 主線先放一個WorkerRush策略seed，剩餘slot由LLM產生策略。
+- 非seed slot帶固定strategy identity，引導同seed下的生成目標。
+- 主線初始個體帶WorkerRush Java seed，再交給Generator實作其策略。
+- 初始個體完成Java流程與評估後，建立對手庫及第0代紀錄。
+
+
+
+詳細解說：population_size=2時為一個configured seed與一個LLM policy。inherited_genotype的Java seed是生成輸入，不代表第0代跳過Generator。configured_seeds與llm_generated_policies是不同模式。LLM policy有DSL驗證與initial_policy_max_attempts=3。第0代無交配或變異，generations3代表gen1至gen3，另加gen0共四份代紀錄。
+
+來源：eagle/operators/initialization.py:59-185；eagle/evolution/search.py:159-231；prompts/initial_policy_variants.txt
+
+## 8. LLM角色的輸入與輸出
+
+
+
+
+| 角色 | 輸入 | 輸出 |
+| --- | --- | --- |
+| Policy Generator | seed策略與slot identity | 經驗證的策略DSL |
+| Java Generator | DSL、生成prompt、scaffold／父代Java | 完整CandidateAgent.java |
+| Commentator／Coach | 單場trace／全場摘要、來源策略 | 戰術診斷與新策略提案 |
+| Prompt／Code Reflection | 限定程式證據、API契約、策略 | 生成指示修訂／Java診斷與修復 |
+
+
+
+詳細解說：角色是不同任務與prompt，不要求各用不同模型。1013只有Ministral3 8B設定，未另設generation_model。Runtime在reflection與generation phase啟用對應客戶端或模型。對戰執行已編譯Java，沒有每tick呼叫LLM。Coach策略提案、Prompt Rewrite指示與直接Java修復是不同輸出。
+
+來源：eagle/evolution/runtime.py:40-160；eagle/candidate.py:105-139；eagle/operators/strategy.py:273-360；eagle/operators/prompt.py:300-389；eagle/operators/code.py
+
+## 9. Java評估的依賴順序
+
+
+
+
+| 階段 | 執行內容 | 通過後才進行 |
+| --- | --- | --- |
+| Generation／Validation | 擷取完整Java，檢查策略區域與scaffold契約 | Compilation |
+| Compilation | javac編譯單一CandidateAgent | Integration |
+| Integration | 確認MicroRTS能載入並呼叫代理 | 完整對戰矩陣 |
+| Matches／診斷 | 計分、失敗分類、Code Quality、probes | 寫入Candidate與artifacts |
+
+
+
+詳細解說：evaluate_population先準備每個個體Java與編譯結果，再建立self-play pool，然後逐個評估。每個candidate依賴的前階段失敗即停止後續。首次成功的Java與class成為canonical表型，不把attempt當多個個體。Semantic probe屬附加診斷，失敗本身不改fitness；對戰不完整及核心階段失敗則影響有效評估狀態。
+
+來源：eagle/evaluation/pipeline.py:50-142；eagle/evaluation/pipeline.py:190-430；eagle/evaluation/decoding.py:57-205
+
+## 10. 生成與編譯修復分支
+
+
+
+
+流程節點：request=基因輸入／Code修復輸出；valid=Validation＋javac；ok=通過？；done=固定class，Integration；repair=修復Java／重新解碼；failed=上限耗盡：失敗記錄
+連線：request → valid；valid → ok；ok → done；ok → repair；repair → valid；repair → failed
+
+
+
+詳細解說：1013 generation_max_attempts=5包含首次。完整Java但Validation或javac失敗，下次用該Java與結構證據compile repair；抽取失敗無完整來源則重抽原請求。Code Reflection子代首次直接驗證修復輸出，避免Generator再覆寫。每次request、response、source、failure、repair lineage保留，首次驗證編譯成功即停止。上限耗盡分支也涵蓋反覆抽取失敗。 重新抽取只適用普通Java生成。Code子代首次若未抽到完整Java便停止，不重新生成；若完整Java驗證或編譯失敗，後續可用普通backend執行compile repair。
+
+來源：eagle/evaluation/decoding.py:57-186；eagle/evaluation/decoding.py:205-350；configs/experiments/1013_match_workers_11_seed7_3runs/ministral3_8b_match_workers_11_seed7_3runs.yaml:28-30
+
+## 11. 搜尋評估的180場對戰矩陣
+
+
+
+
+| 維度 | 主線設定 |
+| --- | --- |
+| 對手 | 10個self-play slots，每slot 18場 |
+| 地圖與上限 | 8×8：1500 ticks，16×16：3000，24×24：4000 |
+| 重複與換邊 | 每圖3 rounds，每round candidate為p0、p1各一場 |
+| 總數 | 10 × 3 maps × 3 rounds × 2 sides = 180場／個體 |
+
+
+
+詳細解說：build_match_matrix強制三張地圖、每圖三round及換邊，以opponent、map、round、side穩定順序生成match identity。換邊減少位置優勢。1013的tick_limit覆蓋全域預設。match_timeout_seconds120是wall-clock上限，與ticks不同。workers9影響平行執行，結果按canonical順序保存。10slots不保證10種不同來源。
+
+來源：eagle/evaluation/match_matrix.py:34-100；configs/experiments/1013_match_workers_11_seed7_3runs/ministral3_8b_match_workers_11_seed7_3runs.yaml:47-66；eagle/evaluation/matches.py
+
+## 12. 單場Game Performance計分
+
+
+
+
+| 項目 | 定義 |
+| --- | --- |
+| 勝負分 | 勝+100、和0、敗−100 |
+| Material／Resource | 5×tanh(平均單位價值差／10)；3×tanh(最終資源差／10) |
+| 時間shaping | 敗：2×存活比例；勝：2×(1−存活比例)；和：0 |
+| 總分 | shaping限制在[−10,10]，單場分=勝負分＋shaping |
+
+
+
+詳細解說：平均material差由telemetry ticks計算。預設價值Base10、Barracks5、Worker1、Light2、Heavy4、Ranged2、Resource0，這是計分權重，與訓練成本不同。存活比例end_tick/max_tick限0至1。勝局鼓勵較快結束，敗局鼓勵較久存活，shaping最大±10所以勝負仍主導。分數由程式計算，並非LLM自評。
+
+來源：eagle/evaluation/game_performance.py:13-50；eagle/evaluation/game_performance.py:205-233；eagle/config.py:170-177
+
+## 13. 對手分數、搜尋fitness與診斷
+
+
+
+- 每對手score為其18場平均分，保留10個對手結果供診斷。
+- Self-play主線以等權平均GP選擇，semantic signature處理近似平手。
+- Fixed-roster的lexicase使用各對手case，aggregate GP供報告與代表個體。
+- Code Quality是程式複雜度診斷，沒有加入主線搜尋fitness。
+
+
+
+詳細解說：GameMetrics先group by opponent_id再套權重，避免權重重複乘18。對戰不完整使用失敗分−1000並明記failure。self-play由配置轉為game_performance_semantic_tiebreak。Code Quality成功為100減複雜度penalty：cyclomatic40、nesting25、logical LOC20、longest function15，各按上限正規化，失敗為−1000。它供結構診斷與reflection，不是額外選擇目標。 Self-play的fitness_objectives只含game_performance，10個slot scores留在game_eval_result；fixed-roster才將10case作fitness objectives。
+
+來源：eagle/evaluation/game_metrics.py:237-360；eagle/evaluation/objectives.py:8-32；eagle/evaluation/code_quality.py:475-494；eagle/evaluation/code_quality.py:542-581；eagle/config.py:303-322；eagle/evaluation/pipeline.py:472-527
+
+## 14. Opponent pool的兩種模式
+
+
+
+
+| 模式 | 來源 | 主要規則 |
+| --- | --- | --- |
+| fixed_roster | 固定十個內建／外部代理 | Registry與固定權重，父代用lexicase |
+| self_play | 初始可編譯個體與run-local對手庫 | 定期輪替快照，父代用GP＋semantic |
+| Final Test | 完成run後的固定十個代理 | 獨立600場，共同比較口徑 |
+
+
+
+詳細解說：Pool是本輪評估的對手集合，與繁殖parent population不同。library跨快照保存來源，active snapshot決定本輪10slots。Final Test是獨立固定benchmark，不能把self-play search分數直接當Final Test成績。Self-play沒有空池時改用固定對手的fallback，空來源明確報錯。
+
+來源：eagle/config.py:151-169；eagle/evaluation/opponents.py:27-74；eagle/evaluation/opponents.py:152-201；eagle/final_test.py:35-39
+
+## 15. Fixed roster的對手與權重
+
+
+
+
+| 類別 | Case／代理 | 搜尋權重 |
+| --- | --- | --- |
+| 基礎行為 | Passive、Random、RandomBiased | 各0.5 |
+| Rush基準 | LightRush、HeavyRush、WorkerRush | 各1.0 |
+| 外部代理 | AllInBot、Mayari、COAC、TMA | 各2.0 |
+| 部署準備 | WorkerRush adapter、SafeAllInBot、外部JAR | 檔案、版本、依賴檢查 |
+
+
+
+詳細解說：Case順序passive、random、randombias、lightrush、heavyrush、workerrush、allinbot、mayari、coac、tma。權重影響aggregate reporting GP，lexicase逐case比最佳值，不以這些權重抽case。AllInBot有fault-contained wrapper。WorkerRush因vendored runtime缺class而準備run-local adapter。外部JAR版本與libraries須先檢查。Final Test各對手場數相同。
+
+來源：eagle/opponent_cases.py:7-35；eagle/opponents.py:47-84；eagle/evaluation/opponents.py:113-201
+
+## 16. Self-play對手庫的資料流
+
+
+
+
+流程節點：valid=初始成功個體 / 刷新時的父代；dedup=ID、Java、semantic去重；library=FIFO library，容量50；rotate=刷新epoch，輪替來源；slots=循環展開為10 slots；eval=父代與子代使用同快照；next=刷新時加入當時父代
+連線：valid → dedup；dedup → library；library → rotate；rotate → slots；slots → eval；eval → next；next → dedup
+
+
+
+詳細解說：run-local library路徑archives/self_play_opponents.json，保存candidate參照。gen0評估後建立library；週期刷新加入當時source parents，再選快照。容量滿就移除最舊項目。Snapshot是本輪邊界，沒有臨時按強度抽對手。實作沒有額外訓練LocalLearner，也沒有勝率排名。
+
+來源：eagle/self_play.py:16-20；eagle/self_play.py:107-229；eagle/evolution/search.py:191-222；eagle/evolution/generation.py:91-139
+
+## 17. 對手庫的准入條件
+
+
+
+
+| 檢查 | 條件 |
+| --- | --- |
+| 程式可執行 | generated_java非空，compile_status=success |
+| 評估完成 | status為evaluated／complete，無failure stage／reason |
+| 對戰完整 | 完成預期match count，沒有未完成opponent結果 |
+| 無合格來源 | 拒絕建立空self-play pool，回報錯誤 |
+
+
+
+詳細解說：Managed library比gen0臨時對手准入更嚴格。gen0為了開始評估，成功產生且編譯Java即可成為臨時對手，同批尚未完成對戰的個體可參與。正式library只收完整評估的表型。因此gen0 pool與後續library snapshot可能不同。空來源不會悄悄用固定代理補足。 准入helper對舊資料只有在match count或opponent rows存在時才檢查完整性，正常當前evaluator會填入這些欄位。
+
+來源：eagle/self_play.py:30-75；eagle/evaluation/opponents.py:27-48
+
+## 18. 對手去重的三個判定
+
+
+
+
+| 順序 | 相同判定 | 結果 |
+| --- | --- | --- |
+| 1：Candidate ID | 已含同一個ID | 不再加入 |
+| 2：Java SHA-256 | 不同ID，但Java完全相同 | 不再加入 |
+| 3：行為等價 | 相容且完整的probe/action向量相同 | 不再加入 |
+| Signature unavailable | 缺少完整行為證據 | 標記缺資料，仍做ID／Java去重 |
+
+
+
+詳細解說：不同策略文字或ID不保證行為多樣，因此再用Java hash和semantic向量。Semantic等價要求dataset與normalization相容，在固定probes上完整action一致。缺signature不虛構行為差異，也不用文字niche替代。此處只做准入去重，不比GP或勝率。
+
+來源：eagle/self_play.py:131-177；eagle/evaluation/semantic_signature.py:83-113；eagle/evaluation/semantic_signature.py:459-490
+
+## 19. FIFO容量管理示例
+
+容量4的教學例子，主線容量為50
+
+
+| 步驟 | Library順序 | 規則 |
+| --- | --- | --- |
+| 初始 | A、B、C、D | 依加入時間排序 |
+| 加入E | B、C、D、E | 超容量，移除最舊A |
+| E的重複程式F | B、C、D、E | Java hash相同，F不加入 |
+| 加入G | C、D、E、G | 超容量，移除最舊B |
+
+
+
+詳細解說：即使A的GP較E高，也會因最舊而移除A，沒有best-first或champion永久保留。Capacity是保存來源數，不是每輪slot數。Library保存candidate reference、hash及signature，完整Java留在canonical candidate artifacts，不在library重複整份程式。
+
+來源：eagle/self_play.py:92-103；eagle/self_play.py:131-177
+
+本頁為教學示例，非實驗量測。
+
+## 20. 快照輪替的精確選擇規則
+
+
+
+- 來源數k=min(library長度,10)，按library的既有順序取來源。
+- epoch=generation // refresh_interval，start=(epoch × k) % library長度。
+- 從start連續取k個項目，跨尾端時回到開頭。
+- 主線每5代刷新，快照期間的父子比較共享同一對手上下文。
+
+
+
+詳細解說：Deterministic rotation並非依GP取top10、隨機抽樣、或每代最大化對手多樣性。interval5使gen0 epoch0、gen5 epoch1。刷新前library可能新增或FIFO淘汰，所以以當下長度與k重新計算。來源少於10仍在下一步循環補slots。
+
+來源：eagle/self_play.py:180-229；eagle/self_play.py:23-27；eagle/evolution/generation.py:91-122
+
+## 21. 輪替來源的索引示例
+
+固定library=[A…L]，長度12，interval=5
+
+
+| 代數／epoch | start與來源 | 形成的快照 |
+| --- | --- | --- |
+| gen0／0 | start=0，k=10 | A、B、C、D、E、F、G、H、I、J |
+| gen5／1 | start=10 | K、L、A、B、C、D、E、F、G、H |
+| gen10／2 | start=8 | I、J、K、L、A、B、C、D、E、F |
+| 前提 | 本例library沒有新增或淘汰 | 實際刷新按當下library計算 |
+
+
+
+詳細解說：代入start=(epoch*k)%n，10%12=10、20%12=8。刷新不是選最高分10個，也不保證相鄰快照不重疊。主線capacity50，長期可保存多於10個來源；短期population2則常只有少數來源。Ten slots不等於ten distinct agents。
+
+來源：eagle/self_play.py:180-229
+
+本頁為教學示例，非實驗量測。
+
+## 22. 少於十個來源時的slot展開
+
+假設只有A、B、C三個可用來源
+
+
+| Slot | 來源 | 場數 |
+| --- | --- | --- |
+| 000、003、006、009 | A，共4 slots | 4 × 18 = 72 |
+| 001、004、007 | B，共3 slots | 3 × 18 = 54 |
+| 002、005、008 | C，共3 slots | 3 × 18 = 54 |
+| 總數 | 10 slots，3個來源 | 72 + 54 + 54 = 180 |
+
+
+
+詳細解說：expand_self_play_slots以來源索引modulo來源數循環補10slots。每slot權重1，ID self_play_000…009，附source candidate與generation。來源數不能整除10時multiplicity不均，A本例占4份權重，B/C各3。實作不排除self-match，個體可能碰到自己的Java。
+
+來源：eagle/self_play.py:30-35；eagle/evaluation/opponents.py:48-74；eagle/opponent_cases.py:20
+
+本頁為教學示例，非實驗量測。
+
+## 23. 刷新快照與父代重新計分
+
+
+
+- gen5、gen10…先將當時source parents加入library，再輪替並保存新快照。
+- 建立父代fitness-refresh replicas，使用原Java對新快照重新評估。
+- 子代也對同一新快照完成評估，再合併父子選倖存者。
+- evaluation_context_id不一致時，拒絕進行self-play倖存者選擇。
+
+
+
+詳細解說：此處重新評分既有表型，不是重新生成策略。ExistingJavaPhenotypeBackend保留原generated Java。改對手後舊GP與新GP難度不同，所以父子必須共享快照。預設reuse_cached不代表換snapshot時可不重評。regenerate_same_genotype是另外的診斷treatment，與必要的context refresh不同。
+
+來源：eagle/evolution/generation.py:91-170；eagle/evolution/parent_refresh.py；eagle/self_play.py:295-325；eagle/evaluation/decoding.py:79-102
+
+## 24. 第0代到第1代的上下文銜接
+
+
+
+- gen0從成功編譯的初始population形成臨時十個slots，再評估初始個體。
+- 評估後，准入與去重可能縮小library，形成正式generation0 snapshot。
+- 若正式快照與gen0評估上下文不同，gen1先重新計分父代。
+- 1013只跑3演化代，無gen5週期刷新，仍可能需要這次context migration。
+
+
+
+詳細解說：gen0 evaluate_population沒有opponent_candidates，使用當前可編譯來源。完成後library可能因評估失敗、exact Java或semantic去重縮小，槽位映射不同。generation step另檢查population_matches_self_play_context，不只看generation%interval。因此interval5、generations3不能推出完全沒有父代重評。
+
+來源：eagle/evolution/search.py:173-245；eagle/evaluation/pipeline.py:112-120；eagle/evolution/generation.py:91-139；eagle/self_play.py:307-325
+
+## 25. 三種選擇的目的與集合
+
+
+
+
+| 選擇 | 輸入集合 | 輸出與規則 |
+| --- | --- | --- |
+| Opponent snapshot | run-local對手library | 按epoch輪替，展開10slots |
+| 繁殖父代 | 目前population | Top GP tier＋semantic，可重複同ID |
+| 倖存者 | 父代與新子代共同集合 | μ+λ，選固定數量不同ID |
+| Run代表個體 | 最終成功population | 最高aggregate GP，summary首選 |
+
+
+
+詳細解說：Opponent selection控制環境，parent selection控制基因來源，survivor selection控制下代人口。Library去重不使全部population必然不同；semantic subset在tier cutoff時才選擇差異。summary best是aggregate代表，不等於所有case專長代表。 第0代未在父代選擇前過濾failed candidates，第1代輸入可能含失敗個體；後續μ+λ的倖存人口才有completed-only保證。
+
+來源：eagle/self_play.py:180-229；eagle/operators/selection.py:42-158；eagle/evolution/offspring.py:78-90
+
+## 26. Self-play的繁殖父代選擇
+
+
+
+- 從目前population找最大GP，再建tolerance=1的top tier。
+- Tier錨於最大值：maxGP − GP ≤ 1，不把相鄰分數串成更大tier。
+- Parent A在tier中選，Parent B以A為reference，優先較不同的行為。
+- 最終平手用seeded random，A、B可能相同，未強制兩個不同ID。
+
+gen0可能含失敗個體，completed-only過濾發生在μ＋λ階段
+
+詳細解說：主線實際algorithm=game_performance_semantic_tiebreak。A無reference時優先signature完整者，再seeded random，未選最稀有niche。B在同tier中以最大可用semantic distance選；signature不相容不可計距離。候選先ID排序確保stable ordering。選擇保留近似高分且行為不同的來源，不是tournament。 select_parent沒有completed過濾，gen0→gen1是例外。失敗候選缺scalar GP時_game_performance可報錯，不能保證已排除所有失敗父代。
+
+來源：eagle/config.py:303-322；eagle/operators/selection.py:42-67；eagle/operators/selection.py:207-282；eagle/evolution/offspring.py:69-90；eagle/evolution/search.py:173-189
+
+## 27. Semantic signature的產生方式
+
+
+
+- 固定三張地圖與reference agents產生早、中、晚期的不可變遊戲狀態。
+- 對每個probe載入狀態，讓新代理輸出一次action，正規化後雜湊。
+- 同dataset上的有序action hashes構成完整、可比較的行為向量。
+- 主線啟用probes作去重與近似平手，probe失敗不改對戰fitness。
+
+
+
+詳細解說：預設reference agents WorkerRush與HeavyRush，player side0，phase fractions .10/.50/.90，三maps×三phases。固定狀態action不是所有可能狀態的等價證明。Summary包含dataset、normalization、probe IDs、action hashes、global/map/phase hashes。完整相容資料才能比較。strategy_signature與niche是文字metadata，不能替代行為signature。
+
+來源：eagle/config.py:43-48；eagle/config.py:157-161；eagle/evaluation/semantic_signature.py:1-8；eagle/evaluation/semantic_signature.py:60-79；eagle/evaluation/semantic_signature.py:116-250
+
+## 28. Semantic距離與max-min示例
+
+教學例子：固定相容probes的action hashes
+
+
+| 個體 | 有序action向量 | 對reference A的距離 |
+| --- | --- | --- |
+| A | x、y、z、w | 0 / 4 = 0 |
+| B | x、y、p、q | 2 / 4 = 0.5 |
+| C | r、s、p、q | 4 / 4 = 1.0 |
+| 選擇 | 同GP tier優先C | 多references時，最大化最小距離 |
+
+
+
+詳細解說：距離是action hash不相同的位置比例。本例4probes為教學，實際suite以dataset為準。Parent B reference是A；倖存者references包含已保留候選。若參照A/B，C分數=min(d(C,A),d(C,B))，再與其他候選比最大值。無相容比較時選完整signature，均缺時seeded random，不用文字similarity替代。
+
+來源：eagle/operators/selection.py:245-339
+
+本頁為教學示例，非實驗量測。
+
+## 29. Fixed-roster的lexicase選擇
+
+替代模式：每位對手為一個獨立case
+
+
+| 步驟 | 規則與例子 |
+| --- | --- |
+| 起始 | A、B、C依ID排序，seed打亂case順序 |
+| Case 1：WorkerRush | A=20、B=20、C=10，只留A、B |
+| Case 2：HeavyRush | A=5、B=8，只留B，立即選出 |
+| 仍平手 | 所有cases檢查完，在剩餘候選seeded random |
+
+
+
+詳細解說：每次選擇重新打亂case，逐case保留精確最高值，無epsilon tolerance。缺case分數−1000。不同case先後順序有機會保留不同對手專長。此例兩case即可出結果，完整roster十case。self-play主線走scalar semantic，不執行這條lexicase分支。
+
+來源：eagle/operators/selection.py:22-39；eagle/operators/selection.py:353-372；eagle/config.py:534-542
+
+本頁為教學示例，非實驗量測。
+
+## 30. 交配與基因來源追蹤
+
+
+
+
+| 元件 | 交配規則 | 來源記錄 |
+| --- | --- | --- |
+| Strategy DSL | 獨立選A／B的一份完整策略 | strategy_parent_id |
+| Generation prompt | 獨立選A／B的一份生成指示 | generation_prompt_parent_id |
+| Inherited Java | 主線獨立選A／B的完整Java | java_parent_id |
+| 不交配時 | 複製A，主線交配率0.75 | 保留單親元件來源 |
+
+
+
+詳細解說：Component-level inheritance，沒有拼接規則或Java行號。獨立抽元件可能得A策略、B生成prompt、A Java。population>1才嘗試.75 crossover。參與來源在C/M前經Code gate，需修復則走單親corrective branch，不混合不一致基因。
+
+來源：eagle/operators/crossover.py:21-56；eagle/evolution/offspring.py:92-209
+
+## 31. 繁殖前的Code Reflection檢查
+
+
+
+
+流程節點：select=選A，預定交配時選B；check=來源策略＋精確Java檢查；healthy=所有來源健康？；normal=正常交配／複製與變異；correct=缺陷來源的單親修復子代；repair=Generation phase修訂Java
+連線：select → check；check → healthy；healthy → normal；healthy → correct；correct → repair
+
+
+
+詳細解說：總是檢查A；預定crossover再檢查B。Healthy要求reflection succeeded、revision_required=false、revision_status=not_required。任何不健康來源形成該來源單親corrective offspring，保留exact Java，放棄crossover與一般Strategy/Prompt mutation。code_check snapshot只是audit，不是額外演化個體。Gate頻率不受code_reflection_probability控制。 遇到首個不健康來源就停止後續來源檢查，該corrective plan占一個子代slot，重複規劃直到population_size。LLMServerError會往外傳遞，可中止規劃，並非所有後端失敗都變成修復子代。
+
+來源：eagle/evolution/offspring.py:96-154；eagle/evolution/offspring.py:295-315；eagle/evolution/offspring.py:394-426；eagle/operators/code.py:95-109
+
+## 32. Code Reflection的診斷與修復契約
+
+
+
+- 分別判斷strategy_fidelity與code_correctness，檢查來源exact Java。
+- 策略unfaithful或程式incorrect時，要求修訂已診斷的來源程式。
+- 保留來源策略與生成prompt，產生完整Java，再做Validation／javac。
+- Code輸出先直接驗證，完整Java未通過時仍可進入後續compile repair。
+
+
+
+詳細解說：Code Reflection v6診斷在reflection phase，revision延後generation phase，配合模型資源切換。沒有成功revision時保留source Java並明記失敗，不能宣稱修好。Decoder首次用DirectCodeReflectionBackend驗證輸出，必要時仍可compile repair。LLM fidelity診斷與靜態契約檢查不是全遊戲狀態的形式化證明。 首次避免普通Generator無故覆寫，但compile repair可改寫失敗Java。診斷與revision各最多mutation_max_attempts=3，LLMServerError直接傳遞。
+
+來源：eagle/operators/code.py:95-109；eagle/operators/code.py:245-257；eagle/operators/code.py:545-552；eagle/evaluation/decoding.py:83-186；eagle/evolution/offspring.py:394-426
+
+## 33. 變異算子的實際選擇機率
+
+
+
+
+| 設定 | 1013值 | 實際行為 |
+| --- | --- | --- |
+| Strategy probability | 0.33 | 可選變異，正規化後0.50 |
+| Prompt probability | 0.33 | 可選變異，正規化後0.50 |
+| Code probability | 0.34 | 不參與隨機變異，另作繁殖前gate |
+| Mutation rate／mode | 1.0／static | 健康主線每子代嘗試一種變異，比例固定 |
+
+
+
+詳細解說：OPERATORS只有Strategy和Prompt，initial probabilities移除Code後正規化=.33/(.33+.33)=.5。Code不只執行34%，也不收AOS mutation credit。Corrective child跳過一般變異，因此mutation_rate1不表示修復子代再改策略。Static不調適。self_play配置要求static，AOS只作替代模式說明。
+
+來源：eagle/operators/adaptive.py:46-50；eagle/operators/adaptive.py:118-124；eagle/operators/adaptive.py:509-538；eagle/config.py:608-616；eagle/evolution/offspring.py:295-315
+
+## 34. Strategy Reflection的完整鏈
+
+
+
+
+流程節點：parent=定位strategy_parent_id；worst=來源父代最差有效單場；comment=Commentator / 分析單場trace；coach=Coach＋全場摘要；rewrite=整理／驗證新策略DSL；child=更新子代策略基因
+連線：parent → worst；worst → comment；comment → coach；coach → rewrite；rewrite → child
+
+
+
+詳細解說：沿component provenance找到策略來源，不用未評估child的比賽，也不按prompt文字猜父代。只做一場Match Commentator，Coach仍收到global_evaluation_summary。角色回應與DSL皆驗證，有界重試後失敗便記錄。Legacy sample_count/sample_budget可讀，但有效count固定1。單場限制只適用commentator選場，不縮減Coach背景。 格式／契約錯誤有界重試，LLMServerError可直接中止流程。
+
+來源：eagle/operators/strategy.py:180-247；eagle/operators/strategy.py:273-360；eagle/operators/strategy.py:715-800；eagle/operators/strategy.py:1269-1277
+
+## 35. 最差有效比賽的精確選法
+
+教學數值，來源必須是策略父代
+
+
+| Match | Performance／狀態 | 選取 |
+| --- | --- | --- |
+| m01 | −105，completed loss | 選取：有效最低分 |
+| m02 | −95，completed loss | 不選：較高 |
+| m03 | −1000，runtime failed | 排除：沒有完成 |
+| 同分／缺trace | 最低分同分按match_id決定 | 固定一場，缺trace不換第二差場 |
+
+
+
+詳細解說：先排除無completed outcome記錄，按match_id去重，優先有限performance。缺performance則用loss/draw/win的−100/0/100。最低同分按stable match_id。−1000是failed sentinel不能當有效最差戰役。最差場trace缺失或commentator重試耗盡，反思失敗，不替換coverage、隨機或第二差。
+
+來源：eagle/operators/strategy.py:715-800；eagle/operators/strategy.py:225-289；tests/test_strategy_reflection_evidence.py
+
+本頁為教學示例，非實驗量測。
+
+## 36. Coach與策略重寫的證據範圍
+
+
+
+- Commentator解釋單場事件、戰術失誤與關鍵決策，不憑空補trace。
+- Coach同時看來源策略、單場診斷與global_evaluation_summary。
+- 新策略須符合DSL contract，必要時做contract rewrite與正規化。
+- 普通策略子代保留其他基因，Generator依修訂策略產生Java。
+
+
+
+詳細解說：Coach有all-match aggregate、parent comparison、mutation intent與behaviors to preserve等有限結構證據，避免以一局偶然推斷全局。輸出是合法DSL，不是無界自然語言policy。非法field、action、unit或過大條件樹都不能直接進演化。策略來源有lineage，其他prompt與Java沿crossover既有來源保留。 有界重試不涵蓋所有backend傳輸例外，LLMServerError會直接往外傳遞。
+
+來源：eagle/operators/strategy.py:273-370；eagle/operators/reflection_prompts.py:17-30；eagle/operators/strategy_compliance.py；eagle/evolution/offspring.py:295-350
+
+## 37. Prompt Reflection的輸入與改寫
+
+
+
+
+| 步驟 | 讀取／處理 | 輸出 |
+| --- | --- | --- |
+| 證據限制 | DSL、可編輯策略Java、結構診斷、API guide | 實作問題與可重用建議 |
+| Reflection | 分析生成指示與程式問題的關係 | 結構化反思回應 |
+| Rewrite | 按證據重寫generation prompt | 可重用生成指示 |
+| 子代更新 | 只換generation_prompt，再交Generator | 策略與其他基因沿既有來源 |
+
+
+
+詳細解說：Prompt Reflection改生成指示，不用戰術trace自行換策略。Reviewer僅看marked editable strategy region，避免改immutable scaffold。輸入budget分區，source malformed時保留extraction failure，不擴大到scaffold。Rewrite不能綁candidate ID、臨時路徑或完整具體程式，應可重用。
+
+來源：eagle/operators/prompt.py:300-389；eagle/operators/reflection_prompts.py:25-32；eagle/operators/reflection_prompts.py:105-145；eagle/operators/reusable_prompt.py
+
+## 38. μ＋λ的倖存者選擇
+
+
+
+- 合併current parents與evaluated offspring，按Candidate ID去重。
+- 只有completed evaluation可占固定population slots，失敗個體保留診斷。
+- 由最高GP逐tier填位，全tier放得下時按ID順序保留。
+- 最後tier超出名額時採semantic max-min subset，再用seed解平手。
+
+
+
+詳細解說：μ=population_size，λ=同數子代。下一代可保留舊父代，不完全由孩子取代。completed不足μ即raise，不用failed補位。快照變更時用重評parent replicas。Scalar tier錨於remaining最大值，非連鎖。Fixed-roster lexicase則從remaining逐次選，移除所選ID，再選至μ。
+
+來源：eagle/operators/selection.py:70-136；eagle/operators/selection.py:174-242；eagle/evolution/generation.py:207-231
+
+## 39. 倖存者tier與cutoff示例
+
+μ=2、tolerance=1，GP為教學數值
+
+
+| 候選 | GP與tier判定 | 處理 |
+| --- | --- | --- |
+| A、B | 100、99.4，距max都不超過1 | 第一tier可全保留 |
+| C | 98.8，距max=1.2 | 不因距B只有0.6就加入第一tier |
+| 另例A、B、C | 100、99.4、99.2，同屬第一tier | 3人搶2位，採semantic subset |
+| 較低tier | 上tier沒有填滿μ才繼續 | 以remaining最大值重建下一tier |
+
+
+
+詳細解說：第一例C98.8不在top tier，100為錨；第二例C99.2則進tier，三人但僅兩位，此時行為多樣性才參與。References含已選倖存者，每次選最小距離最大的。Signature缺少或不相容時按完整證據與seeded fallback。Code Quality與文字niche不加入排序。
+
+來源：eagle/operators/selection.py:174-282
+
+本頁為教學示例，非實驗量測。
+
+## 40. 一個演化世代的執行順序
+
+
+
+
+| 順序 | 執行內容 |
+| --- | --- |
+| 1：對手上下文 | 必要時更新snapshot，固定原Java重評父代 |
+| 2：繁殖計畫 | 選父代，pre-crossover gate，交配／單親分支 |
+| 3：產生與評估 | Strategy／Prompt變異，Code修復，Java pipeline，180場 |
+| 4：下一代狀態 | Operator紀錄、診斷archive、μ+λ、checkpoint、停滯 |
+
+
+
+詳細解說：run_generation_step由fresh和resume共享。Reflection phase做普通reflection與來源code diagnosis；generation phase才materialize Code修復、生成和編譯。評估後operator rewards/update，static只記錄usage。策略archive與error memory更新，再選倖存者、寫checkpoint。Self-play library在週期刷新加入當時source parents，不是每個孩子即時入庫。
+
+來源：eagle/evolution/generation.py:91-288；eagle/evolution/offspring.py:295-426；eagle/operators/adaptive.py:509-538
+
+## 41. Static與AOS的可選分支
+
+
+
+
+| 模式 | Reward與更新 | 主線 |
+| --- | --- | --- |
+| static | 固定Strategy／Prompt機率，記usage | 使用，0.5／0.5 |
+| aos_head2head | 比較子代與來源父代的直接對戰 | 否，fixed-roster可選 |
+| aos_opponent | 比較共同對手case表現取得reward | 否，fixed-roster可選 |
+| Adaptive更新 | EMA credit α=0.20，probability matching＋floor | Code gate不收credit |
+
+
+
+詳細解說：替代適應模式在評估後按算子彙總reward，Q=(1−α)Q+α meanReward，再probability matching。Self-play要求static，沒有自動提高某種mutation機率。aos_minimum_probability.10在static不改比例，也非額外10%Code gate。Credit取自父子評估／對戰證據，不由LLM打reward。
+
+來源：eagle/operators/adaptive.py:46-124；eagle/operators/adaptive.py:195-273；eagle/operators/adaptive.py:509-538；eagle/config.py:608-616
+
+## 42. 停止條件與代表個體
+
+
+
+- generations計算gen1…genN的演化次數，第0代另外處理。
+- 每代比selection-state signature，相同累加stagnation，不同歸零。
+- Scalar signature含GP與semantic global hash，lexicase使用case vectors。
+- 代數上限或停滯門檻觸發完成，最高aggregate GP成功個體作summary best。
+
+
+
+詳細解說：1013 generations3、stagnation25，通常先到3代上限。停滯不是簡單比較ID，而是selection-state signature。Best在GP同分時按candidate.id確定tie。中斷／失敗是其他manifest status，可由完成generation恢復，不能當正常完成執行Final Test。
+
+來源：eagle/evolution/search.py:246-303；eagle/evolution/generation.py:232-288；eagle/operators/selection.py:139-172；configs/experiments/1013_match_workers_11_seed7_3runs/ministral3_8b_match_workers_11_seed7_3runs.yaml:25-49
+
+## 43. Artifacts、Archive與錯誤記憶
+
+
+
+
+| 紀錄 | 保存內容 | 用途 |
+| --- | --- | --- |
+| Candidate artifacts | 基因、Java、生成attempts、對戰、變異 | 追溯個體生成與評估 |
+| Generation snapshot | 倖存人口、stagnation、resume狀態 | 恢復已完成世代 |
+| Library／snapshot | FIFO來源、10slots、context hash | 固定對手上下文 |
+| Strategy／opponent／error | Niche、每case最佳報表、歸一化失敗top3 | 分析與反思有限證據 |
+
+
+
+詳細解說：Self-play library是真正pool來源。Strategy archive是niche診斷。Opponent_archive.py按固定case最高分從candidate snapshots導出報表，不控制輪替，也不另存opponents.json。Error memory歸一化路徑、行號、ID，按signature彙整count，取最常見top3作上下文，避免重複全部raw log。Code_check audit不算演化個體。
+
+來源：eagle/run_artifacts.py:106-201；eagle/artifacts.py；eagle/self_play.py:16-20；eagle/opponent_archive.py:13-42；eagle/strategy_diversity.py
+
+## 44. Random seed與平行執行
+
+
+
+- random_seed是EA的根，候選ID與每個任務RNG由穩定identity派生。
+- LLM request與MicroRTS match有任務seed，對戰identity含對手、圖、round、side。
+- Workers改完成順序，紀錄仍以canonical match identity保存。
+- 固定seed提供可重跑契約，模型後端與硬體仍可能有外部非決定性。
+
+
+
+詳細解說：SHA-256 derive_seed從root與task keys分流，避免worker時序消耗共用亂數。1013 seeds[7]且runs3為7/7/7，若[7,8,9]且runs3則每seed3次。Temperature0與request seed不保證不同GPU、engine、quantization、JVM bitwise一致。現在random_seed就是root contract，無需deterministic_mode。本簡報未新增實測。
+
+來源：eagle/evaluation/determinism.py；eagle/evolution/offspring.py:69-76；eagle/evaluation/matches.py；eagle/experiment.py；eagle/config.py:125-128
+
+## 45. Resume的恢復邊界
+
+
+
+- 從已完成generation snapshot恢復，未完成candidate attempts保留audit。
+- 讀取config、population、operator與archive狀態，從root seed重建RNG。
+- 核對context hash及來源artifacts，沿共用generation step繼續。
+- 新DSL／pre-crossover協定拒絕恢復舊自然語言策略run，歷史實驗需新run。
+
+
+
+詳細解說：load_resume_config要求current strategy_policy_format與EVOLUTION_PROTOCOL。對手snapshot按completed_generation向下對齊interval，再核對context hash。不能任意更改population、selection、evaluation contract後繼用舊分數。Decoder拒絕覆寫已持久化attempt evidence。這些限制保留可審查lineage與checkpoint一致性。 不是從checkpoint讀取歷史RNG游標；resume以random.Random(config.random_seed)重建，再以task identity派生streams。
+
+來源：eagle/evolution/resume.py:69-81；eagle/evolution/resume.py:96-207；eagle/evolution/resume.py:213-300；eagle/self_play.py:264-292；eagle/evaluation/decoding.py:109-116
+
+## 46. Final Test的個體選擇
+
+
+
+
+| 優先序 | 規則 |
+| --- | --- |
+| 前提 | Run完成，候選Java與編譯class可執行 |
+| 指定ID | 由最新代向gen0找，找到不可執行候選即報錯 |
+| 預設首選 | 最新代summary best，且須可執行 |
+| Fallback | 由新向舊找，按七個較強case的lexicographic vector選 |
+
+Self-play缺七個固定case，fallback向量全部同分，實際由ID順序解平手
+
+詳細解說：Fallback不是self-play GP tier，也不是lexicase隨機case。七case固定lightrush/heavyrush/workerrush/allinbot/mayari/coac/tma，缺值−1000，ID排序建立ties。Self-play缺固定case時比較資訊受限，主流程宜summary best或明確ID。記錄fallback generation，不能聲稱一定最後代champion。 對本簡報self-play主線，七個固定case全部缺少，fallback向量全部相同，最後實際由ID排序決定。
+
+來源：eagle/final_test.py:126-203；eagle/final_test.py:227-233；eagle/evaluation/pipeline.py:482-527
+
+## 47. Final Test的共同評估矩陣
+
+
+
+
+| 維度 | 與搜尋評估的差異 |
+| --- | --- |
+| 固定對手 | 三個基礎代理、三種Rush、AllInBot、Mayari、COAC、TMA |
+| 固定條件 | 沿run-local三張地圖，每圖每side各10場 |
+| 總數 | 10 opponents × 3 maps × 10 games × 2 sides = 600場 |
+| 用途與輸出 | 共同口徑比較，保存逐場結果與summary，不回饋演化 |
+
+
+
+詳細解說：Search每圖3round、Final每side10場，故180和600不同。逐場記seed、candidate/source/class hash、opponent、map、side、failure。Final可平行，但矩陣固定。Orchestrator搜尋後執行，mock或skip-final-test跳過。跨run需固定map/tick/scoring/roster，不可直接比不同self-play search GP。
+
+來源：eagle/final_test.py:35-39；eagle/final_test.py:259-389；eagle/experiment.py；eagle/cli/experiment.py:24-40
+
+## 48. 目前設定的參數解讀
+
+
+
+
+| 參數 | 1013值 | 影響 |
+| --- | --- | --- |
+| Crossover／mutation | 0.75／1.0 | 健康來源交配與一種隨機變異 |
+| Refresh／capacity | 5／50 | 每5代輪替，最多50來源 |
+| Tolerance／probes | 1.0／enabled | 近似GP平手用可用行為證據 |
+| Retries／temperature | Policy=3、mutation=3<br>Java=5，temperature=0 | 有界重試，固定取樣設定 |
+
+
+
+詳細解說：population2、generations3、runs3、seed7是研究規模。Timeout120秒、workers9控制對戰。短run無gen5週期refresh，但gen1 context migration可能發生。設定.33/.33/.34實際Strategy/Prompt各.5、Code獨立gate。不同配置可改數值，不能描述為所有版本固定常數。
+
+來源：configs/experiments/1013_match_workers_11_seed7_3runs/ministral3_8b_match_workers_11_seed7_3runs.yaml:14-66；eagle/operators/adaptive.py:118-124
+
+## 49. Gen0至Gen5的流程示例
+
+假設延長到5代，以說明第一次週期刷新
+
+
+| 時點 | 對手上下文 | 人口處理 |
+| --- | --- | --- |
+| gen0 | 可編譯初始pool，評估後建library | 初始policy、Java、評估、記錄 |
+| gen1 | 必要時遷移到去重後正式快照 | 父代重評，再繁殖與μ+λ |
+| gen2–4 | 沿用快照，cached分數可重用 | Gate、變異、子代評估、倖存 |
+| gen5 | 加入當時父代，輪替新快照 | 原Java重評，與子代同context |
+
+
+
+詳細解說：假設generations至少5，不能當1013真的跑gen5，因其僅設定3代。Library更新只在初始化與refresh，不是所有新子代立即入庫。任何代的Code缺陷可形成單親修復。共享snapshot確保μ+λ比較；run完成後固定600場測試，library不控制Final roster。
+
+來源：eagle/evolution/search.py:159-245；eagle/evolution/generation.py:91-231；eagle/self_play.py:23-27
+
+本頁為教學示例，非實驗量測。
+
+## 50. 閱讀當前流程的關鍵邊界
+
+
+
+- 10個self-play slots可能只有少數不同來源，FIFO／輪替沒有強度排名保證。
+- Search GP依對手快照而定，跨run比較應使用共同Final Test與相同條件。
+- Semantic probes只覆蓋固定狀態，Code fidelity檢查亦非完整形式化驗證。
+- 本簡報說明程式與設定，教學數值不代表新的勝率或耗時量測。
+
+
+
+詳細解說：來源少時循環填槽會形成不均source multiplicity，不能據10slots聲稱10種敵人。若追成本應用timing.jsonl與完成generation timings，gen0、週期父代重評、Code diagnosis/revision各有成本。平行執行下wall time與stage／match時間加總不同。本次講流程，沒有跑新實驗，不宣稱新性能或因果結論。
+
+來源：eagle/self_play.py:30-35；eagle/evaluation/semantic_signature.py:1-8；eagle/timing.py；eagle/final_test.py:259-389
+
+## 51. 失敗與中斷的處理
+
+
+
+
+| 失敗類型 | 處理與保留證據 |
+| --- | --- |
+| 核心評估失敗 | 停止依賴階段，failed狀態與−1000分，保留attempt／match證據 |
+| 反思格式或契約錯誤 | 有界重試；Code返回不健康結果可形成單親修復子代 |
+| LLMServerError／傳輸 | 可直接中止規劃或修復，manifest記錄失敗／中斷 |
+| 倖存者不足μ | 報錯，不用failed個體補位；從已完成generation恢復 |
+
+
+
+詳細解說：回應格式與契約錯誤可以有界重試；LLMServerError在ReflectionStage與Code revision明確rethrow，所以不保證每個故障都轉成一個正常failed candidate。通常返回的不健康Code診斷仍占一個corrective slot，plan_offspring規劃到population_size。核心pipeline失敗有failure_stage/reason與sentinel。Self-play全部來源不能執行時pool construction會報錯。μ+λ完成候選不足時拒絕補failed個體。已完成checkpoint仍可恢復，部分generation證據保留audit。
+
+來源：eagle/operators/reflection.py:523-569；eagle/operators/code.py:303-357；eagle/evolution/offspring.py:45-154；eagle/operators/selection.py:105-121；eagle/run_artifacts.py:70-104；eagle/evolution/resume.py:96-207
