@@ -9,7 +9,7 @@ const build=path.join(workspaceDir,'.codex-build');
 const skill=process.env.EAGLE_PRESENTATIONS_SKILL ?? 'C:/Users/cinna/.codex/plugins/cache/openai-primary-runtime/presentations/26.1013.11914/skills/presentations';
 const runtime=process.env.EAGLE_ARTIFACT_RUNTIME ?? 'C:/Users/cinna/.cache/codex-runtimes/codex-primary-runtime/dependencies';
 const reference=process.env.EAGLE_TEMPLATE ?? 'C:/Users/cinna/.codex/skills/artifact-template-eagle-0917/assets/EAGLE.potx';
-const finalPath=path.join(workspaceDir,'deliverables',process.env.EAGLE_DECK_NAME ?? 'EAGLE_final_version_intro.pptx');
+const finalPath=path.join(workspaceDir,'deliverables',process.env.EAGLE_DECK_NAME ?? 'EAGLE_final_version_intro_10x20.pptx');
 const fontReference=process.env.EAGLE_FONT_REFERENCE ?? path.join(path.dirname(reference),'reference.pptx');
 const data=JSON.parse((await fs.readFile(path.join(workspaceDir,'content.json'),'utf8')).replace(/^\uFEFF/,''));
 process.env.RUNTIME_NODE_MODULES=path.join(runtime,'node/node_modules');
@@ -70,6 +70,6 @@ await fs.writeFile(path.join(workspaceDir,'final_version_explained.md'),md);
 const candidatePath=path.join(build,'candidate-ready.pptx');await(await PresentationFile.exportPptx(deck)).save(candidatePath);
 execFileSync(path.join(runtime,'python/python.exe'),[path.join(workspaceDir,'native_numbers.py'),candidatePath],{stdio:'inherit'});
 const result=await finalizePresentation({workspaceDir,candidatePath,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableOwners.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:data.slides.length,requiredNativeTableOwnerSlides:tableOwners,requiredNativeChartOwnerSlides:chartOwners,materializeLiteralChartWorkbooks:false,fontPolicy:{basis:'reference',families:[F],referencePath:fontReference,referenceSha256:createHash('sha256').update(await fs.readFile(fontReference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(build,path.basename(finalPath)+'.validation.json')});
-const finalDeck=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));await fs.mkdir(path.join(build,'render-intro'),{recursive:true});
-for(let i=0;i<finalDeck.slides.items.length;i++){const png=await finalDeck.slides.items[i].export({format:'png',scale:1});await fs.writeFile(path.join(build,'render-intro',`slide-${i+1}.png`),new Uint8Array(await png.arrayBuffer()));console.log(`render ${i+1}/${finalDeck.slides.items.length}`);}
+const finalDeck=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));await fs.mkdir(path.join(build,'render-standard'),{recursive:true});
+for(let i=0;i<finalDeck.slides.items.length;i++){const png=await finalDeck.slides.items[i].export({format:'png',scale:1});await fs.writeFile(path.join(build,'render-standard',`slide-${i+1}.png`),new Uint8Array(await png.arrayBuffer()));console.log(`render ${i+1}/${finalDeck.slides.items.length}`);}
 console.log(JSON.stringify({output:result.finalPath,slides:data.slides.length,tableOwners,receipt:result.receiptPath}));

@@ -8,14 +8,14 @@
 
 
 
-- Deterministic DSL　GPU 與平行執行
-- Ministral3 8B　seed 8 × 3 runs
+- 標準規模：population 10 × 演化 20 代
+- Deterministic DSL　Ministral3 8B
 
 
 
-詳細解說：本簡報介紹程式來源94ab1869的最終運作方式，以deterministic_dsl、seed8重複三次、每run三個演化世代、population2的設定為主線。說明設定、策略表示、初始化、反思、確定性編譯、評估、選擇、平行工作、GPU啟動與續跑。
+詳細解說：本簡報介紹程式來源94ab1869的最終運作方式，標準實驗為population10、20個演化世代，gen0初始化另列。其餘設定沿用deterministic_dsl、seed8重複三次、Strategy-only self-play。說明設定、策略表示、初始化、反思、確定性編譯、評估、選擇、平行工作、GPU啟動與續跑。
 
-來源：configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs/ministral3_8b_deterministic_dsl_3x2_seed8_3runs.yaml；eagle/runtime/processes.py
+來源：configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs/ministral3_8b_deterministic_dsl_20x10_seed8_3runs.yaml；eagle/runtime/processes.py
 
 ## 2. 執行模式與實驗設定
 
@@ -25,27 +25,27 @@
 | 項目 | 本次設定 | 實際作用 |
 | --- | --- | --- |
 | 策略／Java | deterministic_dsl<br>eagle-dsl-java-v1 | 策略 JSON → 固定 Java compiler<br>Generation meta prompt 不啟用 |
-| 搜尋預算 | seed 8，runs 3<br>演化 3 代、population 2 | 三次相同 seed、獨立 run<br>gen0 另列，之後 gen1–3 |
+| 搜尋預算 | population 10、演化 20 代<br>seed 8，runs 3 | gen0 另列，之後 gen1–20<br>三次相同 seed、獨立 run |
 | 反思 | static，mutation_rate 1<br>Strategy probability 1 | 只有 Strategy Reflection<br>Code／Prompt Reflection 不啟用 |
 | 評估 | self_play，3 maps<br>parent mode reuse_cached | Game Performance 最大化<br>同分以 semantic novelty 分辨 |
 
 
 
-詳細解說：ExperimentConfig解析此self_play設定為game_performance_semantic_tiebreak。Gen0把單一WorkerRush policy複製為population_size=2，各候選有不同identity。有效genotype只有strategy_prompt；設定三個演化世代另有gen0初始化，三個獨立run的有效seed均為8。
+詳細解說：ExperimentConfig解析此self_play設定為game_performance_semantic_tiebreak。Gen0把單一WorkerRush policy複製為population_size=10，各候選有不同identity。有效genotype只有strategy_prompt；標準設定20個演化世代另有gen0初始化，三個獨立run的有效seed均為8。
 
-來源：configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs/ministral3_8b_deterministic_dsl_3x2_seed8_3runs.yaml；eagle/config.py；eagle/operators/initialization.py
+來源：configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs/ministral3_8b_deterministic_dsl_20x10_seed8_3runs.yaml；eagle/config.py；eagle/operators/initialization.py
 
 ## 3. 完整搜尋流程
 
 
 
 
-流程節點：config=Config、seed、GPU 檢查；init=Gen0：2 個 seed clones；bootstrap=DSL 編譯、初始評估；iteration=父代、crossover、反思 / 每代 2 offspring；eval=DSL 編譯與對戰 / μ＋λ 倖存者選擇；stop=達到停止條件？；final=完成：champion final-test；outputs=summary、checkpoint、timing
+流程節點：config=Config、seed、GPU 檢查；init=Gen0：10 個 seed clones；bootstrap=DSL 編譯、初始評估；iteration=父代、crossover、反思 / 每代 10 offspring；eval=DSL 編譯與對戰 / μ＋λ 倖存者選擇；stop=達到停止條件？；final=完成：champion final-test；outputs=summary、checkpoint、timing
 連線：config → init；init → bootstrap；bootstrap → iteration；iteration → eval；eval → stop；stop → iteration；stop → final；final → outputs
 
 中斷／失敗：保留最後完整 checkpoint，以 --resume 接續
 
-詳細解說：先完成GPU runtime啟動與config協定核對，gen0建立兩個seed clones、編譯與bootstrap self-play評估，保存snapshot。gen1到gen3按序建立offspring，反思可同時發出但結果固定排序；編譯與評估後以mu+lambda選survivors。正常完成後共同final-test不回饋搜尋。stagnation門檻25高於三代預算，正常會先到代數上限。外部exception/interrupt留下最後完整checkpoint。
+詳細解說：先完成GPU runtime啟動與config協定核對，gen0建立10個seed clones、編譯與bootstrap self-play評估，保存snapshot。gen1到gen20按序建立每代10個offspring，反思以2個LLM slots並行、結果固定排序；編譯與評估後以mu+lambda選10個survivors。第5、10、15、20代刷新對手快照並重評父代。stagnation門檻25高於20代預算，正常會先到代數上限。正常完成後共同final-test不回饋搜尋；外部exception/interrupt留下最後完整checkpoint。
 
 來源：eagle/evolution/search.py；eagle/evolution/generation.py；eagle/final_test.py
 
@@ -84,14 +84,14 @@
 
 | 階段 | 候選／狀態 | 證據 |
 | --- | --- | --- |
-| Gen0 | 單一 WorkerRush policy<br>複製為 2 個候選 | 不同 candidate IDs<br>相同 DSL 與 Java hash |
+| Gen0 | 單一 WorkerRush policy<br>複製為 10 個候選 | 不同 candidate IDs<br>相同 DSL 與 Java hash |
 | 對手快照 | bootstrap 後建立 run-local library<br>Java／語意等價去重 | 固定 source IDs、slot IDs<br>與 context_id |
-| Gen1–3 | 每代建立 2 offspring<br>保存已完成 survivors | parents、strategy_parent_id<br>反思與 lineage |
+| Gen1–20 | 每代建立 10 offspring<br>保存已完成 survivors | parents、strategy_parent_id<br>反思與 lineage |
 | Checkpoint | 只承認完整提交的 generation | config、compiler/scaffold hashes<br>manifest、snapshot、timing |
 
 
 
-詳細解說：初始化clone不是多樣化，兩個policy相同。初始bootstrap評估由compiled候選提供對手；之後library去重可能將兩個identicalJava候選縮為一個source。snapshotcontext改變時，gen1必須先更新父代fitness，而不是無條件重用gen0分數。相同context後可reuse_cached。
+詳細解說：初始化clone不是多樣化，10個policy相同。初始bootstrap評估由compiled候選提供對手；之後library去重可能將10個identicalJava候選縮為一個source。snapshotcontext改變時，gen1必須先更新父代fitness，而不是無條件重用gen0分數。相同context後可reuse_cached。
 
 來源：eagle/operators/initialization.py；eagle/evolution/search.py；eagle/evolution/generation.py；eagle/self_play.py
 
@@ -101,11 +101,11 @@
 
 - 只有完整、可執行且評估成功的 phenotype 可進入 library；依 candidate ID、Java hash 與完整語意簽章去重。
 - Library 容量 50，按 FIFO 保留；刷新時循環取最多 10 個來源，再填滿 10 個 evaluation slots。
-- 本設定每 5 代刷新；只跑 gen1–3，因此沿用 gen0 快照。若 context 不同，先重評父代再比較。
+- 每 5 代刷新對手快照：gen5、10、15、20。刷新或 context 改變時，先重評父代，再與 offspring 在相同快照下比較。
 
 
 
-詳細解說：select_self_play_library_candidates在libraryorder上以epoch=generation//refresh_interval與source_count=min(N,10)決定start=(epoch*source_count)%N；expand_self_play_slots將非空來源按順序循環到10slots。初始兩個相同Java的seedclones在libraryhash去重後通常只剩一個來源，十格並不代表十種策略。gen0bootstrapcontext與librarysnapshotcontext可能不同，gen1觸發context_migration_required；gen2/3若context一致則可reuse。library的capacity與refresh_interval不等於全archive最優對手選擇。
+詳細解說：select_self_play_library_candidates依libraryorder，以epoch=generation//refresh_interval與source_count=min(N,10)決定start=(epoch*source_count)%N，再循環填滿10slots。Gen0的10個相同Java候選在libraryhash去重後通常只剩一個source；gen1可因contextmigration重評父代。第5、10、15、20代加入當代可執行parents、刷新對手快照並重評父代。兩個刷新點之間，context一致時可reuse_cached。Library容量50、FIFO保留；每輪候選共享相同context。
 
 來源：eagle/self_play.py；eagle/evaluation/opponents.py；eagle/evolution/generation.py
 
@@ -118,7 +118,7 @@
 | --- | --- | --- |
 | Evaluation opponents | 固定 self-play snapshot<br>不是目前 breeding pool | library 循環來源 → 10 slots<br>同輪所有候選共用 context |
 | Breeding parents | 目前 evolving population | Game Performance 最高 tier<br>第二父代 tie 可看語意距離 |
-| Survivors | 目前 parents + offspring | μ＋λ 選 2 人<br>tier 邊界用 seeded novelty |
+| Survivors | 目前 parents + offspring | μ＋λ 選 10 人<br>tier 邊界用 seeded novelty |
 | Final-test opponents | 固定 10 種共同測試對手 | 與搜尋 self-play pool 分開<br>champion 測試後不回饋搜尋 |
 
 
@@ -131,13 +131,13 @@
 
 
 
-- 先以 root seed 衍生各 slot 的父代、crossover 與 operator stream，再一次建立 2 個 offspring 計畫。
+- 先以 root seed 衍生各 slot 的父代、crossover 與 operator stream，再一次建立 10 個 offspring 計畫。
 - Crossover rate 0.75：從兩個父代選一份完整 policy；不拼接 rule 子樹，也不繼承 Java／generation prompt。
 - Mutation rate 1.0、Strategy probability 1：反思可改 policy；Code source gate、Prompt Mutation 都停用。
 
 
 
-詳細解說：plan_offspring先依rootseed衍生父代、crossover與operator的taskstreams。deterministic模式以整份策略作crossover的選擇單位，strategy_parent_id記錄策略來源。每代有兩個offspring，mutation_rate=1且Strategy probability=1。先serial決定計畫，再並行reflection，最後按slot順序整合。
+詳細解說：plan_offspring先依rootseed衍生父代、crossover與operator的taskstreams。deterministic模式以整份策略作crossover的選擇單位，strategy_parent_id記錄策略來源。每代有10個offspring，mutation_rate=1且Strategy probability=1。先serial決定計畫，再並行reflection，最後按slot順序整合。
 
 來源：eagle/evolution/offspring.py；eagle/operators/crossover.py；eagle/execution.py
 
@@ -205,13 +205,13 @@
 
 
 
-- Runtime 固定 2 request slots、每 slot context 32768；兩個獨立 offspring 的反思工作可同時呼叫。
+- Runtime 固定 2 request slots、每 slot context 32768；每代 10 個 offspring 的反思工作以最多 2 個同時請求處理。
 - DSL／Java preparation 可平行；完成全部 preparation 後才建立對手 pool。每個候選的 matches 用 10 workers。
 - parallel_map 按輸入順序回傳；父代／operator 計畫與 survivor 整合保留固定順序，跨 run 仍依序執行。
 
 
 
-詳細解說：LLM_WORKERS=2、MODEL_THREADS=8、MATCH_WORKERS=10為固定執行政策。每slotcontext32768使serverctx-size=65536。同一generation的獨立offspring反思可並行，candidate preparation可並行，但preparation全部完成後才建對手pool。候選評估按序，每候選的180matches用10workers。parallel_map依輸入順序回傳，taskseed由rootseed與穩定identity衍生；三個runs仍依序執行。
+詳細解說：LLM_WORKERS=2、MODEL_THREADS=8、MATCH_WORKERS=10為固定執行政策。每slotcontext32768使serverctx-size=65536。Population10代表每代10個offspring，不代表10個LLMslots；獨立反思最多兩請求並行。Candidate preparation可並行，全部完成後才建立對手pool；候選評估按序，每候選180matches用10workers。parallel_map依輸入順序回傳，taskseed穩定，三個runs依序執行。
 
 來源：eagle/execution.py；eagle/runtime/processes.py；eagle/evaluation/pipeline.py；eagle/evaluation/matches.py
 
@@ -257,11 +257,11 @@
 
 - 開始：
 ./experiment.sh \
-  configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs
+  configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs
 - 中斷後接續：
 ./experiment.sh --resume \
-  configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs
-- 檢查 experiment.yaml 的 3 個 run paths；每次保存 gen0、gen1–3 與 final-test。
+  configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs
+- 檢查 experiment.yaml 的 3 個 run paths；每次保存 gen0、gen1–20 與 final-test。
 
 
 

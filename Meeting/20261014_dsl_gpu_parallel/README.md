@@ -1,10 +1,14 @@
 # EAGLE final-version introduction
 
-Code snapshot: `94ab1869`. This 17-slide editable presentation introduces the final deterministic DSL mode using Ministral3 8B, seed 8 repeated three times, 3 evolutionary generations and population 2. It covers the effective configuration and complete operation: initialization, DSL semantics, self-play opponents, parent/survivor selection, crossover, Strategy Reflection, compilation/evaluation, parallel execution, mandatory GPU startup and folder resume.
+Code snapshot: `94ab1869`. This 17-slide editable presentation introduces the final deterministic DSL mode using Ministral3 8B, seed 8 repeated three times, 20 evolutionary generations and population 10. It covers the effective configuration and complete operation: initialization, DSL semantics, self-play opponents, parent/survivor selection, crossover, Strategy Reflection, compilation/evaluation, parallel execution, mandatory GPU startup and folder resume.
+
+Standard experiment: population 10 × 20 evolutionary generations (generation 0 is separate). Each generation plans 10 offspring and selects 10 survivors. Self-play snapshots refresh at generations 5, 10, 15 and 20, with parent fitness refreshed before comparison. LLM concurrency remains 2 slots.
+
+Runnable config: `../../configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs/ministral3_8b_deterministic_dsl_20x10_seed8_3runs.yaml`. Other settings retain seed 8 repeated three times.
 
 ## Current files
 
-- `deliverables/EAGLE_final_version_intro.pptx`: final-version introduction.
+- `deliverables/EAGLE_final_version_intro_10x20.pptx`: final-version introduction.
 - `final_version_explained.md`: slide-by-slide mechanism explanation and sources.
 - `content.json`: current editable slide content and native diagrams/tables.
 - `build.mjs`, `native_numbers.py`: native-template authoring and automatic numbering.
