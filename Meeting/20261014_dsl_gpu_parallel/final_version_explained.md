@@ -63,21 +63,71 @@
 
 來源：prompts/strategy_dsl_reference.txt；eagle/strategy_dsl.py；eagle/generation/dsl_java_compiler.py
 
-## 5. DSL 的規則順序與 fallback
+## 5. DSL 規則順序：一條 rule 要通過三層檢查
+
+每個閒置的我方單位，從 rules 第一條開始；採用第一個能合法發出的動作。
 
 
+流程節點：rule=讀取這個單位的當前 rule；actor=① actor 檢查 / 單位類型符合這條規則？；when=② when 檢查 / 當前狀態是否滿足條件？；legal=③ action 檢查 / 是否真的能合法發出動作？；success=成功：加入本輪動作、更新預留 / 停止此單位；換下一個單位；type-fail=類型不符 → 下一條 rule / 例如 Worker 跳過 Base 的規則；condition-fail=條件為否 → 下一條 rule / 例如攜帶 0 資源，不能 return；action-fail=動作失敗 → 下一條 rule / 例如無目標、超出射程、資源不足；exhausted=若已無下一條 rule → idle
+連線：rule → actor；actor → when；when → legal；legal → success；actor → type-fail；when → condition-fail；legal → action-fail
+
+fallback = 對同一個單位往下試下一條規則；每次都重新檢查 actor → when → action。
+
+詳細解說：先跳過不是我方或目前忙碌的單位。對每個閒置我方單位，從 rules 陣列第一條開始：actor 類型符合才判斷 when，when 成立才建立 action plan。目標、射程、路徑、資源、格子、遊戲合法性與本輪 reservations 都會影響 action 是否可發出。三層任一失敗就對同一個單位嘗試下一條規則，重新從 actor 檢查開始。只有成功 issue 才停止此單位的規則掃描。若所有規則失敗，輸出 TYPE_NONE（duration 10）。此圖把失敗分支分開畫，避免混淆成功路徑與重試路徑。
+
+來源：prompts/strategy_dsl_reference.txt；eagle/generation/dsl_java_compiler.py；eagle/java_templates/CandidateAgent.java
+
+## 6. 具體例子：同一個 Worker 如何 fallback？
+
+機制示例：Worker 攜帶 0 資源；所有敵人都在射程外；旁邊有可採集的 Resource。
 
 
-流程節點：actor=idle friendly actors / 按 unit ID 升序；rules=規則按 rules 陣列順序；when=when 成立？；issue=action 可合法發出？；commit=發出一個 action / 更新本輪 reservations；next=不成立／guard 失敗 / 繼續下一條 rule
-連線：actor → rules；rules → when；when → issue；issue → commit；when → next；issue → next；next → rules
+流程節點：r1=Rule 1：return / when：攜帶資源 > 0；test1=Worker 攜帶 0 / when = false；result1=不嘗試 return / 繼續 Rule 2；r2=Rule 2：attack / when：true；test2=所有敵人都在射程外 / 沒有合法 attack 目標；result2=條件成立，動作仍失敗 / 繼續 Rule 3；r3=Rule 3：harvest / when：true；test3=鄰接資源，可合法採集 / 動作檢查通過；result3=發出 1 個 harvest / 停止，不再檢查後續規則
+連線：r1 → test1；test1 → result1；r2 → test2；test2 → result2；r3 → test3；test3 → result3；r1 → r2；r2 → r3
 
-每個 actor 每 cycle 最多一個 action；沒有匹配則 idle
+這一輪只發出 harvest；不是 return、attack、harvest 三個動作都一起執行。
 
-詳細解說：每個目前idle的friendly actor依升序ID處理，對其type對應rules依arrayorder判斷。when false、目標不存在、path不可達、stockpile不足、cell占用或guard失敗均繼續下一條。第一個真正可issue的action終止該actor，explicitidle也終止。hash target先合法filter，selector metric ties按ID或cell y,x。一次PlayerAction累積resource/cell reservation供後續actor使用。
+詳細解說：三條規則的 actor 都是 Worker。Rule 1 的 when 是 actor_resources > 0，因此攜帶 0 時條件失敗，不執行 return。Rule 2 的 when 是 true；attack 會先將目標過濾為當前射程內可合法攻擊的敵方單位，示例中沒有任何合法目標，因此 plan 為 null 並繼續下一條規則。Rule 3 的 when 是 true，Worker 未攜帶資源，旁邊有 Resource，且採集動作通過遊戲與 reservation 檢查，所以發出一個 harvest primitive，終止此單位的掃描。此例的 harvest 目標已相鄰；非相鄰時可能發出朝資源前進的一步。attack 不會自動追敵；engage 才可在射程外嘗試走一步。所有數值為教學示例，非實驗結果。
 
-來源：prompts/strategy_dsl_reference.txt；eagle/generation/dsl_java_compiler.py
+來源：prompts/strategy_dsl_reference.txt；eagle/generation/dsl_java_compiler.py；eagle/java_templates/CandidateAgent.java
 
-## 6. Gen0 與每代需要保存的狀態
+本頁為教學示例，非實驗量測。
+
+## 7. 多個單位：先成功的動作會預留資源與格子
+
+機制示例：兩座閒置 Base、共有 1 資源；Worker 成本 1，兩座 Base 都有空的鄰格。
+
+
+流程節點：shared=共同規則：stockpile ≥ 1 → train Worker；下一條為 idle；base10=先處理 ID 10 / when：1 ≥ 1，成立；train10=train 可合法發出 / 成本 1、鄰格可用；reserve10=加入 train 動作 / 預留 1 資源 + 出生格；base20=再處理 ID 20 / when：1 ≥ 1，仍成立；train20=可用資源 = 1 − 1 = 0 / train 無法合法發出；fallback20=跳到下一條 idle / 不會再訓練一個 Worker
+連線：base10 → train10；train10 → reserve10；base20 → train20；train20 → fallback20；base10 → base20
+
+stockpile 讀的是當前資源；合法性檢查還要扣除本輪預留。格子也不能被兩個動作重複占用。
+
+詳細解說：閒置我方單位按 unit ID 升序決策，因此 Base ID 10 先於 ID 20。兩者都使用 actor Base、when stockpile >= 1、action train Worker（first_free_adjacent）的規則，後面放一條 when true、action idle。stockpile 條件讀取當前 GameState 的資源；在同一次 PlayerAction 組裝中它仍是 1，並不因預留直接被改成 0。ID 10 成功發出 train 後，commandPlannedAction 把成本 1 與出生格併入 context.reservations。ID 20 的 when 仍成立，但 action 的 resourceUsage 與 reservations 不相容，因此無法再次消耗同一份資源，繼續下一條 idle 規則。資源的實際扣除與單位完成生產由遊戲引擎處理，不能把預留誤稱為即時完成生產。本輪可用資源的說明值為現有資源減已預留資源。位置同樣不可重複預留；後續單位會另選合法格子，找不到才 fallback。示例未量測實驗。
+
+來源：prompts/strategy_dsl_reference.txt；eagle/generation/dsl_java_compiler.py；eagle/java_templates/CandidateAgent.java
+
+本頁為教學示例，非實驗量測。
+
+## 8. fallback 與 idle：何時往下試，何時停止？
+
+每個單位每個 decision cycle 最多一個原始動作；下次決策時重新從第一條 rule 開始。
+
+
+| 當前規則／狀態 | 這個單位接下來做什麼 |
+| --- | --- |
+| actor／when 不符，<br>或 action 無法合法發出 | 嘗試下一條 rule；不輸出這條動作 |
+| 成功發出非 idle 動作 | 停止此單位的規則掃描；更新本輪 reservations |
+| 命中 idle 規則<br>（actor、when 都通過） | 停止此單位的規則掃描；輸出 TYPE_NONE |
+| 所有 rule 都失敗，或 rules 是空陣列 | 預設輸出 TYPE_NONE；之後處理下一個單位 |
+
+idle 需 actor、when 通過才會停止；命中後不再往下試，全部失敗也會 idle。
+
+詳細解說：fallback 並非另找 LLM 改策略，而是執行已編譯的同一份規則陣列時，對當前單位繼續向下試。合法 action 一旦加入本輪 PlayerAction 就停止當前單位的規則掃描，之後處理下一個閒置我方單位。explicit idle 是合法動作，會發出 TYPE_NONE duration 10，並停止掃描；若把 actor 符合、when=true 的 idle 放得太前面，會擋住該類型單位的後續規則。所有規則皆失敗時，compiler 同樣為該單位輸出 TYPE_NONE duration 10。忙碌單位不進入此輪規則掃描。cycle 在此是 AI 決策呼叫，不等於 10 個資源 tick 或實驗的 evolutionary generation。動作跨 tick 執行；單位再次閒置才會再被規則處理。
+
+來源：prompts/strategy_dsl_reference.txt；eagle/generation/dsl_java_compiler.py；eagle/java_templates/CandidateAgent.java
+
+## 9. Gen0 與每代需要保存的狀態
 
 
 
@@ -95,7 +145,7 @@
 
 來源：eagle/operators/initialization.py；eagle/evolution/search.py；eagle/evolution/generation.py；eagle/self_play.py
 
-## 7. Self-play opponent pool 的建立與刷新
+## 10. Self-play opponent pool 的建立與刷新
 
 
 
@@ -109,7 +159,7 @@
 
 來源：eagle/self_play.py；eagle/evaluation/opponents.py；eagle/evolution/generation.py
 
-## 8. 評估對手、繁殖父代與倖存者
+## 11. 評估對手、繁殖父代與倖存者
 
 
 
@@ -127,7 +177,7 @@
 
 來源：eagle/operators/selection.py；eagle/evolution/offspring.py；eagle/self_play.py；eagle/final_test.py
 
-## 9. 每代變異與 Strategy Reflection
+## 12. 每代變異與 Strategy Reflection
 
 
 
@@ -141,7 +191,7 @@
 
 來源：eagle/evolution/offspring.py；eagle/operators/crossover.py；eagle/execution.py
 
-## 10. Strategy Reflection 的證據來源
+## 13. Strategy Reflection 的證據來源
 
 
 
@@ -155,7 +205,7 @@
 
 來源：eagle/operators/context.py；eagle/operators/strategy.py；docs/architecture/mutation.md
 
-## 11. JSONL：合法規則子集可形成策略
+## 14. JSONL：合法規則子集可形成策略
 
 
 
@@ -169,7 +219,7 @@
 
 來源：eagle/strategy_dsl.py；eagle/operators/strategy.py；prompts/coach_refine.txt
 
-## 12. 確定性 Java 物化與失敗邊界
+## 15. 確定性 Java 物化與失敗邊界
 
 
 
@@ -183,7 +233,7 @@
 
 來源：eagle/generation/dsl_java_compiler.py；eagle/evaluation/decoding.py；eagle/evaluation/pipeline.py
 
-## 13. 評估規模與 fitness
+## 16. 評估規模與 fitness
 
 
 
@@ -201,7 +251,7 @@
 
 來源：eagle/evaluation/game_performance.py；eagle/evaluation/game_metrics.py；eagle/opponent_cases.py；eagle/final_test.py
 
-## 14. 平行執行與固定整合順序
+## 17. 平行執行與固定整合順序
 
 
 
@@ -215,7 +265,7 @@
 
 來源：eagle/execution.py；eagle/runtime/processes.py；eagle/evaluation/pipeline.py；eagle/evaluation/matches.py
 
-## 15. 三次 replicate 與資料夾續跑
+## 18. 三次 replicate 與資料夾續跑
 
 
 
@@ -233,7 +283,7 @@
 
 來源：eagle/experiment.py；eagle/evolution/resume.py；docs/operations/running_eagle.md
 
-## 16. GPU 啟動與全層 offload 驗證
+## 19. GPU 啟動與全層 offload 驗證
 
 
 
@@ -251,7 +301,7 @@
 
 來源：eagle/runtime/processes.py；eagle/runtime/config.py；tests/test_runtime_workflow.py
 
-## 17. 執行與資料夾 resume 指令
+## 20. 執行與資料夾 resume 指令
 
 
 
