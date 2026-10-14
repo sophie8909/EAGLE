@@ -5,6 +5,7 @@ import unittest
 import json
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from eagle.config import ExperimentConfig
 from eagle.operators.adaptive import ReflectionOperatorMode
@@ -13,6 +14,37 @@ from eagle.evolution.search import run_search
 
 
 class ResumeWorkflowTests(unittest.TestCase):
+    def test_run_creation_callback_can_load_canonical_config_before_interruption(self):
+        from eagle.evolution.resume import load_resume_config
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = replace(ExperimentConfig.from_mapping({"random_seed": 8}), runs_dir=root / "runs")
+            created = []
+
+            def interrupted(run_dir):
+                created.append(run_dir)
+                self.assertEqual(load_resume_config(run_dir).random_seed, 8)
+                raise KeyboardInterrupt
+
+            with self.assertRaises(KeyboardInterrupt):
+                run_search(config, mock=True, on_run_created=interrupted)
+            manifest = json.loads((created[0] / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "interrupted")
+            self.assertIsNone(manifest["latest_generation"])
+
+    def test_config_write_failure_keeps_manifest_failure_state_before_callback(self):
+        for failure, status in ((OSError("config write failed"), "failed"), (KeyboardInterrupt(), "interrupted")):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = replace(ExperimentConfig.from_mapping({}), runs_dir=root / "runs")
+                callback = []
+                with patch("eagle.evolution.search.write_run_config", side_effect=failure):
+                    with self.assertRaises(type(failure)):
+                        run_search(config, mock=True, on_run_created=callback.append)
+                self.assertEqual(callback, [])
+                manifest = json.loads(next((root / "runs").glob("*/manifest.json")).read_text(encoding="utf-8"))
+                self.assertEqual(manifest["status"], status)
+
     def test_legacy_protocol_is_rejected_without_touching_run(self):
         from eagle.evolution.resume import load_resume_config
         import yaml

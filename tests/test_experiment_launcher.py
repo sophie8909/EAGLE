@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,7 +12,10 @@ import yaml
 
 from eagle.operators.adaptive import build_reflection_operator_controller
 from eagle.config import ExperimentConfig
-from eagle.experiment import ExperimentOrchestrator, resolve_experiment_configs
+from eagle.experiment import (
+    EXPERIMENT_INDEX_SCHEMA_VERSION, ExperimentOrchestrator,
+    _load_experiment_run_index, resolve_experiment_configs,
+)
 from eagle.evolution.search import SearchResult
 
 
@@ -54,9 +58,12 @@ class ExperimentLauncherTests(unittest.TestCase):
         mock: bool,
         final_test_complete: bool = False,
         latest_generation: int | None = 3,
+        random_seed: int | None = None,
     ) -> Path:
         run_dir.mkdir(parents=True)
         config = ExperimentConfig.from_file(source_config)
+        if random_seed is not None:
+            config = replace(config, random_seed=random_seed)
         (run_dir / "config.yaml").write_text(
             yaml.safe_dump(config.to_mapping(mock=mock), sort_keys=False),
             encoding="utf-8",
@@ -258,21 +265,175 @@ class ExperimentLauncherTests(unittest.TestCase):
                 ],
             )
 
-    def test_folder_batch_rejects_multi_run_config(self):
+    def test_folder_batch_records_each_replicate_with_the_same_explicit_seed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            model = root / "model.gguf"
-            model.write_bytes(b"model")
-            path = self.config(root, "replicated.yaml", model_name="one", model_path=model)
+            path = self.config(root, "a.yaml", model_name="one", model_path=root / "model.gguf")
             payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-            payload["runs"] = 3
+            payload.update(runs=3, random_seeds=[8])
             path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            seeds = []
+            run_dirs = []
 
-            with self.assertRaisesRegex(ValueError, "direct config path"):
-                ExperimentOrchestrator(search_runner=lambda *_args, **_kwargs: None).run(
-                    config_path=root,
-                    mock=True,
-                )
+            def search(config, **kwargs):
+                seeds.append(config.random_seed)
+                run_dir = root / "runs" / str(len(seeds))
+                run_dirs.append(run_dir.resolve())
+                kwargs["on_run_created"](run_dir)
+                return SearchResult(run_dir, [], None)
+
+            ExperimentOrchestrator(search_runner=search).run(config_path=root, mock=True)
+            self.assertEqual(seeds, [8, 8, 8])
+            self.assertEqual(_load_experiment_run_index(root), {"a.yaml": run_dirs})
+            self.assertEqual(resolve_experiment_configs(root), [path.resolve()])
+
+    def test_folder_replicates_resume_interruption_and_skip_completed_runs(self):
+        for settings, expected_seeds in (
+            ({"runs": 3, "random_seed": 40}, [40, 41, 42]),
+            ({"runs": 2, "random_seeds": [8, 9]}, [8, 8, 9, 9]),
+        ):
+            with self.subTest(settings=settings), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = self.config(root, "a.yaml", model_name="one", model_path=root / "model.gguf")
+                payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+                payload.update(settings)
+                path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+                created = []
+                resumed = []
+
+                def search(config, **kwargs):
+                    run_dir = self.indexed_run(
+                        root / "runs" / str(len(created)), path,
+                        status="complete" if not created else "interrupted",
+                        mock=True, random_seed=config.random_seed,
+                    )
+                    created.append(config.random_seed)
+                    kwargs["on_run_created"](run_dir)
+                    if len(created) == 2:
+                        raise KeyboardInterrupt
+                    (run_dir / "manifest.json").write_text(
+                        json.dumps({"schema_version": "eagle-run-v2", "status": "complete", "latest_generation": 3}), encoding="utf-8",
+                    )
+                    return SearchResult(run_dir, [], None)
+
+                def resume(_config, *, run_dir, **_kwargs):
+                    resumed.append(run_dir.name)
+                    (run_dir / "manifest.json").write_text(
+                        json.dumps({"schema_version": "eagle-run-v2", "status": "complete", "latest_generation": 3}), encoding="utf-8",
+                    )
+                    return SearchResult(run_dir, [], None, completed_generation=3)
+
+                orchestrator = ExperimentOrchestrator(search_runner=search, resume_runner=resume)
+                with self.assertRaises(KeyboardInterrupt):
+                    orchestrator.run(config_path=root, mock=True)
+                self.assertEqual(len(_load_experiment_run_index(root)["a.yaml"]), 2)
+                orchestrator.run(config_path=None, resume_dir=root, mock=True)
+                self.assertEqual(created, expected_seeds)
+                self.assertEqual(resumed, ["1"])
+                self.assertEqual(len(_load_experiment_run_index(root)["a.yaml"]), len(expected_seeds))
+                orchestrator.run(config_path=None, resume_dir=root, mock=True)
+                self.assertEqual(created, expected_seeds)
+                self.assertEqual(resumed, ["1"])
+
+    def test_folder_resume_rejects_changed_seed_or_shortened_schedule_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(root, "a.yaml", model_name="one", model_path=root / "model.gguf")
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload.update(runs=3, random_seed=40)
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            run_dirs = [self.indexed_run(
+                root / "runs" / str(slot), path, status="complete", mock=True, random_seed=40 + slot,
+            ) for slot in range(2)]
+            index_path = root / "experiment.yaml"
+            original = yaml.safe_dump({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION,
+                                       "runs": {"a.yaml": [str(folder) for folder in run_dirs]}})
+            index_path.write_text(original, encoding="utf-8")
+            for change, message in (({"random_seed": 41}, "random_seed"), ({"runs": 1}, "exceeds")):
+                path.write_text(yaml.safe_dump({**payload, **change}), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    ExperimentOrchestrator().run(config_path=None, resume_dir=root, mock=True)
+                self.assertEqual(index_path.read_text(encoding="utf-8"), original)
+
+    def test_run_index_rejects_unknown_schema_and_invalid_entries_without_overwrite(self):
+        for payload, message in (
+            ({"schema_version": "eagle-experiment-index-v2", "runs": {}}, "Unsupported"),
+            ({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {"a.yaml": "not-a-list"}}, "Invalid"),
+            ({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {"a.yaml": []}}, "Invalid"),
+            ({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {"a.yaml": ["relative/run"]}}, "absolute"),
+        ):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                index_path = root / "experiment.yaml"
+                original = yaml.safe_dump(payload)
+                index_path.write_text(original, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    _load_experiment_run_index(root)
+                self.assertEqual(index_path.read_text(encoding="utf-8"), original)
+
+    def test_folder_resume_replaces_only_uncheckpointed_replicate_slot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(root, "a.yaml", model_name="one", model_path=root / "model.gguf")
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload.update(runs=3, random_seed=40)
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            completed = self.indexed_run(root / "runs" / "first", path,
+                                         status="complete", mock=True, random_seed=40)
+            abandoned = self.indexed_run(root / "runs" / "abandoned", path,
+                                         status="interrupted", mock=True, random_seed=41,
+                                         latest_generation=None)
+            (root / "experiment.yaml").write_text(yaml.safe_dump({
+                "schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION,
+                "runs": {"a.yaml": [str(completed), str(abandoned)]},
+            }), encoding="utf-8")
+            seeds = []
+
+            def search(config, **kwargs):
+                seeds.append(config.random_seed)
+                run_dir = root / "runs" / str(config.random_seed)
+                kwargs["on_run_created"](run_dir)
+                return SearchResult(run_dir, [], None)
+
+            ExperimentOrchestrator(search_runner=search).run(
+                config_path=None, resume_dir=root, mock=True,
+            )
+            self.assertEqual(seeds, [41, 42])
+            self.assertEqual(_load_experiment_run_index(root)["a.yaml"],
+                             [completed, root / "runs" / "41", root / "runs" / "42"])
+            self.assertTrue((abandoned / "manifest.json").is_file())
+
+    def test_multi_run_folder_resume_retries_only_missing_final_tests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(root, "a.yaml", model_name="one", model_path=root / "model.gguf")
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload.update(runs=3, random_seeds=[8])
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            run_dirs = [self.indexed_run(
+                root / "runs" / str(slot), path, status="complete", mock=False,
+                random_seed=8, final_test_complete=(slot == 0),
+            ) for slot in range(3)]
+            (root / "experiment.yaml").write_text(yaml.safe_dump({
+                "schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION,
+                "runs": {"a.yaml": [str(folder) for folder in run_dirs]},
+            }), encoding="utf-8")
+            tested = []
+
+            def forbidden(*_args, **_kwargs):
+                raise AssertionError("completed search started a new run or runtime")
+
+            def final(argv):
+                tested.append(Path(argv[-1]))
+                return 0
+
+            ExperimentOrchestrator(
+                runtime_factory=forbidden, search_runner=forbidden,
+                resume_runner=lambda _config, run_dir, **_kwargs: SearchResult(run_dir, [], None),
+                final_test_runner=final,
+            ).run(config_path=None, resume_dir=root)
+            self.assertEqual(tested, run_dirs[1:])
+            self.assertEqual(_load_experiment_run_index(root)["a.yaml"], run_dirs)
 
     def test_runs_must_be_positive(self):
         config = ExperimentConfig.from_mapping({"runs": 0})
@@ -452,9 +613,10 @@ class ExperimentLauncherTests(unittest.TestCase):
             port_check.assert_not_called()
 
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
-            self.assertEqual(index, {
-                "a.yaml": str((root / "a").resolve()),
-                "b.yaml": str((root / "b").resolve()),
+            self.assertEqual(index["schema_version"], EXPERIMENT_INDEX_SCHEMA_VERSION)
+            self.assertEqual(index["runs"], {
+                "a.yaml": [str((root / "a").resolve())],
+                "b.yaml": [str((root / "b").resolve())],
             })
 
     def test_run_index_keeps_created_run_when_search_later_fails(self):
@@ -475,7 +637,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 orchestrator.run(config_path=root, mock=True, skip_final_test=True)
 
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
-            self.assertEqual(index, {"a.yaml": str(created_run.resolve())})
+            self.assertEqual(index["runs"], {"a.yaml": [str(created_run.resolve())]})
 
     def test_existing_experiment_config_is_never_overwritten_by_run_index(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -612,10 +774,11 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertEqual(events, ["resume:b", "search:c"])
             self.assertEqual(result.run_dir, root / "runs" / "c")
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
-            self.assertEqual(index, {
-                "a.yaml": str(completed.resolve()),
-                "b.yaml": str(interrupted.resolve()),
-                "c.yaml": str((root / "runs" / "c").resolve()),
+            self.assertEqual(index["schema_version"], EXPERIMENT_INDEX_SCHEMA_VERSION)
+            self.assertEqual(index["runs"], {
+                "a.yaml": [str(completed.resolve())],
+                "b.yaml": [str(interrupted.resolve())],
+                "c.yaml": [str((root / "runs" / "c").resolve())],
             })
 
     def test_folder_resume_retries_missing_final_test_without_starting_runtime(self):
@@ -690,7 +853,7 @@ class ExperimentLauncherTests(unittest.TestCase):
 
             self.assertEqual(result.run_dir, replacement)
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
-            self.assertEqual(index, {"a.yaml": str(replacement.resolve())})
+            self.assertEqual(index["runs"], {"a.yaml": [str(replacement.resolve())]})
 
 
 if __name__ == "__main__":

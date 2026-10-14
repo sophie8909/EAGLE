@@ -26,7 +26,7 @@ bypasses ordinary Generator. Historical artifacts are not converted.
 - removal of inherited `previous_code` and phenotype-parent provenance;
 - two-gene crossover, fixed-scaffold generation, and separated Strategy/Prompt/Code evidence;
 - genotype/phenotype and responsibility-specific mutation artifact layout.
-- resumable config-folder batches driven by the atomic `experiment.yaml` index.
+- resumable config-folder batches driven by atomic `eagle-experiment-index-v1` indexes with ordered replicate slots and legacy single-path readback.
 - joint parent-plus-offspring `(mu + lambda)` lexicase survivor selection;
 - heterogeneous generation-zero policy genes sharing one callable no-op Java seed.
 - explicit `candidate_java_mode` with backward-compatible two-prompt default and

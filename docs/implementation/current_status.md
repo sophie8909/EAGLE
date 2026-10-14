@@ -57,11 +57,12 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
   preserves canonical result order and stable JVM match seeds. CPU/GPU settings,
   temperatures, and worker counts remain configurable; external backends and
   wall-clock budgets can still introduce nondeterminism.
-- A direct config may set `runs` to execute independent replicates. Without an
-  explicit list, each run uses the base `random_seed` plus its zero-based
-  replicate index. With `random_seeds`, `runs` repeats each listed seed in
-  order. Every run writes a separate run directory; folder batches retain one
-  run per config for stable `experiment.yaml` indexing.
+- A direct config or folder batch may set `runs` to execute independent
+  replicates. Without an explicit list, each run uses the base `random_seed`
+  plus its zero-based replicate index. With `random_seeds`, `runs` repeats each
+  listed seed in order. Every run writes a separate run directory; folder batches
+  retain ordered replicate slots per config in `experiment.yaml`, keyed by
+  zero-based replicate index and validated against each slot's effective seed.
 - A task-specific seed derived from the resolved replicate root is propagated
   to every OpenAI-compatible LLM request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
@@ -174,26 +175,34 @@ candidate was created.
 ## Experiment lifecycle and run schema
 
 `./experiment.sh CONFIG_TARGET [OPTIONS...]` translates its positional target
-to Python `--config-dir`. Python discovers sorted top-level YAML files exactly
-once, loads each exactly once, and invokes one batch owner that validates and starts the configured llama.cpp model,
-waits for health, runs search and the production final test, and stops only its
-owned process. Folder batches start an identical resolved runtime once and reuse
-it directly for later configs using every launch-critical field; a changed runtime profile is stopped and replaced. Mock mode never constructs the runtime manager or inspects a port. Runtime state records PID plus process start time, exact executable/command, launcher, owner token, and resolved spec; foreign port owners are never killed.
+to Python `--config-dir`. Python discovers sorted top-level YAML files once,
+loads each config once, and lets the batch owner validate the runtime and manage
+its cleanup. Every run or replicate restarts the owned llama.cpp process at
+the run boundary. Model phase switches are reused only within that run. Mock mode never constructs a runtime
+manager or inspects a port. Runtime state records PID plus process start time,
+exact executable/command, launcher, owner token, and resolved spec; foreign port
+owners are never killed.
 Separate runtime/run compatibility commands are not part of production. The
 dispatcher exposes only `experiment` and `analyze`.
 
-Directory batches also maintain an atomic `experiment.yaml` index in the
-selected config directory. Each entry maps the config filename to its absolute
-run folder at run-creation time; the generated index is excluded from later
-config discovery. A legacy `experiment-v2` config with that filename is
-preserved rather than replaced.
+Directory batches maintain an atomic `experiment.yaml` index in the selected
+config directory. Its `eagle-experiment-index-v1` schema maps each exact config
+filename to an ordered list of absolute run-directory paths; list positions are
+zero-based replicate indices. The generated index is excluded from config
+discovery. Legacy filename-to-path mappings are read as one-item lists and
+upgraded atomically on the next run record. A legacy `experiment-v2` config
+named `experiment.yaml` remains a config and is never replaced; that directory
+cannot also hold the generated index.
 
-`./experiment.sh --resume CONFIG_FOLDER` reads that index as a batch checkpoint.
-Indexed entries with incomplete search or missing required final-test output are
-prioritized and resumed, fully completed entries are skipped, and remaining
-unindexed configs run fresh in filename order. Direct `--resume RUN_DIR` remains
-the single-run interface. Search-complete/final-test-only recovery does not start
-llama.cpp unless a later config still needs LLM work.
+`./experiment.sh --resume CONFIG_FOLDER` reads the existing index as a batch
+checkpoint and validates each indexed run's effective seed against its scheduled
+slot. Interrupted search runs and runs missing a required final-test summary are
+processed first. Complete slots are skipped, then missing replicates are created.
+A fresh launch starts a fresh index. If interruption happened before generation
+zero was recorded, that slot receives a replacement run and prior evidence
+remains on disk. Direct `--resume RUN_DIR` remains the single-run interface.
+Final-test-only recovery does not start llama.cpp unless a later config still
+needs LLM work.
 
 For indexed folder resume, the exact config filename in `experiment.yaml`
 anchors run identity. A corrected display-only `experiment_name` is accepted;

@@ -43,6 +43,9 @@ def resolve_experiment_configs(path: str | Path) -> list[Path]:
     return [selected]
 
 
+EXPERIMENT_INDEX_SCHEMA_VERSION = "eagle-experiment-index-v1"
+
+
 def _is_experiment_run_index(path: Path) -> bool:
     """Return whether ``experiment.yaml`` is a generated config-to-run index."""
 
@@ -52,6 +55,9 @@ def _is_experiment_run_index(path: Path) -> bool:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return False
+    if isinstance(payload, dict) and str(payload.get("schema_version", "")).startswith("eagle-experiment-index-"):
+        _decode_experiment_run_index(payload, path)
+        return True
     return (
         isinstance(payload, dict)
         and "schema_version" not in payload
@@ -75,34 +81,69 @@ def _run_index_path(selected: Path) -> Path | None:
     return path
 
 
-def _initialize_experiment_run_index(index_path: Path) -> None:
-    """Start a fresh index for the selected directory batch."""
+def _decode_experiment_run_index(payload: object, index_path: Path) -> dict[str, list[str]]:
+    """Read versioned replicate lists or migrate the legacy single-run mapping."""
 
-    temporary = index_path.with_name(index_path.name + ".tmp")
-    temporary.write_text("{}\n", encoding="utf-8")
-    temporary.replace(index_path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Experiment run index must contain a YAML mapping: {index_path}")
+    if "schema_version" in payload:
+        if payload["schema_version"] != EXPERIMENT_INDEX_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported experiment run index schema: {payload['schema_version']}")
+        entries = payload.get("runs")
+    else:
+        entries = {name: [run_dir] for name, run_dir in payload.items()}
+    if not isinstance(entries, dict) or any(
+        not isinstance(name, str)
+        or Path(name).suffix.lower() not in {".yaml", ".yml"}
+        or not isinstance(run_dirs, list)
+        or not run_dirs
+        or any(not isinstance(folder, str) or not folder for folder in run_dirs)
+        for name, run_dirs in entries.items()
+    ):
+        raise ValueError(f"Invalid experiment run index entries: {index_path}")
+    return entries
 
 
-def _record_experiment_run(index_path: Path, config_name: str, run_dir: Path) -> None:
-    """Atomically update one config-to-run mapping in a batch index."""
-
-    entries: dict[str, str] = {}
-    if index_path.exists():
-        payload = yaml.safe_load(index_path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError(f"Experiment run index must contain a YAML mapping: {index_path}")
-        entries = {str(name): str(folder) for name, folder in payload.items()}
-    entries[config_name] = str(run_dir.resolve())
+def _write_experiment_run_index(index_path: Path, entries: dict[str, list[str]]) -> None:
     temporary = index_path.with_name(index_path.name + ".tmp")
     temporary.write_text(
-        yaml.safe_dump(dict(sorted(entries.items())), sort_keys=False, allow_unicode=True),
+        yaml.safe_dump(
+            {"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": dict(sorted(entries.items()))},
+            sort_keys=False,
+            allow_unicode=True,
+        ),
         encoding="utf-8",
     )
     temporary.replace(index_path)
 
 
-def _load_experiment_run_index(config_dir: Path) -> dict[str, Path]:
-    """Load the canonical config-to-run index for a folder resume."""
+def _initialize_experiment_run_index(index_path: Path) -> None:
+    """Start a fresh index for the selected directory batch."""
+
+    _write_experiment_run_index(index_path, {})
+
+
+def _record_experiment_run(
+    index_path: Path, config_name: str, run_dir: Path, replicate_index: int,
+) -> None:
+    """Atomically record one replicate; repeated callbacks update the same slot."""
+
+    entries = _decode_experiment_run_index(
+        yaml.safe_load(index_path.read_text(encoding="utf-8")), index_path,
+    )
+    run_dirs = entries.setdefault(config_name, [])
+    if not 0 <= replicate_index <= len(run_dirs):
+        raise ValueError(f"Experiment run index has a missing replicate: {config_name}[{replicate_index}]")
+    folder = str(run_dir.resolve())
+    if replicate_index == len(run_dirs):
+        run_dirs.append(folder)
+    else:
+        run_dirs[replicate_index] = folder
+    _write_experiment_run_index(index_path, entries)
+
+
+def _load_experiment_run_index(config_dir: Path) -> dict[str, list[Path]]:
+    """Load ordered replicate paths, accepting legacy single-run indices."""
 
     index_path = config_dir / "experiment.yaml"
     if not index_path.is_file() or not _is_experiment_run_index(index_path):
@@ -110,15 +151,19 @@ def _load_experiment_run_index(config_dir: Path) -> dict[str, Path]:
             "Folder resume requires a generated experiment.yaml run index: "
             f"{index_path}"
         )
-    payload = yaml.safe_load(index_path.read_text(encoding="utf-8"))
-    entries: dict[str, Path] = {}
-    for config_name, raw_run_dir in payload.items():
-        run_dir = Path(raw_run_dir).expanduser()
-        if not run_dir.is_absolute():
-            raise ValueError(
-                f"Experiment run index entry must be absolute: {config_name}={raw_run_dir}"
-            )
-        entries[str(config_name)] = run_dir.resolve()
+    payload = _decode_experiment_run_index(
+        yaml.safe_load(index_path.read_text(encoding="utf-8")), index_path,
+    )
+    entries: dict[str, list[Path]] = {}
+    for config_name, folders in payload.items():
+        entries[config_name] = []
+        for folder in folders:
+            run_dir = Path(folder).expanduser()
+            if not run_dir.is_absolute():
+                raise ValueError(
+                    f"Experiment run index entry must be absolute: {config_name}={folder}"
+                )
+            entries[config_name].append(run_dir.resolve())
     return entries
 
 
@@ -173,15 +218,6 @@ def _run_final_test_if_eligible(
     status = runner(["--run-dir", str(result.run_dir)])
     if status:
         raise RuntimeError(f"Final test failed with exit code {status}.")
-
-
-def _reject_multi_run_directory_config(config: ExperimentConfig, config_dir: Path) -> None:
-    if config.total_runs > 1:
-        raise ValueError(
-            f"total_runs={config.total_runs} is supported for a direct config path only; "
-            f"run the YAML file directly or set runs: 1 with one random seed for a folder batch "
-            f"({config_dir})."
-        )
 
 
 def resolve_experiment_config(path: str | Path) -> Path:
@@ -345,16 +381,14 @@ class ExperimentOrchestrator:
                 print(f"Survivor selection: {config.survivor_selection} lexicase")
                 print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
                 config.validate()
-                if run_index_path is not None:
-                    _reject_multi_run_directory_config(config, config_path.resolve())
-                record_run = (
-                    None
-                    if run_index_path is None
-                    else lambda run_dir, name=resolved_path.name: _record_experiment_run(
-                        run_index_path, name, run_dir
-                    )
-                )
                 for replicate_index, effective_seed in enumerate(config.seed_schedule):
+                    record_run = (
+                        None
+                        if run_index_path is None
+                        else lambda run_dir, name=resolved_path.name, slot=replicate_index: _record_experiment_run(
+                            run_index_path, name, run_dir, slot
+                        )
+                    )
                     run_config = replace(
                         config,
                         random_seed=effective_seed,
@@ -423,26 +457,31 @@ class ExperimentOrchestrator:
         """Resume an interrupted folder batch, then run remaining configs."""
 
         discovered_paths = resolve_experiment_configs(config_dir)
-        for path in discovered_paths:
-            requested = ExperimentConfig.from_file(path)
-            requested.validate()
-            _reject_multi_run_directory_config(requested, config_dir)
         run_index_path = config_dir / "experiment.yaml"
         indexed_runs = _load_experiment_run_index(config_dir)
-        pending_resumes = [
-            path
-            for path in discovered_paths
-            if path.name in indexed_runs
-            and not _batch_entry_is_complete(
-                indexed_runs[path.name],
-                mock=mock,
-                skip_final_test=skip_final_test,
-            )
-        ]
-        config_paths = pending_resumes + [
-            path for path in discovered_paths if path not in pending_resumes
-        ]
-        _print_batch_header(config_dir, len(config_paths))
+        jobs: list[tuple[Path, int, ExperimentConfig, Path | None]] = []
+        for path in discovered_paths:
+            config = ExperimentConfig.from_file(path)
+            config.validate()
+            run_dirs = indexed_runs.get(path.name, [])
+            if len(run_dirs) > config.total_runs:
+                raise ValueError(f"Experiment run index exceeds configured replicates: {path.name}")
+            for replicate_index, effective_seed in enumerate(config.seed_schedule):
+                requested = replace(config, random_seed=effective_seed)
+                indexed_run = run_dirs[replicate_index] if replicate_index < len(run_dirs) else None
+                if indexed_run is not None:
+                    persisted = load_resume_config(indexed_run)
+                    validate_resume_config(
+                        requested, persisted, mock=mock, allow_experiment_name_alias=True,
+                    )
+                    persisted.validate()
+                jobs.append((path, replicate_index, requested, indexed_run))
+        # Finish interrupted indexed runs before starting any missing replicate.
+        jobs.sort(key=lambda job: not (
+            job[3] is not None
+            and not _batch_entry_is_complete(job[3], mock=mock, skip_final_test=skip_final_test)
+        ))
+        _print_batch_header(config_dir, len(discovered_paths))
 
         manager: RuntimeManager | None = None
         last_result: SearchResult | None = None
@@ -474,51 +513,25 @@ class ExperimentOrchestrator:
             }
 
         try:
-            for index, resolved_path in enumerate(config_paths, start=1):
-                print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
-                requested = ExperimentConfig.from_file(resolved_path)
-                requested.validate()
-                indexed_run = indexed_runs.get(resolved_path.name)
-
+            for resolved_path, replicate_index, requested, indexed_run in jobs:
+                print(f"\n{resolved_path.name}: Run [{replicate_index + 1}/{requested.total_runs}] "
+                      f"random_seed={requested.random_seed}")
+                record_run = lambda run_dir, name=resolved_path.name, slot=replicate_index: _record_experiment_run(
+                    run_index_path, name, run_dir, slot,
+                )
                 if indexed_run is not None:
                     persisted = load_resume_config(indexed_run)
-                    validate_resume_config(
-                        requested,
-                        persisted,
-                        mock=mock,
-                        allow_experiment_name_alias=True,
-                    )
-                    persisted.validate()
                     last_known_run = indexed_run
                     if _batch_entry_is_complete(
-                        indexed_run,
-                        mock=mock,
-                        skip_final_test=skip_final_test,
+                        indexed_run, mock=mock, skip_final_test=skip_final_test,
                     ):
                         print(f"Status: complete; skipping {indexed_run}")
                         continue
-
                     manifest = load_manifest(indexed_run)
                     search_complete = str(manifest.get("status") or "") == "complete"
                     if not search_complete and manifest.get("latest_generation") is None:
-                        print(
-                            "Status: interrupted before generation 0; "
-                            "creating a replacement run"
-                        )
-                        ensure_runtime(requested, new_run=True)
-                        record_run = lambda run_dir, name=resolved_path.name: _record_experiment_run(
-                            run_index_path,
-                            name,
-                            run_dir,
-                        )
-                        result = self.search_runner(
-                            requested,
-                            config_path=resolved_path,
-                            mock=mock,
-                            on_run_created=record_run,
-                            **phase_kwargs(requested),
-                        )
-                        record_run(result.run_dir)
+                        print("Status: interrupted before generation 0; creating a replacement run")
+                        indexed_run = None
                     else:
                         print(f"Status: resuming {indexed_run}")
                         if not search_complete:
@@ -529,14 +542,9 @@ class ExperimentOrchestrator:
                             mock=mock,
                             **phase_kwargs(persisted),
                         )
-                else:
+                if indexed_run is None:
                     print("Status: not started; creating a new run")
                     ensure_runtime(requested, new_run=True)
-                    record_run = lambda run_dir, name=resolved_path.name: _record_experiment_run(
-                        run_index_path,
-                        name,
-                        run_dir,
-                    )
                     result = self.search_runner(
                         requested,
                         config_path=resolved_path,
