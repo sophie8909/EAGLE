@@ -9,7 +9,7 @@ const build=path.join(workspaceDir,'.codex-build');
 const skill=process.env.EAGLE_PRESENTATIONS_SKILL ?? 'C:/Users/cinna/.codex/plugins/cache/openai-primary-runtime/presentations/26.1013.11914/skills/presentations';
 const runtime=process.env.EAGLE_ARTIFACT_RUNTIME ?? 'C:/Users/cinna/.cache/codex-runtimes/codex-primary-runtime/dependencies';
 const reference=process.env.EAGLE_TEMPLATE ?? 'C:/Users/cinna/.codex/skills/artifact-template-eagle-0917/assets/EAGLE.potx';
-const finalPath=path.join(workspaceDir,'deliverables',process.env.EAGLE_DECK_NAME ?? 'EAGLE_20261014_dsl_gpu_parallel_v2.pptx');
+const finalPath=path.join(workspaceDir,'deliverables',process.env.EAGLE_DECK_NAME ?? 'EAGLE_final_version_intro.pptx');
 const fontReference=process.env.EAGLE_FONT_REFERENCE ?? path.join(path.dirname(reference),'reference.pptx');
 const data=JSON.parse((await fs.readFile(path.join(workspaceDir,'content.json'),'utf8')).replace(/^\uFEFF/,''));
 process.env.RUNTIME_NODE_MODULES=path.join(runtime,'node/node_modules');
@@ -34,7 +34,7 @@ function table(s,values,widths,size=29){
 }
 function node(s,n){const o=s.shapes.add({name:n.id,geometry:n.decision?'diamond':'rect',position:{left:n.x,top:n.y,width:n.w??360,height:n.h??100},fill:C.paper,line:{fill:C.ink,width:1.5}});o.text=n.text;o.text.style={typeface:F,fontSize:n.size??29,color:C.body,alignment:'center',verticalAlignment:'middle',autoFit:'none'};o.text.insets=8;return o;}
 function diagram(s,spec){const nodes=new Map(spec.nodes.map(n=>[n.id,node(s,n)]));for(const e of spec.edges){s.shapes.connect(nodes.get(e[0]),nodes.get(e[1]),{kind:'elbow',fromSide:e[2]??'right',toSide:e[3]??'left',line:{fill:C.rose,width:2},tail:{type:'arrow',width:'med',length:'med'}});}for(const a of spec.labels??[])text(s,a.text,a.x,a.y,a.w??200,a.h??44,25,C.ink);}
-let md=`# EAGLE deterministic DSL 與 GPU 平行執行版本\n\n來源版本：${data.revision}。截點：2026-10-14（Asia/Taipei）。\n\n本文件逐頁保留簡報內容與詳細解說。示例均為機制教學，不代表實驗量測。\n`;
+let md=`# EAGLE 最終版本介紹\n\n來源版本：${data.revision}。截點：2026-10-14（Asia/Taipei）。\n\n本文件逐頁說明最終版本的設定與運作機制。\n`;
 for(let i=0;i<data.slides.length;i++){
  const d=data.slides[i];const s=deck.slides.add({layoutId:'/ppt/slideLayouts/slideLayout12.xml',width:1672,height:941});
  text(s,d.title,235,44,1202,104,d.title.length>25?43:48,C.ink,true,'center');
@@ -66,10 +66,10 @@ for(let i=0;i<data.slides.length;i++){
  if(d.example)md+='\n本頁為教學示例，非實驗量測。\n';
  for(const source of d.sources){const file=source.split(':')[0];await fs.access(path.join(root,file));}
 }
-await fs.writeFile(path.join(workspaceDir,'workflow_explained.md'),md);
+await fs.writeFile(path.join(workspaceDir,'final_version_explained.md'),md);
 const candidatePath=path.join(build,'candidate-ready.pptx');await(await PresentationFile.exportPptx(deck)).save(candidatePath);
 execFileSync(path.join(runtime,'python/python.exe'),[path.join(workspaceDir,'native_numbers.py'),candidatePath],{stdio:'inherit'});
-const result=await finalizePresentation({workspaceDir,candidatePath,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableOwners.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:data.slides.length,requiredNativeTableOwnerSlides:tableOwners,requiredNativeChartOwnerSlides:chartOwners,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:fontReference,referenceSha256:createHash('sha256').update(await fs.readFile(fontReference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(build,path.basename(finalPath)+'.validation.json')});
-const finalDeck=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));await fs.mkdir(path.join(build,'render'),{recursive:true});
-for(let i=0;i<finalDeck.slides.items.length;i++){const png=await finalDeck.slides.items[i].export({format:'png',scale:1});await fs.writeFile(path.join(build,'render',`slide-${i+1}.png`),new Uint8Array(await png.arrayBuffer()));console.log(`render ${i+1}/${finalDeck.slides.items.length}`);}
+const result=await finalizePresentation({workspaceDir,candidatePath,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableOwners.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:data.slides.length,requiredNativeTableOwnerSlides:tableOwners,requiredNativeChartOwnerSlides:chartOwners,materializeLiteralChartWorkbooks:false,fontPolicy:{basis:'reference',families:[F],referencePath:fontReference,referenceSha256:createHash('sha256').update(await fs.readFile(fontReference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(build,path.basename(finalPath)+'.validation.json')});
+const finalDeck=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));await fs.mkdir(path.join(build,'render-intro'),{recursive:true});
+for(let i=0;i<finalDeck.slides.items.length;i++){const png=await finalDeck.slides.items[i].export({format:'png',scale:1});await fs.writeFile(path.join(build,'render-intro',`slide-${i+1}.png`),new Uint8Array(await png.arrayBuffer()));console.log(`render ${i+1}/${finalDeck.slides.items.length}`);}
 console.log(JSON.stringify({output:result.finalPath,slides:data.slides.length,tableOwners,receipt:result.receiptPath}));
