@@ -19,7 +19,11 @@ Return a replacement strategy prompt encoding ordered JSON DSL rules with concre
 The replacement must be the concrete game-playing policy itself, never a meta-instruction asking another role to define or design a policy.
 Mutation Intent: COUNTER
 Focus on opponent behavior identified by the selected worst-match diagnosis as causing important failures. Create concrete conditional responses while preserving unrelated successful strategy components.
-Return exactly one compact JSONL record on one line with strategy_changes, strategy_signature, parent_strategy_prompt, and new_strategy_prompt. Do not use Markdown fences.
+Return JSONL only, with exactly one compact JSON object per physical line and no Markdown fences.
+First return one metadata line containing record_type "coach_metadata", strategy_changes, and strategy_signature. Do not echo parent_strategy_prompt.
+Then return each ordered policy rule as its own line using exactly this wrapper:
+{"record_type":"strategy_rule","field":"new_strategy_prompt","rule":{"actor":"<unit type>","when":true,"action":{"type":"idle"}}}
+Return at least one rule line. The runtime validates each complete rule independently, preserves valid rules in line order, discards invalid lines/rules, and fails only when no valid rule remains.
 strategy_changes must contain preserved, removed_or_reduced, and added_or_strengthened arrays.
 strategy_signature must contain short categorical opening, economy, production, attack_timing, combat_style, expansion, defense, and target_priority fields.
 Do not append reflection history recursively.
@@ -27,4 +31,4 @@ Do not write Java, discuss implementation details, or return analysis outside th
 parent_strategy_prompt: $parent_strategy_prompt
 commentator_diagnoses_and_evaluation_metadata: $commentator_diagnoses_and_evaluation_metadata
 
-new_strategy_prompt must be a nested JSON OBJECT containing one complete eagle-strategy-dsl-v1 policy, never a serialized JSON string or natural-language rules. Follow the finite DSL reference included in the gameplay contract. Reject prose, code and unknown fields in the policy gene. Intrinsic action guards need not be restated in conditions.
+Each rule value must be one complete legal eagle-strategy-dsl-v1 rule, never a serialized JSON string or natural-language rule. Do not emit a whole policy object; the runtime constructs the versioned policy from accepted rule lines. Follow the finite DSL reference included in the gameplay contract. Intrinsic action guards need not be restated in conditions.

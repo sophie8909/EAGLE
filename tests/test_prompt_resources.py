@@ -24,11 +24,13 @@ class PromptResourceTests(unittest.TestCase):
         for coach_name in ("coach_refine", "coach_counter", "coach_structural", "coach_alternative"):
             coach = load_prompt_templates()[coach_name].template
             self.assertIn("concrete game-playing policy itself", coach)
-            self.assertIn("compact JSONL record on one line", coach)
-            self.assertIn("new_strategy_prompt must be a nested JSON OBJECT", coach)
+            self.assertIn("exactly one compact JSON object per physical line", coach)
+            self.assertIn('"field":"new_strategy_prompt"', coach)
+            self.assertIn("fails only when no valid rule remains", coach)
         contract_rewrite = load_prompt_templates()["strategy_contract_rewrite"].template
-        self.assertIn("compact JSONL record on one line", contract_rewrite)
-        self.assertIn("revised_strategy_prompt must be a nested JSON OBJECT", contract_rewrite)
+        self.assertIn("one compact JSON object per physical line", contract_rewrite)
+        self.assertIn('"field":"revised_strategy_prompt"', contract_rewrite)
+        self.assertIn("fails only when no valid rule remains", contract_rewrite)
 
     def test_every_prompt_is_one_registered_text_file(self) -> None:
         templates = load_prompt_templates()

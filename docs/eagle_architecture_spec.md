@@ -243,12 +243,14 @@ policy without selecting a replacement match. Strategy mutation changes only
 Initial policy generation, Match Commentator, Coach, the library
 Strategy path, and Strategy Alignment receive the immutable closed-world
 MicroRTS gameplay contract. The contract permits arbitrary legal strategy types.
-Coach and its strategy-contract rewriter emit one compact JSONL record with a
-nested DSL object. Parsing is field-targeted and requires exactly one valid
-record for the role; non-JSON lines may be ignored, but the selected DSL is
-validated as a whole without syntax or semantic repair. Legacy whole JSON and
-full-fence responses remain readable. A version-marker scan is forbidden
-because a Coach response may also echo the valid parent policy.
+Coach and its strategy-contract rewriter emit one compact JSONL record per
+ordered strategy rule. Every record is field-targeted and its complete rule is
+validated independently. Valid rules retain physical-line order; malformed
+lines and whole semantically invalid rules are discarded and recorded. A
+non-empty legal subset succeeds, and only zero legal rules fails the role. No
+condition/action subtree is repaired inside a rejected rule. Legacy whole JSON
+and full-fence responses remain readable under all-or-nothing validation, and a
+whole echoed parent policy cannot match the child rule-record schema.
 
 In `llm` mode, Prompt mutation is the former Code Reflection behavior. In default mode it
 compares the source parent's policy with its Java phenotype. In inherited mode

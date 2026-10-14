@@ -220,7 +220,7 @@ anchors run identity. A corrected display-only `experiment_name` is accepted;
 all execution-affecting fields remain strict. Direct config-plus-run resume
 continues to compare the name as well.
 
-New `eagle-run-v2` runs persist one fully resolved `config.yaml`; generation snapshots remain `eagle-generation-v3`, while candidate records use `eagle-candidate-v6` (`phase4-v6`). Subschemas are `reflection-v3`, `phase2b-v3`, `eagle-code-reflection-v6`, `strategy-reflection-v6`, and `eagle-llm-call-v2`. The root has
+New `eagle-run-v2` runs persist one fully resolved `config.yaml`; generation snapshots remain `eagle-generation-v3`, while candidate records use `eagle-candidate-v6` (`phase4-v6`). Subschemas are `reflection-v3`, `phase2b-v3`, `eagle-code-reflection-v6`, `strategy-reflection-v7`, and `eagle-llm-call-v2`. The root has
 only manifest/config/summary/timing plus canonical directories. Candidate,
 generation, match, archive, and config compatibility duplicates have been
 removed. Analysis and resume both require v2 and use the run-local model and
@@ -304,13 +304,16 @@ run timing event, without duplicating prompts/responses under `llm_logs/`.
 Validated Coach results use the authoritative input parent policy; the model's
 echo is retained only in raw/parsed evidence.
 
-Coach and strategy-contract-rewriter output now prefers a one-record JSONL
-envelope with the DSL as a nested JSON object. The compatibility parser still
-accepts the prior whole-object/string-field form. When extra prose is present,
-only complete per-line JSON objects are considered, exactly one record must
-carry the role-specific child-policy field, and the full selected DSL is then
-strictly validated. This intentionally cannot fall back to an echoed
-`parent_strategy_prompt` or delete invalid content within the proposed policy.
+Coach and strategy-contract-rewriter output now prefers rule-per-line JSONL.
+Every `strategy_rule` record carries one complete rule and the role-specific
+child-policy field. Rules are validated independently and accepted in physical
+line order; malformed lines and entire illegal rules are recorded and omitted.
+Any non-empty legal subset becomes the canonical child policy, so the role
+fails only when all proposed rules are unusable. The parser never prunes a
+condition, action, or field inside a rule. A whole echoed parent policy does not
+match the rule-record schema. Extraction evidence is persisted beside the
+parsed output, while the prior whole-object/string-field format remains readable
+with all-or-nothing validation.
 
 Prompt Reviewer/Rewriter evidence is stored under `mutation/prompt_reflection/`.
 The Reviewer sees only the editable strategy region plus the immutable API

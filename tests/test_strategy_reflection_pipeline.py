@@ -645,6 +645,67 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertIn("coach output must not contain Java", second_request["prompt"])
             self.assertNotIn("prompt", second_attempt)
 
+    def test_all_invalid_jsonl_rules_retry_with_extraction_evidence(self) -> None:
+        class RetryRulesBackend:
+            def __init__(self) -> None:
+                self.mock = MockRoleBackend()
+                self.coach_attempts = 0
+
+            def generate(self, prompt: str) -> str:
+                if "ROLE: coach" in prompt:
+                    self.coach_attempts += 1
+                    if self.coach_attempts == 1:
+                        return json.dumps({
+                            "record_type": "strategy_rule",
+                            "field": "new_strategy_prompt",
+                            "rule": {
+                                "actor": "Base",
+                                "when": True,
+                                "action": {"type": "attack"},
+                            },
+                        })
+                return self.mock.generate(prompt)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            trace = root / "match_trace.jsonl.gz"
+            _write_trace(
+                trace,
+                metadata={"match_id": "match-jsonl-retry"},
+                round_state_dir=states,
+                raw_result={},
+                tick_limit=0,
+            )
+            backend = RetryRulesBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=2).run(
+                Candidate(id="jsonl-retry", strategy_prompt=worker_rush_policy()),
+                ReflectionContext(
+                    generation=1,
+                    index=0,
+                    candidate_id="parent",
+                    per_match_results=({
+                        "match_id": "match-jsonl-retry",
+                        "match_trace_path": str(trace),
+                    },),
+                ),
+                artifact_dir=root / "child",
+            )
+
+            self.assertEqual(result.status, "success")
+            self.assertEqual(backend.coach_attempts, 2)
+            first = json.loads((
+                root
+                / "child"
+                / "mutation"
+                / "strategy_reflection"
+                / "coach_response_attempt_001.json"
+            ).read_text())
+            self.assertEqual(first["status"], "error")
+            self.assertEqual(first["strategy_extraction"]["status"], "failed")
+            self.assertEqual(first["strategy_extraction"]["valid_rule_count"], 0)
+
     def test_gameplay_invalid_coach_policy_uses_short_contract_rewriter(self) -> None:
         class ContractRewriteBackend:
             def __init__(self) -> None:
@@ -716,13 +777,30 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 if "ROLE: coach" not in prompt:
                     return response
                 payload = json.loads(response)
-                payload["new_strategy_prompt"] = json.loads(
-                    payload["new_strategy_prompt"]
-                )
-                record = json.dumps(payload, separators=(",", ":"))
-                self.raw_coach_response = (
-                    "I checked the policy.\n" + record + "\nThis line is not JSON."
-                )
+                rules = json.loads(payload["new_strategy_prompt"])["rules"]
+                metadata = json.dumps({
+                    "record_type": "coach_metadata",
+                    "strategy_changes": payload["strategy_changes"],
+                    "strategy_signature": payload["strategy_signature"],
+                }, separators=(",", ":"))
+                valid_records = [json.dumps({
+                    "record_type": "strategy_rule",
+                    "field": "new_strategy_prompt",
+                    "rule": rule,
+                }, separators=(",", ":")) for rule in rules]
+                invalid_record = json.dumps({
+                    "record_type": "strategy_rule",
+                    "field": "new_strategy_prompt",
+                    "rule": {"actor": "Base", "when": True, "action": {"type": "attack"}},
+                }, separators=(",", ":"))
+                self.raw_coach_response = "\n".join((
+                    "I checked the policy.",
+                    metadata,
+                    valid_records[0],
+                    invalid_record,
+                    *valid_records[1:],
+                    "This line is not JSON.",
+                ))
                 return self.raw_coach_response
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -763,6 +841,12 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             parsed = json.loads((reflection_dir / "coach_output.json").read_text())
             self.assertIsInstance(parsed["new_strategy_prompt"], str)
             self.assertEqual(result.candidate.strategy_prompt, worker_rush_policy(2))
+            extraction = json.loads(
+                (reflection_dir / "coach_strategy_extraction.json").read_text()
+            )
+            self.assertEqual(extraction["valid_rule_count"], len(json.loads(worker_rush_policy(2))["rules"]))
+            self.assertEqual(extraction["discarded_line_count"], 3)
+            self.assertEqual(extraction["status"], "partial")
 
     def test_commentary_failure_preserves_trace_without_changing_candidate(self) -> None:
         class BadBackend:

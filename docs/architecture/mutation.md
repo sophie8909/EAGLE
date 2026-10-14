@@ -34,15 +34,16 @@ evaluation/selection metadata. Its replacement
 may change strategy type, but every condition must use observable state and every
 response must be a legal game action.
 
-Coach and strategy-contract-rewriter prompts use one compact JSONL record whose
-policy field is a nested DSL object. At the parser boundary, a complete legacy
-JSON object or full JSON fence remains readable. Otherwise, non-JSON/non-object
-lines are discarded and exactly one complete record carrying the role-specific
-field is required (`new_strategy_prompt` for Coach,
-`revised_strategy_prompt` for contract rewrite). The parser never searches for
-an arbitrary version marker, so an echoed parent policy cannot become the child.
-It does not repair, truncate, or delete content inside the selected DSL; the
-entire object still passes strict DSL validation and canonicalization.
+Coach and strategy-contract-rewriter prompts use rule-per-line JSONL. Each
+`strategy_rule` record names the role-specific field (`new_strategy_prompt` for
+Coach, `revised_strategy_prompt` for contract rewrite) and carries exactly one
+complete DSL rule. Runtime validates every rule independently, preserves valid
+rules in physical-line order, and discards prose, malformed lines, wrong-field
+records, and entire semantically invalid rules. It never repairs part of a rule.
+The attempt succeeds when at least one legal rule remains and fails only when
+all proposed rules are unusable. A whole echoed parent policy is not a rule
+record and cannot become the child. Legacy whole JSON and full-fence responses
+remain readable with their original all-or-nothing validation.
 
 ```text
 (policy A1, prompt B1, Java C1) -> (policy A2, prompt B1, Java C1) -> Java C2

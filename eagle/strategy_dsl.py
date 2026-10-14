@@ -1,4 +1,5 @@
 """Finite, versioned strategy gene grammar; Java generation implements its semantics."""
+import hashlib
 import json
 import math
 import re
@@ -7,6 +8,14 @@ VERSION = "eagle-strategy-dsl-v1"
 UNIT_TYPES = {"Worker", "Base", "Barracks", "Light", "Heavy", "Ranged"}
 MOBILE = {"Worker", "Light", "Heavy", "Ranged"}
 MAX_CHARS = 16000
+
+
+class StrategyJSONLExtractionError(ValueError):
+    """A rule stream had no usable policy; ``report`` retains discard evidence."""
+
+    def __init__(self, message, report):
+        super().__init__(message)
+        self.report = report
 
 
 def _unique_json_object(pairs):
@@ -74,6 +83,168 @@ def strategy_dsl_source_from_record(payload, *, field_name):
     if isinstance(value, dict):
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     raise ValueError(f"strategy response {field_name} must be a JSON object or serialized JSON string")
+
+
+def extract_strategy_rule_jsonl(response, *, field_name, max_rules=32):
+    """Assemble one policy from independently validated JSONL rule records.
+
+    Each ``strategy_rule`` record is validated independently for the requested
+    role field.  Direct rule objects are accepted as a compact compatibility
+    form.  Invalid lines and invalid rules are reported and omitted; the
+    response fails only when no complete legal rule remains.  ``None`` means
+    the response did not use this record format and allows the legacy
+    whole-object parser to run.
+    """
+    text = str(response).lstrip("\ufeff").strip()
+    valid_rules = []
+    valid_rule_lines = []
+    discarded = []
+    metadata = {}
+    metadata_line = None
+    recognized = False
+    bounded_max_rules = min(max_rules, 32)
+
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = _json_object(line)
+        except (json.JSONDecodeError, RecursionError, ValueError) as exc:
+            if '"record_type"' in line and '"strategy_rule"' in line:
+                recognized = True
+            discarded.append({
+                "line": line_number,
+                "reason": f"invalid_json: {exc}",
+            })
+            continue
+        if record is None:
+            discarded.append({"line": line_number, "reason": "not_a_json_object"})
+            continue
+
+        record_type = record.get("record_type")
+        if record_type == "coach_metadata":
+            recognized = True
+            if metadata_line is not None:
+                discarded.append({"line": line_number, "reason": "duplicate_coach_metadata"})
+                continue
+            invalid_metadata = []
+            for key in ("strategy_changes", "strategy_signature"):
+                if key not in record:
+                    continue
+                if not isinstance(record[key], dict):
+                    invalid_metadata.append(key)
+                    continue
+                metadata[key] = record[key]
+            if invalid_metadata:
+                discarded.append({
+                    "line": line_number,
+                    "reason": "invalid_coach_metadata_fields: " + ",".join(invalid_metadata),
+                })
+            metadata_line = line_number
+            continue
+
+        direct_rule = set(record) == {"actor", "when", "action"}
+        if record_type != "strategy_rule" and not direct_rule:
+            discarded.append({"line": line_number, "reason": "not_a_strategy_record"})
+            continue
+        recognized = True
+        if direct_rule:
+            rule = record
+        else:
+            if record.get("field") != field_name:
+                discarded.append({"line": line_number, "reason": "wrong_strategy_field"})
+                continue
+            if set(record) != {"record_type", "field", "rule"}:
+                discarded.append({"line": line_number, "reason": "invalid_strategy_rule_record_fields"})
+                continue
+            rule = record["rule"]
+        if len(valid_rules) >= bounded_max_rules:
+            discarded.append({"line": line_number, "reason": "strategy_rule_limit_exceeded"})
+            continue
+        try:
+            validate_strategy_dsl({"version": VERSION, "rules": [rule]})
+            normalize_strategy_dsl({
+                "version": VERSION,
+                "rules": [*valid_rules, rule],
+            })
+        except (RecursionError, ValueError) as exc:
+            discarded.append({"line": line_number, "reason": str(exc)})
+            continue
+        valid_rules.append(rule)
+        valid_rule_lines.append(line_number)
+
+    if not recognized:
+        return None
+    if not valid_rules:
+        report = {
+            "schema_version": "eagle-strategy-rule-extraction-v1",
+            "status": "failed",
+            "mode": "rule_records",
+            "field_name": field_name,
+            "metadata_line": metadata_line,
+            "valid_rule_count": 0,
+            "valid_rule_lines": [],
+            "discarded_line_count": len(discarded),
+            "discarded_lines": discarded,
+            "raw_response_sha256": hashlib.sha256(str(response).encode("utf-8")).hexdigest(),
+            "extracted_strategy_sha256": None,
+            "canonical_strategy_sha256": None,
+        }
+        raise StrategyJSONLExtractionError(
+            "strategy JSONL contains no valid rules",
+            report,
+        )
+
+    strategy_source = normalize_strategy_dsl({
+        "version": VERSION,
+        "rules": valid_rules,
+    })
+    payload = dict(metadata)
+    payload[field_name] = strategy_source
+    report = {
+        "schema_version": "eagle-strategy-rule-extraction-v1",
+        "status": "partial" if discarded else "complete",
+        "mode": "rule_records",
+        "field_name": field_name,
+        "metadata_line": metadata_line,
+        "valid_rule_count": len(valid_rules),
+        "valid_rule_lines": valid_rule_lines,
+        "discarded_line_count": len(discarded),
+        "discarded_lines": discarded,
+        "raw_response_sha256": hashlib.sha256(str(response).encode("utf-8")).hexdigest(),
+        "extracted_strategy_sha256": hashlib.sha256(strategy_source.encode("utf-8")).hexdigest(),
+        "canonical_strategy_sha256": hashlib.sha256(strategy_source.encode("utf-8")).hexdigest(),
+    }
+    return payload, strategy_source, report
+
+
+def strategy_extraction_report(response, strategy_source, *, field_name, mode):
+    """Build the audit record for a legacy whole-object extraction."""
+    try:
+        canonical = normalize_strategy_dsl(strategy_source)
+        valid_rule_count = len(validate_strategy_dsl(canonical)["rules"])
+    except (RecursionError, ValueError):
+        canonical = None
+        valid_rule_count = None
+    return {
+        "schema_version": "eagle-strategy-rule-extraction-v1",
+        "status": "complete" if canonical is not None else "unvalidated",
+        "mode": mode,
+        "field_name": field_name,
+        "metadata_line": None,
+        "valid_rule_count": valid_rule_count,
+        "valid_rule_lines": [],
+        "discarded_line_count": 0,
+        "discarded_lines": [],
+        "raw_response_sha256": hashlib.sha256(str(response).encode("utf-8")).hexdigest(),
+        "extracted_strategy_sha256": hashlib.sha256(strategy_source.encode("utf-8")).hexdigest(),
+        "canonical_strategy_sha256": (
+            hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            if canonical is not None
+            else None
+        ),
+    }
 
 
 def _fields(value, required, optional=()):

@@ -335,13 +335,19 @@ parent-policy echo, while validated `coach_result.json` takes the parent policy
 from the authoritative input artifact. Bounded Rewrite attempts retain their request/raw files; compact metadata points
 to the representative attempt. A retry request includes the prior deterministic
 validation error; raw invalid output is never rewritten in place.
-Coach and strategy-contract-rewriter responses may contain a single compact
-JSONL record among non-JSON lines. Extraction is keyed only by the expected role
-field and requires exactly one matching valid record; the exact unfiltered
-response remains in the numbered attempt artifact. Parsed output stores the
-selected policy as a serialized DSL string for schema compatibility, and the
-validated candidate stores its canonical form. Invalid material inside that
-selected record is not filtered or repaired.
+Coach and strategy-contract-rewriter responses use rule-per-line JSONL. Each
+complete matching rule record is validated independently; accepted rules retain
+physical-line order, while non-JSON lines and whole invalid rule records are
+discarded. Partial extraction succeeds when at least one legal rule remains;
+zero accepted rules follows the bounded retry/failure path. The exact
+unfiltered response remains in the numbered attempt artifact. Successful roles
+also write `coach_strategy_extraction.json` or
+`strategy_contract_rewriter_extraction.json` with schema
+`eagle-strategy-rule-extraction-v1`, accepted line numbers, discarded line
+reasons, counts, mode, and raw/extracted/canonical hashes. Parsed output stores
+the assembled policy as a serialized DSL string for compatibility, and the
+candidate stores its canonical form. Legacy whole-policy responses remain
+all-or-nothing.
 Mutation-role run timing references the candidate-owned evidence without
 duplicating its prompt/response under `llm_logs/`. Adaptively credited offspring
 retain `aos/reward.json`; its

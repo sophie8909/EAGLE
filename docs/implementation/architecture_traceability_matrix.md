@@ -12,7 +12,7 @@ NSGA-II and `eagle-run-v1` rows were removed on 2026-08-19.
 
 | ID | Contract | Canonical owner | Implementation | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| DSL-01 | Canonical versioned JSON policy, ordered actor/when/action rules, intrinsic legality guards, idle empty rules, role-field-targeted JSONL extraction, and strict whole-policy validation at producers/readers | policy DSL | `eagle/strategy_dsl.py` | DSL/seed/role contract tests; integration plan | See integration plan |
+| DSL-01 | Canonical versioned JSON policy, ordered actor/when/action rules, intrinsic legality guards, rule-per-line JSONL salvage with zero-valid failure, and strict canonical validation at producers/readers | policy DSL | `eagle/strategy_dsl.py` | DSL/seed/role contract tests; integration plan | See integration plan |
 | CAND-01 | LLM-mode default two-prompt genotype and opt-in prompt/prompt/Java genotype remain distinct from the generated Java phenotype | candidate model | `eagle/candidate.py`, `eagle/evaluation/pipeline.py` | candidate/state-transition tests | Implemented |
 | CAND-02 | First-class lineage and independent policy, generation-prompt, and optional Java provenance | lineage schema | `eagle/operators/crossover.py`, `eagle/artifacts.py` | lineage/crossover tests | Implemented |
 | EVO-01 | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection | evolutionary flow | `eagle/operators/selection.py`, `eagle/evolution/generation.py`, `eagle/evolution/search.py`, `eagle/evolution/resume.py` | lexicase tests | Implemented |

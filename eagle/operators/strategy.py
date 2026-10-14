@@ -29,8 +29,10 @@ from eagle.llm import parse_json_object_response
 from eagle.timing import utc_now
 from eagle.strategy_dsl import (
     extract_strategy_jsonl_record,
+    extract_strategy_rule_jsonl,
     normalize_strategy_dsl,
     strategy_dsl_source_from_record,
+    strategy_extraction_report,
     worker_rush_policy,
 )
 from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
@@ -40,8 +42,8 @@ from eagle.strategy_diversity import build_strategy_niche, normalize_strategy_si
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
-ROLE_SCHEMA_VERSION = "strategy-reflection-v6"
-PROMPT_VERSION = "sports-team-v6"
+ROLE_SCHEMA_VERSION = "strategy-reflection-v7"
+PROMPT_VERSION = "sports-team-v7"
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract") + "\n" + load_prompt("strategy_dsl_reference")
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
@@ -326,8 +328,13 @@ class StrategyReflectionPipeline:
                     parent_strategy_prompt=candidate.strategy_prompt,
                 ),
             )
-            coach_output, coach = validated_coach
+            coach_output, coach, coach_extraction = validated_coach
             _write_json(artifact_dir, "reflection/coach_output.json", coach_output)
+            _write_json(
+                artifact_dir,
+                "reflection/coach_strategy_extraction.json",
+                coach_extraction,
+            )
             proposed_strategy = coach.new_strategy_prompt
             _write_text(
                 artifact_dir,
@@ -357,12 +364,17 @@ class StrategyReflectionPipeline:
                     extra=coach_extra,
                     validator=_validate_strategy_contract_rewrite_response,
                 )
-                contract_output, corrected_strategy = validated_contract
+                contract_output, corrected_strategy, contract_extraction = validated_contract
                 contract_rewrite_applied = True
                 _write_json(
                     artifact_dir,
                     "reflection/strategy_contract_rewriter_output.json",
                     contract_output,
+                )
+                _write_json(
+                    artifact_dir,
+                    "reflection/strategy_contract_rewriter_extraction.json",
+                    contract_extraction,
                 )
                 _write_json(artifact_dir, "reflection/strategy_contract_rewrite.json", {
                     "applied": True,
@@ -558,6 +570,9 @@ class StrategyReflectionPipeline:
                     "response": raw,
                     "error": last_error,
                 }
+                extraction_report = getattr(exc, "report", None)
+                if isinstance(extraction_report, dict):
+                    envelope["strategy_extraction"] = extraction_report
                 _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
                 self._write_role_timing(
                     trace,
@@ -1107,8 +1122,8 @@ def _parse_coach(payload: str, *, parent_strategy_prompt: str) -> CoachResult:
     return CoachResult(
         strategy_changes={key: _strings(changes.get(key)) for key in ("preserved", "removed_or_reduced", "added_or_strengthened")},
         strategy_signature=normalize_strategy_signature(data.get("strategy_signature")),
-        # The model echo remains losslessly available in coach_output.json, but
-        # validated state must use the authoritative input gene.
+        # The raw attempt retains any model echo; validated state must use the
+        # authoritative input gene.
         parent_strategy_prompt=parent_strategy_prompt,
         new_strategy_prompt=prompt,
     )
@@ -1123,41 +1138,75 @@ def _validate_coach_structure_response(
     raw: str,
     *,
     parent_strategy_prompt: str,
-) -> tuple[dict[str, object], CoachResult]:
-    payload = extract_strategy_jsonl_record(raw, field_name="new_strategy_prompt")
-    if payload is None:
-        payload = parse_json_object_response(raw)
-    prompt = strategy_dsl_source_from_record(
-        payload,
+) -> tuple[dict[str, object], CoachResult, dict[str, object]]:
+    rule_extraction = extract_strategy_rule_jsonl(
+        raw,
         field_name="new_strategy_prompt",
     )
+    if rule_extraction is not None:
+        payload, prompt, extraction = rule_extraction
+    else:
+        payload = extract_strategy_jsonl_record(raw, field_name="new_strategy_prompt")
+        if payload is None:
+            payload = parse_json_object_response(raw)
+        prompt = strategy_dsl_source_from_record(
+            payload,
+            field_name="new_strategy_prompt",
+        )
+        extraction = strategy_extraction_report(
+            raw,
+            prompt,
+            field_name="new_strategy_prompt",
+            mode="legacy_object",
+        )
     payload = {**payload, "new_strategy_prompt": prompt}
-    return payload, _parse_coach(
-        json.dumps(payload, ensure_ascii=False),
-        parent_strategy_prompt=parent_strategy_prompt,
+    return (
+        payload,
+        _parse_coach(
+            json.dumps(payload, ensure_ascii=False),
+            parent_strategy_prompt=parent_strategy_prompt,
+        ),
+        extraction,
     )
 
 
 def _validate_strategy_contract_rewrite_response(
     raw: str,
-) -> tuple[dict[str, object], str]:
-    payload = extract_strategy_jsonl_record(
+) -> tuple[dict[str, object], str, dict[str, object]]:
+    rule_extraction = extract_strategy_rule_jsonl(
         raw,
         field_name="revised_strategy_prompt",
     )
-    if payload is None:
-        payload = parse_json_object_response(raw)
-    if set(payload) != {"revised_strategy_prompt"}:
-        raise ValueError(
-            "Strategy contract rewrite JSON must contain exactly revised_strategy_prompt."
+    if rule_extraction is not None:
+        payload, prompt, extraction = rule_extraction
+    else:
+        payload = extract_strategy_jsonl_record(
+            raw,
+            field_name="revised_strategy_prompt",
         )
-    prompt = strategy_dsl_source_from_record(
-        payload,
-        field_name="revised_strategy_prompt",
-    )
+        if payload is None:
+            payload = parse_json_object_response(raw)
+        if set(payload) != {"revised_strategy_prompt"}:
+            raise ValueError(
+                "Strategy contract rewrite JSON must contain exactly revised_strategy_prompt."
+            )
+        prompt = strategy_dsl_source_from_record(
+            payload,
+            field_name="revised_strategy_prompt",
+        )
+        extraction = strategy_extraction_report(
+            raw,
+            prompt,
+            field_name="revised_strategy_prompt",
+            mode="legacy_object",
+        )
     normalized = normalize_strategy_dsl(prompt)
     validate_strategy_prompt_contract(normalized)
-    return {"revised_strategy_prompt": prompt}, normalized
+    extraction = {
+        **extraction,
+        "canonical_strategy_sha256": hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
+    }
+    return {"revised_strategy_prompt": prompt}, normalized, extraction
 
 
 def _parse_json(raw: str) -> dict[str, Any]:

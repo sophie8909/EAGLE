@@ -74,39 +74,66 @@ class StrategyDSLTests(unittest.TestCase):
 
     def test_rewrite_boundary_canonicalizes_without_truncation(self):
         policy = json.dumps(validate_strategy_dsl(worker_rush_policy()), indent=2)
-        _, normalized = _validate_strategy_contract_rewrite_response(json.dumps({'revised_strategy_prompt':policy}))
+        _, normalized, _ = _validate_strategy_contract_rewrite_response(json.dumps({'revised_strategy_prompt':policy}))
         self.assertEqual(normalized, worker_rush_policy())
         with self.assertRaises(ValueError):
             _validate_strategy_contract_rewrite_response(json.dumps({'revised_strategy_prompt':policy+' '*20000}))
 
-    def test_jsonl_extracts_one_role_target_and_ignores_non_json_lines(self):
-        policy = json.loads(worker_rush_policy())
-        raw = "analysis that is not JSON\n[\"valid JSON, but not a record\"]\n" + json.dumps({
-            "parent_strategy_prompt": worker_rush_policy(2),
-            "new_strategy_prompt": policy,
-        }, separators=(",", ":")) + "\nfinished"
+    def test_jsonl_keeps_valid_rules_and_discards_everything_else(self):
+        rules = json.loads(worker_rush_policy())["rules"]
+        raw = "\n".join((
+            json.dumps({
+                "record_type": "coach_metadata",
+                "strategy_changes": {"preserved": ["opening"]},
+            }),
+            "analysis that is not JSON",
+            json.dumps({
+                "record_type": "strategy_rule",
+                "field": "new_strategy_prompt",
+                "rule": rules[0],
+            }),
+            json.dumps({
+                "record_type": "strategy_rule",
+                "field": "new_strategy_prompt",
+                "rule": {"actor": "Base", "when": True, "action": {"type": "attack"}},
+            }),
+            '{"record_type":"strategy_rule","field":"new_strategy_prompt","rule":',
+            json.dumps({
+                "record_type": "strategy_rule",
+                "field": "new_strategy_prompt",
+                "rule": rules[1],
+            }),
+        ))
 
-        payload, coach = _validate_coach_structure_response(
+        payload, coach, extraction = _validate_coach_structure_response(
             raw,
             parent_strategy_prompt=worker_rush_policy(2),
         )
 
         self.assertIsInstance(payload["new_strategy_prompt"], str)
-        self.assertEqual(normalize_strategy_dsl(coach.new_strategy_prompt), worker_rush_policy())
+        self.assertEqual(
+            validate_strategy_dsl(coach.new_strategy_prompt)["rules"],
+            rules[:2],
+        )
+        self.assertEqual(extraction["valid_rule_lines"], [3, 6])
+        self.assertEqual(extraction["valid_rule_count"], 2)
+        self.assertEqual(extraction["discarded_line_count"], 3)
 
-    def test_jsonl_never_substitutes_valid_parent_for_broken_child(self):
+    def test_jsonl_fails_only_when_no_legal_rule_remains(self):
         parent_record = json.dumps({"parent_strategy_prompt": worker_rush_policy()})
-        truncated_child = '{"new_strategy_prompt":{"version":"eagle-strategy-dsl-v1","rules":['
+        truncated_child = '{"record_type":"strategy_rule","field":"new_strategy_prompt","rule":'
         raw = parent_record + "\n" + truncated_child
 
         self.assertIsNone(
             extract_strategy_jsonl_record(raw, field_name="new_strategy_prompt")
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             _validate_coach_structure_response(
                 raw,
                 parent_strategy_prompt=worker_rush_policy(),
             )
+        self.assertEqual(caught.exception.report["status"], "failed")
+        self.assertEqual(caught.exception.report["valid_rule_count"], 0)
 
     def test_jsonl_rejects_ambiguous_target_records(self):
         record = json.dumps({"new_strategy_prompt": json.loads(worker_rush_policy())})
@@ -129,11 +156,12 @@ class StrategyDSLTests(unittest.TestCase):
         valid = json.dumps({
             "revised_strategy_prompt": json.loads(worker_rush_policy()),
         }, separators=(",", ":"))
-        payload, normalized = _validate_strategy_contract_rewrite_response(
+        payload, normalized, extraction = _validate_strategy_contract_rewrite_response(
             "non-JSON explanation\n" + valid + "\nmore prose"
         )
         self.assertEqual(normalized, worker_rush_policy())
         self.assertEqual(normalize_strategy_dsl(payload["revised_strategy_prompt"]), normalized)
+        self.assertEqual(extraction["mode"], "legacy_object")
 
         invalid_policy = json.loads(worker_rush_policy())
         invalid_policy["illegal_sentence"] = "drop me"
@@ -144,6 +172,33 @@ class StrategyDSLTests(unittest.TestCase):
             _validate_strategy_contract_rewrite_response(json.dumps({
                 "revised_strategy_prompt": worker_rush_policy() + " trailing prose",
             }))
+
+    def test_jsonl_contract_rewriter_keeps_legal_subset_in_order(self):
+        rules = json.loads(worker_rush_policy())["rules"]
+        lines = [
+            json.dumps({
+                "record_type": "strategy_rule",
+                "field": "revised_strategy_prompt",
+                "rule": rules[2],
+            }),
+            json.dumps({
+                "record_type": "strategy_rule",
+                "field": "revised_strategy_prompt",
+                "rule": {"actor": "Base", "when": True, "action": {"type": "move"}},
+            }),
+            json.dumps({
+                "record_type": "strategy_rule",
+                "field": "revised_strategy_prompt",
+                "rule": rules[0],
+            }),
+        ]
+        _, normalized, extraction = _validate_strategy_contract_rewrite_response(
+            "\n".join(lines)
+        )
+        self.assertEqual(validate_strategy_dsl(normalized)["rules"], [rules[2], rules[0]])
+        self.assertEqual(extraction["valid_rule_lines"], [1, 3])
+        self.assertEqual(extraction["discarded_line_count"], 1)
+        self.assertEqual(extraction["status"], "partial")
 
     def test_coach_keeps_raw_policy_size_and_requires_string(self):
         oversized = worker_rush_policy() + " " * 20000
