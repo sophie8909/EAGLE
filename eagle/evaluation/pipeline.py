@@ -11,6 +11,7 @@ from pathlib import Path
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate, compact_candidate_metadata
 from eagle.config import ExperimentConfig
+from eagle.execution import parallel_map
 from eagle.evaluation.code_quality import (
     CodeQualityBreakdown,
     StrategyRegionScoreResult,
@@ -90,8 +91,8 @@ def evaluate_population(
             )
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
             semantic_dataset_error = f"{type(exc).__name__}: {exc}"
-    prepared: list[tuple[Candidate, BoundedGenerationResult]] = []
-    for index, candidate in enumerate(population):
+    def prepare(item):
+        index, candidate = item
         print(
             f"[gen {generation} cand {index + 1}/{len(population)}] "
             f"{candidate.id} stage=generation status=started",
@@ -112,7 +113,9 @@ def evaluate_population(
             mock=mock,
             candidate_artifact_dir=candidates_dir / candidate.id,
         )
-        prepared.append((candidate, bounded_generation))
+        return candidate, bounded_generation
+
+    prepared = parallel_map(prepare, enumerate(population))
 
     opponent_pool = None
     if config.evaluation_mode == "self_play":

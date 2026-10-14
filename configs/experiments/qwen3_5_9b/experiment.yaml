@@ -12,10 +12,7 @@ model:
   host: 127.0.0.1
   port: 8080
   context_size: 32768
-  gpu_layers: -1
-  threads: 8
   batch_size: 512
-  parallel: 1
   startup_timeout_seconds: 180
   health_timeout_seconds: 5
 

@@ -6,10 +6,7 @@ model:
   path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
   llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   context_size: 32768
-  gpu_layers: -1
-  threads: 8
   batch_size: 512
-  parallel: 1
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 initial_population_mode: llm_generated_policies

@@ -22,14 +22,23 @@ conda run --no-capture-output -n eagle \
 ```
 
 The resolved `model` section selects the GGUF, llama-server executable, host,
-port, context size, GPU layers, threads, batch size, parallel slots, and
-health/startup timeouts for initialization and reflection/rewrite roles. An
+port, per-request context size, batch size, and health/startup timeouts. An
 optional `generation_model` section has the same shape and selects the model for
 final Java generation, deferred Code Reflection revision, and compile-guided
-repair. The orchestrator validates runtime files only outside mock mode, owns
-one process, switches that process only at generation phase boundaries, waits
-for `/health` or `/v1/models`, verifies a chat completion, runs search and the
-production final test, and stops its owned process in `finally`.
+repair. GPU layers (`999`), model threads (`8`), server parallel slots (`2`),
+independent LLM workers (`2`), and match workers (`10`) are fixed by
+`eagle/execution.py`; they are not config fields. The server allocates
+`context_size × 2`, while each request keeps the configured context size.
+Before starting llama.cpp, GPU-device preflight must succeed. Every fresh child
+startup must also emit positive full `offloaded N/N layers to GPU` evidence for the
+selected model. Missing, stale, malformed, or partial offload evidence shuts down
+the owned process and fails the run; EAGLE never continues on CPU. These obsolete
+keys are rejected, not migrated: `gpu_layers`, `threads`,
+`parallel`, and `evaluation.match_workers`. The orchestrator validates runtime
+files only outside mock mode, starts a fresh owned process per run, switches
+models only at phase boundaries, waits for `/health` or `/v1/models`, verifies
+a chat completion, runs search and the production final test, and stops its
+owned process in `finally`.
 
 ```yaml
 model:
@@ -65,12 +74,11 @@ repeat count, for example `random_seeds: [7, 8, 9]` with `runs: 2` executes
 multiple replicates per config.
 With `random_seeds: [8]` and `runs: 3`, the config receives seeds `8, 8, 8`.
 
-Match execution uses ten bounded workers by default on the current benchmarked
-host. Override it under `evaluation.match_workers` when changing the resource
-budget, for example `1` for serial execution or `10` for the recommended
-setting. `match_timeout_seconds` and `match_artifact_mode` remain independent
-top-level settings because they control per-process timeout and evidence
-retention rather than scheduling.
+Match execution always uses ten bounded workers, with canonical results in
+match_index order. Match worker count is fixed; resource tuning does not expose
+a config override. match_timeout_seconds and match_artifact_mode remain
+independent top-level settings because they control per-process timeout and
+evidence retention rather than scheduling.
 
 The resolved config records `survivor_selection: mu_plus_lambda`. Parent and
 offspring candidates jointly enter the evaluation mode's survivor selection:
@@ -111,9 +119,9 @@ phenotype.
 `initial_policy_max_attempts` bounds invalid or
 duplicate policy-output retries. `random_seed` is the single EA root seed;
 all LLM roles receive derived request seeds tied to task identity and attempt.
-Controllable execution is always seeded. Parallel match workers use stable
-per-match JVM seeds and canonical result ordering; CPU/GPU, model threads,
-LLM temperatures, and `evaluation.match_workers` remain configurable.
+Controllable execution is always seeded. Concurrent LLM work and match workers
+collect results in input order; stable task seeds do not depend on completion
+order or worker identity. LLM temperatures remain configurable.
 
 Same inputs and root seed reproduce the EA when task outputs are stable.
 External LLM services may ignore seeds; GPU/backend kernels, batching, private

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eagle.execution import GPU_LAYERS, LLM_WORKERS, MODEL_THREADS
+
 
 @dataclass(frozen=True)
 class ServerArguments:
@@ -80,7 +82,7 @@ class RuntimeSpec:
             "--port",
             str(self.port),
             "--ctx-size",
-            str(self.context_size),
+            str(self.context_size * self.parallel),
             "--n-gpu-layers",
             str(self.gpu_layers),
             "--parallel",
@@ -162,7 +164,7 @@ def runtime_config_from_experiment(
         conda_env="eagle",
         llm=LLMConfig(
             model.path, model.llama_server, model.host, model.port,
-            model.context_size, model.gpu_layers, model.parallel, model.threads,
+            model.context_size, GPU_LAYERS, LLM_WORKERS, MODEL_THREADS,
             model.batch_size, model.startup_timeout_seconds,
             model.health_timeout_seconds,
         ),

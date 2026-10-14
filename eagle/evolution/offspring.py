@@ -12,6 +12,7 @@ from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
+from eagle.execution import parallel_map
 from eagle.operators.adaptive import (
     OPERATOR_TO_MUTATION,
     ReflectionOperatorController,
@@ -67,14 +68,11 @@ def plan_offspring(
         ),
         default=None,
     )
-    while len(plans) < config.population_size:
-        context_index = len(plans)
+    assignments = []
+    for context_index in range(config.population_size):
         parent_a_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "parent_a"))
         parent_b_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "parent_b"))
         crossover_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "crossover"))
-        mutation_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "mutation"))
-        operator_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "operator"))
-        intent_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "intent"))
         parent_selection_started = time.monotonic()
         parent_a = select_parent(
             population,
@@ -91,6 +89,11 @@ def plan_offspring(
         )
         parent_selection_duration = max(0.0, time.monotonic() - parent_selection_started)
         use_crossover = len(population) > 1 and crossover_rng.random() < config.crossover_rate
+        assignments.append((context_index, parent_a, parent_b, parent_selection_duration,
+                            use_crossover, crossover_rng))
+
+    def check_sources(assignment):
+        context_index, parent_a, parent_b, parent_selection_duration, use_crossover, _ = assignment
         checked = []
         healthy_check_timings = []
         blocked = None
@@ -154,9 +157,17 @@ def plan_offspring(
                                         mutation_context=gate_context,
                                         parent_selection_duration=parent_selection_duration)
                 break
+        return checked, check_timing, blocked
+
+    gate_results = parallel_map(check_sources, assignments)
+    for assignment, (checked, check_timing, blocked) in zip(assignments, gate_results, strict=True):
+        context_index, parent_a, parent_b, parent_selection_duration, use_crossover, crossover_rng = assignment
         if blocked is not None:
             plans.append(blocked)
             continue
+        mutation_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "mutation"))
+        operator_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "operator"))
+        intent_rng = random.Random(derive_seed(config.random_seed, "evolution", generation, context_index, "intent"))
         if use_crossover:
             crossover_started_at = utc_now()
             crossover_started = time.monotonic()
@@ -309,8 +320,7 @@ def apply_offspring_mutations(
 ) -> list[OffspringPlan]:
     """Run reflection/rewrite stages after the whole generation is assigned."""
 
-    prepared: list[OffspringPlan] = []
-    for plan in plans:
+    def apply_one(plan: OffspringPlan) -> OffspringPlan:
         child = plan.candidate
         progress_prefix = (
             f"[gen {child.generation} cand {plan.context_index + 1}/{len(plans)}] "
@@ -321,8 +331,7 @@ def apply_offspring_mutations(
                 f"{progress_prefix} stage=mutation status=skipped operator=none",
                 flush=True,
             )
-            prepared.append(plan)
-            continue
+            return plan
         assert plan.mutation_context is not None
         print(
             f"{progress_prefix} stage=mutation status=started operator={plan.mutation_name}",
@@ -397,8 +406,9 @@ def apply_offspring_mutations(
             f"{pending_suffix}{mutation_error_detail}",
             flush=True,
         )
-        prepared.append(replace(plan, candidate=child))
-    return prepared
+        return replace(plan, candidate=child)
+
+    return parallel_map(apply_one, plans)
 
 
 def materialize_code_reflections(
@@ -408,12 +418,10 @@ def materialize_code_reflections(
 ) -> list[OffspringPlan]:
     """Run only deferred Code Reflection revisions in the common final phase."""
 
-    materialized: list[OffspringPlan] = []
-    for plan in plans:
+    def materialize_one(plan: OffspringPlan) -> OffspringPlan:
         child = plan.candidate
         if plan.mutation_name != "code" or plan.mutation is None:
-            materialized.append(plan)
-            continue
+            return plan
         assert plan.mutation_context is not None
         print(
             f"[gen {child.generation} cand {plan.context_index + 1}/{len(plans)}] "
@@ -432,8 +440,9 @@ def materialize_code_reflections(
             f"revision_status={revision_status}",
             flush=True,
         )
-        materialized.append(replace(plan, candidate=child))
-    return materialized
+        return replace(plan, candidate=child)
+
+    return parallel_map(materialize_one, plans)
 
 
 def create_offspring(

@@ -130,6 +130,24 @@ pipeline. Survivor selection then uses replicas plus offspring and excludes the
 old parent identities. This mode measures the total effect of parent
 rematerialization plus match resampling; it is not the production protocol.
 
+Within each phase, independent candidate tasks run in a bounded two-worker LLM
+pool. Source Code gates, reflection/rewrite work, corrective Code revision, Java
+generation/decoding/compilation, and initial policy calls return results in
+candidate order. Initial policy requests use the fixed configured-seed snapshot with distinct task
+seeds. Policy transport is stateless; only Java-generation request context is
+thread-local. Duplicate results are retried in candidate order. Calls within one candidate retain their dependency order. All
+reflection/rewrite work finishes before the `generation_model` switch. AOS
+operator selection and reward application remain serial and preserve their
+existing formulas. Match traces stay available until dependent candidate
+construction finishes and are cleaned up at their existing boundary.
+
+Fresh model-server startup requires GPU preflight and positive log evidence of
+`offloaded N/N layers to GPU` for the selected model. Missing, stale, malformed,
+or partial evidence shuts down the owned process and fails the run without CPU
+fallback. Parallel phases cancel queued tasks on failure or interruption and wait
+for active requests before returning, so model switching cannot occur under an
+in-flight request.
+
 ## 4. Reproducibility
 
 `random_seed` is the EA-wide root seed. Execution always seeds controllable
@@ -153,16 +171,18 @@ seed from the root seed and immutable candidate/opponent/map/round/side/match
 identity, passes `-Deagle.match.seed`, and records it in artifacts. Vendored
 MicroRTS random sources consume this property. Parallel workers return results
 in canonical matrix order, so seed assignment, fitness aggregation, and seeded
-tie-breaking are independent of scheduling. CPU/GPU settings, temperatures,
-and worker counts remain configurable. New generation checkpoints preserve
+tie-breaking are independent of scheduling. GPU layers (`999`), model threads
+(`8`), server slots (`2`), LLM workers (`2`), and match workers (`10`) are
+fixed by `eagle/execution.py`. CUDA/GPU preflight is required before server
+startup; unavailable GPU support fails instead of falling back to CPU.
+Temperatures remain configurable. New generation checkpoints preserve
 stagnation and bounded EA archive state; independent generation streams allow
 same-version resumes to continue the same seeded trajectory. Uncommitted
 candidate/decoder/class artifacts and their LLM logs are retained under
 `archives/interrupted_work/attempt_<nnnn>` before replaying their stable IDs.
 The controller resumes from the manifest's exact completed checkpoint.
 
-Reproducibility requires the same code, inputs, configuration (apart from
-worker count), and deterministic task outputs. Request seeds ask an external
+Reproducibility requires the same code, inputs, configuration, and deterministic task outputs. Request seeds ask an external
 LLM service to repeat its sampling; providers may ignore seeds or change
 models. GPU kernels, backend batching, floating-point reductions, different
 builds/hardware, external opponent binaries with private RNGs, and wall-clock

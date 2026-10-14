@@ -7,10 +7,7 @@ model:
   llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   port: 18080
   context_size: 32768
-  gpu_layers: 0
-  threads: 8
   batch_size: 512
-  parallel: 1
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 initial_population_mode: llm_generated_policies
@@ -51,7 +48,6 @@ stagnation_generations: 25
 
 evaluation:
   mode: self_play
-  match_workers: 1
   maps:
     - path: maps/8x8/basesWorkers8x8.xml
       tick_limit: 1500

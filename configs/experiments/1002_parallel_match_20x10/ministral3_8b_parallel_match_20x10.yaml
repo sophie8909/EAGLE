@@ -15,10 +15,7 @@ model:
   host: 127.0.0.1
   port: 8080
   context_size: 32768
-  gpu_layers: -1
-  threads: 8
   batch_size: 512
-  parallel: 1
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 initial_policy_generation_prompt_file: prompts/initial_policy_generation.txt
@@ -61,7 +58,6 @@ evaluation:
   semantic_probes:
     enabled: true
     fitness_tie_tolerance: 1.0
-  match_workers: 10
   maps:
     - {path: maps/8x8/basesWorkers8x8.xml, tick_limit: 1500}
     - {path: maps/16x16/basesWorkers16x16.xml, tick_limit: 3000}

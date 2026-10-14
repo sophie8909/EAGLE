@@ -38,8 +38,12 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
 - `initial_population_mode: llm_generated_policies` keeps one configured policy
   and fills the remaining population slots with independent policy-only LLM
   calls. The tracked mixed config therefore produces one Worker Rush policy plus
-  nine generated RTS policy prompts. In LLM mode every policy independently enters the Java
-  Generator; WorkerRush Java is inherited request context, not the phenotype.
+  nine generated RTS policy prompts. First-wave policy requests use one configured-seed snapshot with distinct task
+  seeds. Policy transport is stateless; only Java-generation request context is
+  thread-local. Results and duplicate retries resolve in candidate order, with
+  an artifact for each bounded attempt. In LLM mode every
+  policy independently enters the Java Generator; WorkerRush Java is inherited
+  request context, not the phenotype.
 - Default evaluation uses exactly ten fixed opponents: `passive`, `random`,
   `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
   `coac`, and `tma`.
@@ -47,16 +51,23 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
   for each opponent. Evaluation maps may define independent positive tick caps;
   string-only map entries retain the top-level `tick_limit` fallback. Normal,
   AOS head-to-head, and final-test matrices share the resolved per-map caps.
-- Match execution uses bounded parallel workers, defaulting to the benchmarked
-  `evaluation.match_workers: 10`; result ordering remains canonical by
-  `match_index`. Compact artifacts skip Java XML replay generation, while full
-  artifacts retain replay and round-state evidence.
+- Match execution always uses ten bounded workers; result ordering remains
+  canonical by `match_index`. LLM candidate work uses two bounded workers per
+  phase, while AOS selection and reward application remain serial. Compact
+  artifacts skip Java XML replay
+  generation, while full artifacts retain replay and round-state evidence.
 - Controllable randomness is always seeded from the EA root `random_seed`.
   Stable task streams cover initialization, selection, operators, crossover,
-  mutation, LLM requests, and all evaluation matrices. Parallel match execution
-  preserves canonical result order and stable JVM match seeds. CPU/GPU settings,
-  temperatures, and worker counts remain configurable; external backends and
-  wall-clock budgets can still introduce nondeterminism.
+  mutation, LLM requests, and all evaluation matrices. Parallel LLM and match
+  work returns in input order and uses stable task/match seeds. Failed or
+  interrupted phases cancel queued calls and wait for active requests before
+  returning. GPU layers are fixed to `999`, model threads to `8`, LLM workers to `2`, and
+  match workers to `10`. GPU preflight and fresh-child positive
+  `offloaded N/N layers to GPU` evidence are mandatory. Missing, stale,
+  malformed, or partial evidence shuts down the owned process and fails the run;
+  there is no CPU fallback. LLM
+  temperatures remain configurable; external backends and wall-clock budgets
+  can still introduce nondeterminism.
 - A direct config or folder batch may set `runs` to execute independent
   replicates. Without an explicit list, each run uses the base `random_seed`
   plus its zero-based replicate index. With `random_seeds`, `runs` repeats each

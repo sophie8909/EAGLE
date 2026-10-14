@@ -11,10 +11,7 @@ model:
   host: 127.0.0.1
   port: 8080
   context_size: 32768
-  gpu_layers: -1
-  threads: 8
   batch_size: 512
-  parallel: 1
 seed_prompt_files:
   - seeds/blank_policy.txt
   - seeds/worker_rush_policy.txt

@@ -54,14 +54,11 @@ otherwise it inherits the legacy top-level `tick_limit`. The matrix attaches
 the resolved limit to every match specification, so search, AOS head-to-head,
 and final-test matches use the same cap for a given map.
 
-Normal matrix execution uses ten bounded match workers by default, based on the
-bundled MicroRTS benchmark on the development host. `evaluation.match_workers`
-can override that value or restore serial execution with `1`; each match still
-owns an isolated artifact directory and results are returned in canonical
-`match_index` order.
-`scripts/benchmark_match_workers.py` can compare worker counts over the mock
-artifact path or the real bundled MicroRTS matrix; benchmark results are
-machine-dependent and are not written back into experiment configuration.
+Normal matrix execution always uses ten bounded match workers, based on the
+bundled MicroRTS benchmark. Match count is fixed and is not configurable. Each
+match owns an isolated artifact directory, and results return in canonical
+`match_index` order. Worker count is fixed by `eagle/execution.py`; there is no
+serial mode or experiment override.
 
 The evaluator groups match results by opponent in
 `eagle/evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and

@@ -84,6 +84,17 @@ For a successful evaluation, `match_durations_seconds` has exactly 180 entries.
 For partial failure it has one entry per attempted match and is interpreted with
 match statuses.
 
+Concurrent LLM attempts retain candidate-owned request order and evidence; their
+wall-clock intervals may overlap. Generation wall-clock duration measures actual
+elapsed time rather than the sum of concurrent request durations. Initial policy
+duplicate retries are assigned in candidate order and each attempt retains its
+normal artifact and timing record. A valid duplicate response remains `success` in
+the attempt timing and run request event, though the separate attempt
+`result.json` may set `selected: false` and record `population_decision` as
+`{status: rejected_duplicate, reason, duplicate_of_candidate_id}`. Exhausting the
+ordered `initial_policy_max_attempts` budget may fail initialization even when all
+request events were successful.
+
 Default-mode generation-zero seed loading is not an LLM request and has null
 generation timing with an empty attempt list. Inherited `configured_seeds`
 generation zero uses the normal bounded `generation_llm` attempt records
