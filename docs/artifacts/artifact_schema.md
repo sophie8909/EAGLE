@@ -386,18 +386,38 @@ is the authoritative model and experiment definition.
 ## Experiment batch index
 
 When the experiment target is a config directory, the launcher writes
-`<config-directory>/experiment.yaml` as a plain mapping from config filenames to
-absolute run folders. The file is updated atomically when each run directory is
-created and is not a run-root artifact or an experiment config. Config discovery
-excludes this generated index. For compatibility, a pre-existing
-`experiment-v2` config named `experiment.yaml` is never overwritten.
+`<config-directory>/experiment.yaml` with
+`schema_version: eagle-experiment-index-v1`
+and a `runs` mapping from each exact config filename to an ordered list of
+absolute run-directory strings. List position is the zero-based replicate
+index:
 
-Folder-level resume reads this mapping without reinitializing it. An indexed
-entry is lifecycle-complete when its run manifest is `complete` and, for a
-non-mock invocation that does not use `--skip-final-test`, a canonical
+```yaml
+schema_version: eagle-experiment-index-v1
+runs:
+  config.yaml:
+    - /absolute/path/run-1
+    - /absolute/path/run-2
+```
+The index is updated atomically as each run is created and is neither a run-root
+artifact nor an experiment config. Config discovery excludes it. A pre-existing
+`experiment-v2` config named `experiment.yaml` remains a config and is never
+overwritten, so that directory cannot also hold the generated index.
+
+For compatibility, legacy plain mappings from filenames to absolute paths are
+read as one-item lists and upgraded atomically the next time a run is recorded.
+A run directory's canonical `config.yaml` is written before its path is recorded
+in the index. Folder resume validates each run's effective seed against its
+scheduled slot. It recovers indexed incomplete runs before creating missing
+replicate slots. A fresh launch starts a fresh index. If a slot has no
+generation-zero evidence, its run path is replaced while prior evidence remains
+on disk.
+An indexed slot is lifecycle-complete when its run manifest is `complete` and,
+for a non-mock invocation that does not use `--skip-final-test`, a canonical
 `final_test/final_test_summary.json` exists and has the current
 `eagle-final-test-v3` schema. The summary records the requested and selected
-generation, including whether an older-generation fallback was used, and records contained upstream-opponent
+generation, including whether an older-generation fallback was used, and
+records contained upstream-opponent
 faults separately; a recovered containment is an explicit neutral draw rather
 than a candidate win. Incomplete indexed entries are
 resumed before unindexed configs; completed entries are skipped. Index paths

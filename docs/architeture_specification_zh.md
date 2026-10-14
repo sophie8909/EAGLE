@@ -393,14 +393,9 @@ llama.cpp start/reuse/switch、health check、EA、resume、final test 與 owned
 cleanup。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 `python -m eagle runtime` 已移除。
 
-以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，逐筆記錄
-「config 檔名 → 絕對 run folder」。索引在 run folder 建立後立即原子更新，
-不會在下次執行時被當成 config；既有的 `experiment-v2` 同名設定檔不會被覆寫。
+以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，格式為 `schema_version: eagle-experiment-index-v1`，以 `runs` 將精確 config 檔名對應至絕對 run folder 的有序清單；清單位置是從零開始的 replicate index。索引在每個 run 建立時立即原子更新。舊版「檔名 → 單一路徑」格式仍會讀取為一項清單，並在下次記錄 run 時原子升級，不會在下次執行時被當成 config。既有的 `experiment-v2` 同名設定檔不會被覆寫，該資料夾也不會產生批次索引。
 
-`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先續跑已索引但
-search 或必要 final test 尚未完成的 run，跳過完整完成者，再依檔名字典序執行
-其餘尚未建立 run 的 config；新 run 仍會原子寫回同一索引。若 search 已完成、
-只缺 final test，則不會為該步驟啟動 llama.cpp。
+`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先驗證每個槽位的 effective seed，再優先續跑已索引但 search 或必要 final test 尚未完成的 run，跳過完整完成槽位，之後建立缺少的 replicate；新 run 仍會原子寫回同一索引。若 generation zero 尚未記錄，該槽位會換成新 run，舊 evidence 仍保留。若 search 已完成、只缺 final test，則不會為該步驟啟動 llama.cpp。全新啟動會建立新的索引。
 
 ## 驗證
 

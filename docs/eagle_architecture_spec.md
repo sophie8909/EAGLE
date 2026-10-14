@@ -553,26 +553,30 @@ start/health checks, per-run restart, phase-boundary model switching, search,
 resume, final test, and owned-process cleanup. An occupied foreign endpoint is
 never adopted or killed. Mock mode does not construct a runtime manager.
 
-For a directory batch, the selected config directory owns `experiment.yaml`, an
-atomically updated mapping from each config filename to its absolute run folder.
-The index is updated as soon as a run is created, is excluded from config
-discovery, and therefore preserves resumable partial runs. A pre-existing
-`experiment.yaml` with `schema_version: experiment-v2` remains a config and is
-never overwritten by the index writer.
+For a directory batch, the selected config directory owns `experiment.yaml`
+with `schema_version: eagle-experiment-index-v1` and a `runs` mapping from each
+exact config filename to an ordered list of absolute run-directory strings.
+List positions are zero-based replicate indices. The index is updated
+atomically as each run is created and is excluded from config discovery,
+preserving partial runs. A pre-existing `experiment-v2` config named `experiment.yaml` remains a
+config and is never overwritten by the index writer.
 
 When `--resume` targets such a config directory, Python reads the existing
-index instead of resetting it. Indexed runs that have not completed their
+index instead of resetting it. Each slot's effective seed is checked against
+the configured replicate schedule. Indexed runs that have not completed their
 required lifecycle are processed first: interrupted/failed search resumes from
 its latest atomic generation, while a search-complete run without a required
-final-test summary resumes at final testing. Fully completed indexed configs
-are skipped. The remaining unindexed configs then start as fresh runs in
-filename order, with every new run added atomically to the same index. A direct
+final-test summary resumes at final testing. Fully completed slots are skipped.
+Missing replicate slots are created after indexed recovery; each new run is
+added atomically to the same index. A fresh launch starts a fresh index. A direct
 run-directory target retains the single-run resume behavior. If interruption
-occurred before generation 0 was atomically recorded, folder resume starts a
-replacement run for that config and updates the index because no resumable
-population exists.
+occurred before generation 0 was atomically recorded, folder resume replaces
+that slot with a new run and updates the index; prior evidence remains on disk
+because no resumable population exists.
 
-The exact filename-to-run index is also the identity anchor for folder resume.
+Legacy plain filename-to-path mappings remain readable as one-item replicate
+lists and are upgraded atomically the next time a run is recorded. The exact
+filename-to-runs index is also the identity anchor for folder resume.
 It may therefore tolerate a corrected human-readable `experiment_name` while
 still requiring every execution-affecting config field to match the immutable
 run-local definition. Direct config-plus-run resume remains strict, including

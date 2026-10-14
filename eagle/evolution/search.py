@@ -121,9 +121,16 @@ def _run_search_impl(
     generated_agents_dir.mkdir()
     classes_dir.mkdir()
     initialize_run_manifest(run_dir, config=config)
+    try:
+        write_run_config(run_dir, config, mock=mock)
+    except KeyboardInterrupt:
+        mark_run_interrupted(run_dir)
+        raise
+    except Exception as exc:
+        mark_run_failed(run_dir, exc)
+        raise
     if on_run_created is not None:
         on_run_created(run_dir)
-    write_run_config(run_dir, config, mock=mock)
     ensure_strategy_archive(run_dir)
 
     runtime = build_search_runtime(

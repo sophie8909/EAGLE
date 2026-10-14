@@ -55,14 +55,15 @@ materialization. It switches back before the next generation.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
-Set `runs: 3` to execute three independent replicates from a direct config
-path. Each replicate writes its own run directory and uses an incremented
-`random_seed` (`random_seed`, then `random_seed + 1`, and so on). To repeat
+A direct config or folder batch may set `runs: 3` to execute three
+independent replicates. Each replicate writes its own run directory and
+uses an incremented `random_seed` (`random_seed`, then `random_seed + 1`, and
+so on). To repeat
 each of several explicit seeds, provide `random_seeds` and use `runs` as the
 repeat count, for example `random_seeds: [7, 8, 9]` with `runs: 2` executes
-`7, 7, 8, 8, 9, 9`. The default is `runs: 1`. Folder batches keep one run per
-config so their generated `experiment.yaml` index remains one-to-one; invoke
-a multi-run config by its YAML file path.
+`7, 7, 8, 8, 9, 9`. The default is `runs: 1`. Folder batches support
+multiple replicates per config.
+With `random_seeds: [8]` and `runs: 3`, the config receives seeds `8, 8, 8`.
 
 Match execution uses ten bounded workers by default on the current benchmarked
 host. Override it under `evaluation.match_workers` when changing the resource
@@ -184,13 +185,17 @@ It can also continue a whole config-folder batch:
 ./experiment.sh --resume configs/experiments/static_0820/
 ```
 
-Folder resume reads that directory's generated `experiment.yaml` index. It
-first resumes indexed runs whose search or required final test is incomplete,
-skips fully completed entries, and then starts the remaining unindexed configs
-in filename order. It preserves and extends the existing index rather than
-starting a fresh batch index. If the interrupted run has no atomically recorded
-generation yet, the config restarts in a replacement run and the index is
-updated to that new run directory.
+Folder resume reads that directory's generated `experiment.yaml` index. Its
+`eagle-experiment-index-v1` schema maps each exact config filename to an ordered
+list of absolute run-directory paths. List positions are zero-based replicate
+indices. Legacy filename-to-path mappings remain readable as one-item lists and
+are upgraded atomically when a run is next recorded. Resume validates each run's
+effective seed against its scheduled slot, skips completed slots, resumes
+interrupted runs and missing required final tests first, then creates missing
+replicates. A fresh launch starts a fresh index. If interruption happened before
+generation zero was recorded, that slot is replaced by a new run; old evidence
+remains on disk. An existing `experiment-v2` config named `experiment.yaml`
+remains a config and is never overwritten by the index.
 
 If a config folder is also supplied, it is compatibility-checked against the run. Model identity/path/endpoint, EA parameters, evaluation matrix, and reflection mode/probabilities cannot silently change. Missing persisted model assets fail clearly. Only the latest atomically recorded generation is resumed; incomplete candidate work is recomputed.
 

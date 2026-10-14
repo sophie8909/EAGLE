@@ -98,7 +98,7 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `configs/experiments/*/*.yaml` | Production/static definitions plus generated directory-batch `experiment.yaml` indexes |
+| `configs/experiments/*/*.yaml` | Production/static definitions plus generated `eagle-experiment-index-v1` directory-batch indexes |
 | `prompts/manifest.toml` | Prompt metadata and placeholder contracts only |
 | `prompts/*.txt` | One executable prompt body per file |
 | `third_party/microrts/` | Vendored MicroRTS runtime/maps/libraries |
