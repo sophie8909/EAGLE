@@ -91,6 +91,7 @@ def build_generation_event(
         "aggregate_mutation_duration_seconds": sum(duration(item.get("generation_only_duration_seconds")) for item in mutation),
         "aggregate_crossover_duration_seconds": sum(duration(item.get("generation_only_duration_seconds")) for item in crossover),
         "aggregate_llm_request_duration_seconds": request_total,
+        "aggregate_java_materialization_duration_seconds": sum(duration(item.timing.get("java_materialization")) for item in values),
         "aggregate_validation_duration_seconds": sum(duration(item.timing.get("validation")) for item in values),
         "aggregate_compilation_duration_seconds": sum(duration(item.timing.get("compilation")) for item in values),
         "aggregate_evaluation_duration_seconds": sum(duration(item.timing.get("evaluation")) for item in values),

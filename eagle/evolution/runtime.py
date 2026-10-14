@@ -52,7 +52,7 @@ def build_search_runtime(
         max_output_tokens=config.llm_max_tokens,
         seed=config.random_seed,
     )
-    if not mock:
+    if not mock and config.needs_llm_runtime:
         preflight_llm_endpoint(client)
     generation_model = config.resolved_generation_model
     generation_client = LLMClient(
@@ -69,7 +69,7 @@ def build_search_runtime(
     )
     generation_backend = (
         MockGenerationBackend(config.agent_template_path)
-        if mock else generation_client.generation_backend(logger=logger)
+        if mock or config.java_materialization_mode == "deterministic_dsl" else generation_client.generation_backend(logger=logger)
     )
     initial_policy_backend = (
         MockInitialPolicyBackend()
@@ -108,24 +108,27 @@ def build_search_runtime(
             sample_budget=config.match_commentator_sample_count,
             timing_logger=logger,
         ),
-        "prompt": PromptRewriteMutation(
-            config,
-            mutation_type="prompt",
-            reflection_backend=reflection_backend,
-            rewrite_backend=rewrite_backend,
-            artifact_root=candidates_dir,
-            logger=logger,
-            backend_name=backend_name,
-        ),
-        "code": CodeReflectionMutation(
-            config,
-            backend=generation_backend,
-            reflection_backend=reflection_backend,
-            artifact_root=candidates_dir,
-            logger=logger,
-            backend_name=backend_name,
-        ),
     }
+    if config.java_materialization_mode == "llm":
+        mutations.update({
+            "prompt": PromptRewriteMutation(
+                config,
+                mutation_type="prompt",
+                reflection_backend=reflection_backend,
+                rewrite_backend=rewrite_backend,
+                artifact_root=candidates_dir,
+                logger=logger,
+                backend_name=backend_name,
+            ),
+            "code": CodeReflectionMutation(
+                config,
+                backend=generation_backend,
+                reflection_backend=reflection_backend,
+                artifact_root=candidates_dir,
+                logger=logger,
+                backend_name=backend_name,
+            ),
+        })
     return SearchRuntime(
         client=client,
         generation_client=generation_client,

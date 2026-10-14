@@ -72,7 +72,7 @@ def initialize_population(
     )
     if config.initial_population_mode != LLM_GENERATED_POLICIES:
         seed_prompts = config.seed_prompts
-        if config.candidate_java_mode == "inherited_genotype" and len(seed_prompts) == 1:
+        if (config.candidate_java_mode == "inherited_genotype" or config.java_materialization_mode == "deterministic_dsl") and len(seed_prompts) == 1:
             seed_prompts = tuple(seed_prompts[0] for _ in range(config.population_size))
         return [
             Candidate(
@@ -86,6 +86,9 @@ def initialize_population(
                 ),
                 generation=0,
                 strategy_prompt=prompt,
+                candidate_java_mode=config.candidate_java_mode,
+                java_materialization_mode=config.java_materialization_mode,
+                java_compiler_version=config.java_compiler_version if config.java_materialization_mode == "deterministic_dsl" else None,
                 generation_prompt=config.generation_prompt,
                 inherited_java=inherited_java,
                 operator="seed",
@@ -120,6 +123,9 @@ def initialize_population(
             ),
             generation=0,
             strategy_prompt=prompt,
+            candidate_java_mode=config.candidate_java_mode,
+            java_materialization_mode=config.java_materialization_mode,
+            java_compiler_version=config.java_compiler_version if config.java_materialization_mode == "deterministic_dsl" else None,
             generation_prompt=config.generation_prompt,
             inherited_java=inherited_java,
             operator="seed",
@@ -141,6 +147,9 @@ def initialize_population(
                 )
             ),
             generation=0,
+            candidate_java_mode=config.candidate_java_mode,
+            java_materialization_mode=config.java_materialization_mode,
+            java_compiler_version=config.java_compiler_version if config.java_materialization_mode == "deterministic_dsl" else None,
             generation_prompt=config.generation_prompt,
             inherited_java=inherited_java,
             operator="seed",
@@ -182,7 +191,7 @@ def initialize_population(
 def generation_zero_uses_fixed_java(config: ExperimentConfig) -> bool:
     """Return whether generation zero bypasses the Java Generator."""
 
-    return config.candidate_java_mode == "generated_phenotype"
+    return config.java_materialization_mode == "llm" and config.candidate_java_mode == "generated_phenotype"
 
 
 def _generate_initial_policy(

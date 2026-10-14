@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import yaml
 import math
 import os
 import re
@@ -43,7 +45,9 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
         run_dir / "manifest.json",
         {
             "schema_version": RUN_SCHEMA_VERSION,
-            "evolution_protocol": EVOLUTION_PROTOCOL,
+            "evolution_protocol": config.evolution_protocol,
+            "java_materialization_mode": config.java_materialization_mode,
+            "java_compiler_version": config.java_compiler_version if config.java_materialization_mode == "deterministic_dsl" else None,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "run_id": run_dir.name,
             "created_at": utc_now(),
@@ -574,7 +578,11 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
 
     def text(relative: str) -> str:
         target = candidate_dir / relative
-        return target.read_text(encoding="utf-8") if target.is_file() else ""
+        if not target.is_file():
+            return ""
+        if payload.get("java_materialization_mode") == "deterministic_dsl":
+            return target.read_bytes().decode("utf-8")
+        return target.read_text(encoding="utf-8")
 
     def object_json(relative: str) -> dict[str, Any]:
         target = candidate_dir / relative
@@ -588,7 +596,59 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
     phenotype_path = candidate_dir / "phenotype" / "CandidateAgent.java"
     legacy_generation_path = candidate_dir / "generation" / "normalized_candidate.java"
 
+    mode = payload.get("java_materialization_mode", "llm")
+    version = payload.get("java_compiler_version")
+    if payload.get("candidate_schema_version") == "eagle-candidate-v7" and mode != "deterministic_dsl":
+        raise ValueError("Deterministic candidate schema cannot be reinterpreted in another mode.")
+    if mode == "deterministic_dsl":
+        if payload.get("candidate_schema_version") != "eagle-candidate-v7":
+            raise ValueError("Unsupported deterministic candidate schema version.")
+        from eagle.config import JAVA_COMPILER_VERSION
+        if version != JAVA_COMPILER_VERSION:
+            raise ValueError(f"Unsupported Java compiler version: {version!r}")
+        if payload.get("active_genotype_components") != ["strategy_prompt"]:
+            raise ValueError("Invalid deterministic active genotype components.")
+        evidence = object_json("generation/compiler_evidence.json")
+        if evidence.get("operation") != "deterministic_dsl_compile" or evidence.get("materialization_mode") != mode:
+            raise ValueError("Invalid deterministic compiler evidence operation/mode.")
+        if evidence.get("compiler_version") != version:
+            raise ValueError("Deterministic compiler evidence/version mismatch.")
+        generation_result = object_json("generation/result.json")
+        if generation_result:
+            if generation_result.get("artifact_schema_version") != "phase4-v7":
+                raise ValueError("Unsupported deterministic generation artifact schema.")
+            for key in ("materialization_mode", "compiler_version", "policy_sha256", "scaffold_sha256", "source_sha256"):
+                if generation_result.get(key) != evidence.get(key):
+                    raise ValueError(f"Deterministic generation/compiler evidence mismatch: {key}")
+        elif payload.get("compile_status") == "success":
+            raise ValueError("Successful deterministic candidate lacks generation result evidence.")
+        from eagle.strategy_dsl import normalize_strategy_dsl
+        if evidence.get("schema_version") != "eagle-dsl-materialization-v1":
+            raise ValueError("Unsupported deterministic compiler evidence schema.")
+        policy = normalize_strategy_dsl(text("genotype/policy_prompt.txt"))
+        source = text("phenotype/CandidateAgent.java") or text("generation/compiled_candidate.java")
+        if source and any(not isinstance(evidence.get(key), str) or len(evidence[key]) != 64
+                          for key in ("policy_sha256", "source_sha256", "scaffold_sha256")):
+            raise ValueError("Deterministic compiler evidence requires complete hashes.")
+        for content, key in ((policy, "policy_sha256"), (source, "source_sha256")):
+            if evidence.get(key) is not None and hashlib.sha256(content.encode("utf-8")).hexdigest() != evidence[key]:
+                raise ValueError(f"Deterministic compiler evidence hash mismatch: {key}")
+        if source and (text("generation/normalized_policy.json") != policy or evidence.get("normalized_policy") != policy):
+            raise ValueError("Deterministic normalized policy evidence mismatch.")
+        scaffold = text("generation/scaffold.java")
+        if source and hashlib.sha256(scaffold.encode("utf-8")).hexdigest() != evidence["scaffold_sha256"]:
+            raise ValueError("Deterministic scaffold evidence hash mismatch.")
+    elif mode != "llm":
+        raise ValueError(f"Unsupported Java materialization mode: {mode!r}")
+    candidate_java_mode = payload.get("candidate_java_mode")
+    if candidate_java_mode is None:
+        config_path = run_dir / "config.yaml"
+        legacy_config = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
+        candidate_java_mode = (legacy_config or {}).get("candidate_java_mode", "generated_phenotype")
     return Candidate(
+        candidate_java_mode=str(candidate_java_mode),
+        java_materialization_mode=mode,
+        java_compiler_version=version,
         id=candidate_id,
         generation=int(payload.get("generation") or 0),
         parent_ids=tuple(payload.get("parent_ids") or ()),

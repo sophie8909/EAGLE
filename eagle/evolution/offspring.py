@@ -54,7 +54,8 @@ def plan_offspring(
     """
 
     del rng  # Streams use task identities, not call history.
-    if "code" not in mutations:
+    deterministic = config.java_materialization_mode == "deterministic_dsl"
+    if not deterministic and "code" not in mutations:
         raise ValueError("Reproduction requires the independent Code Reflection gate.")
     population = sorted(population, key=lambda candidate: candidate.id)
     plans: list[OffspringPlan] = []
@@ -93,7 +94,11 @@ def plan_offspring(
         checked = []
         healthy_check_timings = []
         blocked = None
-        for role, source in (("source", parent_a), ("donor", parent_b)) if use_crossover else (("source", parent_a),):
+        check_timing = {}
+        gate_sources = () if deterministic else (
+            (("source", parent_a), ("donor", parent_b)) if use_crossover else (("source", parent_a),)
+        )
+        for role, source in gate_sources:
             gate_child = replace(
                 source,
                 id=derive_candidate_id(config.random_seed, generation=generation, index=context_index,
@@ -160,6 +165,7 @@ def plan_offspring(
                 index=context_index,
                 rng=crossover_rng,
                 inherit_java=config.candidate_java_mode == "inherited_genotype",
+                strategy_only=deterministic,
                 random_seed=config.random_seed,
             ))
             crossover_duration = max(0.0, time.monotonic() - crossover_started)
@@ -193,10 +199,13 @@ def plan_offspring(
                 ),
                 strategy_signature=dict(parent_a.strategy_signature),
                 strategy_niche=parent_a.strategy_niche,
-                generation_prompt=parent_a.generation_prompt,
+                candidate_java_mode=config.candidate_java_mode,
+                java_materialization_mode=config.java_materialization_mode,
+                java_compiler_version=config.java_compiler_version if deterministic else None,
+                generation_prompt="" if deterministic else parent_a.generation_prompt,
                 operator="copy",
                 strategy_parent_id=parent_a.id,
-                generation_prompt_parent_id=parent_a.id,
+                generation_prompt_parent_id=None if deterministic else parent_a.id,
                 inherited_java=(
                     parent_a.generated_java or parent_a.inherited_java
                     if config.candidate_java_mode == "inherited_genotype" else ""
@@ -207,8 +216,9 @@ def plan_offspring(
                 ),
                 source_candidate_ids=(parent_a.id,),
             )
-        child = replace(child, metadata={**child.metadata, "pre_crossover_code_checks": checked},
-                        timing={**child.timing, "pre_crossover_code_checks_llm": check_timing})
+        if not deterministic:
+            child = replace(child, metadata={**child.metadata, "pre_crossover_code_checks": checked},
+                            timing={**child.timing, "pre_crossover_code_checks_llm": check_timing})
         progress_prefix = (
             f"[gen {generation} cand {context_index + 1}/{config.population_size}] "
             f"{child.id}"

@@ -94,7 +94,7 @@ class PromptResourceTests(unittest.TestCase):
                 path,
             )
             self.assertEqual(config.generation_prompt_file, DEFAULT_PROMPT_DIR / "initial_generation.txt", path)
-            self.assertEqual(config.generation_prompt, load_prompt("initial_generation"), path)
+            self.assertEqual(config.generation_prompt, "" if config.java_materialization_mode == "deterministic_dsl" else load_prompt("initial_generation"), path)
             self.assertEqual(
                 config.initial_policy_generation_prompt_file,
                 DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",
@@ -107,14 +107,16 @@ class PromptResourceTests(unittest.TestCase):
                     path,
                 )
             else:
-                self.assertEqual(
-                    config.initial_java_seed_path,
-                    Path("eagle/java_seeds/CandidateAgent.java").resolve(),
-                    path,
-                )
+                checked_in_seeds = {
+                    Path("eagle/java_seeds/CandidateAgent.java").resolve():
+                        "1410d85b27e84a0179e2e3ac816ad6003ede5676547e48a5fc6d75af1a833cb6",
+                    Path("eagle/java_seeds/worker_rush/CandidateAgent.java").resolve():
+                        "22b8c9c41423a5a27b93230add7c7e9a5677a498c95746bcdbb8daf0d9acc176",
+                }
+                self.assertIn(config.initial_java_seed_path, checked_in_seeds, path)
                 self.assertEqual(
                     hashlib.sha256(config.initial_java_seed_path.read_text(encoding="utf-8").encode("utf-8")).hexdigest(),
-                    "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
+                    checked_in_seeds[config.initial_java_seed_path],
                     path,
                 )
 

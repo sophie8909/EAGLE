@@ -590,7 +590,7 @@ def failure_code_quality(
     completed_matches: int = 0,
 ) -> float:
     del error_count, integration_pass_ratio, completed_matches
-    if failure_stage not in {"generation", "extraction", "validation", "compilation", "integration", "runtime", "timeout", "incomplete"}:
+    if failure_stage not in {"materialization", "generation", "extraction", "validation", "compilation", "integration", "runtime", "timeout", "incomplete"}:
         raise ValueError(f"Unknown failure stage: {failure_stage}")
     return FAILED_CODE_QUALITY
 

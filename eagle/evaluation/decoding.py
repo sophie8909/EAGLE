@@ -16,6 +16,7 @@ from eagle.artifacts import (
 )
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
+from eagle.evaluation.code_quality import evaluate_agent_strategy_region
 from eagle.evaluation.compiler import normalize_compiler_paths
 from eagle.evaluation.compiler import CompileResult, compile_generated_agent
 from eagle.generation.agent_template import (
@@ -29,6 +30,7 @@ from eagle.generation.java_agent_generator import (
     JavaAgentGenerationResult,
     ValidationResult,
     generate_java_agent_result,
+    validate_generated_java_source,
 )
 from eagle.prompts import load_prompt, render_prompt
 from eagle.timing import utc_now
@@ -75,6 +77,9 @@ def decode_validate_compile_candidate(
     """
 
     _validate_candidate_path_component(candidate.id)
+    if config.java_materialization_mode == "deterministic_dsl":
+        return _materialize_dsl(candidate, config=config, generated_agents_dir=generated_agents_dir,
+                                classes_dir=classes_dir, mock=mock, artifact_dir=candidate_artifact_dir)
     operation = getattr(backend, "operation", None)
     initial_seed_source = operation == "initial_java_seed"
     source_without_generation = operation in {
@@ -326,6 +331,91 @@ def decode_validate_compile_candidate(
         initial_seed_source=initial_seed_source,
         source_without_generation=source_without_generation,
     )
+
+
+def _materialize_dsl(candidate: Candidate, *, config: ExperimentConfig,
+                     generated_agents_dir: Path, classes_dir: Path, mock: bool,
+                     artifact_dir: Path | None) -> BoundedGenerationResult:
+    """Materialize and validate one deterministic source; never retry through LLM."""
+    from eagle.artifacts import write_json
+    from eagle.generation.dsl_java_compiler import compile_strategy_dsl
+    from eagle.strategy_dsl import normalize_strategy_dsl
+
+    if artifact_dir is not None and (artifact_dir / "generation" / "compiler_evidence.json").exists():
+        raise RuntimeError("Refusing to overwrite persisted deterministic compiler evidence.")
+    started_at, started = utc_now(), time.monotonic()
+    evidence = {"schema_version": "eagle-dsl-materialization-v1",
+                "operation": "deterministic_dsl_compile", "materialization_mode": "deterministic_dsl",
+                "compiler_version": config.java_compiler_version, "llm_attempts": [],
+                "policy_sha256": None, "scaffold_sha256": None, "source_sha256": None,
+                "normalized_policy": None, "diagnostics": []}
+    source, region, failure, scaffold = "", "", None, ""
+    try:
+        normalized = normalize_strategy_dsl(candidate.strategy_prompt, max_chars=config.max_prompt_chars)
+        scaffold = load_java_template(JavaTemplatePaths(config.agent_template_path))
+        evidence.update(normalized_policy=normalized,
+                        policy_sha256=hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
+                        scaffold_sha256=hashlib.sha256(scaffold.encode("utf-8")).hexdigest())
+        compiled = compile_strategy_dsl(normalized, scaffold=scaffold, compiler_version=config.java_compiler_version)
+        source, region = compiled.complete_source, compiled.strategy_region
+        evidence.update(normalized_policy=compiled.normalized_policy, policy_sha256=compiled.policy_sha256,
+                        scaffold_sha256=compiled.scaffold_sha256, source_sha256=compiled.source_sha256,
+                        diagnostics=compiled.diagnostics)
+    except (ValueError, TypeError, RuntimeError, OSError) as exc:
+        failure = str(exc)
+        evidence["diagnostics"] = [{"stage": "materialization", "error": failure}]
+    materialization = {"schema_version": "eagle-java-materialization-v1", "mode": "deterministic_dsl",
+                       "compiler_version": config.java_compiler_version, "started_at": started_at,
+                       "finished_at": utc_now(), "duration_seconds": max(0.0, time.monotonic()-started),
+                       "status": "failed" if failure else "success", "error": failure}
+    evidence["timing"] = materialization
+    if artifact_dir is not None:
+        write_json(artifact_dir / "generation" / "compiler_evidence.json", evidence)
+        if evidence["normalized_policy"] is not None:
+            (artifact_dir / "generation" / "normalized_policy.json").write_bytes(str(evidence["normalized_policy"]).encode("utf-8"))
+        if scaffold:
+            (artifact_dir / "generation" / "scaffold.java").write_bytes(scaffold.encode("utf-8"))
+        if source:
+            (artifact_dir / "generation" / "compiled_candidate.java").write_bytes(source.encode("utf-8"))
+    validation_started_at, validation_started = utc_now(), time.monotonic()
+    validation = (ValidationResult(False, failure, failure_reason=failure)
+                  if failure else validate_generated_java_source(source, "CandidateAgent", template_paths=JavaTemplatePaths(config.agent_template_path)))
+    validation_timing = {"started_at": validation_started_at, "finished_at": utc_now(),
+                         "duration_seconds": max(0.0, time.monotonic()-validation_started),
+                         "status": "blocked" if failure else "success" if validation.ok else "failed",
+                         "error": failure or validation.error or None}
+    agent = None
+    if validation.ok:
+        source_path = generated_agents_dir / candidate.id / "CandidateAgent.java"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes(source.encode("utf-8"))
+        agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", source, source_path,
+                                   extracted_code=source, strategy_region=region, validation_result=validation)
+    generation = JavaAgentGenerationResult(assembled_java=source, extracted_code=source, strategy_region=region,
+                strategy_region_score_result=evaluate_agent_strategy_region(region) if validation.ok else None,
+                validation_result=validation, validation_timing=validation_timing, agent=agent,
+                failure_stage="materialization" if failure else None if validation.ok else "validation",
+                failure_reason=failure or validation.error or None)
+    compilation = {"started_at": None, "finished_at": None, "duration_seconds": None,
+                   "status": "blocked", "error": generation.failure_reason}
+    compile_result, compile_error = None, None
+    if agent is not None:
+        compilation_started_at, compilation_started = utc_now(), time.monotonic()
+        _safe_remove_candidate_tree(classes_dir / candidate.id, classes_dir)
+        try:
+            compile_result = compile_agent_source(agent, config=config, classes_dir=classes_dir,
+                                                  candidate_id=candidate.id, mock=mock)
+        except (RuntimeError, OSError, ValueError) as exc:
+            compile_error = str(exc)
+        compilation = {"started_at": compilation_started_at, "finished_at": utc_now(),
+                       "duration_seconds": max(0.0, time.monotonic()-compilation_started),
+                       "status": "success" if compile_result is not None and compile_result.ok else "failed",
+                       "error": compile_error or (compile_error_message(compile_result) if compile_result is not None and not compile_result.ok else None)}
+    selected = compile_result is not None and compile_result.ok
+    attempt = GenerationAttemptResult(1, "", generation, compile_result, compile_error, {}, compilation,
+                                      request_kind="deterministic_dsl_compile", selected=selected, final=True)
+    return BoundedGenerationResult((attempt,), 1 if selected else None, 1, 1, False, True,
+                                   materialization_timing=materialization, compiler_evidence=evidence)
 
 
 def _compile_repair_request(

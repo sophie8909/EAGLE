@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from eagle.artifacts import write_summary
-from eagle.config import ExperimentConfig, EVOLUTION_PROTOCOL, STRATEGY_POLICY_FORMAT
+from eagle.config import ExperimentConfig, EVOLUTION_PROTOCOL, DSL_EVOLUTION_PROTOCOL, JAVA_COMPILER_VERSION, STRATEGY_POLICY_FORMAT
 from eagle.strategy_dsl import normalize_strategy_dsl
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.run_artifacts import (
@@ -75,10 +75,26 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
     payload = yaml.safe_load(run_config_path.read_text(encoding="utf-8"))
     if (
         not isinstance(payload, dict)
-        or payload.get("evolution_protocol") != EVOLUTION_PROTOCOL
+        or payload.get("evolution_protocol") != (DSL_EVOLUTION_PROTOCOL if payload.get("java_materialization_mode", "llm") == "deterministic_dsl" else EVOLUTION_PROTOCOL)
         or payload.get("strategy_policy_format") != STRATEGY_POLICY_FORMAT
     ):
         raise ValueError("Resume requires the DSL/pre-crossover evolution protocol; start a new run for legacy experiments.")
+    if payload.get("java_materialization_mode", "llm") == "deterministic_dsl" and payload.get("java_compiler_version") != JAVA_COMPILER_VERSION:
+        raise ValueError("Resume requires a known explicit Java compiler version.")
+    manifest_path = run_dir / "manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        mode = payload.get("java_materialization_mode", "llm")
+        manifest_protocol = manifest.get("evolution_protocol")
+        protocol_mismatch = (
+            manifest_protocol != payload.get("evolution_protocol")
+            if mode == "deterministic_dsl" or manifest_protocol is not None
+            else False
+        )
+        if manifest.get("java_materialization_mode", "llm") != mode or protocol_mismatch:
+            raise ValueError("Resume config/manifest materialization protocol mismatch.")
+        if mode == "deterministic_dsl" and manifest.get("java_compiler_version") != payload.get("java_compiler_version"):
+            raise ValueError("Resume config/manifest Java compiler version mismatch.")
     return ExperimentConfig.from_file(run_config_path)
 
 
@@ -95,6 +111,18 @@ def _resume_search_impl(
         preflight_evaluation_opponents(config, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
     for candidate in population:
+        if candidate.java_materialization_mode != config.java_materialization_mode:
+            raise ValueError("Resume candidate materialization mode does not match the run.")
+        if config.java_materialization_mode == "deterministic_dsl" and candidate.java_compiler_version != config.java_compiler_version:
+            raise ValueError("Resume candidate compiler version does not match the run.")
+        if config.java_materialization_mode == "deterministic_dsl":
+            import hashlib
+            from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
+            evidence_path = run_dir / "candidates" / candidate.id / "generation" / "compiler_evidence.json"
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            scaffold_hash = hashlib.sha256(load_java_template(JavaTemplatePaths(config.agent_template_path)).encode("utf-8")).hexdigest()
+            if evidence.get("scaffold_sha256") != scaffold_hash:
+                raise ValueError("Resume deterministic scaffold hash differs from recorded compiler evidence.")
         normalize_strategy_dsl(candidate.strategy_prompt, max_chars=config.max_prompt_chars)
     _restore_completed_generation(run_dir, completed_generation)
     ensure_strategy_archive(run_dir)

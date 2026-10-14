@@ -45,8 +45,12 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
             "niche_changed": candidate.niche_changed,
         },
     )
-    (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
-    if candidate.inherited_java or candidate.java_parent_id is not None:
+    if "generation_prompt" in candidate.active_genotype_components:
+        (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    write_json(genotype_dir / "components.json", {
+        "schema_version": "eagle-genotype-components-v1", **candidate.materialization_to_json_dict(),
+    })
+    if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
         (genotype_dir / "inherited_java.java").write_text(candidate.inherited_java, encoding="utf-8")
     reflection_dir = candidate_dir / "mutation" / "strategy_reflection"
     if (reflection_dir / "metadata.json").is_file():
@@ -66,9 +70,9 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
                 "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
                 "candidate_id": candidate.id,
                 "strategy_parent_id": candidate.strategy_parent_id,
-                "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
+                "generation_prompt_parent_id": candidate.generation_prompt_parent_id if "generation_prompt" in candidate.active_genotype_components else None,
         }
-        if candidate.inherited_java or candidate.java_parent_id is not None:
+        if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
             provenance["java_parent_id"] = candidate.java_parent_id
         write_json(crossover_dir / "provenance.json", provenance)
 
@@ -95,6 +99,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     source_without_generation = (evaluation.generation_timing or {}).get("operation") in {
         "initial_java_seed",
         "self_play_fitness_refresh",
+        "deterministic_dsl_compile",
     }
     if not source_without_generation:
         for attempt in evaluation.generation_attempts:
@@ -440,6 +445,7 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     source_without_generation = generation_timing.get("operation") in {
         "initial_java_seed",
         "self_play_fitness_refresh",
+        "deterministic_dsl_compile",
     }
     representative_attempt = next(
         (
@@ -458,16 +464,25 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     failed_source = None
     if source_without_generation and not (evaluation.compile_result is not None and evaluation.compile_result.ok):
         failed_source = "generation/failed_candidate.java"
-        (candidate_dir / failed_source).write_text(result.assembled_java or "", encoding="utf-8")
+        if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
+            (candidate_dir / failed_source).write_bytes((result.assembled_java or "").encode("utf-8"))
+        else:
+            (candidate_dir / failed_source).write_text(result.assembled_java or "", encoding="utf-8")
     if evaluation.compile_result is not None and evaluation.compile_result.ok:
         phenotype_dir = candidate_dir / "phenotype"
         phenotype_dir.mkdir(parents=True, exist_ok=True)
-        (phenotype_dir / "CandidateAgent.java").write_text(
-            result.assembled_java or evaluation.candidate.generated_java or "",
-            encoding="utf-8",
-        )
+        source = result.assembled_java or evaluation.candidate.generated_java or ""
+        if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
+            (phenotype_dir / "CandidateAgent.java").write_bytes(source.encode("utf-8"))
+        else:
+            (phenotype_dir / "CandidateAgent.java").write_text(source, encoding="utf-8")
+    compiler_evidence = {}
+    if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
+        compiler_evidence = {key: generation_timing.get(key) for key in
+            ("materialization_mode", "compiler_version", "policy_sha256", "scaffold_sha256", "source_sha256", "diagnostics", "llm_attempts")}
     write_json(generation_dir / "result.json", {
-        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        **compiler_evidence,
+        "artifact_schema_version": "phase4-v7" if compiler_evidence else ARTIFACT_SCHEMA_VERSION,
         "failed_source_artifact": failed_source,
         "status": (
             "success"
@@ -573,8 +588,14 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "objectives": "evaluation/objectives.json",
         "timing": "timing.json",
     }
-    if candidate.inherited_java or candidate.java_parent_id is not None:
+    if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
         artifact_references["inherited_java"] = "genotype/inherited_java.java"
+    if candidate.java_materialization_mode == "deterministic_dsl":
+        artifact_references.pop("code_generation_prompt", None)
+        artifact_references.pop("inherited_java", None)
+        artifact_references.update(compiler_evidence="generation/compiler_evidence.json",
+                                   normalized_policy="generation/normalized_policy.json",
+                                   compiler_scaffold="generation/scaffold.java")
     candidate_dir = candidates_dir / candidate.id
     if (candidate_dir / "evaluation" / "semantic_signature.json").is_file():
         artifact_references["semantic_signature"] = "evaluation/semantic_signature.json"
@@ -605,7 +626,8 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "initialization/policy_generation/result.json"
         )
     payload = {
-        "candidate_schema_version": "eagle-candidate-v6",
+        "candidate_schema_version": "eagle-candidate-v7" if candidate.java_materialization_mode == "deterministic_dsl" else "eagle-candidate-v6",
+        **candidate.materialization_to_json_dict(),
         "strategy_policy_format": "eagle-strategy-dsl-v1",
         "candidate_id": candidate.id,
         "generation": candidate.generation,
@@ -613,7 +635,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "operator": candidate.operator,
         "mutation_type": candidate.mutation_type,
         "strategy_parent_id": candidate.strategy_parent_id,
-        "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
+        "generation_prompt_parent_id": candidate.generation_prompt_parent_id if "generation_prompt" in candidate.active_genotype_components else None,
         "source_candidate_ids": list(candidate.resolved_source_candidate_ids()),
         "compile_status": candidate.compile_status,
         "status": candidate.status,
@@ -632,7 +654,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "timing_summary": dict(candidate.timing),
         "artifacts": artifact_references,
     }
-    if candidate.inherited_java or candidate.java_parent_id is not None:
+    if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
         payload["java_parent_id"] = candidate.java_parent_id
     write_json(candidates_dir / candidate.id / "candidate.json", payload)
 

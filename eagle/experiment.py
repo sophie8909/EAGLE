@@ -299,7 +299,7 @@ class ExperimentOrchestrator:
             )
             manager: RuntimeManager | None = None
             try:
-                if not mock:
+                if not mock and config.needs_llm_runtime:
                     manager = self.runtime_factory()
                     _restart_runtime_for_run(manager, config, "reflection")
 
@@ -376,9 +376,10 @@ class ExperimentOrchestrator:
                         last_result = result
                         continue
 
-                    if manager is None:
-                        manager = self.runtime_factory()
-                    _restart_runtime_for_run(manager, run_config, "reflection")
+                    if run_config.needs_llm_runtime:
+                        if manager is None:
+                            manager = self.runtime_factory()
+                        _restart_runtime_for_run(manager, run_config, "reflection")
                     search_kwargs = {}
                     if run_config.uses_distinct_generation_model:
                         search_kwargs["activate_model_phase"] = (
@@ -408,7 +409,7 @@ class ExperimentOrchestrator:
             if manager is not None:
                 manager.stop_owned()
         print("Batch complete")
-        if not mock:
+        if not mock and manager is not None:
             print("Runtime: stopped")
         return last_result
 
@@ -454,7 +455,7 @@ class ExperimentOrchestrator:
             new_run: bool = False,
         ) -> None:
             nonlocal manager
-            if mock:
+            if mock or not config.needs_llm_runtime:
                 return
             if manager is None:
                 manager = self.runtime_factory()

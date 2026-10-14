@@ -41,6 +41,7 @@ class Candidate:
     # generated phenotype below so failures do not erase inherited state.
     strategy_prompt: str = '{"rules":[],"version":"eagle-strategy-dsl-v1"}'
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
+    candidate_java_mode: str = "generated_phenotype"
     java_materialization_mode: str = "llm"
     java_compiler_version: str | None = None
     inherited_java: str = ""
@@ -86,10 +87,10 @@ class Candidate:
     def active_genotype_components(self) -> tuple[str, ...]:
         if self.java_materialization_mode == "deterministic_dsl":
             return ("strategy_prompt",)
-        return ("strategy_prompt", "generation_prompt", *(("inherited_java",) if self.inherited_java else ()))
+        return ("strategy_prompt", "generation_prompt", *(("inherited_java",) if self.candidate_java_mode == "inherited_genotype" else ()))
 
     def materialization_to_json_dict(self) -> dict[str, Any]:
-        return {"java_materialization_mode": self.java_materialization_mode,
+        return {"candidate_java_mode": self.candidate_java_mode, "java_materialization_mode": self.java_materialization_mode,
                 "java_compiler_version": self.java_compiler_version,
                 "active_genotype_components": list(self.active_genotype_components)}
 
@@ -107,6 +108,8 @@ class Candidate:
         agent_template_path: object | None = None,
     ) -> str:
         """Build one request for a complete single-file Java agent."""
+        if self.java_materialization_mode == "deterministic_dsl":
+            raise ValueError("Deterministic candidates do not have a Java generation request.")
         from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
 
         # The default mode starts from the checked-in scaffold without parent
@@ -157,7 +160,7 @@ class Candidate:
             "operator": self.operator,
             "mutation_type": self.mutation_type,
             "strategy_parent_id": self.strategy_parent_id,
-            "generation_prompt_parent_id": self.generation_prompt_parent_id,
+            "generation_prompt_parent_id": self.generation_prompt_parent_id if "generation_prompt" in self.active_genotype_components else None,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
             "compile_status": self.compile_status,
             "game_eval_result": dict(self.game_eval_result),
@@ -176,7 +179,7 @@ class Candidate:
             "timing": dict(self.timing),
             "metadata": compact_candidate_metadata(self.metadata),
         }
-        if self.inherited_java or self.java_parent_id is not None:
+        if self.java_materialization_mode == "llm" and (self.inherited_java or self.java_parent_id is not None):
             # The complete component is stored only at the genotype artifact
             # path. Snapshots retain provenance, not duplicate source bodies.
             payload["java_parent_id"] = self.java_parent_id
@@ -223,8 +226,8 @@ class Candidate:
         ordered = (
             *self.source_candidate_ids,
             self.strategy_parent_id,
-            self.generation_prompt_parent_id,
-            self.java_parent_id,
+            self.generation_prompt_parent_id if "generation_prompt" in self.active_genotype_components else None,
+            self.java_parent_id if self.java_materialization_mode == "llm" else None,
         )
         unique: list[str] = []
         for candidate_id in ordered:
@@ -244,10 +247,10 @@ class Candidate:
             "operator": self.operator,
             "mutation_type": self.mutation_type,
             "strategy_parent_id": self.strategy_parent_id,
-            "generation_prompt_parent_id": self.generation_prompt_parent_id,
+            "generation_prompt_parent_id": self.generation_prompt_parent_id if "generation_prompt" in self.active_genotype_components else None,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
         }
-        if self.inherited_java or self.java_parent_id is not None:
+        if self.java_materialization_mode == "llm" and (self.inherited_java or self.java_parent_id is not None):
             payload["java_parent_id"] = self.java_parent_id
         return payload
 

@@ -237,7 +237,7 @@ class InitialPopulationGenerationTests(unittest.TestCase):
             worker_rush_policy(2),
         )
         self.assertIn("Do not use Markdown", backend.requests[0])
-        self.assertIn("escape line breaks", backend.requests[0])
+        self.assertIn("escape any required line breaks", backend.requests[0])
 
     def test_oversized_dsl_is_rejected_after_raw_response_is_persisted(self) -> None:
         config = ExperimentConfig.from_mapping({

@@ -97,6 +97,11 @@ def evaluate_population(
             f"{candidate.id} stage=generation status=started",
             flush=True,
         )
+        if config.java_materialization_mode == "deterministic_dsl":
+            candidate = replace(candidate, candidate_java_mode=config.candidate_java_mode, java_materialization_mode=config.java_materialization_mode,
+                                java_compiler_version=config.java_compiler_version,
+                                generation_prompt="", generation_prompt_parent_id=None,
+                                inherited_java="", java_parent_id=None)
         write_candidate_inputs(candidates_dir, candidate)
         bounded_generation = decoding.decode_validate_compile_candidate(
             candidate,
@@ -217,6 +222,13 @@ def evaluate_candidate(
     receives explicit failure scores and remains available to lexicase.
     """
 
+    if config.java_materialization_mode == "deterministic_dsl":
+        candidate = replace(candidate, candidate_java_mode=config.candidate_java_mode,
+                            java_materialization_mode=config.java_materialization_mode,
+                            java_compiler_version=config.java_compiler_version,
+                            generation_prompt="", generation_prompt_parent_id=None,
+                            inherited_java="", java_parent_id=None)
+
     genotype_before = (
         candidate.strategy_prompt,
         candidate.generation_prompt,
@@ -250,8 +262,11 @@ def evaluate_candidate(
         float(item.compilation_timing.get("duration_seconds") or 0.0)
         for item in generation_attempts
     )
+    deterministic = config.java_materialization_mode == "deterministic_dsl"
     source_provenance = None
-    if initial_seed_source:
+    if deterministic:
+        source_provenance = {"kind": "deterministic_dsl", **bounded_generation.compiler_evidence}
+    elif initial_seed_source:
         source_path = getattr(backend, "source_path", None)
         source_provenance = {
             "kind": "checked_in_java_seed",
@@ -292,9 +307,10 @@ def evaluate_candidate(
     generation_timing = {
         "stage": "generation",
         "operation": (
-            "code_reflection_direct"
-            if candidate.mutation_type == "code" and candidate.generated_java
-            else getattr(backend, "operation", None)
+            "deterministic_dsl_compile" if deterministic else (
+                "code_reflection_direct" if candidate.mutation_type == "code" and candidate.generated_java
+                else getattr(backend, "operation", None)
+            )
         ),
         "model": getattr(backend, "model", None),
         "started_at": None if source_without_generation else generation_attempts[0].generation_timing.get("started_at"),
@@ -320,6 +336,8 @@ def evaluate_candidate(
         "source": source_provenance,
     }
 
+    if deterministic:
+        generation_timing.update(bounded_generation.compiler_evidence)
     agent = generation.agent
     region_score = generation.strategy_region_score_result
     if region_score is None:
@@ -336,8 +354,7 @@ def evaluate_candidate(
     evaluation_finished_at: str | None = None
     evaluation_started: float | None = None
 
-    # Stages 3-4: integrate the class, then execute the full configured
-    # opponent/map/round/side matrix. This is the sole owner of match count.
+    # Integration gates semantic probing and the complete match matrix.
     if compiler.compile_success and agent is not None:
         integration_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "integration"
         integration_result = integrate_microrts_agent(
@@ -348,21 +365,11 @@ def evaluate_candidate(
             seed=derive_seed(config.random_seed, "integration", candidate.id),
             mock=mock,
         )
-        if integration_result.ok:
+        if not integration_result.ok:
+            match_error = integration_result.failure_reason or "MicroRTS integration failed."
+        else:
             evaluation_started_at = utc_now()
             evaluation_started = time.monotonic()
-            matches, match_error = match_module.evaluate_matches(
-                candidate=candidate,
-                agent=agent,
-                config=config,
-                classes_dir=classes_dir,
-                match_artifacts_dir=match_artifacts_dir,
-                mock=mock,
-                ordinal=ordinal,
-                opponent_pool=opponent_pool,
-            )
-        else:
-            match_error = integration_result.failure_reason or "MicroRTS integration failed."
 
     # Semantic probing is independent diagnostic evidence. It is deliberately
     # excluded from failure_stage and objective construction so an unavailable
@@ -396,6 +403,18 @@ def evaluate_candidate(
             ),
             timeout_seconds=config.semantic_probe_timeout_seconds,
             random_seed=config.random_seed,
+        )
+
+    if compiler.compile_success and agent is not None and integration_result is not None and integration_result.ok:
+        matches, match_error = match_module.evaluate_matches(
+            candidate=candidate,
+            agent=agent,
+            config=config,
+            classes_dir=classes_dir,
+            match_artifacts_dir=match_artifacts_dir,
+            mock=mock,
+            ordinal=ordinal,
+            opponent_pool=opponent_pool,
         )
 
     # Stage 5: classify the first blocking failure without discarding partial
@@ -576,7 +595,8 @@ def evaluate_candidate(
     }
     timing = {
         **candidate.timing,
-        "generation_llm": generation_timing,
+        "generation_llm": None if deterministic else generation_timing,
+        **({"java_materialization": bounded_generation.materialization_timing} if deterministic else {}),
         "validation_duration_seconds": sum(
             float(item.generation.validation_timing.get("duration_seconds") or 0.0)
             for item in generation_attempts
@@ -642,7 +662,7 @@ def evaluate_candidate(
     }
     mutation_generation = timing.get("mutation", {}).get("generation_only_duration_seconds", 0.0)
     crossover_generation = timing.get("crossover", {}).get("generation_only_duration_seconds", 0.0)
-    generation_llm_duration = timing["generation_llm"].get("duration_seconds") or 0.0
+    generation_llm_duration = (timing["generation_llm"] or {}).get("duration_seconds") or 0.0
     validation_duration = timing["validation_duration_seconds"]
     compilation_duration_value = timing["compilation_duration_seconds"]
     evaluation_duration_value = timing["evaluation"].get("duration_seconds") or 0.0
@@ -656,8 +676,8 @@ def evaluate_candidate(
         "duration_seconds": operation_generation,
     }
     timing["child_total"] = {
-        "duration_seconds": operation_generation + float(generation_llm_duration) + validation_duration + compilation_duration_value + float(timing["integration"].get("duration_seconds") or 0.0) + evaluation_duration_value,
-        "includes": ["mutation_generation", "crossover_generation", "generation_llm", "validation", "compilation", "integration", "evaluation"],
+        "duration_seconds": operation_generation + float(generation_llm_duration) + float((timing.get("java_materialization") or {}).get("duration_seconds") or 0.0) + validation_duration + compilation_duration_value + float(timing["integration"].get("duration_seconds") or 0.0) + evaluation_duration_value,
+        "includes": ["mutation_generation", "crossover_generation", "java_materialization" if deterministic else "generation_llm", "validation", "compilation", "integration", "evaluation"],
         "status": "failed" if failure_stage else "success",
         "failure_stage": failure_stage,
     }
@@ -669,6 +689,9 @@ def evaluate_candidate(
         parent_ids=candidate.parent_ids,
         strategy_prompt=candidate.strategy_prompt,
         generation_prompt=candidate.generation_prompt,
+        candidate_java_mode=config.candidate_java_mode,
+        java_materialization_mode=config.java_materialization_mode,
+        java_compiler_version=config.java_compiler_version if deterministic else None,
         inherited_java=candidate.inherited_java,
         java_parent_id=candidate.java_parent_id,
         generated_java=generation.assembled_java if compiler.compile_success else "",
