@@ -85,6 +85,8 @@ class RuntimeWorkflowTests(unittest.TestCase):
             self.assertEqual(options["--parallel"], "2")
             self.assertEqual(options["--threads"], "8")
             self.assertEqual(options["--ctx-size"], "65536")
+            self.assertEqual(options["--log-verbosity"], "4")
+            self.assertEqual(options["--fit"], "off")
             self.assertEqual(runtime.spec.command_fragments, tuple(command[:-1]))
             self.assertIn("--no-cache-prompt", command)
             self.assertEqual(runtime.ownership_path.name, "127.0.0.1-18080.json")
@@ -188,6 +190,40 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Mandatory GPU execution was not confirmed"):
                     manager.start()
             stop.assert_called_once()
+
+    def test_start_requires_fresh_full_offload_evidence_from_new_server(self):
+        for offload, accepted in (("33/33", True), ("32/33", False), ("0/33", False)):
+            with self.subTest(offload=offload), tempfile.TemporaryDirectory() as directory:
+                runtime = self.make_runtime(Path(directory))
+                manager = RuntimeManager(runtime)
+                identity = self.identity(runtime)
+                process = type("Process", (), {"pid": identity.pid, "poll": lambda self: None})()
+
+                def start_server(command, **kwargs):
+                    options = dict(zip(command[1:-1:2], command[2:-1:2]))
+                    if int(options["--log-verbosity"]) >= 4:
+                        kwargs["stdout"].write(
+                            f"0.07.008.747 I load_tensors: offloaded {offload} layers to GPU\n"
+                        )
+                        kwargs["stdout"].flush()
+                    return process
+
+                with patch.object(manager, "check"), patch.object(manager, "_reconcile_ownership_state"), patch.object(
+                    manager, "_reconcile_legacy_pid_state"
+                ), patch("eagle.runtime.processes.discover_listening_server_pid", return_value=None), patch(
+                    "eagle.runtime.processes.port_occupied", return_value=False
+                ), patch("eagle.runtime.processes.subprocess.Popen", side_effect=start_server), patch(
+                    "eagle.runtime.processes._wait_for_process_identity", return_value=identity
+                ), patch.object(manager, "_write_ownership_state"), patch(
+                    "eagle.runtime.processes.health_check", return_value=(True, "ok")
+                ), patch.object(manager, "stop_owned") as stop:
+                    if accepted:
+                        self.assertEqual(manager.start().action, "started")
+                        stop.assert_not_called()
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "Mandatory GPU execution was not confirmed"):
+                            manager.start()
+                        stop.assert_called_once()
 
     def test_gpu_unavailable_blocks_launch_and_reuse(self):
         with tempfile.TemporaryDirectory() as directory:

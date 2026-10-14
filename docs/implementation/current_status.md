@@ -62,7 +62,9 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
   work returns in input order and uses stable task/match seeds. Failed or
   interrupted phases cancel queued calls and wait for active requests before
   returning. GPU layers are fixed to `999`, model threads to `8`, LLM workers to `2`, and
-  match workers to `10`. GPU preflight and fresh-child positive
+  match workers to `10`. Runtime fixes `--log-verbosity 4` so core model
+  offload evidence is visible, and `--fit off` disables automatic memory fitting.
+  GPU preflight and fresh-child positive
   `offloaded N/N layers to GPU` evidence are mandatory. Missing, stale,
   malformed, or partial evidence shuts down the owned process and fails the run;
   there is no CPU fallback. LLM

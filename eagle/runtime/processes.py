@@ -46,6 +46,8 @@ def build_server_command(runtime: RuntimeConfig) -> list[str]:
         "--port", str(llm.port), "--ctx-size", str(llm.context_size * llm.parallel),
         "--n-gpu-layers", str(llm.gpu_layers), "--parallel", str(llm.parallel),
         "--threads", str(llm.threads), "--batch-size", str(llm.batch_size),
+        # Core model INFO logs (including offload evidence) require verbosity 4.
+        "--log-verbosity", "4", "--fit", "off",
         # The bundled llama.cpp build can abort while reusing a prompt-cache
         # sequence. EAGLE already owns request-level context, so server-side
         # prompt caching is unnecessary and unsafe for this runtime.

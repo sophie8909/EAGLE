@@ -91,6 +91,10 @@ class RuntimeSpec:
             str(self.threads),
             "--batch-size",
             str(self.batch_size),
+            "--log-verbosity",
+            "4",
+            "--fit",
+            "off",
         )
 
 
