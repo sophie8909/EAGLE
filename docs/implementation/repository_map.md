@@ -26,11 +26,11 @@ kept as documentation entries.
 | `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, owned runtime, search/resume, final test, cleanup |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
-| `eagle/config.py` | File-only prompts, one execution mode, EA/model/evaluation validation |
+| `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, EA/model/evaluation validation |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/evolution/search.py` | Fresh run initialization, generation loop, and finalization |
 | `eagle/evolution/generation.py` | Shared fresh/resume generation ordering, evaluation, credit, selection, and persistence |
-| `eagle/evolution/offspring.py` | Selected-source Code gate before variation, healthy crossover/normal reflection, corrective Java materialization, evidence-parent lookup |
+| `eagle/evolution/offspring.py` | LLM-mode selected-source Code gate and corrective Java path; mode-aware variation and evidence-parent lookup |
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/self_play.py` | Managed self-play opponent library, five-generation context selection, context hashes, resume loading, and selection guards |
 | `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
@@ -45,10 +45,10 @@ kept as documentation entries.
 | `eagle/strategy_dsl.py` | Versioned closed-vocabulary strategy DSL validation and canonical JSON normalization; no runtime interpreter |
 | `docs/implementation/dsl_pre_crossover_reflection_plan.md` | Staged DSL and independent reproduction-source gate integration plan |
 | `eagle/candidate.py` | Candidate genotype, phenotype, lineage, failure, fitness, references |
-| `eagle/operators/crossover.py` | Independent prompt and optional inherited-Java crossover with provenance |
+| `eagle/operators/crossover.py` | LLM-mode independent prompt and optional inherited-Java crossover with provenance; deterministic whole-policy variation |
 | `eagle/operators/reflection.py` | Reflection context and transport contracts |
 | `eagle/operators/prompt.py` | Prompt-only mutation rewrite |
-| `eagle/operators/code.py` | Diagnosis-guided direct parent-Java Code Reflection |
+| `eagle/operators/code.py` | LLM-mode diagnosis-guided direct parent-Java Code Reflection |
 | `eagle/operators/strategy.py` | Match sampling, Commentator, Coach, trace lifecycle |
 | `eagle/operators/context.py` | Structured mutation evidence |
 | `eagle/operators/reflection_prompts.py` | Prompt Reflection reviewer rendering |
@@ -59,8 +59,8 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/generation/backend.py` | Mock/OpenAI-compatible complete-source generation |
-| `eagle/generation/java_agent_generator.py` | Complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
+| `eagle/generation/backend.py` | LLM-mode mock/OpenAI-compatible complete-source generation |
+| `eagle/generation/java_agent_generator.py` | LLM-mode complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
 | `eagle/generation/agent_template.py` | Java template and canonical scaffold assembly contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
 | `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op seed and configured inherited-mode scaffold |
@@ -132,3 +132,12 @@ experiment/analyze entrypoints
 
 Scoring modules return data, artifact modules persist it, search owns population
 transitions, and prompt resources remain outside executable Python source.
+
+
+### Deterministic Java compiler
+
+`eagle/generation/dsl_java_compiler.py` owns normalized strategy DSL to Java
+compilation, typed IR emission, deterministic diagnostics, and policy/scaffold/
+source hashes. `eagle/evaluation/decoding.py` owns materialization, validation, and javac.
+`eagle/evaluation/pipeline.py` owns subsequent Integration, semantic probes,
+and match evaluation for either materialization mode.

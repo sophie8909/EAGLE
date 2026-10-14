@@ -1,18 +1,21 @@
 # Architecture overview
 
-EAGLE evolves one complete Java MicroRTS agent under one of two explicit
-candidate modes. The default genotype contains two prompt components; the
-opt-in inherited mode adds complete Java as a third component. The active evolutionary contract is documented in
+EAGLE evolves one complete Java MicroRTS agent. Candidate state mode and Java
+materialization mode are independent settings. `candidate_java_mode` controls
+whether generated Java is phenotype-only or an inherited genotype component;
+`java_materialization_mode` selects LLM translation or deterministic DSL
+compilation. Deterministic configuration requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`. The active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
 
 ## System boundary
 
 In scope:
 
-- a canonical versioned JSON DSL policy gene, a policy-to-Java code-generation prompt, and
-  optionally inherited Java;
-- crossover, Strategy Reflection, Prompt Reflection, Code Reflection, and Java
-  generation;
+- a canonical versioned JSON DSL policy gene, an optional active
+  policy-to-Java code-generation prompt, and optionally inherited Java;
+- whole-policy crossover/copy and Strategy Reflection in deterministic DSL
+  mode; LLM mode additionally supports Prompt Reflection, Code Reflection, and
+  Java generation;
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
@@ -29,25 +32,43 @@ telemetry remain diagnostics. They are not additional evolutionary objectives.
 flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
-    L --> RT["Owned llama.cpp runtime"]
-    RT --> Z["Generation 0: configured or LLM-generated policies"]
-    Z --> P
+    L --> Z["Generation 0: configured or LLM-generated policies"]
+    L -->|LLM roles enabled| RT["Owned llama.cpp runtime"]
+    RT -.-> Z
+    Z --> SW
     P["Evaluated population"] --> S["Mode-specific parent selection"]
-    S --> CG{"Gate every selected source: own DSL policy + Java"}
-    CG -->|Healthy contributors| X["Crossover/copy + Strategy/Prompt assignment"]
-    CG -->|Defect| CR["One-parent corrective child; preserve genes"]
-    CG -->|Diagnosis failure| FAIL["Failed child; no crossover/mutation"]
-    X --> M{"Run assigned reflection/rewrite work"}
+    S --> CG{"Java materialization mode"}
+    CG -->|llm| GATE["Gate each source against its DSL policy + Java"]
+    GATE -->|Healthy| X["Crossover/copy + mode-allowed reflection"]
+    GATE -->|Defect| CR["One-parent corrective child; preserve genes"]
+    GATE -->|Diagnosis failure| FAIL["Failed child; no crossover/mutation"]
+    CG -->|deterministic_dsl| XDSL["Whole-policy copy/crossover"]
+    XDSL --> M
+    X --> M{"Run mode-allowed reflection work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
-    M -->|Prompt| PR["Prompt Reflection + prompt rewrite"]
-    M -->|No| SW["Generation-model phase"]
+    M -->|Prompt (llm only)| PR["Prompt Reflection + prompt rewrite"]
+    M -->|No| SW["Materialization phase"]
     SR --> SW
     PR --> SW
     CR --> SW
-    SW --> G["Final materialization: Java generation or diagnosed code revision"]
-    G --> V["Validation"] --> C["Compile"] --> I["Integration"]
-    I --> E["180 MicroRTS matches"]
-    E --> O["10 opponent scores + reporting aggregate"]
+    SW --> GM{"Java materialization mode"}
+    GM -->|llm| G["LLM generation/revision or fixed generation-zero source"]
+    GM -->|deterministic_dsl| D["Compile strategy DSL to Java"]
+    G --> V["Validation"]
+    D --> V
+    V -->|valid| C["Compile"]
+    C -->|success| I["Integration"]
+    V -->|invalid, llm| REP["Bounded compile-guided repair"]
+    C -->|failure, llm| REP
+    REP --> G
+    D -->|compiler failure| FAIL
+    V -->|invalid, deterministic_dsl| FAIL
+    C -->|failure, deterministic_dsl| FAIL
+    I --> SP["Diagnostic semantic probe when enabled"]
+    SP --> E["180 MicroRTS matches"]
+    E --> O["10 fixed-roster cases or self-play scalar"]
+    FAIL --> FS["Canonical failure sentinel + artifacts"]
+    FS --> N
     O --> R{"Reflection operator mode"}
     R -->|static| F["Fixed probabilities"]
     R -->|aos_opponent| Q["Ten-opponent rank reward"]
@@ -57,16 +78,16 @@ flowchart TD
     F --> N["Parent + offspring mode-specific survivor selection"]
     A --> N --> P
     N --> FT["Final test"]
-    FT --> CL["Stop owned runtime"]
+    FT --> CL["Finalize artifacts; stop owned runtime if any"]
 ```
 
 ## Invariants
 
 - One generated source and one compiled class directory serve all 180 matches.
-- `inherited_genotype` generation zero replicates one seed policy to the fixed
-  population and performs one independent Generator call per individual under
-  `configured_seeds` initialization.
-- `llm_generated_policies` keeps one configured policy, fills the other slots
+- In LLM materialization mode, `inherited_genotype` generation zero replicates
+  one seed policy to the fixed population and performs one independent Generator
+  call per individual under `configured_seeds` initialization.
+- In LLM materialization mode, `llm_generated_policies` keeps one configured policy, fills the other slots
   with independent policy-only LLM calls, and independently generates Java for
   every generation-zero policy. WorkerRush Java is inherited prompt context.
 - Policy generation and strategy-facing reflection/rewrite roles share one
@@ -75,20 +96,28 @@ flowchart TD
   observable state.
 - New policy genes are validated canonical `eagle-strategy-dsl-v1` JSON with
   ordered actor/when/action rules, intrinsic legal-action guards, and idle empty
-  rules. Java generation implements the DSL; no runtime interpreter exists.
-- Every selected source passes its own independent Code gate before actual
-  crossover/mutation. Defective sources yield one-parent corrective children;
-  failed diagnosis cannot qualify as healthy. Normal mutation/AOS covers only
-  Strategy and Prompt. Corrective Java bypasses ordinary Generator overwrite.
-- Code diagnosis has only strategy fidelity and code correctness; cosmetic
+  rules. The `llm` materializer asks the Generator to implement the DSL;
+  `deterministic_dsl` compiles it through the versioned typed-IR compiler. Neither
+  mode adds a runtime interpreter.
+- Under `java_materialization_mode: llm`, every selected source passes its own
+  independent Code gate before actual crossover/mutation. Normal mutation/AOS
+  covers Strategy and Prompt; corrective Java bypasses ordinary Generator
+  overwrite. Under `deterministic_dsl`, the active genotype is only the complete
+  policy component: crossover copies a whole policy, Strategy mutation remains
+  enabled, and Prompt Reflection, Code Reflection/source repair, and Java LLM
+  generation/repair are disabled.
+- LLM-mode Code diagnosis has only strategy fidelity and code correctness; cosmetic
   simplification is forbidden and ambiguous/correct Java needs no revision.
-- `model` handles initialization and reflection/rewrite work. Optional
-  `generation_model` handles final Java generation, Code Reflection revision,
-  and compile-guided generation repair; when omitted, `model` handles both
-  phases.
-- In inherited mode crossover selects policy, generation prompt, and Java
-  parents independently; generated child Java becomes the inheritable Java
-  component available to the next generation.
+- `model` handles initialization and mode-allowed reflection/rewrite work. In
+  LLM mode, optional `generation_model` handles final Java generation, Code
+  Reflection revision, and compile-guided generation repair; when omitted,
+  `model` handles both phases. Deterministic DSL mode has no generation-model
+  phase.
+- In inherited candidate mode with `llm` materialization, crossover selects
+  policy, generation prompt, and Java parents independently; generated child
+  Java becomes the inheritable Java component available to the next generation.
+  In deterministic mode, generation-prompt and inherited-Java values are
+  inactive and do not participate in crossover or phenotype materialization.
 - Fixed-roster fitness is the ten-opponent mapping in
   `Candidate.fitness_objectives`. Self-play fitness is the single
   `game_performance` value.
@@ -125,4 +154,4 @@ for ownership and artifact details.
 
 ## Python ownership
 
-`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns Java generation/validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness, phase ordering, configuration, or serialized run contracts.
+`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness, phase ordering, configuration, or serialized run contracts.

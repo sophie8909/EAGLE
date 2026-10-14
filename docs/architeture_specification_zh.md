@@ -1,25 +1,45 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-10-11 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-10-14 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
 
-EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent。實際比賽執行時
+在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 則以版本化 compiler 產生 Java。實際比賽執行時
 不會呼叫 LLM。每個 phenotype 都是一份完整的
 `ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
 runtime LLM policy。
 
 ## Candidate 與演化流程
 
-Candidate 有兩種明確模式。預設 `generated_phenotype` 的 genotype 包含兩個
+### Java Materialization 雙模式
+`candidate_java_mode` 與 `java_materialization_mode` 是不同設定。後者未設定時
+預設 `llm`，維持既有流程。`deterministic_dsl` 僅以完整的
+`strategy_prompt` 作為 active genotype；`generation_prompt` 與 inherited Java
+即使保留也只是 inactive compatibility data，不參與 crossover 或 phenotype
+materialization。此模式只允許整份 policy 的 copy/crossover 與 Strategy
+Mutation，不做 rule-level crossover，並停用 Prompt Reflection、Code Reflection/
+source repair、Java Generation 與 compile-repair LLM。版本為
+`eagle-dsl-compiler-v1` / `eagle-dsl-java-v1`。Compiler 產生完整 Java 後仍執行
+validation、javac、Integration、semantic probe 與 evaluation；失敗不會退回
+LLM。此 migration 的測試、真實整合與 smoke-run 結果尚待 implementation owner
+回報。
+Deterministic 設定必須使用 `candidate_java_mode: generated_phenotype` 與 `parent_evaluation_mode: reuse_cached`，其他值會被拒絕。
+
+### LLM materialization lifecycle
+
+以下 Candidate、genotype、source gate 與 generation 流程只描述
+`java_materialization_mode: llm`；deterministic 模式見上方說明。
+
+
+Candidate Java state 有兩種明確模式。LLM materialization 下，預設 `generated_phenotype` 的 active genotype 包含兩個
 可演化 prompt：
 
 1. `strategy_prompt`：canonical versioned JSON DSL policy gene
 2. `generation_prompt`：policy-to-Java translation gene
 
-在預設模式，Java `CandidateAgent.java` 只屬於 phenotype／evidence，不會傳給
-子代。`inherited_genotype` 則加入第三個完整 Java component。Uniform Crossover
+在 LLM materialization 的預設 candidate Java mode，Java `CandidateAgent.java` 只屬於 phenotype／evidence，不會傳給
+子代。LLM materialization 搭配 `inherited_genotype` 時，會加入第三個完整 Java component。Uniform Crossover
 對 policy、generation prompt 與 Java 各自獨立選 parent，保存三者來源 ID；
 Generator 成功產生的 child Java 會成為下一代可選取的 Java component。這是
 明確設定且有版本的 genotype，不是舊版隱含的 `previous_code` 欄位。
@@ -46,7 +66,8 @@ materialization 邊界，修正 Java 直接進 validation／javac，不讓一般
 之後執行 integration、180 場 evaluation、正常 mutation 的 AOS credit，以及
 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
-選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
+選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為
+` 時即為
 `(n + n)`。
 
 `parent_evaluation_mode` 的 canonical 預設是 `reuse_cached`：父代不會在每一代
@@ -195,7 +216,8 @@ evaluation 只對選中的 attempt 執行一次，且 integration/runtime failur
 模型回覆仍必須是一份具有正確 package、class、constructor、lifecycle method、
 security contract 與唯一 strategy marker pair 的完整 Java。通過此前置 envelope
 檢查後，系統會用「設定中的 canonical scaffold＋模型回覆的 strategy region」
-確定性建立 `normalized_candidate.java`。因此模型刪除未使用的固定 method、改寫
+確定性建立
+normalized_candidate.java`。因此模型刪除未使用的固定 method、改寫
 固定註解或重新排版固定區時，差異仍保留在 raw／extracted evidence，但不會進入
 validation、javac 或 phenotype；partial、結構錯誤或含禁止行為的回覆不會因這個
 正規化步驟被放行。

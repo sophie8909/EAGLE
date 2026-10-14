@@ -153,8 +153,8 @@ public final class DslBehaviorProbe {
         resourceMap.addPlayer(new rts.Player(1, 1));
         Unit resourceFirst = new Unit(10, 0, utt.getUnitType("Base"), 1, 2, 0);
         Unit resourceSecond = new Unit(11, 0, utt.getUnitType("Base"), 3, 2, 0);
-        resourceMap.addUnit(resourceFirst);
         resourceMap.addUnit(resourceSecond);
+        resourceMap.addUnit(resourceFirst);
         resourceMap.addUnit(new Unit(12, 1, utt.getUnitType("Base"), 4, 4, 0));
         PlayerAction resourceAction = new CandidateAgent(utt).getAction(
                 0, new GameState(resourceMap, utt));
@@ -172,8 +172,8 @@ public final class DslBehaviorProbe {
         cellMap.addPlayer(new rts.Player(1, 5));
         Unit cellFirst = new Unit(20, 0, utt.getUnitType("Base"), 1, 2, 0);
         Unit cellSecond = new Unit(21, 0, utt.getUnitType("Base"), 3, 2, 0);
-        cellMap.addUnit(cellFirst);
         cellMap.addUnit(cellSecond);
+        cellMap.addUnit(cellFirst);
         cellMap.addUnit(new Unit(22, 1, utt.getUnitType("Base"), 4, 4, 0));
         PlayerAction cellAction = new CandidateAgent(utt).getAction(0, new GameState(cellMap, utt));
         if (cellAction.getAction(cellFirst).getType() != UnitAction.TYPE_PRODUCE
@@ -209,7 +209,18 @@ public final class DslBehaviorProbe {
             Unit chosen = (Unit) targetField.get(plan);
             if (chosen.getID() != expected[selector])
                 throw new AssertionError("selector " + selector + " chose " + chosen.getID());
-        }        System.out.println("DSL_BEHAVIOR_OK");
+        }
+        java.lang.reflect.Field actorIdField = Unit.class.getDeclaredField("ID");
+        actorIdField.setAccessible(true);
+        actorIdField.setLong(worker, Long.MAX_VALUE);
+        timeField.setInt(gs, Integer.MAX_VALUE);
+        java.lang.reflect.Method hashMethod = CandidateAgent.class.getDeclaredMethod(
+                "dslHash", contextClass, Unit.class);
+        hashMethod.setAccessible(true);
+        long exactHash = (Long) hashMethod.invoke(new CandidateAgent(utt), context, worker);
+        if (exactHash != -9223371970282782764L)
+            throw new AssertionError("hash did not use normative long overflow arithmetic: " + exactHash);
+        System.out.println("DSL_BEHAVIOR_OK");
     }
 }
 """, encoding="utf-8")

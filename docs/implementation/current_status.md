@@ -3,13 +3,13 @@
 ## DSL and pre-crossover source contract (2026-10-11)
 
 Canonical `eagle-strategy-dsl-v1` policies are validated by `eagle/strategy_dsl.py`.
-Every reproduction source is independently gated before actual variation. Defects
+In LLM materialization mode, every reproduction source is independently gated before actual variation. Defects
 yield corrective one-parent children; failed checks cannot enter variation. Normal
 mutation/AOS covers Strategy/Prompt. Code v6 permits fidelity/correctness repair
 only. Historical policies remain read-only; incompatible resume fails. See the
 [integration plan](dsl_pre_crossover_reflection_plan.md) for verification.
 
-Snapshot: 2026-10-04. This file describes executable repository behavior.
+Snapshot: 2026-10-14. Unless explicitly marked, implementation details below describe LLM materialization. Deterministic DSL materialization is implemented; verification evidence is recorded in `../testing/test_contracts.md`.
 
 ## Active evolutionary contract
 
@@ -26,19 +26,19 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   and optionally accepts a token for non-loopback binds. It has no
   experiment-control operations.
 
-- `candidate_java_mode: generated_phenotype` preserves the two evolvable prompt
-  components: `strategy_prompt` and `generation_prompt`; generated Java remains
-  phenotype/evidence only. Opt-in `inherited_genotype` adds a complete Java
-  component selected independently at crossover. The Generator revises that
-  component, and a successful child phenotype becomes Java input for the next
-  generation; this is explicit versioned state, not the removed legacy
-  `previous_code` field.
+- `candidate_java_mode` controls Java phenotype versus inherited-Java state;
+  `java_materialization_mode` independently selects `llm` (the backward-
+  compatible default) or `deterministic_dsl`. Deterministic mode activates only
+  `strategy_prompt`; generation prompt and inherited Java are inactive.
+  Prompt/Code Reflection and Java generation/repair LLM paths are disabled there.
+  Protocol/compiler markers are `eagle-dsl-compiler-v1` and
+  `eagle-dsl-java-v1`; the bounded real smoke passes.
 - Automatically created candidate IDs use `gen_<zero-padded-generation>_<12-hex>`;
   explicitly loaded IDs remain unchanged for artifact and resume compatibility.
 - `initial_population_mode: llm_generated_policies` keeps one configured policy
   and fills the remaining population slots with independent policy-only LLM
   calls. The tracked mixed config therefore produces one Worker Rush policy plus
-  nine generated RTS policy prompts. Every policy independently enters the Java
+  nine generated RTS policy prompts. In LLM mode every policy independently enters the Java
   Generator; WorkerRush Java is inherited request context, not the phenotype.
 - Default evaluation uses exactly ten fixed opponents: `passive`, `random`,
   `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
@@ -102,7 +102,7 @@ Snapshot: 2026-10-04. This file describes executable repository behavior.
   static reflection; it evaluates fresh-ID, same-genotype parent replicas and
   selects from replicas plus offspring while retaining immutable source-parent
   artifacts and a generation audit sidecar.
-- Every selected source passes its own policy/Java gate before actual variation.
+- In LLM mode every selected source passes its own policy/Java gate before actual variation; deterministic mode disables this Java source gate.
   Healthy contributors undergo Strategy/Prompt variation; defects/failures yield
   one-parent diagnosed children. Reflection/rewrite finishes before final Java
   materialization; corrective Java bypasses ordinary Generator overwrite.
@@ -307,7 +307,8 @@ responses, parent source, and extracted reflected source under
 `mutation/code_reflection/`. Its immutable context now explicitly lists every
 available action/lookup interface and every available entity/unit. The parsed
 conclusion separately reports strategy fidelity, code correctness. A revision call runs only when one of those dimensions requires a
-correction; otherwise the parent Java is preserved with `not_required` status.
+correction; otherwise the parent Java is preserved with
+ot_required` status.
 Neither call receives the reusable generation prompt, W/D/L, matches, traces, or fitness;
 only source-matching validation/compiler diagnostics are allowed. A complete
 reflected source bypasses final Java generation and enters
@@ -462,3 +463,13 @@ proves wrapper completion, one-time marker persistence, and neutral scoring.
 ## Maintainability refactor (2026-10-02)
 
 Operators now have separate owners under `eagle/operators`; fresh/resume share `eagle/evolution/generation.py`, with offspring planning and parent refresh separated. Generation and evaluation are subpackages of `eagle`; evaluation separates records, decoding, opponents, matches and pipeline orchestration. Offspring planning calculates generation-best evidence once per generation. See the [plan and verification](maintainability_refactor_plan.md) and [repository map](repository_map.md). Evolution/artifact protocols are unchanged.
+
+
+## Deterministic Java materialization (2026-10-14)
+
+Dual materialization is implemented. `java_materialization_mode: llm` remains
+the backward-compatible default. `deterministic_dsl` uses a policy-only active
+genotype, disables Java-generation and repair LLM roles, and records protocol
+`eagle-dsl-compiler-v1` plus compiler version `eagle-dsl-java-v1`. Compiler goldens, artifact/timing and resume contracts, real integration, and
+the bounded self-play smoke pass. See `../testing/test_contracts.md` for recorded
+commands, evidence, and the fixed-roster asset limitation.

@@ -2,7 +2,7 @@
 
 Status: authoritative current contract, 2026-10-11.
 
-This document describes executable EAGLE behavior. Historical NSGA-II,
+This document describes executable EAGLE behavior. Unless stated otherwise, sections 2-14 describe `java_materialization_mode: llm`; section 15 specifies the deterministic override. Historical NSGA-II,
 two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
 contracts are intentionally absent; Git history is the archive for those designs.
 
@@ -18,12 +18,12 @@ fixed roster or immutable-snapshot self-play.
 
 ## 2. Candidate model
 
-Every candidate has two evolving prompt values:
+In `java_materialization_mode: llm`, every candidate has two active evolving prompt values:
 
 1. `strategy_prompt` — canonical versioned JSON DSL policy gene (`policy_prompt` conceptually)
 2. `generation_prompt` — the reusable policy-to-Java translation gene (`code_generation_prompt` conceptually)
 
-`candidate_java_mode` selects the Java state boundary. The default
+`candidate_java_mode` selects the Java state boundary independently of materialization mode. The default
 `generated_phenotype` mode keeps Java as non-inherited phenotype/evidence.
 The explicit `inherited_genotype` mode adds a third component: the complete
 Java source selected from a parent or the configured generation-zero Java
@@ -31,10 +31,10 @@ seed. The Generator consumes that inherited source and produces the candidate's
 new Java component and phenotype. Evaluation does not overwrite either prompt
 gene or the persisted pre-generation Java input.
 
-Code checks and corrective children retain their exact source Java in
+In `llm` materialization mode, Code checks and corrective children retain their exact source Java in
 `inherited_java` with `java_parent_id` for repair provenance in either mode.
 In default mode this is operator input/evidence; ordinary crossover still
-inherits only the two prompt genes.
+inherits only the two active prompt genes in LLM materialization.
 
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
@@ -46,7 +46,7 @@ New candidate identities are generation-qualified as
 and easy to navigate. Persisted IDs are opaque references and are never renamed
 while loading or resuming a run.
 
-### Policy DSL and reproduction gate
+### Policy DSL and LLM-mode reproduction gate
 
 `strategy_prompt` remains the policy gene, serialized as canonical versioned JSON
 DSL (`version: "eagle-strategy-dsl-v1"`). Its ordered `rules` contain `actor`,
@@ -56,7 +56,7 @@ is translated into Java offline; there is no runtime interpreter. New runs rejec
 natural-language policies. Historical natural-language artifacts remain read-only;
 incompatible old checkpoints fail resume clearly, without silent conversion.
 
-Every selected reproduction source passes an independent Code Reflection gate
+In `llm` materialization mode, every selected reproduction source passes an independent Code Reflection gate
 against its own policy and exact Java before actual crossover or mutation. All
 contributors must be healthy. A diagnosed defect instead creates a one-parent
 corrective Java child with unchanged policy/generation genes and source provenance,
@@ -94,14 +94,14 @@ Generator for every candidate. The configured Worker Rush Java is inherited
 revision context in each request, not the generation-zero phenotype. Thus each
 initial policy is materialized into its own validated and compiled Java agent.
 
-Each later generation produces a fixed-size offspring population and performs:
+Each later generation produces a fixed-size offspring population. The `llm` sequence below uses the Code gate and prompt operators; `deterministic_dsl` instead selects/copies whole policies, applies Strategy mutation only, and compiles the resulting policy.
 
 1. select reproduction sources for every offspring slot;
 2. gate each source against its own policy and exact Java before any actual
    crossover/mutation; retain one-parent corrective/failure children for sources
    that do not pass, and use only healthy contributors for normal crossover/copy
    and optional Strategy/Prompt mutation assignment;
-3. complete normal reflection/rewrite work, then enter one materialization phase:
+3. In `llm`, complete normal reflection/rewrite work, then enter one materialization phase:
    ordinary Java generation for healthy variation or evidence-guided corrective
    Java revision for defective-source children;
 
@@ -224,7 +224,7 @@ Initial policy generation, Match Commentator, Coach, the library
 Strategy path, and Strategy Alignment receive the immutable closed-world
 MicroRTS gameplay contract. The contract permits arbitrary legal strategy types.
 
-Prompt mutation is the former Code Reflection behavior. In default mode it
+In `llm` mode, Prompt mutation is the former Code Reflection behavior. In default mode it
 compares the source parent's policy with its Java phenotype. In inherited mode
 it compares the child's independently selected policy with its inherited Java.
 The Reviewer receives only the editable Java strategy region, the policy, the
@@ -235,17 +235,17 @@ Rewriter then returns one validated reusable-rule delta and changes only
 `generation_prompt`; the normal final Generator decodes the child from the
 updated prompt gene.
 
-Code Reflection is the independent pre-crossover source gate described above,
+In `llm` mode, Code Reflection is the independent pre-crossover source gate described above,
 not an ordinary mutation or AOS action. It permits only evidenced defect and
 policy/Java mismatch correction. Its two-stage diagnostic/revision artifacts
 preserve raw responses and both prompt genes.
 
-Normal mutation probabilities and adaptive credit cover only
+In `llm` mode, normal mutation probabilities and adaptive credit cover only
 `strategy_reflection` and `prompt_reflection`. Operator state is `eagle-reflection-operator-v6`. Legacy probability inputs
 normalize Strategy/Prompt weights with Code fixed at zero; all-zero weights skip
 normal mutation. The independent source gate still runs.
 
-Each normal child stores `pre_crossover_code_checks` entries with
+Each normal LLM-mode child stores `pre_crossover_code_checks` entries with
 `source_candidate_id`, `gate_candidate_id`, `healthy`, `reflection_status`,
 `revision_required`, and `artifact_path` (`../{gate_id}/mutation/code_reflection`).
 Source A uses a deterministic source-check ID; donor B, when needed,
@@ -264,12 +264,12 @@ All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
 prompt resources but may not contain alternate executable prompt bodies.
 
-In `inherited_genotype` mode, only gated healthy sources participate in independent
+In `llm` materialization with `inherited_genotype`, only gated healthy sources participate in independent
 component crossover. Strategy and Prompt preserve the selected Java input for the
 final Generator. Corrective children instead retain one source's complete genotype
 and revise its exact Java at materialization, preserving source provenance.
 
-## 7. Java generation and validation
+## 7. LLM Java generation and validation
 
 In `generated_phenotype` mode, generation 0 remains the decoder exception: the
 configured policy uses `initial_java_seed_path` as a fixed phenotype without a
@@ -282,7 +282,7 @@ shared third component; policy-only LLM calls fill the remaining population
 slots and every slot then performs normal bounded Java decoding in generation
 zero.
 
-Except for Code Reflection children, final materialization consumes the two prompt
+In `llm` materialization, except for Code Reflection children, final materialization consumes the two active prompt
 genes plus the fixed checked-in Java scaffold/API constraints and returns
 exactly one complete Java source file. In `inherited_genotype` mode it
 additionally receives the selected inherited Java component as revision
@@ -302,7 +302,8 @@ both phases.
 The extracted response must itself satisfy the complete-file external envelope:
 package/class/superclass, constructors, lifecycle methods, security restrictions,
 and exactly one ordered strategy-marker pair. After that check, the decoder
-deterministically constructs `normalized_candidate.java` from the configured
+deterministically constructs
+normalized_candidate.java` from the configured
 canonical scaffold plus only the extracted strategy region. Model edits outside
 the strategy region therefore remain visible in `response_raw.txt` and
 `extracted_candidate.java` but cannot enter validation, compilation, or the
@@ -353,7 +354,7 @@ than a model reconstruction of fixed code.
 Internal helper names and implementation inside the editable strategy region
 remain flexible within those deterministic Java/API constraints.
 
-## 8. Compilation and integration
+## 8. Shared compilation and integration
 
 Each decoder-attempt Java source that passes validation is compiled at
 most once in an attempt-isolated class directory with the MicroRTS classpath and
@@ -598,3 +599,41 @@ operator explicitly requests it.
 ## 14. Implementation ownership
 
 Executable Python is packaged under `eagle`. `eagle/evolution` owns run and generation orchestration, `eagle/operators` owns independently editable EA operators, `eagle/generation` owns source generation/validation, and `eagle/evaluation` owns decoding, opponent preparation, match dispatch, scoring, and candidate evaluation. Internal imports target the actual owner; obsolete import shims are removed. The [repository map](implementation/repository_map.md) specifies module entrypoints. Configuration, assets, and serialized run/checkpoint contracts remain unchanged.
+
+
+## 15. Java materialization modes
+
+`java_materialization_mode` is independent of `candidate_java_mode`. Its absent
+value defaults to `llm`, retaining historical behavior. `llm` keeps the existing
+active genotype (policy and generation prompt, plus optional inherited Java),
+LLM generation/revision flow, and its established version markers.
+
+`deterministic_dsl` uses only the complete normalized `strategy_prompt` as its
+active genotype. Generation prompt and inherited Java are inactive compatibility
+data and must not be passed to phenotype materialization or presented as active
+genes. It allows whole-policy copy/crossover and Strategy mutation only; it
+disables Prompt Reflection, Code Reflection/source repair, the Java source gate,
+Java Generation, and compile-repair requests. It does not add rule-level
+crossover. The protocol is `eagle-dsl-compiler-v1`; compiler version is
+`eagle-dsl-java-v1`. The typed-IR compiler and canonical Java scaffold create the
+complete phenotype deterministically, then normal validation, javac, Integration,
+semantic probe, and match evaluation continue. Equal normalized policy,
+compiler version, and scaffold must yield byte-identical source. Compiler,
+validation, or javac failure retains stage evidence and uses the canonical
+failure sentinel; no LLM fallback is allowed. Fitness, objective, self-play,
+fixed-roster, and selection formulas are unchanged.
+
+Candidate artifacts record mode, compiler version, and
+`active_genotype_components`; deterministic values are exactly
+`["strategy_prompt"]`. Compiler evidence uses `generation/compiler_evidence.json`
+(`eagle-dsl-materialization-v1`), `generation/normalized_policy.json`,
+`generation/compiled_candidate.java`, and `generation/scaffold.java`. Evidence readback checks the normalized policy, emitted source, and scaffold hashes; resume checks the configured scaffold hash against persisted evidence. The result records operation
+`deterministic_dsl_compile`, policy/scaffold/source hashes, deterministic
+diagnostics, and an empty `llm_attempts` array. Deterministic candidate snapshots
+use `eagle-candidate-v7`, and their generation results use `phase4-v7`;
+shared downstream stage schemas retain their existing versions. The LLM path retains `eagle-candidate-v6`
+and `phase4-v6`. Deterministic configuration requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`; any other values are rejected. Resume rejects unknown compiler versions, protocol mismatches,
+and attempts to cross materialization modes before replay. Historical configs
+without the field remain LLM mode. Focused contracts and bounded real self-play
+validation pass; see `testing/test_contracts.md` for verification and environment
+limitations.

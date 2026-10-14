@@ -1,6 +1,6 @@
 # Artifact schema
 
-## DSL and pre-crossover source contract (2026-10-11)
+## DSL and pre-crossover source contract (LLM materialization mode)
 
 New `strategy_prompt` payloads are canonical `eagle-strategy-dsl-v1` JSON;
 historical natural-language artifacts are read-only and incompatible resume is
@@ -29,9 +29,7 @@ current, with an additional `strategy_policy_format` field; operator state uses
 resume under the changed algorithm.
 
 
-This document owns the current `eagle-run-v2`, `eagle-generation-v3`, and
-`eagle-candidate-v6` layout (`phase4-v6`). Timing and lineage fields are defined by
-`timing_schema.md` and `lineage_schema.md`.
+This document owns the LLM-mode `eagle-run-v2`, `eagle-generation-v3`, and `eagle-candidate-v6` layout (`phase4-v6`), plus the deterministic-mode artifact version described below. Timing and lineage fields are defined by `timing_schema.md` and `lineage_schema.md`.
 
 ## Run root
 
@@ -53,7 +51,7 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete primary `model` section and optional `generation_model` section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda`, `candidate_java_mode`, and `parent_evaluation_mode`, reflection mode/probabilities, and evaluation matrix. The resolved `evaluation.match_workers` records the bounded match scheduler setting used by normal evaluation, AOS head-to-head, and final-test; the benchmark-derived default is `10` and can be overridden per run. `match_timeout_seconds` and `match_artifact_mode` remain top-level because they describe process limits and evidence retention, not scheduling. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete primary `model` section and optional `generation_model` section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda`, `candidate_java_mode`, `java_materialization_mode`, `java_compiler_version`, and `parent_evaluation_mode`, reflection mode/probabilities, and evaluation matrix. Deterministic mode requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`. The resolved `evaluation.match_workers` records the bounded match scheduler setting used by normal evaluation, AOS head-to-head, and final-test; the benchmark-derived default is `10` and can be overridden per run. `match_timeout_seconds` and `match_artifact_mode` remain top-level because they describe process limits and evidence retention, not scheduling. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status,
 experiment/reflection identity, `model_name`, `generation_model_name`, and
@@ -62,7 +60,8 @@ interrupted/failed records include resumability and their interruption/failure
 metadata without replacing the last atomic generation. It never embeds the
 config. `summary.json` stores completion/reporting fields, final population IDs,
 and a reference to the best runnable candidate in the final population; the
-reference is `null` when every final candidate failed. It does not copy
+reference is
+null` when every final candidate failed. It does not copy
 candidate snapshots.
 
 `timing.jsonl` is the canonical append-only run timing stream. Archive data lives only below `archives/`.
@@ -195,12 +194,14 @@ attempts or `generation/attempts/` directory.
 
 `extracted_candidate.java` is the normalized text extracted from the model's
 complete-file response and therefore preserves model-authored fixed-region
-drift for audit. `normalized_candidate.java` is the configured canonical
+drift for audit.
+normalized_candidate.java` is the configured canonical
 scaffold with only that extracted file's strategy region inserted. Structural
 envelope and security checks run before this assembly, so normalization does not
 turn a partial or prohibited response into a valid source. Validation, javac,
 the promoted phenotype, source hashes used by matches, and compile-repair parent
-source references all use `normalized_candidate.java`.
+source references all use
+normalized_candidate.java`.
 
 For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
 retains the configured seed policy and `generation/result.json` records
@@ -269,7 +270,8 @@ fidelity and code correctness. The revision request contains the
 exact parsed conclusion, the explicit interface/unit reference, and the
 source-matching validation/compiler diagnostics supplied to the diagnosis; neither
 Code Reflection stage receives gameplay-performance evidence. When every dimension
-passes, revision status is `not_required` and the parent Java is preserved. A
+passes, revision status is
+ot_required` and the parent Java is preserved. A
 successful reflected source enters the normal generation attempt ledger as
 `code_reflection_output` but causes no additional final Generator LLM request.
 Between diagnosis and the generation-wide materialization phase, its schema is
@@ -278,8 +280,7 @@ updates the same artifact to its terminal status without discarding the original
 diagnosis/evidence. `reflection_model` and `revision_model` separately identify
 the primary and generation-phase models.
 
-Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
-optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated
+Resume rebuilds a `Candidate` from `candidate.json` plus mode-specific active genotype files, optional inactive compatibility data, phenotype, evaluation, code-quality, and timing files. The loader has isolated
 fallback reads for old prompt/phenotype paths, but ignores legacy
 `previous_code` and phenotype-parent provenance. New writers never emit them.
 `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
@@ -401,3 +402,26 @@ faults separately; a recovered containment is an explicit neutral draw rather
 than a candidate win. Incomplete indexed entries are
 resumed before unindexed configs; completed entries are skipped. Index paths
 written by new batches and accepted by folder resume are absolute.
+
+
+## Deterministic Java materialization artifacts
+
+Deterministic candidates retain canonical `phenotype/CandidateAgent.java` as the
+phenotype. The generation directory additionally owns
+`generation/compiler_evidence.json` (`eagle-dsl-materialization-v1`),
+
+`generation/normalized_policy.json`, `generation/compiled_candidate.java`, and `generation/scaffold.java`. Evidence records
+`operation: deterministic_dsl_compile`, `materialization_mode`, compiler
+version, normalized policy, policy/scaffold/source hashes, diagnostics, empty
+`llm_attempts`, and compiler timing. `generation/result.json` carries the same
+mode/version/hash identity. Deterministic candidates use
+`candidate_schema_version: eagle-candidate-v7`; its `generation/result.json`
+uses `artifact_schema_version: phase4-v7`. Shared validation, compilation,
+integration, and evaluation stage schemas retain their existing versions.
+LLM mode retains `eagle-candidate-v6` and `phase4-v6`.
+
+Candidate snapshots identify `active_genotype_components`; this is exactly
+`["strategy_prompt"]` in deterministic mode. Stored `generation_prompt` or
+inherited Java is inactive compatibility data and does not determine source.
+Resume rejects mode/protocol mismatch and unsupported compiler versions before
+replay; an absent field in an old config means `llm`.

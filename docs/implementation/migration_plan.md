@@ -1,6 +1,6 @@
 # Migration plan
 
-## DSL and pre-crossover source contract (2026-10-11)
+## LLM-mode DSL and pre-crossover source contract (2026-10-11)
 
 The [integration plan](dsl_pre_crossover_reflection_plan.md) migrates policy seeds
 and producers to canonical JSON DSL, gates every source before variation, preserves
@@ -54,3 +54,14 @@ compatibility layers.
 ## Maintainability migration (2026-10-02)
 
 The [refactor plan](maintainability_refactor_plan.md) precedes implementation. Python owners are consolidated under `eagle`; each EA operator remains independent, and generation/search/evaluation phase owners are split without a compatibility layer. Callers, test patch targets, packaging and resource roots migrate together. Verification is recorded in the plan.
+
+
+## Deterministic DSL materialization migration
+
+This migration adds `deterministic_dsl` while preserving historical `llm`
+materialization as the missing-field default. It versions policy-only active
+genotype state, compiler/source evidence and timing, and mode/compiler resume
+fences. It is complete only after the compiler golden suite, artifact/timing and
+resume contracts, bounded real Java/MicroRTS integration, and deterministic smoke
+run all pass. These checks pass for the implementation; results are recorded in
+`../testing/test_contracts.md`. No full evolutionary experiment is part of this migration.

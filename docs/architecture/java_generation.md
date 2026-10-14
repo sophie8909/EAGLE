@@ -1,6 +1,6 @@
 # Java generation, validation, and compilation
 
-The Generator is the normal genotype-to-phenotype decoder. A successful Code
+The processing details before "Deterministic DSL materialization" describe `java_materialization_mode: llm`. In that mode, the Generator is the normal genotype-to-phenotype decoder. A successful Code
 Reflection is the one exception: its deferred revision returns a complete Java
 phenotype and therefore enters validation/compilation directly. Both operations
 run in the final generation-wide materialization phase, after all offspring
@@ -14,19 +14,19 @@ the next generation's reflection phase. Without it, `model` owns both phases.
 
 ## Exact input and output
 
-Input in every mode:
+LLM materialization inputs:
 
 - `strategy_prompt` as the game-playing policy;
 - `generation_prompt` as reusable policy-to-Java translation instructions;
 - the fixed checked-in Java scaffold, action API guide, and structural/security constraints.
 
-Additional input in `inherited_genotype` mode:
+Additional LLM input in `inherited_genotype` candidate mode:
 
 - the complete Java component selected from the Java parent, or the configured
   no-op Java seed at generation zero.
 
-Default mode receives no parent Java. Inherited mode receives the selected Java
-component as revision context. Neither mode receives game logs or may independently
+The default candidate-state mode receives no parent Java. Inherited candidate mode receives the selected Java
+component as revision context. Neither candidate-state mode receives game logs or may independently
 improve the policy. Output is one complete `ai.generated.CandidateAgent` Java
 source file; patches, methods, JSON, prose, and partial source are rejected.
 
@@ -149,3 +149,19 @@ for intent fidelity.
 Hard tests prove the default request uses the checked-in scaffold rather than
 `parent.generated_java`, the inherited request includes its explicit Java
 component, and Generator/Evaluation preserve every active genotype input.
+
+
+## Deterministic DSL materialization
+
+`java_materialization_mode: deterministic_dsl` compiles normalized
+`eagle-strategy-dsl-v1` through `eagle/generation/dsl_java_compiler.py` and the
+canonical scaffold. Its active inputs are normalized policy, compiler version
+`eagle-dsl-java-v1`, and scaffold; `generation_prompt` and inherited Java are
+inactive. Protocol is `eagle-dsl-compiler-v1`. The typed-IR emitter is fixed and
+must produce byte-identical complete Java for the same normalized policy,
+compiler version, and scaffold. It calls no Java Generation, Code Reflection,
+Prompt Reflection, or compile-repair LLM. The resulting full source continues
+through normal Java validation, one javac attempt, Integration, semantic probe,
+and evaluation. Compiler/validation/javac failure stays at its actual failure
+stage with source, hashes, diagnostics, and canonical fitness sentinel; no LLM
+fallback is allowed. Unknown compiler versions fail resume explicitly.

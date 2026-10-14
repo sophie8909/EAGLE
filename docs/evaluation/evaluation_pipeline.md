@@ -1,44 +1,25 @@
 # Evaluation pipeline
 
-`eagle/evaluation/pipeline.py` owns the candidate evaluation boundary. Bounded decoder attempts live in `decoding.py`; opponent setup lives in `opponents.py`; ordered match dispatch lives in `matches.py`; shared typed results live in `records.py`. It performs Java
-generation, validation, compilation, integration, the complete MicroRTS
-matrix, diagnostics, objective construction, and candidate artifact writing.
+`eagle/evaluation/pipeline.py` owns the candidate evaluation boundary. LLM decoding lives in `decoding.py`; deterministic Java materialization uses the versioned DSL compiler. Opponent setup lives in `opponents.py`; ordered match dispatch lives in `matches.py`; shared typed results live in `records.py`. Both modes share validation, compilation, integration, semantic probes, matches, diagnostics, objective construction, and candidate artifact writing.
+
 
 ## Active stages
 
 | Stage | Success output | Failure evidence |
 | --- | --- | --- |
-| Java generation | complete `CandidateAgent.java` | generation response and validation failure |
+| Java materialization | complete `CandidateAgent.java` from LLM decoding or deterministic DSL compilation | mode-specific generation/compiler evidence |
 | Source validation | validated source | validation diagnostics |
 | Compilation | isolated class directory | compiler stdout/stderr and structured errors |
 | Integration | loadable MicroRTS agent | seven integration checks |
-| Match execution | 180 matches across ten active cases | retained match results and runtime failure |
 | Semantic probing | nine canonical action hashes in self-play | diagnostic unavailable record; fitness unchanged |
+| Match execution | 180 matches across ten active cases | retained match results and runtime failure |
 | Objective construction | ten fixed-roster cases or one self-play Game Performance score | matching `-1000.0` fitness on failure |
 
-`decode_validate_compile_candidate` is the single production boundary for the
-first three rows and can be called by a decoder smoke without launching
-Integration or the 180-match matrix. `evaluate_candidate` consumes that helper;
-it does not maintain a second retry implementation. Attempt 1 uses the active
-genotype request (two prompts, plus inherited Java when configured); extraction
-failures may repeat that request, while a complete
-source's validation/javac failure produces the next compile-repair request from
-that source and only its structured diagnostics. Every attempt has an isolated
-source/classes workspace and compiles each validated source no more than once.
-Only the first compilation success is promoted. Exhaustion classifies the final
-attempt's generation, validation, or compilation failure; an Integration failure
-never re-enters the decoder.
+`decode_validate_compile_candidate` is the shared production boundary for materialization, validation, and compilation; in LLM mode, a decoder smoke can call it without launching Integration or the match matrix. It owns bounded generation and compile-repair attempts and promotes only the first successful compilation. A validation or javac failure may inform another decoder request; Integration failures never re-enter LLM decoding.
 
-Inherited `configured_seeds` generation zero uses this same bounded decoder for
-every replicated population slot, so a population of ten records ten separate
-requests/responses and can produce ten different Java phenotypes. In inherited
-`llm_generated_policies` mode, policy-only initialization calls occur before
-this boundary, then every policy is independently decoded to Java. WorkerRush
-Java is inherited request context and is never substituted for that policy's
-generation-zero phenotype.
-Later generations pass the independently selected Java component into the base
-and compile-repair requests without mutating that stored input during evaluation.
+In deterministic mode, the typed-IR compiler emits complete Java and compiler evidence without an LLM or repair request. Validation or javac failure is terminal and retains stage diagnostics. Both modes continue through Integration, self-play semantic probes, and configured match evaluation.
 
+In LLM mode, inherited `configured_seeds` generation zero uses the bounded decoder for every replicated population slot, so each records a separate request and can produce its own Java phenotype. In LLM-mode `llm_generated_policies`, policy-only initialization calls occur before decoding; every policy is then independently decoded to Java. WorkerRush Java is inherited request context, never the policy's generation-zero phenotype. Later LLM generations pass the independently selected Java component into base and compile-repair requests without mutating that stored input during evaluation.
 The seven-check Integration probe is deliberately smaller than a match but is
 not an empty-state smoke: it loads separate populated 8×8 bases/workers maps,
 invokes independent one-argument agent instances for the two player sides, and

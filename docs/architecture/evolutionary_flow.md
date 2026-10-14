@@ -4,6 +4,8 @@ This document describes the active implementation. Fixed-roster evaluation
 uses ten opponent cases. Self-play uses scalar Game Performance plus exact
 behavior signatures only when scalar fitness is tied.
 
+Unless a step is marked otherwise, the population lifecycle below describes `java_materialization_mode: llm`; deterministic DSL behavior is specified in its own section.
+
 ## Population lifecycle
 
 1. In default `generated_phenotype` mode, create one candidate per configured
@@ -51,7 +53,8 @@ behavior signatures only when scalar fitness is tied.
    Selection fails explicitly if fewer than the configured population size
    completed candidates remain.
    This is the `(mu + lambda)` environmental-selection model; when both sets
-   have size `n`, it is the requested `(n + n)` form. The canonical default
+   have size
+`, it is the requested `(n + n)` form. The canonical default
    `parent_evaluation_mode: reuse_cached` uses the existing evaluated parents.
    The explicitly non-canonical diagnostic treatment
    `regenerate_same_genotype` is restricted to `inherited_genotype` plus
@@ -144,3 +147,15 @@ AOS probability plot.
 
 See [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md) for
 the complete data and artifact contract.
+
+
+## Deterministic Java materialization
+
+When `java_materialization_mode` is `deterministic_dsl`, only `strategy_prompt`
+is active genotype. Whole-policy copy/crossover and Strategy mutation remain
+available; rule-level crossover, Prompt Reflection, Code Reflection/source
+repair, Java generation, and compile-repair LLM requests are disabled. Compiler
+output follows the existing validation, javac, Integration, semantic-probe, and
+evaluation path. A deterministic compiler or javac failure does not fall back to
+LLM. Resolved protocol/compiler versions are `eagle-dsl-compiler-v1` and
+`eagle-dsl-java-v1`.

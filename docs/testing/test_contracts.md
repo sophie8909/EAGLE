@@ -1,6 +1,6 @@
 # Test contracts
 
-## DSL and pre-crossover source contract (2026-10-11)
+## LLM-mode DSL and pre-crossover source contract (2026-10-11)
 
 Test canonical DSL validation, ordered rules, intrinsic legality guards, idle
 empty rules, unknown-field rejection, and seed/LLM/rewrite boundaries. Verify each
@@ -28,21 +28,21 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 
 | Area | Required proof |
 | --- | --- |
-| Candidate | default two-prompt mode and opt-in prompt/prompt/Java mode; generation-qualified automatic IDs and explicit-ID preservation; inherited Java versus generated phenotype separation; terminal failure retains state |
-| Lineage | seed/copy/crossover/mutation schemas; prompt and optional Java parent IDs resolve; graph acyclic |
-| Crossover | independent whole-component choices for both prompts and, when enabled, Java; exact provenance; equal-text case; default mode has no Java inheritance |
-| Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
-| Prompt Mutation | Strategy-region Policy-Code Reviewer → exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; only code-generation prompt changes; no raw game logs |
-| Independent Code source gate | Policy + selected parent Java + immutable gameplay/API/scaffold context → structured diagnosis during reflection phase → deferred complete corrected Java during final materialization → direct validation/compilation; both prompt genes and inherited Java input are preserved; no W/D/L, matches, traces, fitness, or reusable generation prompt; source-matching compiler diagnostics are allowed; successful output is not overwritten by Generator |
-| Generation | each source-policy/Java check precedes actual crossover/mutation; all contributors must pass; all reflection/rewrite work precedes final Java materialization; optional distinct generation model switches only at that boundary; resolved experiment seed is present in every OpenAI-compatible LLM request; default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one Java decode per policy with WorkerRush only as inherited context; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
+| Candidate | in `llm` mode, default two-prompt and opt-in prompt/prompt/Java modes; in deterministic mode, active policy-only genotype; generation-qualified automatic IDs and explicit-ID preservation; inherited Java versus generated phenotype separation; terminal failure retains state |
+| Lineage | seed/copy/crossover/mutation schemas; active component parent IDs resolve for the selected materialization mode; graph acyclic |
+| Crossover | in `llm` mode, independent whole-component choices for both prompts and, when enabled, Java; in deterministic mode, whole-policy only; exact provenance; equal-text case; default mode has no Java inheritance |
+| Strategy Mutation | Strategy mutation in both modes; in `llm`, Commentator per selected match → Coach → final Java generation; in deterministic mode → policy compiler; only policy changes; no Java/code-prompt evidence |
+| Prompt Mutation | in `llm` only: Strategy-region Policy-Code Reviewer → exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; only code-generation prompt changes; no raw game logs |
+| Independent Code source gate | in `llm` only: Policy + selected parent Java + immutable gameplay/API/scaffold context → structured diagnosis during reflection phase → deferred complete corrected Java during final materialization → direct validation/compilation; LLM-mode prompt genes and configured inherited Java input are preserved; no W/D/L, matches, traces, fitness, or reusable generation prompt; source-matching compiler diagnostics are allowed; successful output is not overwritten by Generator |
+| Generation | in `llm`: each source-policy/Java check precedes actual crossover/mutation; all contributors must pass; all reflection/rewrite work precedes final Java materialization; optional distinct generation model switches only at that boundary; resolved experiment seed is present in every OpenAI-compatible LLM request; default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one Java decode per policy with WorkerRush only as inherited context; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, direct strategy-map reads rejected in favor of bounds-safe `isFreeCell`, and no fixed internal layout |
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |
 | Matches | one promoted source/class tree; complete configured matrix with resolved per-map tick caps in normal, AOS head-to-head, and final-test execution; a real distinct WorkerRush; pinned AllInBot original JAR/class plus separately compiled reflection adapter; a contained upstream fault remains `ok` but is a machine-readable neutral draw, never a candidate win/failure; population-summed generation counts; distinct directories and round indices; both sides; no fake match-seed property; no regeneration after Integration starts |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
-| Artifacts | run-v2/generation-v3 and phase4-v6/candidate-v6 contracts; v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |
-| Timing | UTC fields, monotonic durations, attempts, optional null stages, 180 match durations; match timing lives in `result.json`; deterministic-mode match seeds are stable and persisted |
+| Artifacts | run-v2/generation-v3, with LLM phase4-v6/candidate-v6 and deterministic phase4-v7/candidate-v7 contracts; v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |
+| Timing | UTC fields, monotonic durations, LLM attempts or deterministic materialization timing, optional null stages, 180 match durations; match timing lives in `result.json`; deterministic-mode match seeds are stable and persisted |
 | Opponent-wise lexicase | exactly ten maximized opponent cases; seeded case-order filtering; joint parent-plus-offspring selection without replacement; failed offspring cannot displace completed parents; fixed-size survivor behavior |
 | Self-play | explicit config gating; validated FIFO opponent-library capacity; failed/incomplete phenotype exclusion from the library; empty-valid-pool failure; persisted opponent-library seed/merge at the five-generation boundary; LISS-style exact semantic probe/action-vector deduplication with v1 readback/v2 writes; deterministic library selection and ten `self_play_*` uniform diagnostic slots; scalar Game Performance objective; inclusive `1.0` non-chained tiers; all-failed survivor-pool rejection; semantic second-parent/boundary-survivor diversity; deterministic cycling; immutable context IDs; zero-LLM phenotype-preserving parent refresh; mismatched-context rejection; library/context readback; legacy checkpoint migration; resume parity |
 | Semantic signatures | exactly three maps × early/mid/late states; full compiled agent actions; deterministic canonical hashes and cache hits; dataset-scoped exact equivalence; missing/incompatible fallback; artifact-only offline analysis |
@@ -120,3 +120,53 @@ switching is exact, PID reuse cannot satisfy ownership, unrelated processes are
 never stopped, verified stale state is cleaned, and all EA LLM operations use
 the same resolved endpoint/model identity. Actual shell and direct-Python mock
 commands remain required workflow checks in addition to unit tests.
+
+
+## Deterministic Java materialization
+
+Prove byte-identical output for equal normalized policy/compiler/scaffold inputs;
+all DSL actor, condition, metric, selector, action, ordering, fallthrough,
+reservation, hash-index (including signed long overflow), and return semantics; validation/javac of golden sources;
+no generation, Code Reflection, Prompt Reflection, or compile-repair backend call;
+stage-correct failure with compiler evidence and no LLM fallback; exact active
+genotype metadata; empty/null `generation_llm`; child-total inclusion of
+`java_materialization`; hash readback; and explicit mode/compiler resume rejection.
+Bounded real validation covers WorkerRush, adjacent/distant return, and
+choose/hashed behavior plus a deterministic smoke run with zero Java LLM calls,
+reconstructible source, complete semantic probe, and executable matches. Do not
+run the full evolutionary experiment for this contract.
+
+### Verification recorded on 2026-10-14
+
+Use the existing project virtual environment for repository validation:
+
+```bash
+.venv/bin/python -m compileall -q eagle
+.venv/bin/python -m unittest discover -s tests
+.venv/bin/python -m eagle experiment --config-dir configs/experiments/deterministic_smoke.yaml --skip-final-test
+git diff --check
+```
+
+| Evidence | Result |
+| --- | --- |
+| DSL compiler contracts | 9 tests pass, including every comparison/metric, field-order invariance, current WorkerRush policy, legal selector/choose indices, busy-unit rank, priority/fallthrough, reservations and explicit no-op idle. |
+| Real golden source checks | Empty, WorkerRush and full-grammar snapshots each pass source validation, javac and all 7 Integration checks. |
+| Dedicated return and seed scaffolds | 4 tests pass; adjacent return transfers a carried resource, distant return moves, no nullable Harvest is constructed, and both existing seed scaffolds compile/integrate. |
+| Materialization, launcher and resume | 35 targeted tests pass, including legacy manifests without protocol fields, unknown versions/schema/hash rejection, one javac and zero Java-backend calls. |
+| Prompt resources and analysis | 26 tests pass in the project environment. Explicit WorkerRush seed configs remain supported; inactive deterministic generation prompts are not asserted as active. |
+| Stage ordering and timing | Integration precedes the diagnostic probe, then matches. Simulated 3-second probe + 5-second matches remain in the 8-second evaluation span and child total. |
+| Final repository regression | 585 tests complete with zero failures/errors and one existing skipped GUI match test; see `runs/deterministic_full_regression_final.log`. |
+
+Real smoke evidence lives in `runs/20261014_144034_023082`, with
+`deterministic_smoke_audit.json` recording two evaluated candidates, 180 real
+matches per candidate, 7 passed Integration checks, 9 complete semantic probes,
+zero LLM request events, and byte-identical reconstruction from the saved policy
+and scaffold. Both sources hash to
+`011184423f80f3465bbd45e5c928fbecd0ff216f3609e6e82d9a4e30c04f0ffb`.
+Run outputs are local evidence, not tracked historical artifacts.
+
+The smoke uses the existing self-play library because this local checkout lacks
+`third_party/gui_opponents/jars/allibot.jar`. Fixed-roster contracts remain covered
+by unit/regression tests; a real fixed-roster smoke requires that existing asset.
+The 1- and 10-tick trial caps were too short for three distinct actionable phases;
+the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.

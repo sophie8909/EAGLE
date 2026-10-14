@@ -2,52 +2,41 @@
 
 ## Genotype and phenotype modes
 
-Every candidate has two evolvable prompt components:
+In `java_materialization_mode: llm`, active genes are `strategy_prompt` and
+`generation_prompt`. The default `candidate_java_mode: generated_phenotype`
+keeps complete Java as phenotype/evidence; `inherited_genotype` adds a complete
+pre-generation Java component that the Generator revises into the phenotype.
 
-| Concept | Current field | Meaning |
-| --- | --- | --- |
-| Policy gene | `strategy_prompt` | Canonical versioned JSON DSL policy (`policy_prompt` conceptually). |
-| Translation gene | `generation_prompt` | Canonically rendered, bounded reusable rules for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
+`java_materialization_mode` is independent of candidate Java state mode. An
+absent value defaults to `llm` for old configs. In `deterministic_dsl`, only the
+complete `strategy_prompt` is active genotype. Generation prompt and optional
+inherited Java are inactive compatibility data and do not participate in
+materialization, crossover, or mutation. Candidate snapshots record mode,
+compiler version, and `active_genotype_components: ["strategy_prompt"]`.
+Deterministic mode uses whole-policy copy/crossover only; it has no rule-level crossover. New deterministic configs require `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`.
 
-In the default `generated_phenotype` mode, the complete
-`ai.generated.CandidateAgent` Java source remains non-inherited phenotype and
-Prompt/Code Reflection evidence. In explicit `inherited_genotype` mode, a third
-pre-generation component stores the complete inherited Java source and its
-parent ID. The Generator revises it into the candidate's new Java phenotype;
-that successful phenotype is eligible for independent Java-component
-inheritance by children.
-
-Code checks and corrective children retain their exact source Java in
-`inherited_java` with `java_parent_id` for repair provenance in either mode.
-In default mode this is operator input/evidence; ordinary crossover still
-inherits only the two prompt genes.
-
-Default-mode generation-zero seeds use one checked-in callable no-op phenotype.
-Inherited `configured_seeds` mode requires one seed policy, copies it to
-`population_size`, gives every copy the same Java component, and invokes the
-Generator separately. Inherited `llm_generated_policies` mode retains the one
-configured policy, generates each remaining policy gene with an independent LLM
-call, and gives every candidate WorkerRush Java as the same inherited component.
-Every policy then independently invokes the Generator, so its generated Java is
-the generation-zero phenotype. Subsequent variation operates on the normal
-three-component genotype.
+LLM-mode initialization and inheritance continue to follow the configured
+`generated_phenotype`/`inherited_genotype` and seed initialization modes. The
+Generator call and inherited-Java context apply only when materialization mode is
+`llm`; deterministic materialization consumes normalized policy and the canonical
+scaffold.
 
 ## Policy contract
 
 `strategy_prompt` stores canonical `eagle-strategy-dsl-v1` JSON, validated by
 `eagle/strategy_dsl.py`. Ordered rules contain `actor`, `when`, `action`; intrinsic
-legality guards are fixed, and empty rules idle. Java generation implements this
-policy offline without a runtime DSL interpreter. New runs reject natural language.
-Every selected source is gated against its own policy/exact Java before variation.
-Corrective children preserve one parent's genes and provenance; failed checks
-cannot enter crossover/mutation. See [mutation](mutation.md) for the gate contract.
+legality guards are fixed, and empty rules idle. The LLM Generator or the
+`deterministic_dsl` compiler implements this policy offline without a runtime
+DSL interpreter. New runs reject natural language. The independent Java source
+gate and corrective Code Reflection apply only to `llm` mode. See
+[mutation](mutation.md) for the mode-specific mutation contract.
 
 ## Required logical fields
 
 | Group | Fields |
 | --- | --- |
 | Identity | `candidate_id`, `generation`, `parent_ids` |
-| Genotype | `strategy_prompt`, `generation_prompt`, and optional inherited Java input |
+| Genotype | `active_genotype_components`; mode-specific prompt and optional inherited Java values |
 | Phenotype | `generated_java`, `generated_java_path` |
 | Variation | `operator`, `mutation_type` |
 | Component provenance | `strategy_parent_id`, `generation_prompt_parent_id`, optional `java_parent_id` |
@@ -61,23 +50,25 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 ## Construction invariants
 
 - A child genotype is complete only when every active component and its provenance are known.
-- Whole-component uniform crossover makes two independent prompt choices and,
-  in inherited mode, one independent Java choice.
-- Strategy Reflection may change only `strategy_prompt`.
-- Prompt Reflection may change only `generation_prompt`.
-- Successful Prompt Reflection applies a structured rule delta and deterministically
-  renders `generation_prompt`; policy-specific checklists and Java fragments are
-  rejected at the rewrite boundary.
-- Code Reflection preserves both prompt genes, records a structured diagnosis,
-  and directly revises the selected parent Java from that conclusion; its
-  successful result bypasses the final Generator.
-- Generator, Code Reflection, and Evaluation do not modify either prompt gene.
-- Generator uses the canonical checked-in scaffold. Only inherited mode also
-  receives the selected parent Java component.
-- Failure never erases genotype, partial phenotype, lineage, mutation evidence, or timing.
-- `semantic_signature` describes the compiled full agent on the versioned probe
-  dataset; it is distinct from prompt-derived `strategy_signature` metadata.
-
+- In `llm` mode, whole-component crossover chooses the two prompt genes
+  independently and, in inherited mode, Java independently.
+- In `deterministic_dsl` mode, whole-policy copying/crossover is the only
+  genotype operation; rule-level crossover is absent.
+- Strategy mutation may change only `strategy_prompt` in either materialization
+  mode.
+- Prompt Reflection may change only `generation_prompt` in `llm` mode and is
+  disabled in deterministic mode.
+- Code Reflection preserves active genes and revises Java only in `llm` mode;
+  deterministic mode disables Code Reflection and source repair.
+- Java materialization and Evaluation do not modify active genotype
+  components.
+- The LLM Generator uses the canonical scaffold and receives selected parent
+  Java only in inherited candidate mode. The deterministic compiler uses
+  normalized policy and canonical scaffold only.
+- Failure never erases genotype, partial phenotype, lineage, mutation
+  evidence, or timing.
+- `semantic_signature` describes the compiled full agent on the versioned
+  probe dataset; it is distinct from prompt-derived `strategy_signature` metadata.
 ## Compatibility
 
 New candidate artifacts use `genotype/policy_prompt.txt`,

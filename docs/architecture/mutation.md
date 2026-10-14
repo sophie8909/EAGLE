@@ -1,6 +1,6 @@
 # Mutation responsibility boundaries
 
-Normal mutation has exactly two mutually exclusive operators: Strategy changes the
+The Strategy/Prompt/Code workflows below describe `java_materialization_mode: llm`. In that mode, normal mutation has exactly two mutually exclusive operators: Strategy changes the
 DSL policy gene and Prompt changes the reusable policy-to-Java translation gene.
 Independent Code Reflection gates reproduction sources before actual variation.
 
@@ -22,7 +22,7 @@ all-match global evaluation summary + selected diagnosis
   -> final Java Generator
 ```
 
-The Match Commentator receives the current policy, opponent, map, side, result,
+In `llm` mode, the Match Commentator receives the current policy, opponent, map, side, result,
 allowlisted match record, canonical trace, and immutable closed-world MicroRTS
 gameplay contract. It receives no Java, generation prompt, compiler diagnostics,
 or fitness-writing task. If the selected worst match has no usable trace or its
@@ -40,7 +40,7 @@ response must be a legal game action.
 
 ## Prompt Reflection
 
-Prompt Reflection is the behavior formerly named Code Reflection. It changes
+In `llm` mode, Prompt Reflection is the behavior formerly named Code Reflection. It changes
 only `generation_prompt`:
 
 ```text
@@ -79,7 +79,7 @@ is translated into Java offline; there is no runtime interpreter. New runs rejec
 natural-language policies. Historical natural-language artifacts remain read-only;
 incompatible old checkpoints fail resume clearly, without silent conversion.
 
-Every selected reproduction source passes an independent Code Reflection gate
+In `llm` mode, every selected reproduction source passes an independent Code Reflection gate
 against its own policy and exact Java before actual crossover or mutation. All
 contributors must be healthy. A diagnosed defect instead creates a one-parent
 corrective Java child with unchanged policy/generation genes and source provenance,
@@ -135,18 +135,28 @@ Worker Rush subject. Its expected scopes are `strategy_prompt`,
 
 ## Hard invariants
 
-- Strategy preserves `generation_prompt` and inherited Java.
-- Prompt preserves `strategy_prompt` and inherited Java.
-- Code preserves both prompt genes and inherited Java input.
-- Every selected source is gated before actual crossover/mutation; normal
+- In `llm` mode, Strategy preserves `generation_prompt` and inherited Java.
+- In `llm` mode, Prompt preserves `strategy_prompt` and inherited Java.
+- In `llm` mode, Code preserves both prompt genes and inherited Java input.
+- In `llm` mode every selected source is gated before actual crossover/mutation; normal
   reflection/rewrite work completes before Java materialization.
-- A successful Code Reflection source bypasses the final Generator.
-- Optional `generation_model` owns ordinary final Java generation, deferred
+- In `llm` mode, a successful Code Reflection source bypasses the final Generator.
+- In `llm` mode, optional `generation_model` owns ordinary final Java generation, deferred
   Code revision, and compile-guided repair; otherwise the primary `model` owns
   those calls too.
-- Generator and Evaluation never change prompt genes or pre-generation Java.
+- Java materialization and Evaluation never change active genotype components.
 - Match Commentator/Coach exclude Java and generation prompts.
 - Prompt Reviewer excludes raw game logs and fixed-scaffold behavior.
 - Code diagnosis receives only strategy, parent Java, immutable contracts,
   interface/unit reference, and scaffold; Java revision additionally receives
   exactly that diagnosis and runs only for a reported defect.
+
+
+## Materialization-mode boundary
+
+In `llm` mode, Strategy and Prompt remain the normal mutually exclusive
+operators, and Code Reflection is the independent source gate. In
+`deterministic_dsl`, only Strategy mutation is selectable and credited; Prompt
+Reflection, Code Reflection/source repair, and the pre-crossover Java source gate
+are disabled. The active genotype is one complete policy component, with no
+rule-level crossover. Existing Strategy Reflection changes only that policy.

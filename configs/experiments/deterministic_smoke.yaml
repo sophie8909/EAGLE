@@ -1,0 +1,24 @@
+schema_version: experiment-v2
+experiment_name: deterministic_dsl_smoke
+java_materialization_mode: deterministic_dsl
+java_compiler_version: eagle-dsl-java-v1
+seed_prompt_files: [seeds/blank_policy.txt]
+population_size: 1
+generations: 1
+mutation_rate: 0
+crossover_rate: 0
+reflection_operator_mode: static
+strategy_reflection_probability: 1
+prompt_reflection_probability: 0
+code_reflection_probability: 0
+execution_mode: openai
+tick_limit: 100
+match_timeout_seconds: 30
+evaluation:
+  mode: self_play
+  match_workers: 10
+  semantic_probes:
+    enabled: true
+llm:
+  match_commentator:
+    enabled: false

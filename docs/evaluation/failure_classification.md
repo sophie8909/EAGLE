@@ -1,9 +1,6 @@
 # Failure classification and objective sentinels
 
-The evaluation pipeline records the first terminal stage and retains all
-earlier evidence. Any candidate that fails generation, extraction,
-validation, compilation, integration, runtime execution, timeout handling, or
-the expected complete batch receives the same objective sentinel:
+The evaluation pipeline records the first terminal stage and retains all earlier evidence. A candidate that fails materialization, validation, compilation, integration, runtime execution, timeout handling, or the expected complete batch receives the same objective sentinel:
 
 | Objective | Failure value | Direction |
 | --- | ---: | --- |
@@ -17,16 +14,7 @@ diagnostics, validation diagnostics, integration results, retained matches,
 and any diagnostic complexity metrics remain available in artifacts and
 reflection context.
 
-Bounded Java decoding retains every attempt's request, source, structured
-failure evidence, and repair-chain reference. A complete validation or javac
-failure may guide the next decoder attempt; an extraction failure has no source
-to repair and repeats the base request. The first validation+compilation success
-ends decoding and proceeds to Integration. If the configured attempt budget is
-exhausted, the final attempt determines the candidate's terminal generation,
-validation, or compilation failure. Earlier failures remain diagnostic and do
-not create extra fitness cases, and an exhausted source is not a canonical
-phenotype.
-
+LLM-mode bounded Java decoding retains each attempt's request, source, structured failure evidence, and repair-chain reference. A complete validation or javac failure may guide the next decoder attempt; extraction failure repeats the base request. The first successful validation and compilation proceeds to Integration. If the attempt budget is exhausted, the final attempt determines the terminal failure. Deterministic DSL materialization has no Java generation or compile-repair LLM: a compiler, validation, or javac failure is terminal and retains stage evidence.
 The Integration boundary is not a decoder-repair input. It runs a real
 populated 8×8 two-side probe with independent agent instances/states and checks
 `PlayerAction` integrity, safe issuance, and one cycle; an exception or invalid

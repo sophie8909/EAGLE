@@ -1,6 +1,6 @@
 # Timing schema
 
-## DSL and pre-crossover source contract (2026-10-11)
+## DSL and pre-crossover source contract (LLM materialization mode)
 
 Source Code diagnosis completes before actual crossover/mutation. Corrective
 Java revision is deferred to the generation-model boundary, retaining separate
@@ -14,6 +14,8 @@ LLM time. Each retained check has its `gate_candidate_id` and complete
 counted again as a healthy check. Generation aggregates include all three timing
 streams without double-counting.
 
+
+Existing `generation_llm` and reflection-attempt fields describe LLM materialization. The example below is an LLM-mode record; deterministic mode sets `generation_llm` to `null` and uses the compiler timing object specified below.
 
 This is the canonical owner of candidate and LLM-attempt timing fields. Normative source: specification section 25.
 
@@ -220,3 +222,13 @@ is stored in their role request/response envelopes with UTC start/finish fields
 and monotonic duration. Each Commentator/Coach attempt also writes exactly one
 run-level `llm_request` event with the same role and timing. Exact role prompts
 and responses remain candidate-owned and are not duplicated in `llm_logs/`.
+
+
+## Deterministic materialization timing
+
+Versioned deterministic timing uses `java_materialization` with schema
+`eagle-java-materialization-v1`, mode, compiler version, UTC start/end, monotonic
+duration, status, and nullable error. Its duration is included in child total.
+`generation_llm` is null with empty attempts; do not synthesize a zero-second
+request. Deterministic mode emits no Java generation, Code Reflection, or
+compile-repair `llm_request` timing event. LLM-mode timing remains unchanged.

@@ -1,5 +1,11 @@
 # Architecture gaps
 
+## Deterministic DSL compiler decision (2026-10-14)
+
+| ID | Gap | Decision | Verification | Status |
+| --- | --- | --- | --- | --- |
+| DSL-COMP-01 | Entity-target `move` endpoint and adjacent/self-target behavior | User explicitly decided that entity-target `move` uses the existing deterministic pathfinder to an adjacent position (range 1). Already adjacent, self-target and unreachable actions cannot issue and fall through; target filtering uses that same legal-step contract. Recorded in `prompts/strategy_dsl_reference.txt`. | Golden sources plus real adjacent/self-target/fallthrough fixtures in `tests/test_dsl_java_compiler.py`. | Resolved and implemented |
+
 ## DSL and pre-crossover source contract (2026-10-11)
 
 The [integration plan](dsl_pre_crossover_reflection_plan.md) tracks DSL/source-gate
@@ -35,3 +41,17 @@ Historical gap rows remain available in Git history.
 
 Do not add a gap for an intentionally unsupported historical interface. Add a
 gap only when executable source differs from the current architecture spec.
+
+## Deterministic materialization verification (2026-10-14)
+
+The typed compiler, dedicated return API, policy-only genotype, no-Java-LLM
+materialization, artifact hashes, timing, and strict deterministic resume fences
+are implemented. Legacy LLM manifests without a protocol field remain readable
+when their resolved config has the supported LLM protocol. Golden source, real
+Java/MicroRTS integration, and focused compatibility tests pass. The bounded
+self-play smoke has complete semantic probes and matches; final repository-wide
+regression results are recorded in `../testing/test_contracts.md`.
+
+The local checkout lacks the fixed-roster AllInBot JAR, so the real smoke uses
+the existing self-play protocol. No fitness/selection formula or third-party
+MicroRTS behavior was changed.
