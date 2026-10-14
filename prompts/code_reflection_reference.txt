@@ -7,6 +7,11 @@ resource, reachability, adjacency, occupancy, and range prerequisites are satisf
   coordinate.
 - commandHarvest(Unit worker, Unit resource, Unit base): assign a friendly Worker to
   harvest a neutral Resource and return it to a friendly Base.
+- commandReturn(Unit worker, Unit base, AgentContext context): require friendly
+  Worker, friendly Base, carried resources; move toward Base adjacency or issue
+  TYPE_RETURN when adjacent. This never creates a null-target Harvest.
+- commandPlannedAction(Unit actor, rts.UnitAction action, AgentContext context):
+  commit an exact currently legal primitive with cell/resource reservations.
 - commandTrain(Unit producer, UnitType unitType): a Base may train Worker; a Barracks may
   train Light, Heavy, or Ranged.
 - commandBuild(Unit worker, UnitType buildingType, int x, int y): a friendly Worker may
@@ -38,5 +43,5 @@ Complete available entity/unit list and Java symbols:
 - Heavy (heavyType): cost 2, 4 HP, attack range 1, damage 4; slower combat mover.
 - Ranged (rangedType): cost 2, 1 HP, attack range 3, damage 1.
 
-There are no other units, buildings, resources, observations, actions, or helper
-interfaces available to editable strategy code.
+The deterministic compiler also uses the reserved primitive interfaces documented
+in action_api_guide.txt. There are no other units, buildings or resources.

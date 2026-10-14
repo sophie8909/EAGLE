@@ -1,0 +1,12 @@
+{"version":"eagle-strategy-dsl-v1","rules":[
+{"actor":"Base","when":true,"action":{"type":"train","unit":"Worker","target":{"kind":"cell","selector":"first_free_adjacent"}}},
+{"actor":"Worker","when":{"all":[{"compare":{"metric":"actor_id_rank","op":"<","value":2}},{"compare":{"metric":"actor_resources","op":">","value":0}}]},"action":{"type":"return","target":{"kind":"entity","owner":"friendly","types":["Base"],"selector":"nearest"}}},
+{"actor":"Worker","when":{"compare":{"metric":"actor_id_rank","op":"<","value":2}},"action":{"type":"harvest","target":{"kind":"entity","owner":"neutral","types":["Resource"],"selector":"nearest"}}},
+{"actor":"Worker","when":{"compare":{"metric":"time","op":">=","value":5}},"action":{"type":"engage","target":{"kind":"entity","owner":"enemy","types":["Base","Barracks","Worker","Light","Heavy","Ranged"],"selector":"lowest_hp"}}},
+{"actor":"Barracks","when":{"compare":{"metric":"stockpile","op":">=","value":2}},"action":{"type":"choose","options":[{"type":"train","unit":"Light","target":{"kind":"cell","selector":"hashed_free_adjacent"}},{"type":"train","unit":"Ranged","target":{"kind":"cell","selector":"first_free_adjacent"}}]}},
+{"actor":"Light","when":{"compare":{"metric":"count","op":">","value":0,"entities":{"owner":"enemy","types":["Worker"]},"radius":5}},"action":{"type":"attack","target":{"kind":"entity","owner":"enemy","types":["Worker"],"selector":"highest_hp"}}},
+{"actor":"Heavy","when":{"compare":{"metric":"distance","op":"<","value":6,"entities":{"owner":"enemy","types":["Base"]}}},"action":{"type":"move","target":{"kind":"entity","owner":"enemy","types":["Base"],"selector":"farthest"}}},
+{"actor":"Ranged","when":{"any":[false,{"not":{"compare":{"metric":"actor_hp","op":"==","value":0}}}]},"action":{"type":"choose","options":[{"type":"attack","target":{"kind":"entity","owner":"enemy","types":["Worker"],"selector":"hashed"}},{"type":"engage","target":{"kind":"entity","owner":"enemy","types":["Base"],"selector":"lowest_id"}},{"type":"move","target":{"kind":"cell","selector":"hashed_free_adjacent"}},{"type":"idle"}]}},
+{"actor":"Worker","when":true,"action":{"type":"build","unit":"Barracks","target":{"kind":"cell","selector":"first_free_adjacent"}}},
+{"actor":"Worker","when":true,"action":{"type":"idle"}}
+]}

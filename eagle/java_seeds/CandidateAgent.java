@@ -1,6 +1,7 @@
 package ai.generated;
 
 import ai.abstraction.AbstractionLayerAI;
+import ai.abstraction.AbstractAction;
 import ai.abstraction.pathfinding.AStarPathFinding;
 import ai.abstraction.pathfinding.PathFinding;
 import ai.core.AI;
@@ -10,6 +11,8 @@ import java.util.List;
 import rts.GameState;
 import rts.PhysicalGameState;
 import rts.PlayerAction;
+import rts.ResourceUsage;
+import rts.UnitAction;
 import rts.units.Unit;
 import rts.units.UnitType;
 import rts.units.UnitTypeTable;
@@ -180,6 +183,64 @@ public final class CandidateAgent extends AbstractionLayerAI {
         return true;
     }
 
+    private boolean commandReturn(Unit worker, Unit base, AgentContext context) {
+        UnitAction planned = prepareReturn(worker, base, context);
+        return planned != null && commandReturn(worker, base, context, planned);
+    }
+
+    private boolean commandReturn(Unit worker, Unit base, AgentContext context, UnitAction planned) {
+        UnitAction expected = prepareReturn(worker, base, context);
+        if (expected == null || !expected.equals(planned)
+                || !commandPlannedAction(worker, planned, context)) {
+            return false;
+        }
+        actions.put(worker, new ReturnAction(worker, base, planned));
+        return true;
+    }
+
+    private UnitAction prepareReturn(Unit worker, Unit base, AgentContext context) {
+        if (context == null || context.gs != activeGameState || context.player != activePlayer
+                || !isIdleAlly(worker, context) || base == null
+                || worker.getType() != workerType || base.getType() != baseType
+                || base.getPlayer() != context.player || worker.getResources() <= 0
+                || !context.units.contains(base)) {
+            return null;
+        }
+        int dx = base.getX() - worker.getX();
+        int dy = base.getY() - worker.getY();
+        UnitAction action;
+        if (Math.abs(dx) + Math.abs(dy) == 1) {
+            int direction = dx == 1 ? UnitAction.DIRECTION_RIGHT
+                    : dx == -1 ? UnitAction.DIRECTION_LEFT
+                    : dy == 1 ? UnitAction.DIRECTION_DOWN : UnitAction.DIRECTION_UP;
+            action = new UnitAction(UnitAction.TYPE_RETURN, direction);
+        } else {
+            action = pf.findPathToAdjacentPosition(worker,
+                    base.getX() + base.getY() * context.gs.getPhysicalGameState().getWidth(),
+                    context.gs, context.reservations);
+        }
+        return action != null && context.gs.isUnitActionAllowed(worker, action)
+                && context.reservations.consistentWith(
+                        action.resourceUsage(worker, context.gs.getPhysicalGameState()), context.gs)
+                ? action : null;
+    }
+
+    private boolean commandPlannedAction(Unit actor, UnitAction action, AgentContext context) {
+        if (context == null || context.gs != activeGameState || context.player != activePlayer
+                || action == null || !isIdleAlly(actor, context) || !context.units.contains(actor)
+                || !actor.canExecuteAction(action, context.gs)
+                || !context.gs.isUnitActionAllowed(actor, action)) {
+            return false;
+        }
+        ResourceUsage usage = action.resourceUsage(actor, context.gs.getPhysicalGameState());
+        if (!context.reservations.consistentWith(usage, context.gs)) {
+            return false;
+        }
+        actions.put(actor, new PlannedUnitAction(actor, action));
+        context.reservations.merge(usage);
+        return true;
+    }
+
     private boolean commandTrain(Unit producer, UnitType unitType) {
         if (producer == null || producer.getPlayer() != activePlayer || unitType == null) {
             return false;
@@ -328,11 +389,57 @@ public final class CandidateAgent extends AbstractionLayerAI {
         final int player;
         final GameState gs;
         final List<Unit> units;
+        final ResourceUsage reservations;
 
         AgentContext(int player, GameState gs, List<Unit> units) {
             this.player = player;
             this.gs = gs;
             this.units = units;
+            this.reservations = gs.getResourceUsage().clone();
+        }
+    }
+
+    // One-cycle primitives retain the compiler's exact placement and reservations.
+    private static class PlannedUnitAction extends AbstractAction {
+        private final UnitAction action;
+        private boolean executed;
+
+        PlannedUnitAction(Unit actor, UnitAction action) {
+            super(actor);
+            this.action = action;
+        }
+
+        @Override
+        public boolean completed(GameState gs) {
+            return executed;
+        }
+
+        @Override
+        public UnitAction execute(GameState gs, ResourceUsage usage) {
+            executed = true;
+            return action;
+        }
+
+        @Override
+        public void toxml(util.XMLWriter writer) {
+            writer.tagWithAttributes("PlannedUnitAction", "unitID=\"" + getUnit().getID() + "\"");
+            writer.tag("/PlannedUnitAction");
+        }
+    }
+
+    private static final class ReturnAction extends PlannedUnitAction {
+        private final Unit base;
+
+        ReturnAction(Unit worker, Unit base, UnitAction action) {
+            super(worker, action);
+            this.base = base;
+        }
+
+        @Override
+        public void toxml(util.XMLWriter writer) {
+            writer.tagWithAttributes("Return", "unitID=\"" + getUnit().getID()
+                    + "\" base=\"" + base.getID() + "\"");
+            writer.tag("/Return");
         }
     }
 

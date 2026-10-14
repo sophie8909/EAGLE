@@ -7,6 +7,11 @@ methods only inside the strategy region.
 Issue actions only through these fixed helpers:
 - commandMove(Unit unit, int x, int y)
 - commandHarvest(Unit worker, Unit resource, Unit base)
+- commandReturn(Unit worker, Unit base, AgentContext context): a friendly Worker
+  carrying resources returns to a friendly Base; move toward its adjacent position
+  if distant, issue TYPE_RETURN if adjacent. Never pass a null Resource to Harvest.
+- commandPlannedAction(Unit actor, rts.UnitAction action, AgentContext context):
+  commit one currently legal primitive with resource and destination reservations.
 - commandTrain(Unit producer, UnitType unitType)
 - commandBuild(Unit worker, UnitType buildingType, int x, int y)
 - commandAttack(Unit attacker, Unit target)
@@ -19,7 +24,8 @@ Use these fixed lookup helpers instead of inventing engine queries:
 - ownBase(AgentContext context)
 - isFreeCell(AgentContext context, int x, int y)
 
-AgentContext exposes only context.player, context.gs, and context.units. The
+AgentContext exposes context.player, context.gs, context.units, and
+context.reservations (the current cycle ResourceUsage including planned actions). The
 following MicroRTS reads are allowlisted; do not call any unlisted method or
 field on GameState, PhysicalGameState, Player, Unit, UnitType, or PathFinding:
 - GameState: getTime(), getPlayer(int), getUnits(), getUnitAction(Unit), and
@@ -77,3 +83,15 @@ EA RANDOMNESS CONTRACT:
   Math.random(), randomUUID(), wall-clock APIs, or an unseeded Collections.shuffle.
 - Keep a seeded java.util.Random field inside the editable strategy region when
   successive choices need a stream; never derive its namespace from time or threads.
+
+DETERMINISTIC COMPILER PRIMITIVE CONTRACT:
+The fixed DSL emitter prepares one rts.UnitAction per actor before committing it.
+GameState.getResourceUsage(), isUnitActionAllowed(Unit, UnitAction),
+Unit.canExecuteAction(UnitAction, GameState), UnitType.canMove,
+UnitAction.resourceUsage(Unit, PhysicalGameState), ResourceUsage.consistentWith(),
+and protected pf.findPath()/findPathToAdjacentPosition()/findPathToPositionInRange()
+are available for this preflight. All actions commit through commandPlannedAction;
+return commits through commandReturn(worker, base, context, preparedAction), which
+checks the same dedicated return plan. No null-target Harvest is a return action.
+The compiler selects train/build placement first and commits TYPE_PRODUCE at that
+exact adjacent cell; commandTrain's autonomous placement is not the DSL contract.
