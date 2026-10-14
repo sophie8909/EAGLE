@@ -1,0 +1,1085 @@
+{
+  "revision": "94ab1869",
+  "slides": [
+    {
+      "title": "EAGLE deterministic DSL 版本",
+      "notes": "本簡報以94ab1869為程式截點，2026-10-14 Asia/Taipei。主線為使用者選定的deterministic DSL三次同seed實驗，介紹目前方法、執行變更、啟動失敗證據與待量測項目。沒有把程式測試當成對戰成績。",
+      "sources": [
+        "configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs/ministral3_8b_deterministic_dsl_3x2_seed8_3runs.yaml",
+        "eagle/runtime/processes.py"
+      ],
+      "type": "cover",
+      "hero": "DSL 編譯、GPU 與平行搜尋",
+      "body": [
+        "2026-10-14　程式版本 94ab1869",
+        "Ministral3 8B　seed 8 × 3 runs"
+      ]
+    },
+    {
+      "title": "策略表示與編譯：逐次變更",
+      "notes": "37d5ec2e是compiler實作、9500d3c1是流程整合；195ec5d3是相應文件，不將它誤標為實作。這些改變的程式契約可由source確認，但目前沒有正式三次run效能量測。方法基準是10/13簡報記錄的1fa6662e，並非共同測試結果。",
+      "sources": [
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/generation/backend.py",
+        "docs/architecture/java_generation.md"
+      ],
+      "table": [
+        [
+          "版本／日期",
+          "變更前",
+          "變更後與目的"
+        ],
+        [
+          "37d5ec2e\n10/14",
+          "策略以 DSL 表示\nJava 仍依 LLM 解碼",
+          "新增固定 typed-IR compiler\n同輸入得到同 Java"
+        ],
+        [
+          "9500d3c1\n10/14",
+          "搜尋主線為 LLM\nmaterialization",
+          "deterministic_dsl 整合搜尋\n只演化策略基因"
+        ],
+        [
+          "dbaeb7c2\n10/14",
+          "缺少專用驗證設定",
+          "seed 8 × 3 runs\n3 代、population 2"
+        ],
+        [
+          "214c5733\n10/14",
+          "巢狀規則 schema\n容易被誤讀",
+          "釐清完整 DSL rule 結構\n規則內容須完整合法"
+        ]
+      ],
+      "widths": [
+        255,
+        495,
+        592
+      ],
+      "size": 28,
+      "foot": "影響主線：移除 Java LLM 解碼；成績與耗時尚未驗證"
+    },
+    {
+      "title": "回應格式、批次與 runtime：逐次變更",
+      "notes": "此頁每項為獨立變更。JSONL parsing先由6dee建立目標欄位record，4f04加入rule-level salvage。b536提示適用LLM materialization，對主線deterministic compiler不構成處理步驟。94ab修正啟動證據可見性並禁用自動fitting；沒有宣稱硬體或搜尋效能已改善。",
+      "sources": [
+        "eagle/experiment.py",
+        "eagle/execution.py",
+        "eagle/strategy_dsl.py",
+        "prompts/code_reflection.txt",
+        "eagle/runtime/processes.py"
+      ],
+      "table": [
+        [
+          "版本",
+          "原行為",
+          "本版行為"
+        ],
+        [
+          "2585ce0e",
+          "資料夾不能執行多 runs",
+          "每個 replicate 有獨立槽\nexperiment.yaml 支援續跑"
+        ],
+        [
+          "c401d99a",
+          "GPU／平行度由 config 覆寫",
+          "GPU 強制啟用\n2 LLM slots、10 match workers"
+        ],
+        [
+          "6dee5d4f\n4f04c901",
+          "策略回應以整份 JSON 判定",
+          "JSONL 每行一條規則\n保留合法規則、丟棄壞行"
+        ],
+        [
+          "b536fd42\n94ab1869",
+          "提示仍有泛稱策略描述\nverbosity 3 缺 offload log",
+          "LLM 提示對齊 DSL\nverbosity 4、fit off"
+        ]
+      ],
+      "widths": [
+        255,
+        495,
+        592
+      ],
+      "size": 28
+    },
+    {
+      "title": "本次設定與有效執行模式",
+      "notes": "由ExperimentConfig.from_mapping可確認self_play強制解析為game_performance_semantic_tiebreak。CLI一般banner中出現lexicase不代表此config實際採fixed-roster lexicase。單一WorkerRush設定seed在deterministic模式複製為population_size=2；gen0有兩個不同ID但相同policy的候選。",
+      "sources": [
+        "configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs/ministral3_8b_deterministic_dsl_3x2_seed8_3runs.yaml",
+        "eagle/config.py",
+        "eagle/operators/initialization.py"
+      ],
+      "table": [
+        [
+          "項目",
+          "本次設定",
+          "實際作用"
+        ],
+        [
+          "策略／Java",
+          "deterministic_dsl\neagle-dsl-java-v1",
+          "策略 JSON → 固定 Java compiler\nGeneration meta prompt 不啟用"
+        ],
+        [
+          "搜尋預算",
+          "seed 8，runs 3\n演化 3 代、population 2",
+          "三次相同 seed、獨立 run\ngen0 另列，之後 gen1–3"
+        ],
+        [
+          "反思",
+          "static，mutation_rate 1\nStrategy probability 1",
+          "只有 Strategy Reflection\nCode／Prompt Reflection 不啟用"
+        ],
+        [
+          "評估",
+          "self_play，3 maps\nparent mode reuse_cached",
+          "Game Performance 最大化\n同分以 semantic novelty 分辨"
+        ]
+      ],
+      "widths": [
+        255,
+        495,
+        592
+      ],
+      "size": 28
+    },
+    {
+      "title": "完整搜尋流程",
+      "notes": "先完成GPU runtime啟動與config協定核對，gen0建立兩個seed clones、編譯與bootstrap self-play評估，保存snapshot。gen1到gen3按序建立offspring，反思可同時發出但結果固定排序；編譯與評估後以mu+lambda選survivors。正常完成後共同final-test不回饋搜尋。stagnation門檻25高於三代預算，正常會先到代數上限。外部exception/interrupt留下最後完整checkpoint。",
+      "sources": [
+        "eagle/evolution/search.py",
+        "eagle/evolution/generation.py",
+        "eagle/final_test.py"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "config",
+            "text": "Config、seed、GPU 檢查",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "init",
+            "text": "Gen0：2 個 seed clones",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "bootstrap",
+            "text": "DSL 編譯、初始評估",
+            "x": 1115,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "iteration",
+            "text": "父代、crossover、反思\n每代 2 offspring",
+            "x": 1115,
+            "y": 460,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "eval",
+            "text": "DSL 編譯與對戰\nμ＋λ 倖存者選擇",
+            "x": 650,
+            "y": 460,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "stop",
+            "text": "達到停止條件？",
+            "x": 185,
+            "y": 450,
+            "w": 360,
+            "h": 120,
+            "decision": true,
+            "size": 27
+          },
+          {
+            "id": "final",
+            "text": "完成：champion final-test",
+            "x": 185,
+            "y": 660,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "outputs",
+            "text": "summary、checkpoint、timing",
+            "x": 650,
+            "y": 660,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "config",
+            "init"
+          ],
+          [
+            "init",
+            "bootstrap"
+          ],
+          [
+            "bootstrap",
+            "iteration",
+            "bottom",
+            "top"
+          ],
+          [
+            "iteration",
+            "eval",
+            "left",
+            "right"
+          ],
+          [
+            "eval",
+            "stop",
+            "left",
+            "right"
+          ],
+          [
+            "stop",
+            "iteration",
+            "top",
+            "top"
+          ],
+          [
+            "stop",
+            "final",
+            "bottom",
+            "top"
+          ],
+          [
+            "final",
+            "outputs"
+          ]
+        ],
+        "labels": [
+          {
+            "text": "否：繼續 gen1–3",
+            "x": 600,
+            "y": 374,
+            "w": 290
+          },
+          {
+            "text": "是：正常完成",
+            "x": 235,
+            "y": 594,
+            "w": 230
+          }
+        ]
+      },
+      "foot": "中斷／失敗：保留最後完整 checkpoint，以 --resume 接續"
+    },
+    {
+      "title": "DSL：策略與實作之間的固定契約",
+      "notes": "策略格式eagle-strategy-dsl-v1，上限16000字元、32rules、conditiondepth6、booleanfanout8。規則包含actor單位類型、when條件、action合法動作。choose是合法動作子集上的確定性hash選擇，沒有persistent RNG。策略本身仍由LLM反思改變，確定性的是policy到Java的物化映射，不等於不使用LLM。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/strategy_dsl.py",
+        "eagle/generation/dsl_java_compiler.py"
+      ],
+      "body": [
+        "策略是一個 version + rules 的 JSON object；每條 rule 包含 actor、when、action。空 rules 明確表示 idle。",
+        "條件只讀當前可觀測狀態；action、target、selector 使用封閉詞彙。禁止自訂 prose／Java 欄位。",
+        "Java 是離線編譯的 phenotype；固定 scaffold、compiler version 與 policy hash 一起保存。"
+      ],
+      "size": 33
+    },
+    {
+      "title": "DSL 的規則順序與 fallback",
+      "notes": "每個目前idle的friendly actor依升序ID處理，對其type對應rules依arrayorder判斷。when false、目標不存在、path不可達、stockpile不足、cell占用或guard失敗均繼續下一條。第一個真正可issue的action終止該actor，explicitidle也終止。hash target先合法filter，selector metric ties按ID或cell y,x。一次PlayerAction累積resource/cell reservation供後續actor使用。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/generation/dsl_java_compiler.py"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "actor",
+            "text": "idle friendly actors\n按 unit ID 升序",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "rules",
+            "text": "規則按 rules 陣列順序",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "when",
+            "text": "when 成立？",
+            "x": 1115,
+            "y": 250,
+            "w": 360,
+            "h": 120,
+            "decision": true,
+            "size": 28
+          },
+          {
+            "id": "issue",
+            "text": "action 可合法發出？",
+            "x": 1115,
+            "y": 470,
+            "w": 360,
+            "h": 120,
+            "decision": true,
+            "size": 28
+          },
+          {
+            "id": "commit",
+            "text": "發出一個 action\n更新本輪 reservations",
+            "x": 650,
+            "y": 480,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "next",
+            "text": "不成立／guard 失敗\n繼續下一條 rule",
+            "x": 185,
+            "y": 480,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "actor",
+            "rules"
+          ],
+          [
+            "rules",
+            "when"
+          ],
+          [
+            "when",
+            "issue",
+            "bottom",
+            "top"
+          ],
+          [
+            "issue",
+            "commit",
+            "left",
+            "right"
+          ],
+          [
+            "when",
+            "next",
+            "bottom",
+            "top"
+          ],
+          [
+            "issue",
+            "next",
+            "bottom",
+            "bottom"
+          ],
+          [
+            "next",
+            "rules",
+            "top",
+            "bottom"
+          ]
+        ],
+        "labels": [
+          {
+            "text": "是",
+            "x": 1305,
+            "y": 438,
+            "w": 50
+          },
+          {
+            "text": "是",
+            "x": 1040,
+            "y": 497,
+            "w": 50
+          },
+          {
+            "text": "否／無合法 action",
+            "x": 685,
+            "y": 642,
+            "w": 310
+          },
+          {
+            "text": "when 為否",
+            "x": 580,
+            "y": 380,
+            "w": 210
+          }
+        ]
+      },
+      "foot": "每個 actor 每 cycle 最多一個 action；沒有匹配則 idle",
+      "example": true
+    },
+    {
+      "title": "Gen0 與每代需要保存的狀態",
+      "notes": "初始化clone不是多樣化，兩個policy相同。初始bootstrap評估由compiled候選提供對手；之後library去重可能將兩個identicalJava候選縮為一個source。snapshotcontext改變時，gen1必須先更新父代fitness，而不是無條件重用gen0分數。相同context後可reuse_cached。",
+      "sources": [
+        "eagle/operators/initialization.py",
+        "eagle/evolution/search.py",
+        "eagle/evolution/generation.py",
+        "eagle/self_play.py"
+      ],
+      "table": [
+        [
+          "階段",
+          "候選／狀態",
+          "證據"
+        ],
+        [
+          "Gen0",
+          "單一 WorkerRush policy\n複製為 2 個候選",
+          "不同 candidate IDs\n相同 DSL 與 Java hash"
+        ],
+        [
+          "對手快照",
+          "bootstrap 後建立 run-local library\nJava／語意等價去重",
+          "固定 source IDs、slot IDs\n與 context_id"
+        ],
+        [
+          "Gen1–3",
+          "每代建立 2 offspring\n保存已完成 survivors",
+          "parents、strategy_parent_id\n反思與 lineage"
+        ],
+        [
+          "Checkpoint",
+          "只承認完整提交的 generation",
+          "config、compiler/scaffold hashes\nmanifest、snapshot、timing"
+        ]
+      ],
+      "widths": [
+        255,
+        580,
+        507
+      ],
+      "size": 28
+    },
+    {
+      "title": "Self-play opponent pool 的建立與刷新",
+      "notes": "select_self_play_library_candidates在libraryorder上以epoch=generation//refresh_interval與source_count=min(N,10)決定start=(epoch*source_count)%N；expand_self_play_slots將非空來源按順序循環到10slots。初始兩個相同Java的seedclones在libraryhash去重後通常只剩一個來源，十格並不代表十種策略。gen0bootstrapcontext與librarysnapshotcontext可能不同，gen1觸發context_migration_required；gen2/3若context一致則可reuse。library的capacity與refresh_interval不等於全archive最優對手選擇。",
+      "sources": [
+        "eagle/self_play.py",
+        "eagle/evaluation/opponents.py",
+        "eagle/evolution/generation.py"
+      ],
+      "body": [
+        "只有完整、可執行且評估成功的 phenotype 可進入 library；依 candidate ID、Java hash 與完整語意簽章去重。",
+        "Library 容量 50，按 FIFO 保留；刷新時循環取最多 10 個來源，再填滿 10 個 evaluation slots。",
+        "本設定每 5 代刷新；只跑 gen1–3，因此沿用 gen0 快照。若 context 不同，先重評父代再比較。"
+      ],
+      "size": 32
+    },
+    {
+      "title": "評估對手、繁殖父代與倖存者",
+      "notes": "GamePerformance的tier不是鏈式鄰近合併，最高分往下1.0以內屬tier。父代A在top tier選擇，B可用A語意簽章當reference。survivor先保留完整較好score tiers，容量截斷的tier才用farthest-first語意新穎度，不讓semantic distance把較差tier提升。missing/incompatible簽章走seeded fallback。finaltest固定roster，不混同搜尋的selfplay_000–009slots。",
+      "sources": [
+        "eagle/operators/selection.py",
+        "eagle/evolution/offspring.py",
+        "eagle/self_play.py",
+        "eagle/final_test.py"
+      ],
+      "table": [
+        [
+          "用途",
+          "從哪裡選",
+          "選擇規則"
+        ],
+        [
+          "Evaluation opponents",
+          "固定 self-play snapshot\n不是目前 breeding pool",
+          "library 循環來源 → 10 slots\n同輪所有候選共用 context"
+        ],
+        [
+          "Breeding parents",
+          "目前 evolving population",
+          "Game Performance 最高 tier\n第二父代 tie 可看語意距離"
+        ],
+        [
+          "Survivors",
+          "目前 parents + offspring",
+          "μ＋λ 選 2 人\ntier 邊界用 seeded novelty"
+        ],
+        [
+          "Final-test opponents",
+          "固定 10 種共同測試對手",
+          "與搜尋 self-play pool 分開\nchampion 測試後不回饋搜尋"
+        ]
+      ],
+      "widths": [
+        290,
+        480,
+        572
+      ],
+      "size": 28
+    },
+    {
+      "title": "每代變異：只有 Strategy Reflection",
+      "notes": "deterministic branch在plan_offspring設定gate_sources=()，不呼叫independentCodeReflection。crossover(strategy_only)只在兩親中選整份strategy_prompt，source-parent provenance跟policy選擇同步。mutationsource仍按strategy_parent_id鎖定，不能隨意改用當代最好parent。所有計畫的來源選擇先serial決定，然後可並行reflection；回傳按照slot順序整合。",
+      "sources": [
+        "eagle/evolution/offspring.py",
+        "eagle/operators/crossover.py",
+        "eagle/execution.py"
+      ],
+      "body": [
+        "先以 root seed 衍生各 slot 的父代、crossover 與 operator stream，再一次建立 2 個 offspring 計畫。",
+        "Crossover rate 0.75：從兩個父代選一份完整 policy；不拼接 rule 子樹，也不繼承 Java／generation prompt。",
+        "Mutation rate 1.0、Strategy probability 1：反思可改 policy；Code source gate、Prompt Mutation 都停用。"
+      ],
+      "size": 32
+    },
+    {
+      "title": "Strategy Reflection 的證據來源",
+      "notes": "選擇只從記錄的strategy_parent_id對應parent已完成matches中挑最低有限performance的一場；若無有限score，依loss=-100、draw=0、win=100 fallback。stablematch_id打破tie；failedmatches排除。Commentator看到該場canonicaltrace；Coach看到一份diagnosis與parent全部matches的global summary。JSONL結果經驗證後形成策略基因。缺trace不換成另一場。",
+      "sources": [
+        "eagle/operators/context.py",
+        "eagle/operators/strategy.py",
+        "docs/architecture/mutation.md"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "parent",
+            "text": "記錄的 strategy_parent_id",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "worst",
+            "text": "已完成 matches\n恰好選一場 worst",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "commentator",
+            "text": "Match Commentator\n單場 trace → diagnosis",
+            "x": 1115,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "summary",
+            "text": "parent 全場摘要\nglobal summary",
+            "x": 185,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "coach",
+            "text": "Coach\n單場診斷＋全場摘要",
+            "x": 650,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "dsl",
+            "text": "JSONL 完整 rules\n驗證 → 新 policy",
+            "x": 1115,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "parent",
+            "worst"
+          ],
+          [
+            "worst",
+            "commentator"
+          ],
+          [
+            "parent",
+            "summary",
+            "bottom",
+            "top"
+          ],
+          [
+            "commentator",
+            "coach",
+            "bottom",
+            "top"
+          ],
+          [
+            "summary",
+            "coach"
+          ],
+          [
+            "coach",
+            "dsl"
+          ]
+        ]
+      },
+      "foot": "單場診斷提供具體失敗證據；全場摘要保留整體表現"
+    },
+    {
+      "title": "JSONL：合法規則子集可形成策略",
+      "notes": "這裡不能把合法空policy與零條合法JSONL輸出混為一談。空rules完整policy是idle，然而Coach策略變更的JSONL協定需要至少一條合法strategy_rule。Salvage不修補非法rule子樹，也不從父策略echo推斷新策略。wholeJSON/fullfence保留既有讀取behavior，但本版提示輸出目標是rule-per-lineJSONL。上限mutation_max_attempts=3。具體backend/serverexceptions與語意解析失敗走不同失敗邊界，不能保證所有例外都正常降級候選。",
+      "sources": [
+        "eagle/strategy_dsl.py",
+        "eagle/operators/strategy.py",
+        "prompts/coach_refine.txt"
+      ],
+      "body": [
+        "每個實體行是一筆 strategy_rule record；Coach 使用 new_strategy_prompt，contract rewrite 使用 revised_strategy_prompt。",
+        "每條 rule 獨立驗證 actor／when／action；丟棄 malformed、錯欄位或語意不合法的整條規則，保留合法行順序。",
+        "至少一條合法 rule 才成功；零條合法規則最多 3 次嘗試。耗盡可保留原 policy；transport exception 仍可能中止 run。"
+      ],
+      "size": 31,
+      "foot": "固定 compiler 接收的是完整、正規化 policy，不是未驗證的原始 JSONL"
+    },
+    {
+      "title": "確定性 Java 物化與失敗邊界",
+      "notes": "DSLcompiler先validate/normalize，生成typedIR，再用eagle-dsl-java-v1與固定scaffold發射完整source。下游一般validation、單次javac與integration維持，probe/matches有自身diagnostics。deterministic模式沒有JavaGeneration、CodeReflection、PromptReflection或compile-repairLLM。compiler/validation/javacfailure保持實際failurestage與source/hash，不假裝進入遊戲。",
+      "sources": [
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/evaluation/decoding.py",
+        "eagle/evaluation/pipeline.py"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "policy",
+            "text": "完整 canonical DSL policy",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "ir",
+            "text": "validate／normalize\n建立 typed IR",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "emit",
+            "text": "固定 compiler＋scaffold\n完整 Java phenotype",
+            "x": 1115,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "validate",
+            "text": "source validation\n單次 javac、Integration",
+            "x": 1115,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "game",
+            "text": "語意 probe、matches\nfitness、diagnostics",
+            "x": 650,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "evidence",
+            "text": "phenotype、hashes\nresult、lineage、timing",
+            "x": 185,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "policy",
+            "ir"
+          ],
+          [
+            "ir",
+            "emit"
+          ],
+          [
+            "emit",
+            "validate",
+            "bottom",
+            "top"
+          ],
+          [
+            "validate",
+            "game",
+            "left",
+            "right"
+          ],
+          [
+            "game",
+            "evidence",
+            "left",
+            "right"
+          ]
+        ]
+      },
+      "foot": "編譯失敗：保留原階段證據與失敗候選；沒有 Java LLM fallback"
+    },
+    {
+      "title": "評估規模與 fitness",
+      "notes": "game_performance使用每場result100/0/-100加[-10,10]shaping，以詳細telemetry計算資源及軍力等訊號，不等同winrate。semanticprobe為1.0tier tie新穎度，不能突破fitness tiers。finaltest若非mock且未skip在正常runcomplete後進行；中斷/失敗時不跑。180與600是定義的matrix大小，不是已完成場數。",
+      "sources": [
+        "eagle/evaluation/game_performance.py",
+        "eagle/evaluation/game_metrics.py",
+        "eagle/opponent_cases.py",
+        "eagle/final_test.py"
+      ],
+      "table": [
+        [
+          "項目",
+          "本設定",
+          "用途"
+        ],
+        [
+          "Search matrix",
+          "10 slots × 3 maps\n× 3 rounds × 2 sides = 180",
+          "每個候選完成一次評估\nslots 可重複同一來源"
+        ],
+        [
+          "地圖與 tick limit",
+          "8×8：1500；16×16：3000\n24×24：4000",
+          "雙方換邊、固定 match seeds\n超時／失敗保留診斷"
+        ],
+        [
+          "Game Performance",
+          "勝／和／敗基分 + bounded shaping\n跨 completed matches 聚合",
+          "唯一 optimizer objective\nCode Quality 只作診斷"
+        ],
+        [
+          "Champion final-test",
+          "10 opponents × 3 maps\n× 10 games × 2 sides = 600",
+          "正常完成後的共同測試\n與 search fitness 分開"
+        ]
+      ],
+      "widths": [
+        290,
+        540,
+        512
+      ],
+      "size": 28
+    },
+    {
+      "title": "平行執行與固定整合順序",
+      "notes": "LLM_WORKERS=2、MODEL_THREADS=8、MATCH_WORKERS=10為程式常數，config不可覆寫。serverctx-size=contextper-slot*parallel=65536。單一runtime一次只載入一個model，generation與reflectionmodel有switchbarrier；本deterministic主線不啟用Java生成LLM。evaluate_population preparation採parallel_map，但candidateevaluation仍serial、單candidate180matches內部parallel。不要宣稱3個run並行或整個generation所有階段重疊。工作有穩定taskseed；浮點GPUbackend、wall-clocktimeouts仍有外部nondeterminism。",
+      "sources": [
+        "eagle/execution.py",
+        "eagle/runtime/processes.py",
+        "eagle/evaluation/pipeline.py",
+        "eagle/evaluation/matches.py"
+      ],
+      "body": [
+        "Runtime 固定 2 request slots、每 slot context 32768；兩個獨立 offspring 的反思工作可同時呼叫。",
+        "DSL／Java preparation 可平行；完成全部 preparation 後才建立對手 pool。每個候選的 matches 用 10 workers。",
+        "parallel_map 按輸入順序回傳；父代／operator 計畫與 survivor 整合保留固定順序，跨 run 仍依序執行。"
+      ],
+      "size": 32
+    },
+    {
+      "title": "三次 replicate 與資料夾續跑",
+      "notes": "索引schemaeagle-experiment-index-v1；source config的runs跟random_seeds展開成orderedslots。路徑是實際run_dirs，由on_run_created更新。resume不可將不相容policyformat/compiler/scaffold默默轉換。三次同seed是重複性檢查，不能把它當三個獨立randomseed樣本；GPU/runtime差異仍需用hash與timing檢查。",
+      "sources": [
+        "eagle/experiment.py",
+        "eagle/evolution/resume.py",
+        "docs/operations/running_eagle.md"
+      ],
+      "table": [
+        [
+          "階段",
+          "experiment.yaml／run",
+          "恢復行為"
+        ],
+        [
+          "展開 config",
+          "random_seeds [8]、runs 3\n有效序列 [8,8,8]",
+          "run1、run2、run3\n各自獨立目錄與 checkpoint"
+        ],
+        [
+          "保存索引",
+          "每個 YAML filename\n對應有序 run paths 清單",
+          "按 replicate slot 更新\n不覆蓋其他 slot"
+        ],
+        [
+          "--resume folder",
+          "核對每槽 config／effective seed\n先處理未完成 indexed runs",
+          "已完成跳過\n未啟動 replicate 接續建立"
+        ],
+        [
+          "中斷時",
+          "以最後完整 generation 恢復\ngen0 前失敗無 checkpoint",
+          "無可用 checkpoint 可建替代run\n原始失敗證據保留"
+        ]
+      ],
+      "widths": [
+        290,
+        530,
+        522
+      ],
+      "size": 28
+    },
+    {
+      "title": "GPU 啟動：可用裝置與實際 offload",
+      "notes": "LLAMA_LOG_INFO在common/log.cpp被GGML_INFO映射到LOG_LEVEL_TRACE4；userlogverbosity3缺少modelcorelog，但CUDAdevice以及HTTPserverready仍可見。94ab保留原strictregex，不以CUDAlisting或slots推斷成功。GPU count固定999要求多於模型layercount，實際log才驗證N/N。其含義是所有model layersoffload，並非宣稱完全沒有CPU上任何runtime工作。來源外部：https://github.com/ggml-org/llama.cpp/blob/master/common/log.cpp ; common/arg.cpp ; src/llama-model.cpp。",
+      "sources": [
+        "eagle/runtime/processes.py",
+        "eagle/runtime/config.py",
+        "tests/test_runtime_workflow.py"
+      ],
+      "table": [
+        [
+          "檢查",
+          "固定行為",
+          "不通過時"
+        ],
+        [
+          "裝置 preflight",
+          "llama-server --list-devices\n確認 CUDA／NVIDIA backend",
+          "停止啟動，不退回 CPU"
+        ],
+        [
+          "要求全層",
+          "--n-gpu-layers 999\n--fit off",
+          "禁止自動記憶體 fitting\n載入失敗即保留錯誤"
+        ],
+        [
+          "證據可見性",
+          "--log-verbosity 4",
+          "core INFO 才輸出 offload 行\nserver ready 不代表驗證成功"
+        ],
+        [
+          "實際 full offload",
+          "只讀這次 child 的新 log\n要求 offloaded N/N，N > 0",
+          "缺失／部分／stale 證據\n停止 owned process"
+        ]
+      ],
+      "widths": [
+        290,
+        530,
+        522
+      ],
+      "size": 28
+    },
+    {
+      "title": "啟動量測：模型載入至 server ready",
+      "notes": "用戶trace採相對timestamp：model load start0.149851s，warmupstart7.051955s，ready7.217671s。分段相减6.902104s與0.165716s，加總7.067820s。第一段包括模型載入與其他初始化至warmup，第二段包括warmup與slot/server初始化，不能稱純warmupkernel耗時。這是單次失敗啟動局部walltime，不含devicepreflight或整個experiment。沒有前後對照，不估generationduration或speedup。",
+      "sources": [
+        "Meeting/20261014_dsl_gpu_parallel/runtime_log_excerpt.txt"
+      ],
+      "chart": {
+        "categories": [
+          "載入開始 → warmup 開始",
+          "warmup 開始 → server ready"
+        ],
+        "values": [
+          6.902104,
+          0.165716
+        ],
+        "seriesName": "單次啟動分段 wall time（秒）"
+      },
+      "subtitle": "RTX 5080／Ministral3 8B；單次貼文紀錄，n = 1",
+      "foot": "兩段合計 7.068 秒；GPU 驗證仍失敗，未進入 generation 0"
+    },
+    {
+      "title": "Code Reflection 與 Generation 提示的 DSL 更新",
+      "notes": "b536修改16檔，包含11promptresources、canonicalreusableheader、兩docs與兩tests。具體attack是range-only、engage可移動、harvest不自動return、moveentityrange1自指或adjacent不可issuedfallthrough。generation輸出完整Java，不改為DSLresponse。這些提示屬llm materialization，主線deterministic_dsl完全不呼叫Code/PromptReflection、JavaGeneration/compileRepair。因此不能將本次實驗效果歸因於b536。",
+      "sources": [
+        "prompts/code_reflection.txt",
+        "prompts/initial_generation.txt",
+        "eagle/operators/reusable_prompt.py",
+        "prompts/java_compile_repair.txt"
+      ],
+      "body": [
+        "Code diagnosis 以 rule index、actor／when／action 與 intrinsic semantics 指出 Java 不一致；合法空 rules 不再視為模糊策略。",
+        "Generation meta rules 對齊規則順序、合法 action、target ties、hashed choose、reservations 與 fallback。",
+        "初始 meta prompt、反思後的 canonical 標頭、Java revision 與 compile repair 一起更新；Java／JSON 輸出契約保留。"
+      ],
+      "size": 31,
+      "foot": "本設定不使用這些 LLM 提示；它們供 llm materialization 模式使用"
+    },
+    {
+      "title": "目前的實驗結果與缺口",
+      "notes": "正式run需run-localconfig、manifest、completedsnapshots與finaltestsummary驗證。Agent查找到runs/20261014_142526_546498等deterministic_dsl_smoke，不是Ministral3seed8三run且semanticdataset曾錯誤。已完成matches紀錄不能因名字相似就用於正式比較。缺乏fitness與finaltest數值，這頁明確保留結果缺口，不繪不存在的零值nativechart。",
+      "sources": [
+        "Meeting/20261014_dsl_gpu_parallel/version_report.md",
+        "Meeting/20261013_current_workflow/content.json",
+        "Meeting/20261014_dsl_gpu_parallel/runtime_log_excerpt.txt"
+      ],
+      "table": [
+        [
+          "證據",
+          "已知狀態",
+          "可支持的結論"
+        ],
+        [
+          "目標 seed 8 × 3 runs",
+          "遠端啟動在 gen0 前失敗\n正式 manifests 未取得",
+          "不能報勝率／fitness trajectory\n或完成三次實驗"
+        ],
+        [
+          "本機 deterministic smoke",
+          "其他設定、population 1\nsemantic probe 曾回報錯誤",
+          "不是目標 config 的 benchmark\n不拿零分作比較基準"
+        ],
+        [
+          "10/13 workflow baseline",
+          "1fa6662e，LLM／inherited 模式\nseed 7，方法說明簡報",
+          "可比較方法與執行邊界\n沒有共同成績量測"
+        ],
+        [
+          "共同 final-test",
+          "目標 champion results 未提供",
+          "尚無可用版本間 outcome chart\n不可用測試 PASS 取代勝率"
+        ]
+      ],
+      "widths": [
+        290,
+        540,
+        512
+      ],
+      "size": 28
+    },
+    {
+      "title": "已完成的程式驗證",
+      "notes": "測試count源自本次對話各實作阶段留下的驗證紀錄。603包含一個skip；85與49focused是不同scope而且可能重疊，不能加總成737個不重複tests。runtime tests用controlledchildlog驗證verbosity4確保freshfulloffload通過，32/33與0/33停止ownedprocess，stalepriorlog無法通過。這頁只列工程回歸證據，對戰結果另頁未提供。",
+      "sources": [
+        "tests/test_runtime_workflow.py",
+        "tests/test_experiment_launcher.py",
+        "tests/test_reusable_generation_prompt.py",
+        "tests/test_code_reflection.py"
+      ],
+      "table": [
+        [
+          "範圍／版本",
+          "驗證紀錄",
+          "不代表"
+        ],
+        [
+          "GPU／平行化\nc401d99a",
+          "先前全套 603 tests\n1 skip：歷史 AllInBot fixture",
+          "不是 remote GPU 實跑\n不是勝率或加速量測"
+        ],
+        [
+          "DSL 提示\nb536fd42",
+          "85 項 focused regressions 通過\n含 meta prompt round-trip",
+          "未量測模型回應品質"
+        ],
+        [
+          "GPU startup fix\n94ab1869",
+          "49 項 runtime／launcher tests 通過\n完整通過，partial／zero 拒絕",
+          "RTX 5080 尚未重跑確認"
+        ],
+        [
+          "資料一致性",
+          "config parse 與 seed schedule 核對\ndiff checks 通過",
+          "不等於跨 backend 完全確定性"
+        ]
+      ],
+      "widths": [
+        290,
+        540,
+        512
+      ],
+      "size": 28
+    },
+    {
+      "title": "與 10/13 方法基準的比較",
+      "notes": "基準是前次workflowdeckrecord1fa，不是67fbdartifactcommit本身。比較同時改了seed、materialization與runtime，沒有matchedtest只能說methoddifferences，不能推導higherfitness、tokenreduction百分比或GPUparallel speedup。若後續要量化，需同一hardware/model/maps/budget與finaltestprotocol，保留run IDs與完整walltime。",
+      "sources": [
+        "Meeting/20261013_current_workflow/content.json",
+        "docs/architecture/java_generation.md",
+        "eagle/execution.py"
+      ],
+      "table": [
+        [
+          "比較項",
+          "10/13：1fa6662e",
+          "10/14：94ab1869"
+        ],
+        [
+          "有效 genotype",
+          "DSL policy、generation prompt\n加 inherited Java",
+          "只有完整 DSL policy"
+        ],
+        [
+          "Java 物化",
+          "LLM decoder／revision\ncompile-guided repair",
+          "固定 compiler + scaffold\n單次 javac，无 LLM repair"
+        ],
+        [
+          "搜尋／執行",
+          "seed 7、self_play\nmatch workers 9",
+          "seed 8、self_play\nGPU mandatory、match workers 10"
+        ],
+        [
+          "可支持的差異",
+          "方法基準，沒有實測對照",
+          "移除 Java LLM 工作可由契約確認\n成功率／節省時間仍需量測"
+        ]
+      ],
+      "widths": [
+        290,
+        530,
+        522
+      ],
+      "size": 28
+    },
+    {
+      "title": "執行與資料夾 resume 指令",
+      "notes": "從EAGLErepo root執行，experiment.sh使用condarun-neagle。啟動fix沒有新增configfields，不需修改現有YAML。第一個runtime還未on_run_created時沒有index/checkpoint，這次應先重新執行start命令；已有index才用folderresume。成功run正常會執行finaltest，skip-final-test若使用則必須一致標記比較arm。bash反斜線在換行前不要帶其他字元。",
+      "sources": [
+        "experiment.sh",
+        "eagle/cli/experiment.py",
+        "eagle/experiment.py"
+      ],
+      "body": [
+        "開始（先同步 94ab1869 及前置變更）：\n./experiment.sh \\\n  configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs",
+        "中斷後接續：\n./experiment.sh --resume \\\n  configs/experiments/1014_deterministic_dsl_3x2_seed8_3runs",
+        "檢查 experiment.yaml 的 3 個 run paths；每次保存 gen0、gen1–3 與 final-test。"
+      ],
+      "size": 28
+    },
+    {
+      "title": "完成三次 run 後要比較的證據",
+      "notes": "三次seed8replicates回答相同rootseed的runtime重複性，不是不同隨機初始化樣本。generationtiming以committedrecords為准，partialLLM log不能推估完整generation。必要時matchedbaseline採同硬體/模型/seed/預算但固定一個變因；本scope不啟動新experiments。remoteGPUpostfixlaunch、self-playsemanticprobe/finaltest都待正式run證據。",
+      "sources": [
+        "eagle/evolution/search.py",
+        "eagle/timing.py",
+        "eagle/final_test.py",
+        "Meeting/20261014_dsl_gpu_parallel/version_report.md"
+      ],
+      "body": [
+        "重複性：逐 run 比較 policy／Java hash、selected-parent lineage、每代 survivors 與 completed-match seeds。",
+        "效能：統一 final-test roster／maps／seeds，報 W／D／L／E、Game Performance 與各 run 差異。",
+        "時間：gen0 單列，gen1–3 用已提交 timing 記錄；區分 run wall time、stage sums 與平行工作量。"
+      ],
+      "size": 32
+    }
+  ]
+}

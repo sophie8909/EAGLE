@@ -1,0 +1,11 @@
+使用者於本次對話提供的遠端啟動紀錄（節錄）
+0.00.073.185 I log_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.148.441 I   - CUDA0   : NVIDIA GeForce RTX 5080 (15838 MiB, 15016 MiB free)
+0.00.149.851 I srv    load_model: loading model '/home/mhlab/EAGLE/experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf'
+0.07.051.955 W common_init_from_params: warming up the model with an empty run - please wait ... (--no-warmup to disable)
+0.07.182.159 I srv    load_model: initializing slots, n_slots = 2
+0.07.215.055 I slot   load_model: id  1 | task -1 | new slot, n_ctx = 32768
+0.07.217.671 I srv          main: model loaded
+0.07.217.673 I srv          main: server is listening on http://127.0.0.1:18080
+ERROR: Mandatory GPU execution was not confirmed: llama.cpp must report all model layers offloaded to GPU.
+註：ERROR 在原貼文位於 server log 之前；本節錄將錯誤置末僅為閱讀，未對錯誤推定時間戳。
