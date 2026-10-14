@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 
+from eagle.execution import MATCH_WORKERS
 from eagle.strategy_dsl import VERSION as STRATEGY_POLICY_FORMAT, normalize_strategy_dsl
 
 
@@ -51,7 +52,6 @@ DEFAULT_SEMANTIC_REFERENCE_AGENTS = (
     "ai.abstraction.HeavyRush",
 )
 DEFAULT_SEMANTIC_PHASE_FRACTIONS = (0.10, 0.50, 0.90)
-DEFAULT_MATCH_WORKERS = 10
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -74,10 +74,7 @@ class ModelConfig:
     host: str = "127.0.0.1"
     port: int = 8080
     context_size: int = 32768
-    gpu_layers: int = -1
-    threads: int = 8
     batch_size: int = 512
-    parallel: int = 1
     startup_timeout_seconds: float = 180.0
     health_timeout_seconds: float = 5.0
 
@@ -93,7 +90,7 @@ class ModelConfig:
             raise ValueError(f"model.host is invalid: {self.host!r}")
         if not 1 <= self.port <= 65535:
             raise ValueError("model.port must be between 1 and 65535.")
-        for field_name in ("context_size", "threads", "batch_size", "parallel"):
+        for field_name in ("context_size", "batch_size"):
             if int(getattr(self, field_name)) <= 0:
                 raise ValueError(f"model.{field_name} must be positive.")
         if self.startup_timeout_seconds <= 0 or self.health_timeout_seconds <= 0:
@@ -165,7 +162,6 @@ class ExperimentConfig:
     semantic_probe_timeout_seconds: float = 120.0
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
-    match_workers: int = DEFAULT_MATCH_WORKERS
     match_artifact_mode: str = "compact"
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
     evaluation_map_tick_limits: tuple[int, ...] = ()
@@ -190,6 +186,10 @@ class ExperimentConfig:
     prompt_reflection_probability: float = 0.80
     code_reflection_probability: float = 0.0
     aos_minimum_probability: float = 0.10
+
+    @property
+    def match_workers(self) -> int:
+        return MATCH_WORKERS
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ExperimentConfig":
@@ -234,7 +234,7 @@ class ExperimentConfig:
         obsolete_fields = {
             "seed_prompts", "seed_prompt_template", "generation_prompt",
             "generation_backend", "alignment_backend", "opponent",
-            "matches_per_candidate", "map_path",
+            "matches_per_candidate", "map_path", "match_workers",
         }
         obsolete = sorted(obsolete_fields.intersection(payload))
         if obsolete:
@@ -306,6 +306,8 @@ class ExperimentConfig:
         evaluation_settings = payload.get("evaluation", {})
         if not isinstance(evaluation_settings, dict):
             raise ValueError("evaluation must be a mapping.")
+        if "match_workers" in evaluation_settings:
+            raise ValueError("Obsolete evaluation.match_workers is not supported; match parallelism is mandatory.")
         evaluation_mode = str(evaluation_settings.get("mode", "fixed_roster"))
         configured_algorithm = str(payload.get("algorithm", LEXICASE_SELECTION))
         configured_objectives = payload.get("objectives")
@@ -481,12 +483,6 @@ class ExperimentConfig:
             ),
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
-            match_workers=int(
-                evaluation_settings.get(
-                    "match_workers",
-                    payload.get("match_workers", DEFAULT_MATCH_WORKERS),
-                )
-            ),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             evaluation_maps=evaluation_maps,
             evaluation_map_tick_limits=evaluation_map_tick_limits,
@@ -681,8 +677,6 @@ class ExperimentConfig:
                 raise ValueError(f"Configured evaluation map does not exist: {microrts_root / map_path}")
         if self.match_timeout_seconds <= 0:
             raise ValueError("match_timeout_seconds must be greater than zero.")
-        if self.match_workers < 1:
-            raise ValueError("evaluation.match_workers must be at least 1.")
         if self.match_artifact_mode not in {"compact", "full"}:
             raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
@@ -765,10 +759,7 @@ class ExperimentConfig:
                 "host": self.model.host,
                 "port": self.model.port,
                 "context_size": self.model.context_size,
-                "gpu_layers": self.model.gpu_layers,
-                "threads": self.model.threads,
                 "batch_size": self.model.batch_size,
-                "parallel": self.model.parallel,
                 "startup_timeout_seconds": self.model.startup_timeout_seconds,
                 "health_timeout_seconds": self.model.health_timeout_seconds,
             },
@@ -813,7 +804,6 @@ class ExperimentConfig:
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
                 "mode": self.evaluation_mode,
-                "match_workers": self.match_workers,
                 "self_play_refresh_interval": self.self_play_refresh_interval,
                 "self_play_opponent_library_capacity": self.self_play_opponent_library_capacity,
                 "semantic_probes": {
@@ -987,6 +977,10 @@ def _parse_model(
     if not isinstance(value, dict):
         raise ValueError(f"{field_name} must be a mapping.")
 
+    obsolete = sorted({"gpu_layers", "threads", "parallel"}.intersection(value))
+    if obsolete:
+        raise ValueError(f"Obsolete {field_name} runtime controls are not supported: " + ", ".join(obsolete))
+
     def path_value(key: str) -> Path | None:
         raw = value.get(key)
         if raw in (None, ""):
@@ -1002,10 +996,7 @@ def _parse_model(
             host=str(value.get("host", "127.0.0.1")).strip(),
             port=int(value.get("port", 8080)),
             context_size=int(value.get("context_size", 32768)),
-            gpu_layers=int(value.get("gpu_layers", -1)),
-            threads=int(value.get("threads", 8)),
             batch_size=int(value.get("batch_size", 512)),
-            parallel=int(value.get("parallel", 1)),
             startup_timeout_seconds=float(value.get("startup_timeout_seconds", 180)),
             health_timeout_seconds=float(value.get("health_timeout_seconds", 5)),
         )
@@ -1023,10 +1014,7 @@ def _model_mapping(model: ModelConfig) -> dict[str, object]:
         "host": model.host,
         "port": model.port,
         "context_size": model.context_size,
-        "gpu_layers": model.gpu_layers,
-        "threads": model.threads,
         "batch_size": model.batch_size,
-        "parallel": model.parallel,
         "startup_timeout_seconds": model.startup_timeout_seconds,
         "health_timeout_seconds": model.health_timeout_seconds,
     }

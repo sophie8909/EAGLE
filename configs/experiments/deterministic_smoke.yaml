@@ -16,7 +16,6 @@ tick_limit: 100
 match_timeout_seconds: 30
 evaluation:
   mode: self_play
-  match_workers: 10
   semantic_probes:
     enabled: true
 llm:

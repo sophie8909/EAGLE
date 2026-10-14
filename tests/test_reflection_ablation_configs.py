@@ -39,7 +39,7 @@ class ReflectionAblationConfigTests(unittest.TestCase):
             self.assertEqual(config.initial_population_mode, "llm_generated_policies", path)
             self.assertEqual(config.generations, 20, path)
             self.assertEqual(config.population_size, 10, path)
-            self.assertEqual(config.model.parallel, 1, path)
+            self.assertFalse(hasattr(config.model, "parallel"), path)
 
     def test_configs_only_change_name_and_operator_probabilities_from_baseline(self) -> None:
         base = yaml.safe_load(BASE_CONFIG.read_text(encoding="utf-8"))

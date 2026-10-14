@@ -54,7 +54,7 @@ def evolutionary_state(result):
 
 
 class EvolutionReproducibilityTests(unittest.TestCase):
-    def config(self, root, *, seed=19, workers=1, algorithm="lexicase"):
+    def config(self, root, *, seed=19, algorithm="lexicase"):
         return replace(ExperimentConfig.from_mapping({
             "population_size": 2,
             "generations": 2,
@@ -65,10 +65,9 @@ class EvolutionReproducibilityTests(unittest.TestCase):
             "reflection_operator_mode": "aos_head2head" if algorithm == "lexicase" else "static",
             "evaluation": {
                 "mode": "fixed_roster" if algorithm == "lexicase" else "self_play",
-                "match_workers": workers,
                 "self_play_refresh_interval": 1,
             },
-            "model": {"name": "mock", "parallel": workers},
+            "model": {"name": "mock"},
             "strategy_reflection_probability": 0.4,
             "prompt_reflection_probability": 0.4,
             "code_reflection_probability": 0.2,
@@ -82,9 +81,8 @@ class EvolutionReproducibilityTests(unittest.TestCase):
                     config = self.config(root, algorithm=algorithm)
                     first = run_search(config, mock=True, run_id=f"{algorithm}-first")
                     repeated = run_search(config, mock=True, run_id=f"{algorithm}-repeat")
-                    parallel = run_search(replace(config, match_workers=4,
-                        model=replace(config.model, parallel=4)), mock=True,
-                        run_id=f"{algorithm}-parallel")
+                    with patch("eagle.config.MATCH_WORKERS", 4), patch("eagle.execution.LLM_WORKERS", 4):
+                        parallel = run_search(config, mock=True, run_id=f"{algorithm}-parallel")
                     self.assertEqual(evolutionary_state(first), evolutionary_state(repeated))
                     self.assertEqual(evolutionary_state(first), evolutionary_state(parallel))
                     other_seed = run_search(replace(config, random_seed=20), mock=True,

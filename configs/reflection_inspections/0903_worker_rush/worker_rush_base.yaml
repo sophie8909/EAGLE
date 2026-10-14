@@ -12,10 +12,7 @@ model:
   host: 127.0.0.1
   port: 8080
   context_size: 32768
-  gpu_layers: -1
-  threads: 8
   batch_size: 512
-  parallel: 1
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 generation_prompt_file: prompts/initial_generation.txt
 initial_java_seed_path: eagle/java_seeds/worker_rush/CandidateAgent.java

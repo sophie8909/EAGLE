@@ -51,7 +51,24 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete primary `model` section and optional `generation_model` section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda`, `candidate_java_mode`, `java_materialization_mode`, `java_compiler_version`, and `parent_evaluation_mode`, reflection mode/probabilities, and evaluation matrix. Deterministic mode requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`. The resolved `evaluation.match_workers` records the bounded match scheduler setting used by normal evaluation, AOS head-to-head, and final-test; the benchmark-derived default is `10` and can be overridden per run. `match_timeout_seconds` and `match_artifact_mode` remain top-level because they describe process limits and evidence retention, not scheduling. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by
+runtime and search. It contains defaults, absolute runtime paths where needed, the
+primary `model` and optional `generation_model`, LLM behavior, EA settings
+including `survivor_selection: mu_plus_lambda`, `candidate_java_mode`,
+`java_materialization_mode`, `java_compiler_version`, and `parent_evaluation_mode`,
+reflection mode/probabilities, and the evaluation matrix. Deterministic mode
+requires `candidate_java_mode: generated_phenotype` and
+`parent_evaluation_mode: reuse_cached`. `evaluation.match_workers`, model
+`gpu_layers`, `threads`, and `parallel` are rejected config keys; fixed runtime
+and worker values are not written into the resolved config. The runtime uses GPU
+layers `999`, eight model threads, two server slots, two LLM workers, and ten
+match workers. `context_size` remains the per-request limit; the server allocates
+twice that amount for two slots. `match_timeout_seconds` and
+`match_artifact_mode` remain top-level because they describe process limits and
+evidence retention. Every resolved `evaluation.maps` entry is a `{path,
+tick_limit}` mapping, even when the source config used a string map path and
+inherited the top-level fallback. New runs do not write `source_config`,
+`resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status,
 experiment/reflection identity, `model_name`, `generation_model_name`, and
@@ -216,16 +233,25 @@ in candidate or generation JSON.
 
 For `llm_generated_policies`, the first candidate's policy comes from the
 configured seed file and the remaining candidates own
-`initialization/policy_generation/`. Each attempt persists its exact rendered
+`initialization/policy_generation/`. First-wave policy requests use the same
+configured-seed snapshot with distinct task seeds. Policy transport is stateless;
+only Java-generation request context is thread-local. Results and duplicate
+retries are resolved in candidate order. Each attempt persists its exact rendered
 request before transport (including the immutable MicroRTS gameplay contract),
-raw response before parsing, semantic result, and UTC
-timing. Attempt results also retain backend/model/endpoint identity and
-request/response hashes. The compact result references
-`genotype/policy_prompt.txt` rather than
-duplicating the accepted policy text. `candidate.json` identifies the policy as
-configured or LLM-generated and references the initialization result. Failed or
-interrupted attempts remain evidence even when generation zero is not committed.
-Every accepted policy then owns ordinary bounded Java-generation attempts; its
+raw response before parsing, semantic result, and UTC timing. Attempt results also
+retain backend/model/endpoint identity and request/response hashes. The compact
+result references `genotype/policy_prompt.txt` rather than duplicating the
+accepted policy text. `candidate.json` identifies the policy as configured or
+LLM-generated and references the initialization result. Failed or interrupted
+attempts remain evidence even when generation zero is not committed. For a valid
+first-wave response rejected as a population duplicate, the attempt `result.json`
+may include `population_decision` with
+`{status: rejected_duplicate, reason, duplicate_of_candidate_id}`. The attempt
+keeps `status: success` and `selected: false`; its timing record and run-level LLM
+request event also remain successful. The initialization result records the
+ordered retry outcome and may fail after `initial_policy_max_attempts` is
+exhausted, even when each response was valid but duplicated. Every accepted
+policy then owns ordinary bounded Java-generation attempts; its
 WorkerRush `genotype/inherited_java.java` is prompt context rather than the
 phenotype.
 

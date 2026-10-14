@@ -87,9 +87,12 @@ flowchart TD
 - In LLM materialization mode, `inherited_genotype` generation zero replicates
   one seed policy to the fixed population and performs one independent Generator
   call per individual under `configured_seeds` initialization.
-- In LLM materialization mode, `llm_generated_policies` keeps one configured policy, fills the other slots
-  with independent policy-only LLM calls, and independently generates Java for
-  every generation-zero policy. WorkerRush Java is inherited prompt context.
+- In LLM materialization mode, `llm_generated_policies` keeps one configured
+  policy and runs independent policy-only calls for remaining slots in a bounded
+  pool. Their first-wave prompts share one configured-seed snapshot; outputs are
+  resolved and duplicate retries are processed in candidate order. Java generation
+  also runs per candidate in the bounded pool. WorkerRush Java is inherited
+  prompt context.
 - Policy generation and strategy-facing reflection/rewrite roles share one
   immutable closed-world MicroRTS gameplay contract; it permits strategy
   diversity while grounding every rule in legal entities, actions, and
@@ -154,4 +157,4 @@ for ownership and artifact details.
 
 ## Python ownership
 
-`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness, phase ordering, configuration, or serialized run contracts.
+`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness formulas, phase barriers, configuration, or serialized run contracts.

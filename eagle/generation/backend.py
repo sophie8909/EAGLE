@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
+from threading import local
 from typing import TYPE_CHECKING
 
 from eagle.evaluation.determinism import derive_seed
@@ -112,6 +113,16 @@ class ExistingJavaPhenotypeBackend(GenerationBackend):
             raise ValueError("A self-play fitness refresh requires an existing Java phenotype.")
         return candidate.generated_java
 
+class _GenerationRequestContext(local):
+    def __init__(self):
+        self.active_request_started_at = None
+        self.active_request_started_monotonic = None
+        self.generation_attempt = 1
+        self.generation_attempt_id = None
+        self.generation_request_kind = "initial_decode"
+        self.request_artifact_dir = None
+
+
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
@@ -125,17 +136,12 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
         self.seed = 0 if seed is None else int(seed)
-        self._active_request_started_at: str | None = None
-        self._active_request_started_monotonic: float | None = None
-        self._generation_attempt = 1
-        self._generation_attempt_id: str | None = None
-        self._generation_request_kind = "initial_decode"
-        self._request_artifact_dir: Path | None = None
+        self._request_context = _GenerationRequestContext()
 
     def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
-        self._generation_attempt = attempt
-        self._generation_attempt_id = attempt_id
-        self._request_artifact_dir = None
+        self._request_context.generation_attempt = attempt
+        self._request_context.generation_attempt_id = attempt_id
+        self._request_context.request_artifact_dir = None
 
     def set_generation_request_kind(self, request_kind: str) -> None:
         if request_kind not in {
@@ -145,10 +151,10 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             "code_reflection",
         }:
             raise ValueError(f"Unsupported generation request kind: {request_kind}")
-        self._generation_request_kind = request_kind
+        self._request_context.generation_request_kind = request_kind
 
     def set_request_artifact_dir(self, artifact_dir: Path | None) -> None:
-        self._request_artifact_dir = artifact_dir
+        self._request_context.request_artifact_dir = artifact_dir
 
     @property
     def chat_completions_url(self) -> str:
@@ -192,7 +198,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         module_name = {
             "compile_repair": "java_compile_repair",
             "code_reflection": "code_reflection",
-        }.get(self._generation_request_kind, "complete_java_agent")
+        }.get(self._request_context.generation_request_kind, "complete_java_agent")
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -206,8 +212,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             attempt = attempt_index + 1
             request_seed = derive_seed(
                 self.seed, "llm", self.operation or "generation", candidate.generation,
-                candidate.id, self._generation_request_kind, self._generation_attempt,
-                self._generation_attempt_id or "", attempt,
+                candidate.id, self._request_context.generation_request_kind, self._request_context.generation_attempt,
+                self._request_context.generation_attempt_id or "", attempt,
             ) & 0x7FFF_FFFF
             payload["seed"] = request_seed
             request = urllib.request.Request(
@@ -216,8 +222,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            self._active_request_started_at = utc_now()
-            self._active_request_started_monotonic = time.monotonic()
+            self._request_context.active_request_started_at = utc_now()
+            self._request_context.active_request_started_monotonic = time.monotonic()
             try:
                 with llm_request_progress(
                     stage="generation",
@@ -314,7 +320,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             candidate_id=candidate.id,
             generation=candidate.generation,
             module_name=module_name,
-            attempt=self._generation_attempt,
+            attempt=self._request_context.generation_attempt,
             error=error,
             metadata={
                 "class_name": generated_class_name(candidate.id),
@@ -324,18 +330,18 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 "sampling_seed": sampling_seed,
                 "operation_type": (
                     "mutation"
-                    if self._generation_request_kind == "code_reflection"
+                    if self._request_context.generation_request_kind == "code_reflection"
                     or candidate.operator in {"mutation", "crossover+mutation"}
                     else "crossover" if candidate.operator == "crossover" else None
                 ),
-                "generation_attempt": self._generation_attempt,
-                "generation_attempt_id": self._generation_attempt_id,
+                "generation_attempt": self._request_context.generation_attempt,
+                "generation_attempt_id": self._request_context.generation_attempt_id,
                 "transport_attempt": attempt,
-                "generation_request_kind": self._generation_request_kind,
+                "generation_request_kind": self._request_context.generation_request_kind,
             },
-            started_at=self._active_request_started_at,
+            started_at=self._request_context.active_request_started_at,
             finished_at=utc_now(),
-            duration_seconds=None if self._active_request_started_monotonic is None else max(0.0, time.monotonic() - self._active_request_started_monotonic),
+            duration_seconds=None if self._request_context.active_request_started_monotonic is None else max(0.0, time.monotonic() - self._request_context.active_request_started_monotonic),
             artifact_refs=artifact_refs,
             retain_inline_evidence=status != "success",
         )
@@ -353,8 +359,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         if status != "success" or self.logger is None or self.logger.log_dir.name != "llm_logs":
             return None
         run_dir = self.logger.log_dir.parent
-        if self._generation_request_kind == "code_reflection":
-            directory = self._request_artifact_dir
+        if self._request_context.generation_request_kind == "code_reflection":
+            directory = self._request_context.request_artifact_dir
             if directory is None:
                 directory = (
                     run_dir
@@ -363,8 +369,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     / "mutation"
                     / "code_reflection"
                 )
-            request_name = f"revision_attempt_{self._generation_attempt:03d}_request.txt"
-            response_name = f"revision_attempt_{self._generation_attempt:03d}_response_raw.txt"
+            request_name = f"revision_attempt_{self._request_context.generation_attempt:03d}_request.txt"
+            response_name = f"revision_attempt_{self._request_context.generation_attempt:03d}_response_raw.txt"
         else:
             directory = (
                 run_dir
@@ -372,7 +378,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 / candidate.id
                 / "generation"
                 / "attempts"
-                / f"attempt_{self._generation_attempt:03d}"
+                / f"attempt_{self._request_context.generation_attempt:03d}"
             )
             request_name = "request.txt"
             response_name = "response_raw.txt"

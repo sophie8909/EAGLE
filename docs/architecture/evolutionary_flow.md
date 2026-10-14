@@ -13,17 +13,28 @@ Unless a step is marked otherwise, the population lifecycle below describes `jav
    In inherited `configured_seeds` mode, require one seed policy, copy it to
    `population_size`, and give every copy the same inherited Java input. In
    inherited `llm_generated_policies` mode, keep the configured policy in slot
-   one and fill every other slot through one policy-only LLM call. Each such
-   call receives the immutable closed-world MicroRTS gameplay contract and a
+   one and fill every other slot through bounded policy-only LLM calls. These
+   calls receive the immutable closed-world MicroRTS gameplay contract and a
    stable slot-specific strategy identity from `initial_policy_variants.txt`.
-   This keeps deterministic runs reproducible while preventing every slot from
-   receiving the same effective generation request.
+   First-wave policy requests use the same configured-seed snapshot and distinct
+   task seeds. This keeps candidate requests distinct in deterministic runs. Policy
+   transport is stateless; Java-generation request context is
+   thread-local.
+   Results are collected in candidate order; duplicates are resolved and retried
+   in that order against already accepted policies. Every attempt retains its
+   bounded artifacts and timing. For a valid duplicate, the attempt remains
+   successful and unselected; its `result.json` may record `population_decision`
+   as `{status: rejected_duplicate, reason, duplicate_of_candidate_id}`. Its
+   timing and request event remain successful. Retries continue within
+   `initial_policy_max_attempts`; exhausting the bound can fail initialization
+   even when the duplicate responses themselves were valid.
 2. In inherited `configured_seeds` and `llm_generated_policies` modes, call the
-   Generator independently for every generation-zero candidate. In the latter,
-   WorkerRush Java is inherited prompt context rather than the phenotype. Later
-   children in both modes independently
-   inherit policy, generation prompt, and Java provenance before the same final
-   Generator boundary.
+   Generator independently for every generation-zero candidate. These independent
+   candidate calls use the bounded LLM pool and results return in candidate order.
+   In the latter, WorkerRush Java is inherited prompt context rather than the
+   phenotype. Later children in both modes independently inherit policy,
+   generation prompt, and Java provenance before the same final Generator
+   boundary.
 3. In default `fixed_roster` evaluation, store one score for each opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.
@@ -81,6 +92,22 @@ Unless a step is marked otherwise, the population lifecycle below describes `jav
 
 The shared generation implementation is in `eagle/evolution/generation.py` and `eagle/evolution/offspring.py`; selection is in `eagle/operators/selection.py`, with evaluation in
 `eagle/evaluation/pipeline.py`.
+
+## Bounded execution
+
+`eagle/execution.py` fixes GPU layers to `999`, model threads to `8`, LLM
+workers to `2`, and match workers to `10`; the llama-server uses two slots.
+Independent candidate work runs in the LLM pool within its phase: source Code
+gates, reflection/rewrite, corrective Code revision, and Java generation,
+decoding, and compilation. Each candidate's dependent calls retain their
+required order. On failure or interruption, queued tasks are cancelled and active
+requests finish before the phase returns; results are consumed in
+candidate/assignment order. The reflection/rewrite phase completes before
+switching to `generation_model`.
+AOS selection and reward calculation/application remain serial and keep their
+existing formulas. Match dispatch uses the fixed ten-worker pool. Match traces
+remain available through dependent candidate construction and are retired at
+their existing cleanup boundary.
 
 ## Objective contract
 

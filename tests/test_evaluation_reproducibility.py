@@ -57,11 +57,12 @@ class EvaluationReproducibilityTests(unittest.TestCase):
             seeds = []
             with patch("eagle.evaluation.matches.run_microrts_match", side_effect=self._stochastic_match):
                 for workers, seed in ((1, 7), (4, 7), (4, 7), (4, 8)):
-                    config = replace(ExperimentConfig.from_mapping({}), match_workers=workers, random_seed=seed)
-                    results, error = evaluate_matches(
-                        candidate=candidate, agent=agent, config=config, classes_dir=root,
-                        match_artifacts_dir=None, mock=True, ordinal=0, opponent_pool=opponents,
-                    )
+                    config = replace(ExperimentConfig.from_mapping({}), random_seed=seed)
+                    with patch("eagle.config.MATCH_WORKERS", workers):
+                        results, error = evaluate_matches(
+                            candidate=candidate, agent=agent, config=config, classes_dir=root,
+                            match_artifacts_dir=None, mock=True, ordinal=0, opponent_pool=opponents,
+                        )
                     self.assertIsNone(error)
                     self.assertEqual([item.match_index for item in results], list(range(36)))
                     seeds.append([item.match_seed for item in results])
@@ -78,8 +79,9 @@ class EvaluationReproducibilityTests(unittest.TestCase):
             snapshots = []
             with patch("eagle.evaluation.parent_offspring.run_microrts_match", side_effect=self._stochastic_match):
                 for workers in (1, 4, 4):
-                    config = replace(ExperimentConfig.from_mapping({}), match_workers=workers, random_seed=37)
-                    result = evaluate_parent_vs_offspring(Candidate(id="offspring"), Candidate(id="parent"), config=config, classes_dir=root, match_artifacts_dir=root, mock=True)
+                    config = replace(ExperimentConfig.from_mapping({}), random_seed=37)
+                    with patch("eagle.config.MATCH_WORKERS", workers):
+                        result = evaluate_parent_vs_offspring(Candidate(id="offspring"), Candidate(id="parent"), config=config, classes_dir=root, match_artifacts_dir=root, mock=True)
                     snapshots.append((result.to_dict(), result.reward))
             self.assertEqual(snapshots[0], snapshots[1])
             self.assertEqual(snapshots[1], snapshots[2])
@@ -88,10 +90,14 @@ class EvaluationReproducibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with patch("eagle.final_test.FINAL_TEST_OPPONENTS", FINAL_TEST_OPPONENTS[:1]), patch("eagle.final_test.FINAL_TEST_GAMES_PER_SIDE", 2), patch("eagle.final_test._prepare_worker_rush_opponent", return_value=root), patch("eagle.final_test._prepare_safe_allinbot_opponent", return_value=root), patch("eagle.final_test._opponent_classpath", return_value=()), patch("eagle.final_test.hash_file", return_value="source"), patch("eagle.final_test.run_microrts_match", side_effect=self._stochastic_match):
-                snapshots = [
-                    _run_final_matrix(config=replace(ExperimentConfig.from_mapping({}), match_workers=workers, random_seed=37), repository_root=root, candidate={"candidate_id": "a"}, classes_dir=root, output_dir=root)
-                    for workers in (1, 4, 4)
-                ]
+                snapshots = []
+                for workers in (1, 4, 4):
+                    with patch("eagle.config.MATCH_WORKERS", workers):
+                        snapshots.append(_run_final_matrix(
+                            config=replace(ExperimentConfig.from_mapping({}), random_seed=37),
+                            repository_root=root, candidate={"candidate_id": "a"},
+                            classes_dir=root, output_dir=root,
+                        ))
             self.assertEqual(snapshots[0], snapshots[1])
             self.assertEqual(snapshots[1], snapshots[2])
             self.assertTrue(all(item["match"]["match_seed"] is not None for item in snapshots[0]))

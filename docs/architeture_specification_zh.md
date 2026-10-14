@@ -61,9 +61,16 @@ Controller state 使用 `eagle-reflection-operator-v6`。
 獨立 Code Reflection gate，通過後才允許實際 crossover／mutation。所有 contributor
 都必須通過。缺陷來源改產生保留 policy／generation genes 的單一父代修正子代，
 跳過 crossover／一般 mutation；診斷失敗不等於健康，也不能進入 variation。
-健康來源才執行一般 Strategy／Prompt mutation。全部反思完成後進入 generation_model
+健康來源的獨立 gate、反思／rewrite、Code revision、Java decode／compile，
+以及初始 policy request 都在各自階段使用有界 LLM pool，結果依 candidate
+順序消費。初始 policy request 使用同一 configured-seed snapshot，並依 task 使用不同
+seed；policy transport 是 stateless。Java-generation request context 才使用
+thread-local。重複結果依 candidate 順序重試。全部反思完成後才進入
+generation_model
 materialization 邊界，修正 Java 直接進 validation／javac，不讓一般 Generator 覆寫。
-之後執行 integration、180 場 evaluation、正常 mutation 的 AOS credit，以及
+之後執行 integration、180 場 evaluation。AOS selection 與 reward application
+維持序列執行，公式不變；match trace 保留至相依 candidate 工作完成後才清理。
+之後執行正常 mutation 的 AOS credit，以及
 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為
@@ -83,8 +90,10 @@ replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
 reflection sampling、LLM request 與 retry 都依穩定任務身分衍生獨立 seed。
 可控的執行流程永遠採用此規則，不再提供 deterministic/non-deterministic 切換。
 一般評估、父子對戰及 final test 都傳遞並保存每場比賽的 JVM seed；多執行緒依固定
-match 順序彙整，seed 與決策不依完成順序或 thread 身分。CPU/GPU、溫度及 worker 數
-仍可設定。相同版本的新 checkpoint 保存 stagnation 狀態，resume 可延續相同軌跡。
+match 順序彙整，seed 與決策不依完成順序或 thread 身分。GPU layer 固定為 `999`、model thread
+固定為 `8`、server slot 固定為 `2`、LLM worker 固定為 `2`、match worker 固定為 `10`，
+由 `eagle/execution.py` 統一管理。CUDA/GPU preflight 必須成功，無 GPU 時明確失敗，不回退 CPU。
+LLM temperature 仍可設定。相同版本的新 checkpoint 保存 stagnation 狀態，resume 可延續相同軌跡。
 
 外部 LLM 可能忽略 seed 或改變模型；GPU kernel、batching、浮點運算、外部 opponent
 私有 RNG 與時間預算／timeout 仍可能造成差異。固定 seed 無法保證這些外部輸出相同；

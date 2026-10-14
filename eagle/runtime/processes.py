@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import signal
 import socket
@@ -41,7 +42,8 @@ def build_server_command(runtime: RuntimeConfig) -> list[str]:
     llm = runtime.llm
     return [
         str(llm.server_binary), "--model", str(llm.model_path), "--host", llm.host,
-        "--port", str(llm.port), "--ctx-size", str(llm.context_size),
+        # llama.cpp divides the total context among its concurrent request slots.
+        "--port", str(llm.port), "--ctx-size", str(llm.context_size * llm.parallel),
         "--n-gpu-layers", str(llm.gpu_layers), "--parallel", str(llm.parallel),
         "--threads", str(llm.threads), "--batch-size", str(llm.batch_size),
         # The bundled llama.cpp build can abort while reusing a prompt-cache
@@ -69,6 +71,7 @@ class RuntimeManager:
 
         if self._owned_identity is not None and self.runtime is not None:
             if self.runtime.spec == runtime.spec:
+                self.check()
                 self._verify_owned_process()
                 ok, detail = health_check(runtime)
                 if not ok:
@@ -86,6 +89,7 @@ class RuntimeManager:
         runtime = self._require_runtime()
         if self._owned_identity is not None:
             return self.ensure(runtime)
+        self.check()
 
         self._reconcile_ownership_state()
         self._reconcile_legacy_pid_state()
@@ -100,6 +104,8 @@ class RuntimeManager:
         runtime.log_root.mkdir(parents=True, exist_ok=True)
         log_path = runtime.log_path
         with log_path.open("a", encoding="utf-8") as log:
+            log.seek(0, os.SEEK_END)
+            log_start = log.tell()
             process = subprocess.Popen(
                 command,
                 cwd=runtime.project_root,
@@ -141,6 +147,15 @@ class RuntimeManager:
                 )
             ok, detail = health_check(runtime)
             if ok:
+                with log_path.open(encoding="utf-8", errors="replace") as log:
+                    log.seek(log_start)
+                    startup_log = log.read()
+                if not _all_layers_on_gpu(startup_log):
+                    self.stop_owned()
+                    raise RuntimeError(
+                        "Mandatory GPU execution was not confirmed: llama.cpp must "
+                        "report all model layers offloaded to GPU.\n" + startup_log
+                    )
                 return ProcessStatus("healthy", detail, process.pid, action="started")
             time.sleep(0.25)
         self.stop_owned()
@@ -211,24 +226,23 @@ class RuntimeManager:
 
     def check(self) -> ProcessStatus:
         runtime = self._require_runtime()
-        if runtime.llm.gpu_layers != 0:
-            try:
-                probe = subprocess.run(
-                    [str(runtime.llm.server_binary), "--list-devices"],
-                    cwd=runtime.project_root,
-                    capture_output=True,
-                    text=True,
-                    timeout=runtime.llm.health_timeout_seconds,
-                    check=False,
-                )
-            except OSError as exc:
-                raise RuntimeError(f"Unable to inspect llama.cpp devices: {exc}") from exc
-            devices = (probe.stdout + probe.stderr).strip()
-            if probe.returncode != 0 or not _has_gpu_device(devices):
-                raise RuntimeError(
-                    "CUDA support is unavailable for the configured GPU execution.\n"
-                    f"{devices or 'llama-server --list-devices returned no devices.'}"
-                )
+        try:
+            probe = subprocess.run(
+                [str(runtime.llm.server_binary), "--list-devices"],
+                cwd=runtime.project_root,
+                capture_output=True,
+                text=True,
+                timeout=runtime.llm.health_timeout_seconds,
+                check=False,
+            )
+        except OSError as exc:
+            raise RuntimeError(f"Unable to inspect llama.cpp devices: {exc}") from exc
+        devices = (probe.stdout + probe.stderr).strip()
+        if probe.returncode != 0 or not _has_gpu_device(devices):
+            raise RuntimeError(
+                "CUDA support is unavailable for the configured GPU execution.\n"
+                f"{devices or 'llama-server --list-devices returned no devices.'}"
+            )
         return ProcessStatus("healthy", "runtime configuration is valid")
 
     def _require_runtime(self) -> RuntimeConfig:
@@ -618,3 +632,8 @@ def _log_tail(path: Path, lines: int = 80) -> str:
 def _has_gpu_device(output: str) -> bool:
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     return any(line.startswith("CUDA") or "CUDA0" in line or "NVIDIA" in line for line in lines)
+
+
+def _all_layers_on_gpu(output: str) -> bool:
+    reports = re.findall(r"offloaded\s+(\d+)/(\d+)\s+layers to GPU", output)
+    return bool(reports) and all(int(done) == int(total) and int(total) > 0 for done, total in reports)

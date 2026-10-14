@@ -13,6 +13,7 @@ from typing import Protocol
 from eagle.artifacts import write_candidate_inputs, write_json
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
+from eagle.execution import parallel_map
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
 from eagle.prompts import load_prompt
@@ -47,13 +48,11 @@ class MockInitialPolicyBackend:
         self.requests: list[str] = []
 
     def generate(self, prompt: str) -> str:
+        raise ValueError("Mock initial policy generation requires an explicit task seed.")
+
+    def generate_seeded(self, prompt: str, seed: int) -> str:
         self.requests.append(prompt)
-        sample = len(self.requests)
-        return json.dumps(
-            {
-                "strategy_prompt": worker_rush_policy(sample + 1),
-            }
-        )
+        return json.dumps({"strategy_prompt": worker_rush_policy(2 + seed % 999_999)})
 
 
 def initialize_population(
@@ -170,17 +169,34 @@ def initialize_population(
     for candidate in (*configured, *drafts):
         write_candidate_inputs(candidates_dir, candidate)
 
-    population = list(configured)
     selected_prompts = [candidate.strategy_prompt for candidate in configured]
-    for draft in drafts:
-        strategy_prompt = _generate_initial_policy(
-            draft,
-            config=config,
-            backend=policy_backend,
-            candidates_dir=candidates_dir,
-            selected_prompts=selected_prompts,
-            timing_logger=timing_logger,
-        )
+    snapshot = list(selected_prompts)
+    generated = parallel_map(lambda draft: _generate_initial_policy(
+        draft, config=config, backend=policy_backend, candidates_dir=candidates_dir,
+        selected_prompts=snapshot, timing_logger=timing_logger,
+    ), drafts)
+    population = list(configured)
+    for draft, strategy_prompt in zip(drafts, generated, strict=True):
+        if strategy_prompt in selected_prompts:
+            root = candidates_dir / draft.id / "initialization" / "policy_generation"
+            summary = json.loads((root / "result.json").read_text(encoding="utf-8"))
+            attempt_dir = root / summary["selected_attempt_artifact"]
+            rejected = json.loads((attempt_dir / "result.json").read_text(encoding="utf-8"))
+            reason = "strategy_prompt duplicates an earlier parallel population policy"
+            rejected.update(selected=False, population_decision={
+                "status": "rejected_duplicate",
+                "reason": reason,
+                "duplicate_of_candidate_id": next(
+                    candidate.id for candidate in population
+                    if candidate.strategy_prompt == strategy_prompt
+                ),
+            })
+            write_json(attempt_dir / "result.json", rejected)
+            strategy_prompt = _generate_initial_policy(
+                draft, config=config, backend=policy_backend, candidates_dir=candidates_dir,
+                selected_prompts=selected_prompts, timing_logger=timing_logger,
+                start_attempt=summary["final_attempt"] + 1, prior_error=reason,
+            )
         candidate = replace(draft, strategy_prompt=strategy_prompt)
         write_candidate_inputs(candidates_dir, candidate)
         population.append(candidate)
@@ -202,15 +218,18 @@ def _generate_initial_policy(
     candidates_dir: Path,
     selected_prompts: list[str],
     timing_logger: LLMCallLogger | None,
+    start_attempt: int = 1,
+    prior_error: str | None = None,
 ) -> str:
     root = candidates_dir / candidate.id / "initialization" / "policy_generation"
     attempts_root = root / "attempts"
     root.mkdir(parents=True, exist_ok=True)
     selected_attempt: int | None = None
     final_prompt = ""
-    failure_reason: str | None = None
+    failure_reason = prior_error
+    attempt = start_attempt - 1
 
-    for attempt in range(1, config.initial_policy_max_attempts + 1):
+    for attempt in range(start_attempt, config.initial_policy_max_attempts + 1):
         request = _render_initial_policy_request(
             config,
             sample_index=int(candidate.metadata["initial_policy_sample_index"]),

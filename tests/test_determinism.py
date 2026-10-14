@@ -33,17 +33,13 @@ class DeterminismTests(unittest.TestCase):
         config = ExperimentConfig.from_mapping({
             "model": {
                 "name": "test",
-                "gpu_layers": 0,
-                "threads": 1,
                 "batch_size": 512,
-                "parallel": 1,
             },
             "llm": {
                 "temperature": 0,
                 "initial_policy_temperature": 0,
                 "match_commentator": {"temperature": 0},
             },
-            "evaluation": {"match_workers": 1},
             "candidate_java_mode": "inherited_genotype",
             "population_size": 2,
             "random_seed": 37,

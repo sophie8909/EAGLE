@@ -11,7 +11,6 @@ kept as documentation entries.
 | `analyze.sh` | Wrapper for `python -m eagle analyze` |
 | `watchdog.sh` | Optional network-interface monitor; no model lifecycle ownership |
 | `scripts/run_gui_match.py` | Optional read-only visual match inspection |
-| `scripts/benchmark_match_workers.py` | Bounded mock/real MicroRTS match-worker benchmark |
 | `scripts/test_llm_seed_restarts.py` | Restart-owned-server LLM seed stability comparison |
 
 ## Experiment and search
@@ -24,6 +23,7 @@ kept as documentation entries.
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
 | `eagle/cli/analyze.py` | Run selection and report dispatch |
 | `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, owned runtime, search/resume, final test, cleanup |
+| `eagle/execution.py` | Fixed GPU/model/LLM/match concurrency policy and ordered bounded parallel mapping |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, EA/model/evaluation validation |
@@ -69,7 +69,7 @@ kept as documentation entries.
 | `eagle/evaluation/records.py` | Typed cross-stage evaluation/decoder/opponent records |
 | `eagle/evaluation/decoding.py` | Bounded Java decoding, validation, compilation, diagnostic repair and class promotion |
 | `eagle/evaluation/opponents.py` | Fixed/self-play pools, prerequisite checks and opponent compilation |
-| `eagle/evaluation/matches.py` | Ordered matrix dispatch with configured match workers |
+| `eagle/evaluation/matches.py` | Ordered matrix dispatch with the fixed match-worker count |
 | `eagle/evaluation/compiler.py` | Isolated javac and diagnostics |
 | `eagle/evaluation/microrts_runner.py` | Standalone seven-check integration probe only |
 | `eagle/evaluation/runtime_evaluation.py` | Sole MicroRTS match process owner |

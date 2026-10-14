@@ -14,14 +14,8 @@ model:
   llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   host: 127.0.0.1
   port: 18080
-  # llama.cpp divides the context across parallel slots; with parallel=2,
-  # 32768 provides only 16384 tokens per request. Code-reflection prompts can
-  # exceed that boundary, so reserve 32768 tokens per slot.
-  context_size: 65536
-  gpu_layers: -1
-  threads: 20
+  context_size: 32768
   batch_size: 512
-  parallel: 2
 
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 initial_policy_generation_prompt_file: prompts/initial_policy_generation.txt
@@ -64,9 +58,6 @@ evaluation:
   semantic_probes:
     enabled: true
     fitness_tie_tolerance: 1.0
-  # Real MicroRTS benchmark: worker=8 beat 10/12/20 on this host while
-  # llama.cpp parallel remains independently capped at 2 for VRAM safety.
-  match_workers: 8
   maps:
     - {path: maps/8x8/basesWorkers8x8.xml, tick_limit: 1500}
     - {path: maps/16x16/basesWorkers16x16.xml, tick_limit: 3000}

@@ -42,14 +42,13 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
 
     def test_seeded_execution_allows_parallel_gpu_runtime(self):
         config = ExperimentConfig.from_mapping({
-            "model": {"name": "test", "gpu_layers": -1, "threads": 4, "parallel": 2},
-            "evaluation": {"match_workers": 4},
+            "model": {"name": "test"},
             "llm": {"temperature": 0.2, "initial_policy_temperature": 0.8},
         })
         config.validate()
         self.assertNotIn("deterministic_mode", config.to_mapping())
         self.assertFalse(hasattr(config, "deterministic_mode"))
-        self.assertEqual(config.match_workers, 4)
+        self.assertEqual(config.match_workers, 10)
 
     def test_legacy_mode_flag_cannot_disable_seeded_execution(self):
         for legacy_value in (True, False):
@@ -67,7 +66,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             classes.mkdir(parents=True)
             (classes / "CandidateAgent.class").write_bytes(b"compiled")
             agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", "source", source)
-            config = ExperimentConfig.from_mapping({"evaluation": {"match_workers": 4}})
+            config = ExperimentConfig.from_mapping({})
             thread_names: set[str] = set()
             thread_lock = threading.Lock()
             four_workers_started = threading.Event()
@@ -75,7 +74,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             def fake_match(**kwargs):
                 with thread_lock:
                     thread_names.add(threading.current_thread().name)
-                    if len(thread_names) >= 4:
+                    if len(thread_names) >= 10:
                         four_workers_started.set()
                 if not four_workers_started.wait(timeout=5):
                     raise AssertionError("parallel match workers did not start")
@@ -100,13 +99,16 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 )
 
         self.assertIsNone(error)
-        self.assertEqual(len(thread_names), 4)
+        self.assertEqual(len(thread_names), 10)
         self.assertEqual([item.match_index for item in results], list(range(180)))
-        self.assertEqual(config.to_mapping()["evaluation"]["match_workers"], 4)
+        self.assertNotIn("match_workers", config.to_mapping()["evaluation"])
 
-    def test_parallel_worker_count_must_be_positive(self):
-        with self.assertRaisesRegex(ValueError, "match_workers must be at least 1"):
-            ExperimentConfig.from_mapping({"evaluation": {"match_workers": 0}}).validate()
+    def test_removed_match_worker_controls_are_rejected(self):
+        for payload in ({"match_workers": 1}, {"evaluation": {"match_workers": 1}}):
+            with self.assertRaisesRegex(ValueError, "Obsolete"):
+                ExperimentConfig.from_mapping(payload)
+        with self.assertRaises(TypeError):
+            ExperimentConfig(seed_prompts=(), match_workers=1)
 
     def test_one_source_and_class_set_serves_search_roster_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -122,7 +124,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 source=source.read_text(encoding="utf-8"),
                 source_path=source,
             )
-            config = ExperimentConfig.from_mapping({"evaluation": {"match_workers": 1}})
+            config = ExperimentConfig.from_mapping({})
             observed: list[dict] = []
 
             def fake_match(**kwargs):
@@ -150,6 +152,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
 
         self.assertIsNone(error)
         self.assertEqual(len(results), config.expected_match_count)
+        observed.sort(key=lambda item: item["match_index"])
         self.assertEqual([item["match_index"] for item in observed], list(range(config.expected_match_count)))
         self.assertEqual([item["opponent"] for item in observed[::18]], [item.class_name for item in EVALUATION_ROSTER])
         self.assertEqual([item.opponent_id for item in results[::18]], [item.opponent_id for item in EVALUATION_ROSTER])

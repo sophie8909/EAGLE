@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eagle.config import ExperimentConfig
+from eagle.execution import GPU_LAYERS
 from eagle.runtime.config import runtime_config_from_experiment
 from eagle.runtime.processes import (
     ProcessIdentity,
@@ -31,7 +32,7 @@ class RuntimeWorkflowTests(unittest.TestCase):
     ) -> ExperimentConfig:
         binary = root / "llama-server"
         if not binary.exists():
-            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+            binary.write_text("#!/bin/sh\nif [ \"$1\" = \"--list-devices\" ]; then echo CUDA0; fi\n", encoding="utf-8")
         binary.chmod(0o755 if executable else 0o644)
         model = root / model_filename
         if not missing_model:
@@ -44,9 +45,6 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 "host": "127.0.0.1",
                 "port": port,
                 "context_size": 32768,
-                "gpu_layers": 0,
-                "parallel": 1,
-                "threads": 8,
                 "batch_size": 512,
                 "startup_timeout_seconds": 5,
                 "health_timeout_seconds": 1,
@@ -82,7 +80,12 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 command[1:5],
                 ["--model", str(runtime.llm.model_path), "--host", "127.0.0.1"],
             )
-            self.assertIn("--n-gpu-layers", command)
+            options = dict(zip(command[1:-1:2], command[2:-1:2]))
+            self.assertEqual(options["--n-gpu-layers"], str(GPU_LAYERS))
+            self.assertEqual(options["--parallel"], "2")
+            self.assertEqual(options["--threads"], "8")
+            self.assertEqual(options["--ctx-size"], "65536")
+            self.assertEqual(runtime.spec.command_fragments, tuple(command[:-1]))
             self.assertIn("--no-cache-prompt", command)
             self.assertEqual(runtime.ownership_path.name, "127.0.0.1-18080.json")
 
@@ -97,7 +100,7 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 "port": 18081,
                 "context_size": 4096,
                 "gpu_layers": 1,
-                "parallel": 2,
+                "parallel": 3,
                 "threads": 9,
                 "batch_size": 256,
             }
@@ -140,10 +143,66 @@ class RuntimeWorkflowTests(unittest.TestCase):
             self.assertEqual(reflection.llm.model_path, reflection_model)
             self.assertEqual(generation.llm.model_path, generation_model)
             self.assertNotEqual(reflection.spec, generation.spec)
+            for runtime in (reflection, generation):
+                self.assertEqual((runtime.llm.gpu_layers, runtime.llm.threads, runtime.llm.parallel), (GPU_LAYERS, 8, 2))
             self.assertEqual(
                 config.to_mapping()["generation_model"]["name"],
                 "qwen3.5-9b",
             )
+
+    def test_removed_runtime_controls_are_rejected_and_not_serialized(self):
+        for model_field in ("model", "generation_model"):
+            for control in ("gpu_layers", "threads", "parallel"):
+                with self.subTest(model=model_field, control=control):
+                    with self.assertRaisesRegex(ValueError, "Obsolete"):
+                        ExperimentConfig.from_mapping({model_field: {"name": "test", control: 1}})
+        config = ExperimentConfig.from_mapping({"generation_model": {"name": "generation"}})
+        for model_field in ("model", "generation_model"):
+            self.assertTrue({"gpu_layers", "threads", "parallel"}.isdisjoint(config.to_mapping()[model_field]))
+
+    def test_gpu_offload_evidence_requires_all_layers(self):
+        from eagle.runtime.processes import _all_layers_on_gpu
+
+        self.assertTrue(_all_layers_on_gpu("load_tensors: offloaded 33/33 layers to GPU"))
+        for output in ("", "CPU buffer", "offloaded 0/33 layers to GPU", "offloaded 32/33 layers to GPU", "offloaded 0/0 layers to GPU"):
+            with self.subTest(output=output):
+                self.assertFalse(_all_layers_on_gpu(output))
+
+    def test_healthy_server_without_full_gpu_offload_is_stopped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = self.make_runtime(Path(directory))
+            runtime.log_root.mkdir(parents=True)
+            runtime.log_path.write_text("offloaded 33/33 layers to GPU\n", encoding="utf-8")
+            manager = RuntimeManager(runtime)
+            identity = self.identity(runtime)
+            process = type("Process", (), {"pid": identity.pid, "poll": lambda self: None})()
+            with patch.object(manager, "check"), patch.object(manager, "_reconcile_ownership_state"), patch.object(
+                manager, "_reconcile_legacy_pid_state"
+            ), patch("eagle.runtime.processes.discover_listening_server_pid", return_value=None), patch(
+                "eagle.runtime.processes.port_occupied", return_value=False
+            ), patch("eagle.runtime.processes.subprocess.Popen", return_value=process), patch(
+                "eagle.runtime.processes._wait_for_process_identity", return_value=identity
+            ), patch.object(manager, "_write_ownership_state"), patch(
+                "eagle.runtime.processes.health_check", return_value=(True, "ok")
+            ), patch.object(manager, "stop_owned") as stop:
+                with self.assertRaisesRegex(RuntimeError, "Mandatory GPU execution was not confirmed"):
+                    manager.start()
+            stop.assert_called_once()
+
+    def test_gpu_unavailable_blocks_launch_and_reuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = self.make_runtime(Path(directory))
+            manager = RuntimeManager(runtime)
+            probe = subprocess.CompletedProcess([], 0, "CPU backend only", "")
+            with patch("eagle.runtime.processes.subprocess.run", return_value=probe), patch(
+                "eagle.runtime.processes.subprocess.Popen"
+            ) as popen:
+                with self.assertRaisesRegex(RuntimeError, "CUDA support is unavailable"):
+                    manager.start()
+                manager._owned_identity = self.identity(runtime)
+                with self.assertRaisesRegex(RuntimeError, "CUDA support is unavailable"):
+                    manager.ensure(runtime)
+            popen.assert_not_called()
 
     def test_missing_model_and_non_executable_binary_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -277,7 +336,10 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 return_value="python3 -m http.server 18080",
             ), patch("eagle.runtime.processes.terminate_pid") as terminate, patch(
                 "eagle.runtime.processes.subprocess.Popen"
-            ) as popen:
+            ) as popen, patch(
+                "eagle.runtime.processes.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, "CUDA0", ""),
+            ):
                 with self.assertRaisesRegex(RuntimeError, "not EAGLE-owned") as caught:
                     manager.start()
             message = str(caught.exception)
@@ -408,7 +470,10 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 "eagle.runtime.processes._wait_for_process_identity", return_value=identity
             ), patch.object(
                 manager, "_write_ownership_state", side_effect=OSError("disk full")
-            ), patch("eagle.runtime.processes.terminate_pid") as terminate:
+            ), patch("eagle.runtime.processes.terminate_pid") as terminate, patch(
+                "eagle.runtime.processes.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, "CUDA0", ""),
+            ):
                 with self.assertRaisesRegex(OSError, "disk full"):
                     manager.start()
             terminate.assert_called_once_with(identity.pid, 5.0)
