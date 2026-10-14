@@ -236,7 +236,18 @@ def _generate_initial_policy(
                 raise ValueError(
                     "response must contain exactly one string field: strategy_prompt"
                 )
-            final_prompt = normalize_strategy_dsl(parsed["strategy_prompt"], max_chars=config.max_prompt_chars)
+            strategy_source = parsed["strategy_prompt"]
+            if isinstance(strategy_source, str):
+                if len(strategy_source) > config.max_prompt_chars:
+                    raise ValueError("strategy DSL exceeds size limit")
+                try:
+                    # Local models sometimes emit literal newlines inside the
+                    # nested DSL JSON string. Reuse the tolerant JSON boundary
+                    # before applying the normative DSL validator.
+                    strategy_source = parse_json_object_response(strategy_source)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    pass
+            final_prompt = normalize_strategy_dsl(strategy_source, max_chars=config.max_prompt_chars)
             if final_prompt in selected_prompts:
                 raise ValueError("strategy_prompt duplicates an existing population policy")
             status = "success"

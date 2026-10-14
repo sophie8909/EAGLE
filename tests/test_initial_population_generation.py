@@ -258,6 +258,26 @@ class InitialPopulationGenerationTests(unittest.TestCase):
             self.assertEqual(len(responses), 1)
             self.assertEqual(responses[0].read_text(encoding="utf-8"), raw)
 
+    def test_llm_population_mode_repairs_literal_newlines_in_nested_dsl(self) -> None:
+        config = ExperimentConfig.from_mapping({
+            "candidate_java_mode": "inherited_genotype",
+            "initial_population_mode": "llm_generated_policies",
+            "population_size": 2,
+            "seed_prompt_files": ["seeds/worker_rush_policy.txt"],
+            "initial_policy_max_attempts": 1,
+        })
+        policy = worker_rush_policy(2)
+        raw_policy = policy.replace("},{", "},\n{")
+        raw = json.dumps({"strategy_prompt": raw_policy})
+        backend = ScriptedPolicyBackend([raw])
+        with tempfile.TemporaryDirectory() as directory:
+            population = initialize_population(
+                config,
+                policy_backend=backend,
+                candidates_dir=Path(directory) / "candidates",
+            )
+        self.assertEqual(population[1].strategy_prompt, policy)
+
     def test_llm_population_mode_rejects_incompatible_boundaries(self) -> None:
         for payload, message in (
             (
