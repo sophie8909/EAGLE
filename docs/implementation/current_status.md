@@ -304,6 +304,14 @@ run timing event, without duplicating prompts/responses under `llm_logs/`.
 Validated Coach results use the authoritative input parent policy; the model's
 echo is retained only in raw/parsed evidence.
 
+Coach and strategy-contract-rewriter output now prefers a one-record JSONL
+envelope with the DSL as a nested JSON object. The compatibility parser still
+accepts the prior whole-object/string-field form. When extra prose is present,
+only complete per-line JSON objects are considered, exactly one record must
+carry the role-specific child-policy field, and the full selected DSL is then
+strictly validated. This intentionally cannot fall back to an echoed
+`parent_strategy_prompt` or delete invalid content within the proposed policy.
+
 Prompt Reviewer/Rewriter evidence is stored under `mutation/prompt_reflection/`.
 The Reviewer sees only the editable strategy region plus the immutable API
 guide, so fixed scaffold fields/helpers cannot be mistaken for reachable

@@ -705,6 +705,65 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 (reflection_dir / "strategy_contract_rewriter_output.json").exists()
             )
 
+    def test_jsonl_coach_ignores_prose_and_preserves_raw_response(self) -> None:
+        class JsonlCoachBackend:
+            def __init__(self) -> None:
+                self.mock = MockRoleBackend()
+                self.raw_coach_response = ""
+
+            def generate(self, prompt: str) -> str:
+                response = self.mock.generate(prompt)
+                if "ROLE: coach" not in prompt:
+                    return response
+                payload = json.loads(response)
+                payload["new_strategy_prompt"] = json.loads(
+                    payload["new_strategy_prompt"]
+                )
+                record = json.dumps(payload, separators=(",", ":"))
+                self.raw_coach_response = (
+                    "I checked the policy.\n" + record + "\nThis line is not JSON."
+                )
+                return self.raw_coach_response
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            trace = root / "match_trace.jsonl.gz"
+            _write_trace(
+                trace,
+                metadata={"match_id": "match-jsonl"},
+                round_state_dir=states,
+                raw_result={},
+                tick_limit=0,
+            )
+            backend = JsonlCoachBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=1).run(
+                Candidate(id="jsonl-coach", strategy_prompt=worker_rush_policy()),
+                ReflectionContext(
+                    generation=1,
+                    index=0,
+                    candidate_id="parent",
+                    per_match_results=({
+                        "match_id": "match-jsonl",
+                        "match_trace_path": str(trace),
+                    },),
+                ),
+                artifact_dir=root / "child",
+            )
+
+            self.assertEqual(result.status, "success")
+            reflection_dir = root / "child" / "mutation" / "strategy_reflection"
+            call = json.loads((reflection_dir / "coach_call.json").read_text())
+            attempt = call["selected_attempt"]
+            raw_artifact = json.loads(
+                (reflection_dir / f"coach_response_attempt_{attempt:03d}.json").read_text()
+            )
+            self.assertEqual(raw_artifact["response"], backend.raw_coach_response)
+            parsed = json.loads((reflection_dir / "coach_output.json").read_text())
+            self.assertIsInstance(parsed["new_strategy_prompt"], str)
+            self.assertEqual(result.candidate.strategy_prompt, worker_rush_policy(2))
+
     def test_commentary_failure_preserves_trace_without_changing_candidate(self) -> None:
         class BadBackend:
             def __init__(self) -> None:

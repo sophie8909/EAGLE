@@ -27,7 +27,12 @@ from eagle.operators.context import ReflectionContext
 from eagle.operators.reflection import _run_relative_artifact_base
 from eagle.llm import parse_json_object_response
 from eagle.timing import utc_now
-from eagle.strategy_dsl import normalize_strategy_dsl, worker_rush_policy
+from eagle.strategy_dsl import (
+    extract_strategy_jsonl_record,
+    normalize_strategy_dsl,
+    strategy_dsl_source_from_record,
+    worker_rush_policy,
+)
 from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
 from eagle.opponent_cases import LEXICASE_CASES
 from eagle.prompts import load_prompt, render_prompt
@@ -1119,26 +1124,40 @@ def _validate_coach_structure_response(
     *,
     parent_strategy_prompt: str,
 ) -> tuple[dict[str, object], CoachResult]:
-    payload = parse_json_object_response(raw)
-    return payload, _parse_coach(raw, parent_strategy_prompt=parent_strategy_prompt)
+    payload = extract_strategy_jsonl_record(raw, field_name="new_strategy_prompt")
+    if payload is None:
+        payload = parse_json_object_response(raw)
+    prompt = strategy_dsl_source_from_record(
+        payload,
+        field_name="new_strategy_prompt",
+    )
+    payload = {**payload, "new_strategy_prompt": prompt}
+    return payload, _parse_coach(
+        json.dumps(payload, ensure_ascii=False),
+        parent_strategy_prompt=parent_strategy_prompt,
+    )
 
 
 def _validate_strategy_contract_rewrite_response(
     raw: str,
 ) -> tuple[dict[str, object], str]:
-    payload = parse_json_object_response(raw)
+    payload = extract_strategy_jsonl_record(
+        raw,
+        field_name="revised_strategy_prompt",
+    )
+    if payload is None:
+        payload = parse_json_object_response(raw)
     if set(payload) != {"revised_strategy_prompt"}:
         raise ValueError(
             "Strategy contract rewrite JSON must contain exactly revised_strategy_prompt."
         )
-    prompt = payload["revised_strategy_prompt"]
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError(
-            "Strategy contract rewrite revised_strategy_prompt must be a non-empty string."
-        )
+    prompt = strategy_dsl_source_from_record(
+        payload,
+        field_name="revised_strategy_prompt",
+    )
     normalized = normalize_strategy_dsl(prompt)
     validate_strategy_prompt_contract(normalized)
-    return payload, normalized
+    return {"revised_strategy_prompt": prompt}, normalized
 
 
 def _parse_json(raw: str) -> dict[str, Any]:

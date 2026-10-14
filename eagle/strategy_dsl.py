@@ -1,11 +1,79 @@
 """Finite, versioned strategy gene grammar; Java generation implements its semantics."""
 import json
 import math
+import re
 
 VERSION = "eagle-strategy-dsl-v1"
 UNIT_TYPES = {"Worker", "Base", "Barracks", "Light", "Heavy", "Ranged"}
 MOBILE = {"Worker", "Light", "Heavy", "Ranged"}
 MAX_CHARS = 16000
+
+
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field {key}")
+        result[key] = value
+    return result
+
+
+def _json_object(text):
+    value = json.loads(text, object_pairs_hook=_unique_json_object)
+    return value if isinstance(value, dict) else None
+
+
+def extract_strategy_jsonl_record(response, *, field_name):
+    """Return one complete JSON/JSONL record carrying ``field_name``.
+
+    A whole JSON object remains the preferred compatibility shape.  If prose or
+    fence lines surround the answer, each non-empty line is instead treated as
+    an independent JSONL record.  Non-JSON and non-object lines are ignored;
+    duplicate JSON fields, zero matching records, and multiple matching records
+    are rejected.  Parsing is deliberately field-targeted so an echoed parent
+    policy cannot be selected as the proposed child policy.
+    """
+    text = str(response).lstrip("\ufeff").strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*\n([\s\S]*?)\n```", text, flags=re.IGNORECASE)
+    whole = fenced.group(1) if fenced else text
+    try:
+        payload = _json_object(whole)
+    except json.JSONDecodeError:
+        payload = None
+    if payload is not None:
+        return payload if field_name in payload else None
+
+    matches = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = _json_object(line)
+        except json.JSONDecodeError:
+            continue
+        if payload is not None and field_name in payload:
+            matches.append((line_number, payload))
+    if len(matches) > 1:
+        lines = ", ".join(str(line_number) for line_number, _ in matches)
+        raise ValueError(
+            f"strategy response contains multiple JSONL records for {field_name}: lines {lines}"
+        )
+    return matches[0][1] if matches else None
+
+
+def strategy_dsl_source_from_record(payload, *, field_name):
+    """Decode a strategy field, accepting the new object form and legacy string form."""
+    if field_name not in payload:
+        raise ValueError(f"strategy response must contain {field_name}")
+    value = payload[field_name]
+    if isinstance(value, str):
+        if not value.strip():
+            raise ValueError(f"strategy response {field_name} must be non-empty")
+        return value
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    raise ValueError(f"strategy response {field_name} must be a JSON object or serialized JSON string")
 
 
 def _fields(value, required, optional=()):
@@ -136,15 +204,8 @@ def validate_strategy_dsl(source, *, max_chars=MAX_CHARS, max_rules=32):
     if isinstance(source, str):
         if len(source) > max_chars:
             raise ValueError("strategy DSL exceeds size limit")
-        def unique(pairs):
-            result = {}
-            for key, value in pairs:
-                if key in result:
-                    raise ValueError(f"duplicate JSON field {key}")
-                result[key] = value
-            return result
         try:
-            data = json.loads(source, object_pairs_hook=unique)
+            data = json.loads(source, object_pairs_hook=_unique_json_object)
         except (json.JSONDecodeError, RecursionError) as exc:
             raise ValueError("strategy_prompt must be versioned JSON strategy DSL") from exc
     else:

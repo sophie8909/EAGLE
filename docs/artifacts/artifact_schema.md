@@ -335,6 +335,13 @@ parent-policy echo, while validated `coach_result.json` takes the parent policy
 from the authoritative input artifact. Bounded Rewrite attempts retain their request/raw files; compact metadata points
 to the representative attempt. A retry request includes the prior deterministic
 validation error; raw invalid output is never rewritten in place.
+Coach and strategy-contract-rewriter responses may contain a single compact
+JSONL record among non-JSON lines. Extraction is keyed only by the expected role
+field and requires exactly one matching valid record; the exact unfiltered
+response remains in the numbered attempt artifact. Parsed output stores the
+selected policy as a serialized DSL string for schema compatibility, and the
+validated candidate stores its canonical form. Invalid material inside that
+selected record is not filtered or repaired.
 Mutation-role run timing references the candidate-owned evidence without
 duplicating its prompt/response under `llm_logs/`. Adaptively credited offspring
 retain `aos/reward.json`; its

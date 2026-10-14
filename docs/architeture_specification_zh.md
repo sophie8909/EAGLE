@@ -245,6 +245,14 @@ bounds 擋下非法座標，避免抽象 action 帶著地圖外座標進入 Micr
 共用有界重試；每次 attempt 保存 UTC 起訖時間，並在 run `timing.jsonl` 寫一筆
 不重複 prompt／response 的 timing event。
 
+Coach 與 strategy-contract-rewriter 優先輸出單行、單筆 JSONL record，DSL 欄位
+直接放巢狀 JSON object，避免雙層 JSON escape。若 response 另有非 JSON 說明行，
+parser 只依角色指定欄位抽取唯一的完整 record：Coach 使用
+`new_strategy_prompt`，rewriter 使用 `revised_strategy_prompt`。不會搜尋任意
+`eagle-strategy-dsl-v1`，因此不會把回顯的 parent policy 誤認為 child。被選中的
+DSL 仍須整體通過嚴格驗證；DSL 內的非法句子、欄位、動作或截斷內容都不能被刪除
+或修補。舊的完整 JSON／完整 JSON fence 格式仍可讀取，原始 response 也會原樣保存。
+
 Strategy Reflection 的 candidate artifact 會在 `mutation/strategy_reflection/`
 保存：parent
 `strategy_prompt`、唯一選出的最差比賽及其 Commentator 解析結果、Coach 的結構化
