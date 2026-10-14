@@ -16,9 +16,15 @@ the next generation's reflection phase. Without it, `model` owns both phases.
 
 LLM materialization inputs:
 
-- `strategy_prompt` as the game-playing policy;
-- `generation_prompt` as reusable policy-to-Java translation instructions;
+- `strategy_prompt` as the authoritative `eagle-strategy-dsl-v1` JSON policy;
+- `generation_prompt` as reusable DSL-to-Java translation instructions;
 - the fixed checked-in Java scaffold, action API guide, and structural/security constraints.
+
+Initial and rewritten generation meta prompts preserve DSL `actor`/`when`/`action`,
+ordered legal-action fallthrough, idle semantics, observable metrics, target selection,
+deterministic hashing and same-cycle reservations. Normative DSL semantics take priority
+over reusable instructions and inherited Java. Compile-repair prompts preserve that same
+contract; output remains complete Java with no runtime DSL interpreter.
 
 Additional LLM input in `inherited_genotype` candidate mode:
 

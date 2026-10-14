@@ -9,6 +9,7 @@ from eagle.operators.reusable_prompt import (
     RULES_START_MARKER,
     apply_reusable_rule_delta,
     parse_reusable_generation_rules,
+    render_reusable_generation_prompt,
     reusable_rules_json,
 )
 
@@ -18,6 +19,7 @@ class ReusableGenerationPromptTests(unittest.TestCase):
         prompt = load_prompt("initial_generation")
         rules = parse_reusable_generation_rules(prompt)
 
+        self.assertEqual(render_reusable_generation_prompt(rules), prompt)
         self.assertEqual(len(rules), 6)
         self.assertEqual(len({rule.rule_id for rule in rules}), len(rules))
         self.assertIn(RULES_START_MARKER, prompt)

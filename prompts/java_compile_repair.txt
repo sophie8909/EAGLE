@@ -2,10 +2,10 @@ Repair one complete generated CandidateAgent.java phenotype so it passes the
 immutable EAGLE source contract and javac. This is a decoder compile-repair
 substage, not Strategy Reflection or Code Reflection.
 
-AUTHORITATIVE POLICY GENE — preserve its game-playing intent exactly:
+AUTHORITATIVE DSL POLICY GENE — preserve its actor/when/action semantics exactly:
 $policy_prompt
 
-AUTHORITATIVE POLICY-TO-JAVA GENE — preserve its translation intent exactly:
+AUTHORITATIVE DSL-TO-JAVA GENE — subordinate to normative DSL semantics:
 $code_generation_prompt
 
 IMMUTABLE MICRORTS ACTION/JAVA API CONTRACT — higher priority than either gene:
@@ -34,7 +34,9 @@ REPAIR RULES:
 - Return a corrected complete file from scratch, not a patch or explanation.
 - Fix every reported validation and compiler error, including dependent type,
   return-value, scope, missing-symbol, and API-receiver errors.
-- Do not change, reinterpret, improve, or weaken the policy gene.
+- Do not change, reinterpret, improve, or weaken the DSL policy gene. Preserve
+  ordered rules, intrinsic guards, legal-target selection, deterministic hashing,
+  reservations and fallthrough. Empty rules explicitly means idle.
 - Do not rewrite either prompt gene. They are immutable inputs, not output.
 - Do not invent unavailable MicroRTS APIs or helpers. Every called strategy
   helper must be declared with a compatible signature and return type.

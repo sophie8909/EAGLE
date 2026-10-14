@@ -1,7 +1,7 @@
 EAGLE Prompt Reflection generation-prompt rewrite stage.
 
-Improve the reusable rules that translate any policy prompt into complete Java. Return a
-rule delta; runtime applies it deterministically to the current rules. Do not rewrite the
+Improve the reusable rules that translate any valid eagle-strategy-dsl-v1 JSON policy
+into complete Java. Return a rule delta; runtime applies it deterministically to the current rules. Do not rewrite the
 whole prompt.
 
 Return exactly one JSON object with this schema:
@@ -15,7 +15,11 @@ normalized. The final rule set may contain at most 10 rules, so when Current reu
 already contains 10 entries, replace one by returning exactly one valid removal ID.
 
 Every added instruction must be policy-agnostic and useful for unseen policies. Convert a
-specific mismatch into a general translation principle. Never copy the current policy,
+specific DSL/Java mismatch into a general DSL-to-Java translation invariant. Preserve
+actor/when/action meaning, rule order, legal-action fallthrough, idle semantics, current
+observable state, legal-target selection, deterministic hashing and reservations.
+Reusable rules must remain subordinate to the normative DSL semantics and immutable
+API/scaffold contracts. Never copy the current policy,
 name its concrete units or strategy, prescribe helper names, include Java fragments, or
 request edits to the immutable scaffold. Do not return Java, analysis, a patch, a diff, or
 Markdown.

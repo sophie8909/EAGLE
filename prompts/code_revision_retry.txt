@@ -10,5 +10,5 @@ The response could not be used as one complete CandidateAgent.java source:
 $validation_error
 
 Correct only that error while following the recorded reflection conclusion and original
-strategy, gameplay, API, and fixed-scaffold constraints. Return exactly one complete Java
-source file with no prose, JSON, diff, or Markdown fence.
+strategy DSL semantics, gameplay, API, and fixed-scaffold constraints. Return exactly
+one complete Java source file with no prose, JSON, diff, or Markdown fence.

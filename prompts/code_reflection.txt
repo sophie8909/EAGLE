@@ -1,12 +1,13 @@
 EAGLE Code Reflection diagnosis stage.
 
-Compare the current strategy prompt with behavior reachable from the supplied parent
-CandidateAgent Java. Produce a concise conclusion before any code is revised. Do not
-optimize from wins or losses, use game performance, opponent scores, W/D/L, match
+Compare the current eagle-strategy-dsl-v1 JSON policy with behavior reachable from the
+supplied parent CandidateAgent Java. Judge the DSL's executable semantics, not a
+natural-language interpretation of strategy intent. Produce a concise conclusion before
+any code is revised. Do not optimize from wins or losses, use game performance, opponent scores, W/D/L, match
 results, traces, logs, or aggregate fitness, invent strategy requirements, rewrite
 either prompt, or return Java.
 
-Current strategy prompt:
+Current strategy DSL policy (ordered actor/when/action rules):
 $strategy_prompt
 
 Parent CandidateAgent Java:
@@ -30,13 +31,25 @@ $java_scaffold
 
 Judge only legal behavior that can be implemented with the supplied contracts. The fixed
 scaffold is immutable: diagnose only reachable behavior in the editable strategy region.
-If the strategy prompt is blank or ambiguous, do not invent its intent. Assess both
-independent dimensions:
-1. strategy_fidelity: faithful only when reachable Java behavior implements the concrete
-   policy; unfaithful requires an evidenced policy/Java behavioral mismatch. Use
-   ambiguous_strategy when the policy does not support a fidelity judgment.
+A valid policy with an empty rules array explicitly means idle and is not ambiguous.
+Missing, malformed or unsupported DSL does not authorize inferred strategy intent or
+an assumed idle policy. Assess both independent dimensions:
+1. strategy_fidelity: faithful only when reachable Java implements the supplied DSL
+   rules and their normative semantics; unfaithful requires an evidenced DSL/Java
+   behavioral mismatch. Use ambiguous_strategy only when the supplied policy does not
+   support a fidelity judgment.
 2. code_correctness: incorrect only for actual compilation, runtime, control-flow defects,
    or violations of the supplied game/action API contracts. Otherwise correct.
+
+For fidelity, identify the affected rule index and actor/when/action fields or the
+violated intrinsic DSL semantic in each diagnosis. Check idle actors by ascending ID,
+array-order rules, first legally issuable action, failed-guard fallthrough, explicit idle
+termination and unmatched-actor idle behavior. Check observable metrics (including
+actor_id_rank over all same-type friendly units), legal-target filtering before selection,
+selector ties, deterministic long-arithmetic hashing, choose option filtering and order,
+and same-cycle stockpile/cell reservations. Distinguish in-range attack from engage,
+separate harvest from return, and preserve entity-move adjacency/reachability guards.
+A Java helper's broader behavior cannot override the DSL or introduce unstated actions.
 
 Never request simplification, cosmetic refactoring, deduplication, cleanup, or removal of
 unreachable code solely for neatness. Do not improve strategy or optimize win/loss outcomes.

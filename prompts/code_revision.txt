@@ -4,9 +4,9 @@ Revise the supplied parent CandidateAgent Java only after applying the recorded 
 Reflection conclusion below. This operator edits Java, not either prompt gene. Do not add
 changes that are absent from the conclusion, optimize from wins or losses, use game
 performance, opponent scores, W/D/L, match results, traces, logs, or aggregate fitness,
-or invent strategy requirements.
+or invent DSL rules, conditions, targets, actions or priorities.
 
-Current strategy prompt:
+Current strategy DSL policy (ordered actor/when/action rules):
 $strategy_prompt
 
 Code Reflection conclusion:
@@ -37,6 +37,10 @@ coherent changes inside the editable strategy region for dimensions explicitly m
 unfaithful or incorrect, while preserving its listed correct
 behaviors. Every condition must use observable state and every action must be legal under
 the supplied contracts. Preserve every already correct behavior, both prompt genes, and the inherited input Java.
+Correct DSL/Java mismatches against the cited rule index or intrinsic semantic, preserving
+actor/when/action meaning, ordered legal-action fallthrough, selection and reservations.
+An empty rules array means idle. Do not reinterpret missing or invalid DSL as an idle
+policy, and do not let a broader Java helper add behavior absent from the DSL.
 Do not simplify, cosmetically refactor, deduplicate, or clean up unrelated code.
 Ambiguous strategy never authorizes invented behavior. Implement only evidenced program
 defect or policy/Java mismatch corrections; do not optimize win/loss outcomes.

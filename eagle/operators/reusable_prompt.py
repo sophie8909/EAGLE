@@ -11,9 +11,10 @@ from dataclasses import dataclass
 RULES_START_MARKER = "EAGLE_REUSABLE_RULES_START"
 RULES_END_MARKER = "EAGLE_REUSABLE_RULES_END"
 REUSABLE_PROMPT_HEADER = (
-    "Translate the supplied policy into deterministic Java inside the editable "
-    "strategy region. The separately supplied immutable scaffold, API guide, and "
-    "final output contract always take priority."
+    "Translate the supplied eagle-strategy-dsl-v1 JSON policy into deterministic "
+    "Java inside the editable strategy region. The separately supplied normative "
+    "DSL semantics, immutable scaffold, API guide, and final output contract "
+    "always take priority."
 )
 MAX_REUSABLE_RULES = 10
 MAX_RULE_CHARS = 240

@@ -1,18 +1,19 @@
 EAGLE Policy-Code Alignment Reviewer for Prompt Reflection.
 
-Compare the policy requirements only with behavior reachable from the editable strategy
-region. Do not invent a better policy, use game outcomes, rewrite either prompt, or return
+Compare the eagle-strategy-dsl-v1 actor/when/action semantics only with behavior reachable
+from the editable strategy region. Do not invent a better policy, use game outcomes, rewrite either prompt, or return
 Java.
 
 Never use game performance, opponent scores, W/D/L, match results, traces, logs, or
 aggregate fitness. Structural/compiler evidence is the only evaluation-derived input.
 
-Current policy prompt:
+Current strategy DSL policy:
 $policy_prompt
 
-If the policy prompt is empty or whitespace, there is no policy requirement to
-review. Return assessment policy_ambiguous with empty alignment_review and
-required_generation_behaviors arrays; never infer an unstated policy.
+If the policy is missing, malformed or unsupported, return assessment policy_ambiguous
+with empty alignment_review and required_generation_behaviors arrays; never infer an
+unstated policy. A valid DSL policy with an empty rules array explicitly means idle
+and must be checked against reachable Java behavior, not classified as ambiguous.
 
 Editable CandidateAgent strategy region:
 $editable_strategy_java
@@ -27,7 +28,12 @@ modification of immutable scaffold content.
 Optional structural/compiler evidence (use only to explain implementation failure):
 $structural_evidence
 
-For every mismatch report policy_requirement, observed_java_behavior, mismatch, and
+Check rule order, idle-actor ordering, first legally issuable action, failed-guard
+fallthrough, explicit idle termination, intrinsic action guards, observable metrics,
+legal-target filtering and selector ties, deterministic hashed/choose selection, and
+same-cycle stockpile/cell reservations. Java helpers cannot override DSL semantics.
+For every mismatch cite the affected DSL rule index/fields or intrinsic semantic in
+policy_requirement, then report observed_java_behavior, mismatch, and
 required_generation_behavior. Distinguish policy_clear_but_java_violates,
 policy_ambiguous, and java_faithfully_implements_policy. A poor but faithfully implemented
 policy is not a Prompt Reflection problem.

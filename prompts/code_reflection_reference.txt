@@ -1,5 +1,12 @@
 IMMUTABLE CODE REFLECTION IMPLEMENTATION REFERENCE.
 
+The normative strategy DSL reference defines policy behavior. These interfaces describe
+available Java mechanisms, not a one-to-one mapping from DSL action names. In particular,
+DSL attack is in-range only, engage may move, and harvest cannot implicitly return unless
+an applicable return rule authorizes it. Entity-target move must preserve range-1
+adjacency, self-target and unreachable-target fallthrough. Prefer exact legal primitives
+when a higher-level helper would continue or add behavior beyond the selected DSL action.
+
 Available action interfaces. They return false when their fixed ownership/type/bounds
 guards fail; strategy code must still check that the actor is idle and that the action's
 resource, reachability, adjacency, occupancy, and range prerequisites are satisfied:
@@ -40,7 +47,8 @@ Complete available entity/unit list and Java symbols:
 - Worker (workerType): cost 1, 1 HP, attack range 1; moves, attacks, harvests/returns one
   resource, and builds Base or Barracks.
 - Light (lightType): cost 2, 4 HP, attack range 1, damage 2; fastest combat mover.
-- Heavy (heavyType): cost 2, 4 HP, attack range 1, damage 4; slower combat mover.
+- Heavy (heavyType): configured UnitType.cost (2 in VERSION_ORIGINAL, 3 in other tables),
+  4 HP, attack range 1, damage 4; slower combat mover.
 - Ranged (rangedType): cost 2, 1 HP, attack range 3, damage 1.
 
 The deterministic compiler also uses the reserved primitive interfaces documented

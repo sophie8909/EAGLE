@@ -63,7 +63,9 @@ current reusable rules + alignment review
   -> replacement generation_prompt -> final Java Generator
 ```
 
-The Reviewer sees only the editable strategy region, never fixed-scaffold Java.
+The Reviewer compares the DSL's `actor`/`when`/`action` semantics with only the editable
+strategy region, never fixed-scaffold Java. It cites rule fields or intrinsic DSL semantics
+for mismatches; a valid empty `rules` array is an explicit idle policy, not ambiguity.
 Source-matching validation/compiler diagnostics may explain an implementation
 failure. It receives no game performance, opponent scores, W/D/L summaries,
 match results, traces, logs, aggregate fitness, or other gameplay evidence. It
@@ -99,6 +101,11 @@ healthy pass and cannot enter crossover/mutation. Healthy sources follow normal
 crossover and Strategy/Prompt mutation. Code gating has no adaptive probability
 or AOS reward. Corrective revision runs at the `generation_model` boundary (or
 primary model when absent) and bypasses ordinary Generator overwrite.
+
+Code diagnosis and revision prompts use the normative DSL semantics for rule/actor
+ordering, legal-action fallthrough, observable metrics, target selection, deterministic
+hashing and reservations. Broader Java helpers cannot introduce unstated behavior.
+A valid empty `rules` array is an explicit idle policy, not ambiguity.
 
 Code diagnosis schema `eagle-code-reflection-v6` has exactly two independent
 dimensions: `strategy_fidelity` (`faithful`, `unfaithful`, `ambiguous_strategy`)

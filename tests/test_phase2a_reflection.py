@@ -84,7 +84,7 @@ class Phase2AReflectionTests(unittest.TestCase):
     def test_prompt_reflection_contains_complete_failure_evidence(self):
         prompt = build_prompt_reflection_prompt(self.candidate, self.context)
         for expected in (
-            "Current policy prompt",
+            "Current strategy DSL policy",
             "Editable CandidateAgent strategy region",
             "Immutable scaffold/API contract",
             "Optional structural/compiler evidence",

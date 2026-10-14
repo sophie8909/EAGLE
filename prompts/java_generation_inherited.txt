@@ -1,16 +1,26 @@
-Generate the complete Java source file for CandidateAgent.
+Generate the complete Java source file for CandidateAgent by translating the supplied
+DSL into Java behavior offline. Do not emit DSL or implement a runtime DSL interpreter.
 
-Game-playing policy to implement faithfully:
+Preserve each actor/when/action rule, array-order priority, first legally issuable action,
+failed-guard fallthrough and explicit idle termination. Process idle friendly actors by
+ascending ID and reserve stockpile and destination cells before processing later actors.
+Filter targets and choose options for legality before selection, with the normative
+selector ties and deterministic long-arithmetic hashing. Implement only current-state
+conditions and intrinsic action guards. Empty rules means idle, not missing intent.
+Java helpers and reusable instructions must not add behavior absent from the DSL.
+
+Authoritative eagle-strategy-dsl-v1 JSON policy to implement exactly:
 $policy_prompt
 
-Reusable policy-to-Java translation instructions:
+Reusable DSL-to-Java translation instructions (subordinate to normative DSL semantics):
 $code_generation_prompt
 
 INHERITED JAVA COMPONENT (an evolvable input, not the immutable scaffold):
 $inherited_java
 
 Use the inherited Java as implementation evidence while producing a complete
-CandidateAgent that follows the policy and translation instructions. Do not
+CandidateAgent that implements the authoritative DSL semantics. Inherited behavior
+must not override the DSL or add unstated actions. Do not
 return a patch: return the complete file.
 
 IMMUTABLE SOURCE/API CONTRACT (higher priority than the reusable instructions):
