@@ -1,7 +1,7 @@
 """Typed results shared by EAGLE evaluation stages."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from eagle.candidate import Candidate
@@ -75,6 +75,8 @@ class BoundedGenerationResult:
     max_attempts: int
     initial_seed_source: bool
     source_without_generation: bool
+    materialization_timing: dict[str, object] | None = None
+    compiler_evidence: dict[str, object] = field(default_factory=dict)
 
     @property
     def representative_attempt(self) -> GenerationAttemptResult:

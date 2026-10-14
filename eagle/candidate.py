@@ -41,6 +41,8 @@ class Candidate:
     # generated phenotype below so failures do not erase inherited state.
     strategy_prompt: str = '{"rules":[],"version":"eagle-strategy-dsl-v1"}'
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
+    java_materialization_mode: str = "llm"
+    java_compiler_version: str | None = None
     inherited_java: str = ""
     java_parent_id: str | None = None
     generated_java: str = ""
@@ -79,6 +81,17 @@ class Candidate:
                 "id",
                 f"gen_{self.generation:04d}_{uuid4().hex[:12]}",
             )
+
+    @property
+    def active_genotype_components(self) -> tuple[str, ...]:
+        if self.java_materialization_mode == "deterministic_dsl":
+            return ("strategy_prompt",)
+        return ("strategy_prompt", "generation_prompt", *(("inherited_java",) if self.inherited_java else ()))
+
+    def materialization_to_json_dict(self) -> dict[str, Any]:
+        return {"java_materialization_mode": self.java_materialization_mode,
+                "java_compiler_version": self.java_compiler_version,
+                "active_genotype_components": list(self.active_genotype_components)}
 
     def objective_vector(self) -> tuple[float, ...]:
         """Return the fixed opponent cases used by lexicase selection."""
@@ -130,8 +143,9 @@ class Candidate:
         """
 
         payload = {
-            "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "candidate_schema_version": "eagle-candidate-v7" if self.java_materialization_mode == "deterministic_dsl" else CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
+            **self.materialization_to_json_dict(),
             "id": self.id,
             "candidate_id": self.id,
             "generation": self.generation,
@@ -181,8 +195,9 @@ class Candidate:
         """Return fitness and timing data for run-level summaries."""
 
         return {
-            "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "candidate_schema_version": "eagle-candidate-v7" if self.java_materialization_mode == "deterministic_dsl" else CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
+            **self.materialization_to_json_dict(),
             "candidate_id": self.id,
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
@@ -222,6 +237,7 @@ class Candidate:
 
         payload = {
             "lineage_schema_version": LINEAGE_SCHEMA_VERSION,
+            **self.materialization_to_json_dict(),
             "candidate_id": self.id,
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),

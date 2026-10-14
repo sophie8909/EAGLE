@@ -25,6 +25,8 @@ from eagle.prompts import DEFAULT_PROMPT_DIR, PromptTemplate
 
 
 EVOLUTION_PROTOCOL = "eagle-dsl-pre-crossover-v1"
+DSL_EVOLUTION_PROTOCOL = "eagle-dsl-compiler-v1"
+JAVA_COMPILER_VERSION = "eagle-dsl-java-v1"
 
 
 DEFAULT_EVALUATION_MAPS = (
@@ -146,6 +148,8 @@ class ExperimentConfig:
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     initial_java_seed_path: Path = DEFAULT_INITIAL_JAVA_SEED_PATH
     candidate_java_mode: str = "generated_phenotype"
+    java_materialization_mode: str = "llm"
+    java_compiler_version: str = JAVA_COMPILER_VERSION
     # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
@@ -203,6 +207,8 @@ class ExperimentConfig:
         *,
         base_dir: Path | None = None,
     ) -> "ExperimentConfig":
+        materialization_mode = str(payload.get("java_materialization_mode", "llm"))
+        deterministic = materialization_mode == "deterministic_dsl"
         schema_version = payload.get("schema_version")
         if schema_version not in {None, "experiment-v1", "experiment-v2"}:
             raise ValueError(f"Unsupported experiment schema version: {schema_version!r}")
@@ -215,7 +221,7 @@ class ExperimentConfig:
             )
         if payload.get("application", "microrts") != "microrts":
             raise ValueError("The configured application is not supported.")
-        if schema_version == "experiment-v2" and not isinstance(payload.get("model"), dict):
+        if schema_version == "experiment-v2" and not deterministic and not isinstance(payload.get("model"), dict):
             raise ValueError("experiment-v2 requires a model mapping.")
         forbidden = {
             "llm_base_url", "llm_model", "llm_model_path", "model_path",
@@ -264,10 +270,10 @@ class ExperimentConfig:
         generation_prompt_file_value = payload.get("generation_prompt_file")
         generation_prompt_file = (
             _parse_prompt_files((generation_prompt_file_value,), repository_root, "generation_prompt_file")[0]
-            if generation_prompt_file_value is not None
+            if generation_prompt_file_value is not None and not deterministic
             else DEFAULT_PROMPT_DIR / "initial_generation.txt"
         )
-        generation_prompt = generation_prompt_file.read_text(encoding="utf-8").strip()
+        generation_prompt = "" if deterministic else generation_prompt_file.read_text(encoding="utf-8").strip()
         model = _parse_model(payload.get("model"), repository_root, field_name="model")
         generation_model_payload = payload.get("generation_model")
         generation_model = (
@@ -402,6 +408,8 @@ class ExperimentConfig:
                 "Remove match_seeds and use round_index to identify repeated matches."
             )
         return cls(
+            java_materialization_mode=materialization_mode,
+            java_compiler_version=str(payload.get("java_compiler_version") or JAVA_COMPILER_VERSION),
             seed_prompts=seed_prompts,
             seed_prompt_files=seed_prompt_files,
             initial_population_mode=str(
@@ -506,6 +514,15 @@ class ExperimentConfig:
         )
 
     def validate(self) -> None:
+        if self.java_materialization_mode not in {"llm", "deterministic_dsl"}:
+            raise ValueError("java_materialization_mode must be llm or deterministic_dsl.")
+        if self.java_materialization_mode == "deterministic_dsl":
+            if self.java_compiler_version != JAVA_COMPILER_VERSION:
+                raise ValueError(f"Unsupported Java compiler version: {self.java_compiler_version!r}")
+            if self.candidate_java_mode != "generated_phenotype":
+                raise ValueError("deterministic_dsl requires candidate_java_mode=generated_phenotype.")
+            if self.parent_evaluation_mode != "reuse_cached":
+                raise ValueError("deterministic_dsl requires parent_evaluation_mode=reuse_cached.")
         for policy in self.seed_prompts:
             normalize_strategy_dsl(policy, max_chars=self.max_prompt_chars)
         if not self.experiment_name.strip():
@@ -620,7 +637,7 @@ class ExperimentConfig:
                 "candidate_java_mode=inherited_genotype requires exactly one seed_prompt_files entry."
             )
         if self.initial_population_mode == "llm_generated_policies":
-            if self.candidate_java_mode != "inherited_genotype":
+            if self.candidate_java_mode != "inherited_genotype" and self.java_materialization_mode != "deterministic_dsl":
                 raise ValueError(
                     "initial_population_mode=llm_generated_policies requires "
                     "candidate_java_mode=inherited_genotype."
@@ -692,13 +709,16 @@ class ExperimentConfig:
         if any(value < 0 for _, value in self.unit_material_values):
             raise ValueError("unit material values must be non-negative.")
         validate_java_template(JavaTemplatePaths(self.agent_template_path))
-        validate_java_template(JavaTemplatePaths(self.initial_java_seed_path))
+        if self.java_materialization_mode == "llm":
+            validate_java_template(JavaTemplatePaths(self.initial_java_seed_path))
 
     def validate_runtime_files(self) -> None:
         """Validate external model assets immediately before a production launch."""
 
+        if not self.needs_llm_runtime:
+            return
         self.model.validate(require_files=True)
-        if self.generation_model is not None:
+        if self.java_materialization_mode == "llm" and self.generation_model is not None:
             self.generation_model.validate(require_files=True)
 
     @property
@@ -724,7 +744,9 @@ class ExperimentConfig:
 
         mapping = {
             "schema_version": "experiment-v2",
-            "evolution_protocol": EVOLUTION_PROTOCOL,
+            "evolution_protocol": self.evolution_protocol,
+            "java_materialization_mode": self.java_materialization_mode,
+            "java_compiler_version": self.java_compiler_version if self.java_materialization_mode == "deterministic_dsl" else None,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "experiment_name": self.experiment_name,
             "algorithm": self.algorithm,
@@ -856,7 +878,7 @@ class ExperimentConfig:
 
     @property
     def uses_distinct_generation_model(self) -> bool:
-        return self.generation_model is not None and self.generation_model != self.model
+        return self.java_materialization_mode == "llm" and self.generation_model is not None and self.generation_model != self.model
 
     def model_for_phase(self, phase: str) -> ModelConfig:
         if phase == "reflection":
@@ -866,12 +888,20 @@ class ExperimentConfig:
         raise ValueError(f"Unknown LLM model phase: {phase!r}.")
 
     @property
+    def evolution_protocol(self) -> str:
+        return DSL_EVOLUTION_PROTOCOL if self.java_materialization_mode == "deterministic_dsl" else EVOLUTION_PROTOCOL
+
+    @property
+    def needs_llm_runtime(self) -> bool:
+        return self.java_materialization_mode == "llm" or self.mutation_rate > 0 or self.initial_population_mode == "llm_generated_policies"
+
+    @property
     def reflection_operator_settings(self) -> ReflectionOperatorSettings:
         return ReflectionOperatorSettings(
             mode=ReflectionOperatorMode.parse(self.reflection_operator_mode),
-            strategy_probability=self.strategy_reflection_probability,
-            prompt_probability=self.prompt_reflection_probability,
-            code_probability=self.code_reflection_probability,
+            strategy_probability=1.0 if self.java_materialization_mode == "deterministic_dsl" else self.strategy_reflection_probability,
+            prompt_probability=0.0 if self.java_materialization_mode == "deterministic_dsl" else self.prompt_reflection_probability,
+            code_probability=0.0 if self.java_materialization_mode == "deterministic_dsl" else self.code_reflection_probability,
             minimum_probability=self.aos_minimum_probability,
         )
 
