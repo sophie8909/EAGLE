@@ -13,12 +13,17 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.execution import parallel_map
+from eagle.generation.framework_slots import load_framework_bundle, validate_genome
 from eagle.operators.adaptive import (
     OPERATOR_TO_MUTATION,
     ReflectionOperatorController,
 )
 from eagle.operators.context import ReflectionContext, build_reflection_context
 from eagle.operators.crossover import CrossoverContext, crossover
+from eagle.operators.framework_slots import (
+    crossover_framework_slots,
+    mutate_framework_slot,
+)
 from eagle.operators.selection import select_parent
 from eagle.operators.strategy import select_strategy_mutation_intent
 from eagle.strategy_dsl import normalize_strategy_dsl
@@ -55,6 +60,12 @@ def plan_offspring(
     """
 
     del rng  # Streams use task identities, not call history.
+    if config.java_materialization_mode == "framework_slots":
+        return _plan_framework_slot_offspring(
+            population,
+            config=config,
+            generation=generation,
+        )
     deterministic = config.java_materialization_mode == "deterministic_dsl"
     if not deterministic and "code" not in mutations:
         raise ValueError("Reproduction requires the independent Code Reflection gate.")
@@ -304,6 +315,185 @@ def plan_offspring(
         ))
     assignments = ", ".join(
         f"{plan.context_index + 1}:{plan.candidate.operator}/{plan.mutation_name or 'none'}"
+        for plan in plans
+    )
+    print(
+        f"[gen {generation}] stage=offspring_plan status=completed assignments={assignments}",
+        flush=True,
+    )
+    return plans
+
+
+def _plan_framework_slot_offspring(
+    population: list[Candidate],
+    *,
+    config: ExperimentConfig,
+    generation: int,
+) -> list[OffspringPlan]:
+    """Plan framework children using only deterministic typed-slot operators."""
+
+    if config.framework_bundle_path is None or config.framework_bundle_sha256 is None:
+        raise ValueError("framework_slots reproduction requires a validated bundle.")
+    bundle = load_framework_bundle(
+        config.framework_bundle_path,
+        expected_sha256=config.framework_bundle_sha256,
+    )
+    population = sorted(population, key=lambda candidate: candidate.id)
+    for parent in population:
+        if parent.java_materialization_mode != "framework_slots":
+            raise ValueError("framework_slots reproduction requires framework parents.")
+        if parent.framework_bundle_sha256 != config.framework_bundle_sha256:
+            raise ValueError(
+                f"Parent {parent.id} framework bundle hash does not match the run bundle."
+            )
+        validate_genome(bundle, parent.control_genome)
+
+    plans: list[OffspringPlan] = []
+    for context_index in range(config.population_size):
+        parent_a_rng = random.Random(
+            derive_seed(config.random_seed, "evolution", generation, context_index, "parent_a")
+        )
+        parent_b_rng = random.Random(
+            derive_seed(config.random_seed, "evolution", generation, context_index, "parent_b")
+        )
+        crossover_rng = random.Random(
+            derive_seed(config.random_seed, "evolution", generation, context_index, "crossover")
+        )
+        selection_started = time.monotonic()
+        parent_a = select_parent(
+            population,
+            parent_a_rng,
+            selection_mode=config.algorithm,
+            fitness_tolerance=config.fitness_tie_tolerance,
+        )
+        parent_b = select_parent(
+            population,
+            parent_b_rng,
+            selection_mode=config.algorithm,
+            fitness_tolerance=config.fitness_tie_tolerance,
+            semantic_reference=parent_a,
+        )
+        parent_selection_duration = max(0.0, time.monotonic() - selection_started)
+        use_crossover = len(population) > 1 and crossover_rng.random() < config.crossover_rate
+
+        operation_started_at = utc_now()
+        operation_started = time.monotonic()
+        if use_crossover:
+            crossed = crossover_framework_slots(
+                bundle,
+                parent_a.control_genome,
+                parent_b.control_genome,
+                parent_a_id=parent_a.id,
+                parent_b_id=parent_b.id,
+                random_seed=config.random_seed,
+                generation=generation,
+                child_index=context_index,
+            )
+            parent_ids = tuple(dict.fromkeys((parent_a.id, parent_b.id)))
+            source_candidate_ids = crossed.source_parent_ids
+            genome = crossed.genome
+            slot_parent_ids = crossed.slot_parent_ids
+            operator = "crossover"
+            role = "crossover"
+        else:
+            genome = validate_genome(bundle, parent_a.control_genome)
+            slot_parent_ids = {slot.slot_id: parent_a.id for slot in bundle.slots}
+            parent_ids = (parent_a.id,)
+            source_candidate_ids = (parent_a.id,)
+            operator = "copy"
+            role = "copy"
+        operation_duration = max(0.0, time.monotonic() - operation_started)
+
+        mutation_rng = random.Random(
+            derive_seed(config.random_seed, "evolution", generation, context_index, "mutation")
+        )
+        mutation_record: dict[str, Any] | None = None
+        mutation_timing: dict[str, Any] | None = None
+        mutation_type: str | None = None
+        if mutation_rng.random() < config.mutation_rate:
+            mutation_started_at = utc_now()
+            mutation_started = time.monotonic()
+            mutated = mutate_framework_slot(
+                bundle,
+                genome,
+                random_seed=config.random_seed,
+                generation=generation,
+                child_index=context_index,
+                slot_parent_ids=slot_parent_ids,
+            )
+            genome = mutated.genome
+            slot_parent_ids = mutated.slot_parent_ids
+            source_candidate_ids = mutated.source_parent_ids
+            mutation_type = "slot" if mutated.applied else None
+            mutation_record = {
+                "operation": "framework_slot_mutation",
+                "applied": mutated.applied,
+                "slot_id": mutated.mutated_slot_id,
+                "previous_value": mutated.previous_value,
+                "new_value": mutated.new_value,
+            }
+            mutation_timing = {
+                "operation_type": "framework_slot_mutation",
+                "started_at": mutation_started_at,
+                "finished_at": utc_now(),
+                "generation_only_duration_seconds": max(
+                    0.0, time.monotonic() - mutation_started
+                ),
+                "status": "success" if mutated.applied else "skipped",
+                "error": None,
+            }
+
+        candidate_id = derive_candidate_id(
+            config.random_seed,
+            generation=generation,
+            index=context_index,
+            role=role,
+            parent_ids=parent_ids,
+        )
+        timing = {
+            operator: {
+                "operation_type": operator,
+                "started_at": operation_started_at,
+                "finished_at": utc_now(),
+                "generation_only_duration_seconds": operation_duration,
+                "parent_selection_duration_seconds": parent_selection_duration,
+                "status": "success",
+                "error": None,
+            }
+        }
+        if mutation_timing is not None:
+            timing["mutation"] = mutation_timing
+        metadata: dict[str, Any] = {"framework_id": bundle.framework_id}
+        if mutation_record is not None:
+            metadata["mutation"] = mutation_record
+        child = Candidate(
+            id=candidate_id,
+            generation=generation,
+            parent_ids=parent_ids,
+            candidate_java_mode=config.candidate_java_mode,
+            java_materialization_mode="framework_slots",
+            java_compiler_version=config.java_compiler_version,
+            control_genome=genome,
+            slot_parent_ids=slot_parent_ids,
+            framework_bundle_sha256=config.framework_bundle_sha256,
+            generation_prompt="",
+            operator=operator,
+            mutation_type=mutation_type,
+            source_candidate_ids=source_candidate_ids,
+            timing=timing,
+            metadata=metadata,
+        )
+        plans.append(
+            OffspringPlan(
+                candidate=child,
+                context_index=context_index,
+                parent_selection_duration=parent_selection_duration,
+            )
+        )
+
+    assignments = ", ".join(
+        f"{plan.context_index + 1}:{plan.candidate.operator}/"
+        f"{plan.candidate.mutation_type or 'none'}"
         for plan in plans
     )
     print(

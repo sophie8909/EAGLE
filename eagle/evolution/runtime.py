@@ -67,13 +67,15 @@ def build_search_runtime(
         run_id=run_dir.name,
         timing_path=run_dir / "timing.jsonl",
     )
+    framework_slots = config.java_materialization_mode == "framework_slots"
     generation_backend = (
         MockGenerationBackend(config.agent_template_path)
-        if mock or config.java_materialization_mode == "deterministic_dsl" else generation_client.generation_backend(logger=logger)
+        if mock or config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
+        else generation_client.generation_backend(logger=logger)
     )
     initial_policy_backend = (
         MockInitialPolicyBackend()
-        if mock
+        if mock or framework_slots
         else client.prompt_backend(
             operation="initial_policy_generation",
             temperature=config.initial_policy_temperature,
@@ -82,7 +84,7 @@ def build_search_runtime(
     # The mock and production generator must render the same configured
     # immutable scaffold, including inherited-Java requests.
     generation_backend.agent_template_path = config.agent_template_path
-    if mock:
+    if mock or framework_slots:
         reflection_backend = build_reflection_backend("mock")
         rewrite_backend = reflection_backend
         strategy_role_backend = MockRoleBackend()
@@ -96,7 +98,7 @@ def build_search_runtime(
     enabled_roles = {"coach"}
     if config.match_commentator_enabled:
         enabled_roles.add("match_commentator")
-    mutations = {
+    mutations = {} if framework_slots else {
         "strategy": StrategyReflectionMutation(
             strategy_role_backend,
             max_attempts=config.mutation_max_attempts,

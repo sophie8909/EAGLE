@@ -178,3 +178,13 @@ operators, and Code Reflection is the independent source gate. In
 Reflection, Code Reflection/source repair, and the pre-crossover Java source gate
 are disabled. The active genotype is one complete policy component, with no
 rule-level crossover. Existing Strategy Reflection changes only that policy.
+
+In `framework_slots`, none of the reflection or source-gate workflows in this
+document run. Mutation is a local seeded operation over the exact finite domains
+in the run-frozen bundle: it chooses at most one mutable slot and replaces its
+value with a different legal lattice point or enumerated `choice_id`. Formula
+mutation selects a predeclared Java expression; it cannot write expression text.
+There is no candidate-time LLM prompt, diagnosis, reflection, source repair,
+Java Generation, or compile repair, and static mode records no fabricated AOS
+credit. Per-slot crossover/mutation provenance is defined by
+[framework slots](framework_slots.md) and the [lineage schema](../artifacts/lineage_schema.md).

@@ -679,3 +679,51 @@ and attempts to cross materialization modes before replay. Historical configs
 without the field remain LLM mode. Focused contracts and bounded real self-play
 validation pass; see `testing/test_contracts.md` for verification and environment
 limitations.
+
+## 16. Gemini framework and finite-slot mode
+
+`framework_slots` is a third Java materialization mode with an explicit
+two-stage boundary. Before a run, `python -m eagle framework` performs one
+bounded Gemini `generateContent` bootstrap using the checked-in gameplay and API
+contracts. It persists every credential-free request and raw response before
+parsing and publishes one strictly validated `eagle-framework-bundle-v1`.
+Bootstrap is never implicit in experiment startup and is the only Gemini/LLM
+work in this mode.
+
+The structured bundle has exactly `schema_version`, `framework_id`,
+`java_template`, `slots`, `slot_generation_prompt`, and `report`. Each slot has
+exactly `slot_id`, `kind`, `marker`, `default`, `minimum`, `maximum`, `step`,
+`choices`, and `purpose`; its canonical marker is
+`{{EAGLE_SLOT:<slot_id>}}`. Kinds are finite-lattice `integer`, finite-lattice
+`number`, or `expression_choice`. Every expression choice has exactly
+`choice_id`, `java_expression`, and `description`; the candidate stores only the
+choice ID, so formulas are selected from bundle-frozen expressions rather than
+generated as source. The report has exactly `architecture_summary`,
+`decision_flow`, `invariants`, `slot_rationale`, `assumptions`, and `risks`, with
+`slot_rationale` mapping exactly all slot IDs to nonempty strings. The complete
+schema and bootstrap prompt contract are canonical in
+[framework slots](architecture/framework_slots.md).
+
+Config resolution validates the exact bundle bytes and records their schema
+version and SHA-256. Run creation freezes a run-owned copy; resume rejects
+version/hash drift and never adopts a changed external file. The only active
+candidate component is `control_genome`. Generation zero samples complete legal
+genomes; seeded local uniform crossover selects each slot independently with
+`slot_parent_ids`, and local mutation changes at most one slot to a different
+legal value. Equal bundle/genome/materializer inputs produce byte-identical
+complete Java and reconstructible hashes.
+
+Framework-slot mode uses `candidate_java_mode: generated_phenotype`,
+`parent_evaluation_mode: reuse_cached`, `reflection_operator_mode: static`, and
+protocol/materializer version `eagle-framework-slots-v1`. It performs no
+candidate-time LLM generation, Strategy/Prompt/Code Reflection, source repair,
+or compile repair. Render failure has no fallback. Successfully rendered source
+continues through the unchanged security validation, one javac, Integration,
+semantic probe, objectives, parent-plus-offspring selection, and ten-opponent x
+three-map x three-round x two-side evaluation.
+
+`GEMINI_API_KEY` is accepted only from the bootstrap process environment and is
+never written to prompt, request, config, bootstrap, run, candidate, or failure
+artifacts. Raw provider output and structured report are untrusted evidence;
+schema validation, Java-envelope checks, ordinary validation, javac, and
+Integration remain mandatory trust boundaries.

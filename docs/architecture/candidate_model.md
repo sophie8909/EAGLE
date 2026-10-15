@@ -21,6 +21,14 @@ Generator call and inherited-Java context apply only when materialization mode i
 `llm`; deterministic materialization consumes normalized policy and the canonical
 scaffold.
 
+In `framework_slots`, the only active gene is `control_genome`: an exact mapping
+from every run-frozen bundle slot ID to one typed finite-domain value. The
+framework template, structured report, and `slot_generation_prompt` are immutable
+run inputs, never genes. Each candidate pins `framework_bundle_sha256`, uses
+`candidate_java_mode: generated_phenotype`, and records
+`active_genotype_components: ["control_genome"]`. See
+[framework slots](framework_slots.md) for the exact bundle and domain schema.
+
 ## Policy contract
 
 `strategy_prompt` stores canonical `eagle-strategy-dsl-v1` JSON, validated by
@@ -36,10 +44,10 @@ gate and corrective Code Reflection apply only to `llm` mode. See
 | Group | Fields |
 | --- | --- |
 | Identity | `candidate_id`, `generation`, `parent_ids` |
-| Genotype | `active_genotype_components`; mode-specific prompt and optional inherited Java values |
+| Genotype | `active_genotype_components`; mode-specific prompt/optional Java values or framework `control_genome` |
 | Phenotype | `generated_java`, `generated_java_path` |
 | Variation | `operator`, `mutation_type` |
-| Component provenance | `strategy_parent_id`, `generation_prompt_parent_id`, optional `java_parent_id` |
+| Component provenance | prompt/optional Java parent IDs, or framework `slot_parent_ids` plus `framework_bundle_sha256` |
 | State/failure | `status`, `failure_stage`, `failure_reason` |
 | Objectives/evidence | active-mode fitness, executable semantic signature, game/code diagnostics |
 | Persistence references | `artifacts`, `timing` |
@@ -54,6 +62,9 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
   independently and, in inherited mode, Java independently.
 - In `deterministic_dsl` mode, whole-policy copying/crossover is the only
   genotype operation; rule-level crossover is absent.
+- In `framework_slots` mode, per-slot crossover chooses each value independently
+  and mutation changes at most one slot to a different legal value. Every slot
+  has `slot_parent_ids` provenance; prompt/Java component provenance is absent.
 - Strategy mutation may change only `strategy_prompt` in either materialization
   mode.
 - Prompt Reflection may change only `generation_prompt` in `llm` mode and is
@@ -62,6 +73,9 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
   deterministic mode disables Code Reflection and source repair.
 - Java materialization and Evaluation do not modify active genotype
   components.
+- Framework-slot materialization substitutes typed values into the run-frozen
+  template and cannot call an LLM or synthesize a new expression. Its
+  `expression_choice` values name predeclared Java expressions from the bundle.
 - The LLM Generator uses the canonical scaffold and receives selected parent
   Java only in inherited candidate mode. The deterministic compiler uses
   normalized policy and canonical scaffold only.

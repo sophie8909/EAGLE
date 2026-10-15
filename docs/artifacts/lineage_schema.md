@@ -54,3 +54,14 @@ the active list is exactly `["strategy_prompt"]`; generation prompt and optional
 inherited Java are not active components and do not gain crossover provenance.
 The policy component retains ordinary source-candidate lineage. The LLM mode
 continues to use the existing prompt and optional Java component provenance.
+
+For `framework_slots`, lineage schema is `4.0`. The only active component is
+`control_genome`; `framework_bundle_sha256` identifies the immutable run-owned
+bundle, and `slot_parent_ids` maps exactly every bundle slot ID to the candidate
+that supplied its value. `source_candidate_ids` is the stable ordered unique set
+of those values. Generation-zero candidates have empty parents and an empty
+slot-parent map; later copy, per-slot crossover, and one-slot mutation retain
+complete provenance independent of whether two values happen to be equal.
+Framework lineage does not contain policy, generation-prompt, or Java-parent
+fields. Resume verifies the slot keys and every referenced parent against the
+frozen bundle and prior generation before reconstruction.

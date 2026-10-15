@@ -8,6 +8,7 @@ import math
 import os
 import re
 import statistics
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -15,8 +16,26 @@ from typing import Any
 from eagle.evaluation.objectives import OBJECTIVE_DIRECTIONS
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 
-from eagle.candidate import Candidate, has_completed_evaluation
-from eagle.config import ExperimentConfig, EVOLUTION_PROTOCOL, STRATEGY_POLICY_FORMAT
+from eagle.candidate import (
+    FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION,
+    FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION,
+    FRAMEWORK_SLOTS_MATERIALIZATION_VERSION,
+    Candidate,
+    has_completed_evaluation,
+)
+from eagle.config import (
+    FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL,
+    ExperimentConfig,
+    EVOLUTION_PROTOCOL,
+    STRATEGY_POLICY_FORMAT,
+)
+from eagle.generation.framework_slots import (
+    FRAMEWORK_BUNDLE_SCHEMA_VERSION,
+    canonical_genome_json,
+    render_framework,
+    validate_framework_bundle,
+    validate_genome,
+)
 
 RUN_SCHEMA_VERSION = "eagle-run-v2"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
@@ -26,6 +45,41 @@ RESUME_ARCHIVE_PATHS = (
     "archives/strategy.json", "archives/error_memory.jsonl",
     "archives/self_play_opponents.json",
 )
+
+FRAMEWORK_BUNDLE_ARTIFACT = "framework/bundle.json"
+
+
+def freeze_framework_bundle(
+    run_dir: Path,
+    config: ExperimentConfig,
+) -> ExperimentConfig:
+    """Copy the exact configured bundle bytes into a fresh run.
+
+    The exact-byte digest is the run identity fence.  The normalized bundle
+    digest is deliberately not substituted here because JSON whitespace and
+    key ordering are part of the configured input provenance.
+    """
+
+    if config.java_materialization_mode != "framework_slots":
+        return config
+    source = config.framework_bundle_path
+    expected_digest = config.framework_bundle_sha256
+    if source is None or expected_digest is None:
+        raise ValueError("framework_slots requires a configured framework bundle.")
+    data = source.read_bytes()
+    actual_digest = hashlib.sha256(data).hexdigest()
+    if actual_digest != expected_digest:
+        raise ValueError("Configured framework bundle_sha256 changed before run creation.")
+    target = run_dir / FRAMEWORK_BUNDLE_ARTIFACT
+    if target.exists():
+        raise ValueError(f"Frozen framework bundle is immutable and already exists: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.tmp")
+    temporary.write_bytes(data)
+    temporary.replace(target)
+    frozen = replace(config, framework_bundle_path=target.resolve())
+    frozen.validate()
+    return frozen
 
 
 def utc_now() -> str:
@@ -47,7 +101,14 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "schema_version": RUN_SCHEMA_VERSION,
             "evolution_protocol": config.evolution_protocol,
             "java_materialization_mode": config.java_materialization_mode,
-            "java_compiler_version": config.java_compiler_version if config.java_materialization_mode == "deterministic_dsl" else None,
+            "java_compiler_version": (
+                config.java_compiler_version
+                if config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
+                else None
+            ),
+            "framework_bundle_version": config.framework_bundle_version if config.java_materialization_mode == "framework_slots" else None,
+            "framework_bundle_sha256": config.framework_bundle_sha256 if config.java_materialization_mode == "framework_slots" else None,
+            "framework_bundle_artifact": FRAMEWORK_BUNDLE_ARTIFACT if config.java_materialization_mode == "framework_slots" else None,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "run_id": run_dir.name,
             "created_at": utc_now(),
@@ -570,6 +631,8 @@ def load_resume_population(run_dir: Path) -> tuple[int, list[Candidate]]:
 
 
 def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
+    if not candidate_id or Path(candidate_id).name != candidate_id or candidate_id in {".", ".."}:
+        raise ValueError(f"Invalid candidate identifier: {candidate_id!r}")
     candidate_dir = run_dir / "candidates" / candidate_id
     path = candidate_dir / "candidate.json"
     if not path.is_file():
@@ -654,6 +717,152 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
                 raise ValueError("Deterministic reference source hash mismatch.")
         elif evidence.get("reference_source_sha256") is not None:
             raise ValueError("Ordinary deterministic policy has a reference source hash.")
+    elif mode == "framework_slots":
+        if payload.get("candidate_id") != candidate_id:
+            raise ValueError("Framework candidate snapshot identifier mismatch.")
+        if payload.get("candidate_schema_version") != FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION:
+            raise ValueError("Unsupported framework_slots candidate schema version.")
+        if version != FRAMEWORK_SLOTS_MATERIALIZATION_VERSION:
+            raise ValueError(f"Unsupported framework_slots materialization version: {version!r}")
+        if payload.get("candidate_java_mode") != "generated_phenotype":
+            raise ValueError("framework_slots candidate must use generated_phenotype.")
+        if payload.get("active_genotype_components") != ["control_genome"]:
+            raise ValueError("Invalid framework_slots active genotype components.")
+
+        expected_refs = {
+            "control_genome": "genotype/control_genome.json",
+            "framework_evidence": "generation/framework_evidence.json",
+            "framework_bundle": "../../framework/bundle.json",
+        }
+        for name, expected in expected_refs.items():
+            if artifact_refs.get(name) != expected:
+                raise ValueError(f"Invalid framework_slots artifact reference: {name}")
+
+        bundle_path = run_dir / FRAMEWORK_BUNDLE_ARTIFACT
+        if not bundle_path.is_file():
+            raise ValueError("Frozen framework bundle is missing.")
+        bundle_bytes = bundle_path.read_bytes()
+        exact_bundle_sha256 = hashlib.sha256(bundle_bytes).hexdigest()
+        if payload.get("framework_bundle_sha256") != exact_bundle_sha256:
+            raise ValueError("Framework candidate/frozen bundle hash mismatch.")
+        try:
+            bundle_payload = json.loads(bundle_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Frozen framework bundle is not valid UTF-8 JSON.") from exc
+        if not isinstance(bundle_payload, dict):
+            raise ValueError("Frozen framework bundle must contain a JSON object.")
+        bundle = validate_framework_bundle(bundle_payload)
+        if bundle.schema_version != FRAMEWORK_BUNDLE_SCHEMA_VERSION:
+            raise ValueError("Unsupported frozen framework bundle schema.")
+
+        manifest = load_manifest(run_dir)
+        manifest_fences = (
+            ("java_materialization_mode", mode),
+            ("evolution_protocol", FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL),
+            ("java_compiler_version", FRAMEWORK_SLOTS_MATERIALIZATION_VERSION),
+            ("framework_bundle_version", FRAMEWORK_BUNDLE_SCHEMA_VERSION),
+            ("framework_bundle_sha256", exact_bundle_sha256),
+            ("framework_bundle_artifact", FRAMEWORK_BUNDLE_ARTIFACT),
+        )
+        for key, expected in manifest_fences:
+            if manifest.get(key) != expected:
+                raise ValueError(f"Framework candidate/run manifest mismatch: {key}")
+
+        genome_path = candidate_dir / "genotype" / "control_genome.json"
+        if not genome_path.is_file():
+            raise ValueError("Framework candidate control genome is missing.")
+        try:
+            raw_genome = json.loads(genome_path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Framework candidate control genome is not valid JSON.") from exc
+        genome = validate_genome(bundle, raw_genome)
+        if genome_path.read_text(encoding="utf-8") != canonical_genome_json(bundle, genome) + "\n":
+            raise ValueError("Framework candidate control genome is not canonical.")
+
+        slot_parent_ids = payload.get("slot_parent_ids")
+        if not isinstance(slot_parent_ids, dict) or any(
+            not isinstance(slot_id, str) or not isinstance(parent_id, str) or not parent_id
+            for slot_id, parent_id in slot_parent_ids.items()
+        ):
+            raise ValueError("Invalid framework_slots slot provenance.")
+        slot_ids = set(bundle.slot_ids)
+        generation = int(payload.get("generation") or 0)
+        if generation == 0:
+            if slot_parent_ids:
+                raise ValueError("Generation-zero framework candidate has parent provenance.")
+        elif set(slot_parent_ids) != slot_ids:
+            raise ValueError("Framework candidate provenance must cover every slot.")
+        parent_ids = tuple(payload.get("parent_ids") or ())
+        if any(parent_id not in parent_ids for parent_id in slot_parent_ids.values()):
+            raise ValueError("Framework slot provenance references a non-parent candidate.")
+        expected_sources = tuple(dict.fromkeys(
+            slot_parent_ids[slot_id] for slot_id in sorted(slot_parent_ids)
+        ))
+        if tuple(payload.get("source_candidate_ids") or ()) != expected_sources:
+            raise ValueError("Framework source candidate IDs/provenance mismatch.")
+
+        lineage = object_json("lineage.json")
+        lineage_fences = (
+            ("lineage_schema_version", FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION),
+            ("candidate_id", candidate_id),
+            ("java_materialization_mode", mode),
+            ("java_compiler_version", version),
+            ("framework_bundle_sha256", exact_bundle_sha256),
+            ("active_genotype_components", ["control_genome"]),
+            ("slot_parent_ids", slot_parent_ids),
+            ("source_candidate_ids", list(expected_sources)),
+        )
+        for key, expected in lineage_fences:
+            if lineage.get(key) != expected:
+                raise ValueError(f"Framework candidate lineage mismatch: {key}")
+
+        evidence = object_json("generation/framework_evidence.json")
+        rendered = render_framework(bundle, genome)
+        identity_fences = (
+            ("schema_version", "eagle-framework-materialization-v1"),
+            ("operation", "framework_slot_assembly"),
+            ("materialization_mode", mode),
+            ("materialization_version", version),
+            ("framework_bundle_sha256", exact_bundle_sha256),
+            ("control_genome", genome),
+            ("slot_parent_ids", slot_parent_ids),
+        )
+        for key, expected in identity_fences:
+            if evidence.get(key) != expected:
+                raise ValueError(f"Framework materialization evidence mismatch: {key}")
+        derived_fences = (
+            ("framework_id", bundle.framework_id),
+            ("canonical_bundle_sha256", rendered.bundle_sha256),
+            ("template_sha256", rendered.template_sha256),
+            ("genome_sha256", rendered.genome_sha256),
+            ("source_sha256", rendered.source_sha256),
+        )
+        has_derived_evidence = all(
+            evidence.get(key) == expected for key, expected in derived_fences
+        )
+        has_explicit_failed_evidence = all(
+            evidence.get(key) is None for key, _ in derived_fences
+        )
+        if not has_derived_evidence and not has_explicit_failed_evidence:
+            raise ValueError("Framework materialization evidence has partial derived hashes.")
+        if payload.get("compile_status") == "success" and not has_derived_evidence:
+            raise ValueError("Successful framework candidate lacks derived materialization evidence.")
+        generation_result = object_json("generation/result.json")
+        if generation_result.get("artifact_schema_version") != "phase4-v8":
+            raise ValueError("Unsupported framework generation artifact schema.")
+        for key in tuple(key for key, _ in identity_fences) + tuple(
+            key for key, _ in derived_fences
+        ):
+            if generation_result.get(key) != evidence.get(key):
+                raise ValueError(f"Framework generation/result evidence mismatch: {key}")
+        rendered_source = (
+            text("phenotype/CandidateAgent.java")
+            or text("generation/failed_candidate.java")
+        )
+        if has_derived_evidence and rendered_source != rendered.source:
+            raise ValueError("Framework candidate phenotype does not match its genome.")
+        if has_explicit_failed_evidence and rendered_source:
+            raise ValueError("Failed framework materialization unexpectedly persisted source.")
     elif mode != "llm":
         raise ValueError(f"Unsupported Java materialization mode: {mode!r}")
     candidate_java_mode = payload.get("candidate_java_mode")
@@ -665,6 +874,11 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         candidate_java_mode=str(candidate_java_mode),
         java_materialization_mode=mode,
         java_compiler_version=version,
+        control_genome=genome if mode == "framework_slots" else {},
+        slot_parent_ids=slot_parent_ids if mode == "framework_slots" else {},
+        framework_bundle_sha256=(
+            exact_bundle_sha256 if mode == "framework_slots" else None
+        ),
         id=candidate_id,
         generation=int(payload.get("generation") or 0),
         parent_ids=tuple(payload.get("parent_ids") or ()),

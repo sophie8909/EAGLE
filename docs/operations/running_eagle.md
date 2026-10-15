@@ -21,6 +21,51 @@ conda run --no-capture-output -n eagle \
   --mock --skip-final-test
 ```
 
+## One-time Gemini framework bootstrap
+
+Framework-slot runs use two explicit commands. First create a new bootstrap
+directory; the API key is environment-only and must not be placed in YAML,
+shell history as a CLI option, or tracked artifacts:
+
+```bash
+export GEMINI_API_KEY='...'
+python -m eagle framework \
+  --model YOUR_GEMINI_MODEL \
+  --brief-file framework_design.txt \
+  --output runs/framework_bootstrap/my_framework
+```
+
+`--brief` may replace `--brief-file`. Optional bounds are `--temperature`,
+`--max-output-tokens`, `--max-attempts`, and `--timeout-seconds`. The command
+uses native Gemini `generateContent` structured JSON, refuses a nonempty output
+directory, retains every raw response before parsing, and exits `2` if its
+bounded attempts do not publish a valid bundle. Review `bundle.json`,
+`CandidateAgent.template.java`, `report.json`, and `bootstrap.json` before use.
+
+Then select those exact bundle bytes in an ordinary experiment config:
+
+```yaml
+schema_version: experiment-v2
+java_materialization_mode: framework_slots
+candidate_java_mode: generated_phenotype
+parent_evaluation_mode: reuse_cached
+reflection_operator_mode: static
+framework:
+  bundle_path: runs/framework_bootstrap/my_framework/bundle.json
+  # Optional input fences; config resolution always fills both in config.yaml.
+  bundle_version: eagle-framework-bundle-v1
+  bundle_sha256: <sha256-of-exact-bundle.json-bytes>
+```
+
+Keep the normal population, generation, evaluation-map, opponent, and runtime
+settings. EAGLE validates the bundle at config load, copies it to
+`runs/<run_id>/framework/bundle.json`, records the exact byte hash, and runs
+without an LLM server. Generation zero samples finite slot values; later EA work
+uses only seeded local per-slot crossover and one-slot mutation. Formula controls
+are choice IDs for bundle-frozen Java expressions. Validation, javac,
+Integration, semantic probing, and the configured 180-match fixed-roster matrix
+remain unchanged. See [framework slots](../architecture/framework_slots.md).
+
 The resolved `model` section selects the GGUF, llama-server executable, host,
 port, per-request context size, batch size, and health/startup timeouts. An
 optional `generation_model` section has the same shape and selects the model for
@@ -206,6 +251,12 @@ remains on disk. An existing `experiment-v2` config named `experiment.yaml`
 remains a config and is never overwritten by the index.
 
 If a config folder is also supplied, it is compatibility-checked against the run. Model identity/path/endpoint, EA parameters, evaluation matrix, and reflection mode/probabilities cannot silently change. Missing persisted model assets fail clearly. Only the latest atomically recorded generation is resumed; incomplete candidate work is recomputed.
+
+For `framework_slots`, resume additionally reloads only the run-owned
+`framework/bundle.json`, verifies its schema and exact SHA-256 against the
+manifest/config, and checks every candidate genome and rendered-source hash. A
+changed or missing external bootstrap directory cannot change a run; a changed,
+missing, or unsupported run-frozen bundle makes resume fail explicitly.
 
 `generation_max_attempts` controls bounded compile-guided Java decoding. Its
 repository and legacy-config default is `1`; production configs that opt in

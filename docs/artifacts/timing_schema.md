@@ -243,3 +243,20 @@ duration, status, and nullable error. Its duration is included in child total.
 `generation_llm` is null with empty attempts; do not synthesize a zero-second
 request. Deterministic mode emits no Java generation, Code Reflection, or
 compile-repair `llm_request` timing event. LLM-mode timing remains unchanged.
+
+## Framework-slot timing
+
+Candidate-time framework rendering uses the same
+`eagle-java-materialization-v1` `java_materialization` envelope with mode
+`framework_slots`, compiler/materializer version `eagle-framework-slots-v1`,
+operation `framework_slot_assembly`, UTC boundaries, monotonic duration, status,
+and nullable error. Validation, compilation, Integration, semantic probe, and
+matches retain their existing timing owners. `generation_llm` and all reflection
+streams are null with empty attempts, and the run emits no candidate-time
+`llm_request` event.
+
+The explicit Gemini bootstrap is outside run/candidate timing. Its standalone
+`bootstrap.json` and per-attempt `result.json` retain UTC boundaries, monotonic
+duration, success/failure/retryability, HTTP status, and request/response hashes.
+Those records must not be copied into `timing.jsonl` or charged to any candidate,
+generation, or EA operator.

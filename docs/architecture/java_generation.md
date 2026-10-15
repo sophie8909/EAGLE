@@ -178,3 +178,23 @@ a vendored `ai.abstraction.WorkerRush` delegate and replays the delegate's full
 action vector. Compiler evidence pins `WorkerRush.java` by SHA-256. Generated
 initial policies and Strategy rewrites reject `reference_agent`, so this escape
 hatch is limited to the checked-in seed.
+
+## Framework-slot materialization
+
+`java_materialization_mode: framework_slots` consumes one run-frozen validated
+`eagle-framework-bundle-v1` and the candidate's complete `control_genome`.
+Materialization validates every exact key and typed value, replaces every
+`{{EAGLE_SLOT:<slot_id>}}` marker once, verifies no marker remains, and records
+the bundle, template, canonical-genome, and rendered-source SHA-256 values.
+Numeric values are rendered only from declared finite lattices. An
+`expression_choice` genome value is a declared `choice_id` whose immutable
+bundle-owned `java_expression` is substituted; arbitrary formula source is not
+a gene.
+
+The rendered complete source follows the same external/security validation,
+isolated `javac`, Integration, semantic probe, and match evaluation as other
+modes. It does not use the LLM Generator, Code Reflection/source gate, Prompt or
+Strategy Reflection, or compile-guided repair. Render, validation, or javac
+failure retains exact stage evidence and never falls back to Gemini or another
+LLM. The one-time Gemini creation step and exact bundle schema are owned by
+[framework slots](framework_slots.md), not by candidate decoding.

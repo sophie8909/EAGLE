@@ -15,6 +15,7 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.execution import parallel_map
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
+from eagle.generation.framework_slots import load_framework_bundle, sample_initial_genome
 from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
 from eagle.prompts import load_prompt
 from eagle.timing import utc_now
@@ -67,6 +68,43 @@ def initialize_population(
     timing_logger: LLMCallLogger | None = None,
 ) -> list[Candidate]:
     """Build generation zero under the configured population contract."""
+
+    if config.java_materialization_mode == "framework_slots":
+        if config.framework_bundle_path is None or config.framework_bundle_sha256 is None:
+            raise ValueError("framework_slots initialization requires a validated bundle.")
+        bundle = load_framework_bundle(
+            config.framework_bundle_path,
+            expected_sha256=config.framework_bundle_sha256,
+        )
+        return [
+            Candidate(
+                id=derive_candidate_id(
+                    config.random_seed,
+                    generation=0,
+                    index=index,
+                    role="initial",
+                ),
+                generation=0,
+                candidate_java_mode=config.candidate_java_mode,
+                java_materialization_mode="framework_slots",
+                java_compiler_version=config.java_compiler_version,
+                control_genome=sample_initial_genome(
+                    bundle,
+                    random_seed=config.random_seed,
+                    sample_index=index,
+                ),
+                slot_parent_ids={},
+                framework_bundle_sha256=config.framework_bundle_sha256,
+                generation_prompt="",
+                operator="seed",
+                metadata={
+                    "seed_index": index,
+                    "framework_id": bundle.framework_id,
+                    "initial_genome_sample_index": index,
+                },
+            )
+            for index in range(config.population_size)
+        ]
 
     inherited_java = (
         config.initial_java_seed_path.read_text(encoding="utf-8")

@@ -1,18 +1,18 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-10-14 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-10-15 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
 
-在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 則以版本化 compiler 產生 Java。實際比賽執行時
+在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 則先由明確的一次性 Gemini bootstrap 建立完整 Java framework，之後只由本地 EA 控制有限 typed slots。實際比賽執行時
 不會呼叫 LLM。每個 phenotype 都是一份完整的
 `ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
 runtime LLM policy。
 
 ## Candidate 與演化流程
 
-### Java Materialization 雙模式
+### Java Materialization 三模式
 `candidate_java_mode` 與 `java_materialization_mode` 是不同設定。後者未設定時
 預設 `llm`，維持既有流程。`deterministic_dsl` 僅以完整的
 `strategy_prompt` 作為 active genotype；`generation_prompt` 與 inherited Java
@@ -28,6 +28,27 @@ Gen 0 的 WorkerRush seed 是唯一封閉的 reference policy：deterministic co
 直接委派到 vendored `ai.abstraction.WorkerRush` 並重播完整 action vector，同時
 記錄官方來源 SHA-256；LLM 生成與 Strategy Mutation 不得產生 reference policy。
 Deterministic 設定必須使用 `candidate_java_mode: generated_phenotype` 與 `parent_evaluation_mode: reuse_cached`，其他值會被拒絕。
+
+### Gemini framework 與有限 slots
+
+`framework_slots` 是明確的兩階段流程。使用者先執行
+`python -m eagle framework`；Gemini 只在此一次性的 bounded bootstrap 階段被呼叫（可做有限 transport retry），並以
+structured JSON 回傳完整 `CandidateAgent` template、有限 slots、產生 slots 的
+prompt 與結構化 report。Bundle 版本為 `eagle-framework-bundle-v1`；每個 slot
+只能是 finite-lattice `integer`／`number` 或列舉 `expression_choice`。Formula
+不是自由 Java 字串，而是從 bundle 內已凍結的 `choice_id`／`java_expression`
+選項中選擇。
+
+Experiment 啟動時會把 bundle exact bytes 複製到 run 的
+`framework/bundle.json` 並記錄 SHA-256。Candidate 的唯一 active genotype 是
+`control_genome`，crossover 逐 slot 選 parent，mutation 最多改一個 slot，且
+完整記錄 `slot_parent_ids`。演化期間不呼叫 Gemini 或其他 LLM，也不執行
+Strategy／Prompt／Code Reflection、source repair 或 compile repair。Rendered
+Java 仍通過原本 validation、javac、Integration、semantic probe 與 180-match
+evaluation。Resume 只信任 run-frozen bundle，版本或 hash 漂移會明確失敗。
+`GEMINI_API_KEY` 僅從 bootstrap process environment 讀取，絕不寫入 config 或
+artifact。完整 schema 與 artifact 契約見
+[framework slots](architecture/framework_slots.md)。
 
 ### LLM materialization lifecycle
 
@@ -434,4 +455,6 @@ Python 統一於 `eagle/`。修改單一 EA operator 到 `eagle/operators/` 的 
 
 文件 map 新增：[可維護性重構計畫](implementation/maintainability_refactor_plan.md) 與
 [本地實驗監控](operations/monitoring_experiment.md)，前者包含掃描結果、修改入口、
-實作順序與驗證記錄；完整 owner 表見 [repository map](implementation/repository_map.md)。
+實作順序與驗證記錄；Gemini framework／有限 slot mode 的 owner 是
+[framework slots](architecture/framework_slots.md)；完整 owner 表見
+[repository map](implementation/repository_map.md)。

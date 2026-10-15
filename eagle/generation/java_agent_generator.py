@@ -258,6 +258,7 @@ def validate_generated_java_source(
     class_name: str,
     *,
     template_paths: JavaTemplatePaths | None = None,
+    immutable_scaffold_source: str | None = None,
 ) -> ValidationResult:
     if not source.strip():
         return blocked_validation_result("Generated Java source is empty.")
@@ -296,14 +297,18 @@ def validate_generated_java_source(
         "; ".join(strategy_errors),
     )
     try:
-        scaffold = load_java_template(template_paths or JavaTemplatePaths())
+        scaffold = (
+            immutable_scaffold_source
+            if immutable_scaffold_source is not None
+            else load_java_template(template_paths or JavaTemplatePaths())
+        )
         fixed_scaffold_ok = fixed_scaffold_equivalent(source, scaffold)
     except ValueError:
         fixed_scaffold_ok = False
     check(
         "fixed_scaffold",
         fixed_scaffold_ok,
-        "source outside the EAGLE strategy region must preserve the checked-in scaffold",
+        "source outside the EAGLE strategy region must preserve the immutable scaffold",
     )
     runtime_contract_ok = bool(package_match and public_class and superclass and constructor_one and constructor_two and methods_ok)
     check("runtime_contract", runtime_contract_ok, "the complete external MicroRTS runtime contract is not satisfied")

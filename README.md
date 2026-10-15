@@ -17,6 +17,13 @@ New policies use canonical `eagle-strategy-dsl-v1` JSON. Historical natural-lang
 artifacts remain read-only; incompatible old runs cannot resume through silent conversion.
 See the [implementation plan](docs/implementation/dsl_pre_crossover_reflection_plan.md).
 
+EAGLE also provides an explicit two-stage `framework_slots` mode. A separate
+`python -m eagle framework` command asks Gemini once for a complete Java
+framework plus a finite typed control surface; an experiment then freezes that
+bundle and evolves only local numeric or enumerated-expression choices. There is
+no candidate-time LLM, reflection, or repair in this mode. See the canonical
+[framework-slot contract](docs/architecture/framework_slots.md).
+
 ## Canonical workflow
 
 Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and llama.cpp launch settings:
