@@ -1,8 +1,8 @@
-"""One-shot Gemini bootstrap for an immutable, slot-controlled Java framework.
+"""One-shot Groq bootstrap for an immutable, slot-controlled Java framework.
 
 This module intentionally stops at framework-bundle creation.  Evolutionary
 configuration, candidate state, and Java materialization consume the bundle in
-separate layers.  Authentication is read only from ``GEMINI_API_KEY`` and is
+separate layers.  Authentication is read only from ``GROQ_API_KEY`` and is
 never included in persisted request or result artifacts.
 """
 
@@ -30,9 +30,10 @@ from eagle.prompts import load_prompt, render_prompt
 
 
 FRAMEWORK_SCHEMA_VERSION = FRAMEWORK_BUNDLE_SCHEMA_VERSION
-BOOTSTRAP_SCHEMA_VERSION = "eagle-gemini-framework-bootstrap-v1"
-ATTEMPT_SCHEMA_VERSION = "eagle-gemini-framework-attempt-v1"
-DEFAULT_GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
+BOOTSTRAP_SCHEMA_VERSION = "eagle-groq-framework-bootstrap-v1"
+ATTEMPT_SCHEMA_VERSION = "eagle-groq-framework-attempt-v1"
+DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_MAX_OUTPUT_TOKENS = 32_768
@@ -150,12 +151,12 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
 }
 
 
-class GeminiFrameworkError(RuntimeError):
+class GroqFrameworkError(RuntimeError):
     """The bounded framework bootstrap did not produce a valid bundle."""
 
 
 @dataclass(frozen=True)
-class GeminiFrameworkResult:
+class GroqFrameworkResult:
     """Published framework bundle and its compact bootstrap record."""
 
     output_dir: Path
@@ -167,15 +168,15 @@ class GeminiFrameworkResult:
 def generate_framework_bundle(
     output_dir: str | Path,
     *,
-    model: str,
+    model: str = DEFAULT_GROQ_MODEL,
     design_brief: str,
     temperature: float = 0.2,
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-    api_root: str = DEFAULT_GEMINI_API_ROOT,
-) -> GeminiFrameworkResult:
-    """Call Gemini with a fixed JSON schema and publish one validated bundle.
+    api_root: str = DEFAULT_GROQ_API_ROOT,
+) -> GroqFrameworkResult:
+    """Call Groq with a fixed JSON schema and publish one validated bundle.
 
     Every attempt owns its exact credential-free request body, raw HTTP body,
     timing, hashes, and result.  The raw body is flushed to disk before any
@@ -192,28 +193,23 @@ def generate_framework_bundle(
         timeout_seconds=timeout_seconds,
         api_root=api_root,
     )
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key.strip():
-        raise GeminiFrameworkError("GEMINI_API_KEY is required for framework generation.")
+        raise GroqFrameworkError("GROQ_API_KEY is required for framework generation.")
     _prepare_output_directory(target)
 
     prompt = render_prompt(
-        "gemini_framework_design",
+        "groq_framework_design",
         {
             "design_brief": design_brief.strip(),
             "gameplay_contract": load_prompt("microrts_gameplay_contract"),
             "action_api_guide": load_prompt("action_api_guide"),
         },
     )
-    model_name = model.removeprefix("models/")
-    endpoint = (
-        api_root.rstrip("/")
-        + "/models/"
-        + urllib.parse.quote(model_name, safe="._-")
-        + ":generateContent"
-    )
+    endpoint = api_root.rstrip("/") + "/chat/completions"
     request_payload = _request_payload(
         prompt,
+        model=model,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
     )
@@ -232,7 +228,7 @@ def generate_framework_bundle(
     selected_attempt: int | None = None
     selected_bundle: dict[str, object] | None = None
     selected_response_sha256: str | None = None
-    last_error = "Gemini returned no response."
+    last_error = "Groq returned no response."
     attempt_summaries: list[dict[str, object]] = []
 
     for attempt in range(1, max_attempts + 1):
@@ -255,7 +251,7 @@ def generate_framework_bundle(
                 data=request_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": api_key,
+                    "Authorization": f"Bearer {api_key}",
                 },
                 method="POST",
             )
@@ -263,7 +259,7 @@ def generate_framework_bundle(
                 http_status = int(getattr(response, "status", 200))
                 raw_response = response.read()
             raw_path.write_bytes(raw_response)
-            bundle = parse_gemini_framework_response(raw_response)
+            bundle = parse_groq_framework_response(raw_response)
             status = "success"
             retryable = False
         except urllib.error.HTTPError as exc:
@@ -273,11 +269,11 @@ def generate_framework_bundle(
             error = _http_error_summary(exc, raw_response)
             retryable = exc.code in {408, 409, 429} or 500 <= exc.code <= 599
         except (urllib.error.URLError, TimeoutError) as exc:
-            error = f"Gemini API request failed: {exc}"
+            error = f"Groq API request failed: {exc}"
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            error = f"Gemini response validation failed: {exc}"
+            error = f"Groq response validation failed: {exc}"
         except OSError as exc:
-            error = f"Gemini framework artifact failure: {exc}"
+            error = f"Groq framework artifact failure: {exc}"
             retryable = False
 
         finished_at = _utc_now()
@@ -290,8 +286,8 @@ def generate_framework_bundle(
             "status": status,
             "retryable": retryable,
             "error": safe_error,
-            "provider": "gemini",
-            "model": model_name,
+            "provider": "groq",
+            "model": model,
             "endpoint": endpoint,
             "http_status": http_status,
             "started_at": started_at,
@@ -328,8 +324,8 @@ def generate_framework_bundle(
         failure_record = {
             "schema_version": BOOTSTRAP_SCHEMA_VERSION,
             "status": "failed",
-            "provider": "gemini",
-            "model": model_name,
+            "provider": "groq",
+            "model": model,
             "endpoint": endpoint,
             "max_attempts": max_attempts,
             "selected_attempt": None,
@@ -343,8 +339,8 @@ def generate_framework_bundle(
             "error": last_error,
         }
         _write_json(target / "bootstrap.json", failure_record)
-        raise GeminiFrameworkError(
-            f"Gemini framework generation failed after {len(attempt_summaries)} attempt(s): "
+        raise GroqFrameworkError(
+            f"Groq framework generation failed after {len(attempt_summaries)} attempt(s): "
             f"{last_error}"
         )
 
@@ -365,8 +361,8 @@ def generate_framework_bundle(
     bootstrap_record = {
         "schema_version": BOOTSTRAP_SCHEMA_VERSION,
         "status": "success",
-        "provider": "gemini",
-        "model": model_name,
+        "provider": "groq",
+        "model": model,
         "endpoint": endpoint,
         "max_attempts": max_attempts,
         "selected_attempt": selected_attempt,
@@ -382,7 +378,7 @@ def generate_framework_bundle(
         "error": None,
     }
     _write_json(target / "bootstrap.json", bootstrap_record)
-    return GeminiFrameworkResult(
+    return GroqFrameworkResult(
         output_dir=target,
         bundle_path=target / "bundle.json",
         bootstrap_path=target / "bootstrap.json",
@@ -390,8 +386,8 @@ def generate_framework_bundle(
     )
 
 
-def parse_gemini_framework_response(raw_response: bytes | str) -> dict[str, object]:
-    """Parse a Gemini provider envelope and validate its framework JSON text."""
+def parse_groq_framework_response(raw_response: bytes | str) -> dict[str, object]:
+    """Parse a Groq provider envelope and validate its framework JSON text."""
 
     source = (
         raw_response.decode("utf-8")
@@ -400,34 +396,31 @@ def parse_gemini_framework_response(raw_response: bytes | str) -> dict[str, obje
     )
     envelope = json.loads(source)
     if not isinstance(envelope, dict):
-        raise ValueError("Gemini response envelope must be an object.")
-    candidates = envelope.get("candidates")
-    if not isinstance(candidates, list) or len(candidates) != 1:
-        raise ValueError("Gemini response must contain exactly one candidate.")
-    candidate = candidates[0]
-    if not isinstance(candidate, dict):
-        raise ValueError("Gemini candidate must be an object.")
-    content = candidate.get("content")
-    if not isinstance(content, dict):
-        raise ValueError("Gemini candidate content must be an object.")
-    parts = content.get("parts")
-    if not isinstance(parts, list) or not parts:
-        raise ValueError("Gemini candidate content must contain text parts.")
-    text_parts: list[str] = []
-    for part in parts:
-        if not isinstance(part, dict) or not isinstance(part.get("text"), str):
-            raise ValueError("Gemini structured response parts must contain text.")
-        text_parts.append(part["text"])
-    generated = json.loads("".join(text_parts))
+        raise ValueError("Groq response envelope must be an object.")
+    choices = envelope.get("choices")
+    if not isinstance(choices, list) or len(choices) != 1:
+        raise ValueError("Groq response must contain exactly one choice.")
+    choice = choices[0]
+    if not isinstance(choice, dict) or choice.get("finish_reason") != "stop":
+        raise ValueError("Groq response must finish with stop; incomplete output is rejected.")
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        raise ValueError("Groq choice message must be an object.")
+    if message.get("refusal"):
+        raise ValueError("Groq refused framework generation.")
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("Groq structured response must contain JSON text.")
+    generated = json.loads(content)
     if not isinstance(generated, dict):
-        raise ValueError("Gemini framework content must be one JSON object.")
+        raise ValueError("Groq framework content must be one JSON object.")
     bundle = validate_framework_bundle(generated)
     _validate_generated_java_template(bundle)
     return bundle.to_json_dict()
 
 
 def _validate_generated_java_template(bundle: FrameworkBundle) -> None:
-    """Apply Gemini-bootstrap source-envelope checks beyond the generic bundle schema."""
+    """Apply Groq-bootstrap source-envelope checks beyond the generic bundle schema."""
 
     source = bundle.java_template
     if source.count("package ai.generated;") != 1:
@@ -457,20 +450,22 @@ def _validate_generated_java_template(bundle: FrameworkBundle) -> None:
 def _request_payload(
     prompt: str,
     *,
+    model: str,
     temperature: float,
     max_output_tokens: int,
 ) -> dict[str, object]:
     return {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": temperature,
-            "candidateCount": 1,
-            "maxOutputTokens": max_output_tokens,
-            "responseFormat": {
-                "text": {
-                    "mimeType": "APPLICATION_JSON",
-                    "schema": FRAMEWORK_RESPONSE_SCHEMA,
-                }
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "max_completion_tokens": max_output_tokens,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "eagle_framework",
+                # Dynamic slot_rationale keys require best-effort schema mode.
+                "strict": False,
+                "schema": FRAMEWORK_RESPONSE_SCHEMA,
             },
         },
     }
@@ -479,7 +474,7 @@ def _request_payload(
 def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str:
     """Return a bounded provider diagnostic without replacing the raw artifact."""
 
-    prefix = f"Gemini API HTTP {exc.code}: {exc.reason}"
+    prefix = f"Groq API HTTP {exc.code}: {exc.reason}"
     try:
         payload = json.loads(raw_response.decode("utf-8"))
         provider_error = payload.get("error") if isinstance(payload, dict) else None
@@ -502,9 +497,8 @@ def _validate_settings(
     timeout_seconds: float,
     api_root: str,
 ) -> None:
-    model_name = model.removeprefix("models/")
-    if not model_name or not re.fullmatch(r"[A-Za-z0-9._-]+", model_name):
-        raise ValueError("Gemini model must be a non-empty model identifier.")
+    if not re.fullmatch(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?", model):
+        raise ValueError("Groq model must be a non-empty model identifier.")
     if not design_brief.strip():
         raise ValueError("Framework design brief must not be empty.")
     if not math.isfinite(temperature) or temperature < 0:
@@ -517,7 +511,7 @@ def _validate_settings(
         raise ValueError("timeout_seconds must be finite and positive.")
     parsed = urllib.parse.urlparse(api_root)
     if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("Gemini api_root must be a valid HTTPS URL.")
+        raise ValueError("Groq api_root must be a valid HTTPS URL.")
 
 
 def _prepare_output_directory(path: Path) -> None:

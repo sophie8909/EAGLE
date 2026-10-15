@@ -514,7 +514,7 @@ inherited Java is inactive compatibility data and does not determine source.
 Resume rejects mode/protocol mismatch and unsupported compiler versions before
 replay; an absent field in an old config means `llm`.
 
-## Standalone Gemini framework bootstrap
+## Standalone Groq framework bootstrap
 
 Bootstrap artifacts are preparation evidence and do not live inside a candidate:
 
@@ -534,16 +534,19 @@ Bootstrap artifacts are preparation evidence and do not live inside a candidate:
 
 `response_raw.json` is flushed before provider-envelope or generated-content
 parsing, including failed responses. Attempt schema
-`eagle-gemini-framework-attempt-v1` records status/retryability, redacted error,
+`eagle-groq-framework-attempt-v1` records status/retryability, redacted error,
 provider/model/endpoint/HTTP status, UTC boundaries, duration, and exact request
-and response hashes. `eagle-gemini-framework-bootstrap-v1` records the selected
+and response hashes. `eagle-groq-framework-bootstrap-v1` records the selected
 attempt, total duration, attempt summaries, and the SHA-256 of the exact
-published `bundle.json` bytes. The normalized bundle, extracted template,
-slot-generation prompt, and report are separate convenience views; `bundle.json`
-is the sole experiment input.
+published `bundle.json` bytes.
 
-The API key is never an artifact. It is read only from `GEMINI_API_KEY`, sent in
-the `x-goog-api-key` header, excluded from request JSON/config, and redacted from
-stored errors. A bootstrap target must be new or empty so previous evidence is
-never overwritten. See [framework slots](../architecture/framework_slots.md) for
+The OpenAI-compatible request uses user content in `messages` and
+`response_format` JSON Schema named `eagle_framework` with `strict: false`. The normalized bundle, extracted template,
+slot-generation prompt, and report are separate convenience views;
+`bundle.json` is the sole experiment input.
+
+The API key is never an artifact. It is read only from `GROQ_API_KEY`, sent in
+the HTTP Bearer authorization header, excluded from request JSON/config, and
+redacted from stored errors. A bootstrap target must be new or empty so previous
+evidence is never overwritten. See [framework slots](../architecture/framework_slots.md) for
 the exact structured schema and retry boundary.

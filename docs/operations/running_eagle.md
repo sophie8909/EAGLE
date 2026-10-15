@@ -21,24 +21,27 @@ conda run --no-capture-output -n eagle \
   --mock --skip-final-test
 ```
 
-## One-time Gemini framework bootstrap
+## One-time Groq framework bootstrap
 
 Framework-slot runs use two explicit commands. First create a new bootstrap
 directory; the API key is environment-only and must not be placed in YAML,
 shell history as a CLI option, or tracked artifacts:
 
 ```bash
-export GEMINI_API_KEY='...'
+export GROQ_API_KEY='...'
 python -m eagle framework \
-  --model YOUR_GEMINI_MODEL \
+  --model openai/gpt-oss-120b \
   --brief-file framework_design.txt \
   --output runs/framework_bootstrap/my_framework
 ```
 
-`--brief` may replace `--brief-file`. Optional bounds are `--temperature`,
+`--brief` may replace `--brief-file`. Omitting `--model` selects
+`openai/gpt-oss-120b`. Optional bounds are `--temperature`,
 `--max-output-tokens`, `--max-attempts`, and `--timeout-seconds`. The command
-uses native Gemini `generateContent` structured JSON, refuses a nonempty output
-directory, retains every raw response before parsing, and exits `2` if its
+uses the OpenAI-compatible Groq Chat Completions endpoint with `response_format`
+JSON Schema (`strict: false`). Local exact bundle validation remains
+authoritative. It refuses a nonempty output directory, retains every raw response
+before parsing, and exits `2` if its
 bounded attempts do not publish a valid bundle. Review `bundle.json`,
 `CandidateAgent.template.java`, `report.json`, and `bootstrap.json` before use.
 

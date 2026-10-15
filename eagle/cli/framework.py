@@ -1,4 +1,4 @@
-"""CLI for generating an immutable Gemini Java-framework bundle."""
+"""CLI for generating an immutable Groq Java-framework bundle."""
 
 from __future__ import annotations
 
@@ -6,11 +6,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from eagle.generation.gemini_framework import (
+from eagle.generation.groq_framework import (
+    DEFAULT_GROQ_MODEL,
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_MAX_OUTPUT_TOKENS,
     DEFAULT_TIMEOUT_SECONDS,
-    GeminiFrameworkError,
+    GroqFrameworkError,
     generate_framework_bundle,
 )
 
@@ -19,12 +20,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m eagle framework",
         description=(
-            "Ask Gemini once for a structured Java framework and persist an "
+            "Ask Groq once for a structured Java framework and persist an "
             "immutable slot-control bundle."
         ),
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--model", required=True, help="Gemini model identifier")
+    parser.add_argument("--model", default=DEFAULT_GROQ_MODEL, help="Groq model identifier")
     brief = parser.add_mutually_exclusive_group(required=True)
     brief.add_argument("--brief", help="framework design brief")
     brief.add_argument("--brief-file", type=Path, help="UTF-8 framework design brief")
@@ -55,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Framework bundle written to: {result.bundle_path}")
         print(f"framework_id={result.bundle['framework_id']}")
         return 0
-    except (GeminiFrameworkError, OSError, ValueError) as exc:
+    except (GroqFrameworkError, OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 

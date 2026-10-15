@@ -187,7 +187,7 @@ def sha256_text(value: str) -> str:
 
 
 def validate_framework_bundle(payload: Mapping[str, Any]) -> FrameworkBundle:
-    """Validate and normalize one exact-schema Gemini framework bundle."""
+    """Validate and normalize one exact-schema framework bundle."""
 
     data = _require_mapping(payload, "framework bundle")
     _require_exact_keys(data, _BUNDLE_KEYS, "framework bundle")

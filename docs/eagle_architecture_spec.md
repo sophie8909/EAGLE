@@ -715,14 +715,14 @@ without the field remain LLM mode. Focused contracts and bounded real self-play
 validation pass; see `testing/test_contracts.md` for verification and environment
 limitations.
 
-## 16. Gemini framework and finite-slot mode
+## 16. Groq framework and finite-slot mode
 
 `framework_slots` is a third Java materialization mode with an explicit
 two-stage boundary. Before a run, `python -m eagle framework` performs one
-bounded Gemini `generateContent` bootstrap using the checked-in gameplay and API
+bounded Groq `chat-completions` bootstrap using the checked-in gameplay and API
 contracts. It persists every credential-free request and raw response before
 parsing and publishes one strictly validated `eagle-framework-bundle-v1`.
-Bootstrap is never implicit in experiment startup and is the only Gemini/LLM
+Bootstrap is never implicit in experiment startup and is the only Groq/LLM
 work in this mode.
 
 The structured bundle has exactly `schema_version`, `framework_id`,
@@ -757,7 +757,7 @@ continues through the unchanged security validation, one javac, Integration,
 semantic probe, objectives, parent-plus-offspring selection, and ten-opponent x
 three-map x three-round x two-side evaluation.
 
-`GEMINI_API_KEY` is accepted only from the bootstrap process environment and is
+`GROQ_API_KEY` is accepted only from the bootstrap process environment and is
 never written to prompt, request, config, bootstrap, run, candidate, or failure
 artifacts. Raw provider output and structured report are untrusted evidence;
 schema validation, Java-envelope checks, ordinary validation, javac, and

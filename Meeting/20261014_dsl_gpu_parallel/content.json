@@ -1,0 +1,1150 @@
+{
+  "revision": "94ab1869",
+  "slides": [
+    {
+      "title": "EAGLE 最終版本介紹",
+      "notes": "本簡報介紹程式來源94ab1869的最終運作方式，標準實驗為population10、20個演化世代，gen0初始化另列。其餘設定沿用deterministic_dsl、seed8重複三次、Strategy-only self-play。說明設定、策略表示、初始化、反思、確定性編譯、評估、選擇、平行工作、GPU啟動與續跑。",
+      "sources": [
+        "configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs/ministral3_8b_deterministic_dsl_20x10_seed8_3runs.yaml",
+        "eagle/runtime/processes.py"
+      ],
+      "type": "cover",
+      "hero": "以 DSL 演化策略的搜尋流程",
+      "body": [
+        "標準規模：population 10 × 演化 20 代",
+        "Deterministic DSL　Ministral3 8B"
+      ]
+    },
+    {
+      "title": "執行模式與實驗設定",
+      "notes": "ExperimentConfig解析此self_play設定為game_performance_semantic_tiebreak。Gen0把單一WorkerRush policy複製為population_size=10，各候選有不同identity。有效genotype只有strategy_prompt；標準設定20個演化世代另有gen0初始化，三個獨立run的有效seed均為8。",
+      "sources": [
+        "configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs/ministral3_8b_deterministic_dsl_20x10_seed8_3runs.yaml",
+        "eagle/config.py",
+        "eagle/operators/initialization.py"
+      ],
+      "table": [
+        [
+          "項目",
+          "本次設定",
+          "實際作用"
+        ],
+        [
+          "策略／Java",
+          "deterministic_dsl\neagle-dsl-java-v1",
+          "策略 JSON → 固定 Java compiler\nGeneration meta prompt 不啟用"
+        ],
+        [
+          "搜尋預算",
+          "population 10、演化 20 代\nseed 8，runs 3",
+          "gen0 另列，之後 gen1–20\n三次相同 seed、獨立 run"
+        ],
+        [
+          "反思",
+          "static，mutation_rate 1\nStrategy probability 1",
+          "只有 Strategy Reflection\nCode／Prompt Reflection 不啟用"
+        ],
+        [
+          "評估",
+          "self_play，3 maps\nparent mode reuse_cached",
+          "Game Performance 最大化\n同分以 semantic novelty 分辨"
+        ]
+      ],
+      "widths": [
+        255,
+        495,
+        592
+      ],
+      "size": 28
+    },
+    {
+      "title": "完整搜尋流程",
+      "notes": "先完成GPU runtime啟動與config協定核對，gen0建立10個seed clones、編譯與bootstrap self-play評估，保存snapshot。gen1到gen20按序建立每代10個offspring，反思以2個LLM slots並行、結果固定排序；編譯與評估後以mu+lambda選10個survivors。第5、10、15、20代刷新對手快照並重評父代。stagnation門檻25高於20代預算，正常會先到代數上限。正常完成後共同final-test不回饋搜尋；外部exception/interrupt留下最後完整checkpoint。",
+      "sources": [
+        "eagle/evolution/search.py",
+        "eagle/evolution/generation.py",
+        "eagle/final_test.py"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "config",
+            "text": "Config、seed、GPU 檢查",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "init",
+            "text": "Gen0：10 個 seed clones",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "bootstrap",
+            "text": "DSL 編譯、初始評估",
+            "x": 1115,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "iteration",
+            "text": "父代、crossover、反思\n每代 10 offspring",
+            "x": 1115,
+            "y": 460,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "eval",
+            "text": "DSL 編譯與對戰\nμ＋λ 倖存者選擇",
+            "x": 650,
+            "y": 460,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "stop",
+            "text": "達到停止條件？",
+            "x": 185,
+            "y": 450,
+            "w": 360,
+            "h": 120,
+            "decision": true,
+            "size": 27
+          },
+          {
+            "id": "final",
+            "text": "完成：champion final-test",
+            "x": 185,
+            "y": 660,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "outputs",
+            "text": "summary、checkpoint、timing",
+            "x": 650,
+            "y": 660,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "config",
+            "init"
+          ],
+          [
+            "init",
+            "bootstrap"
+          ],
+          [
+            "bootstrap",
+            "iteration",
+            "bottom",
+            "top"
+          ],
+          [
+            "iteration",
+            "eval",
+            "left",
+            "right"
+          ],
+          [
+            "eval",
+            "stop",
+            "left",
+            "right"
+          ],
+          [
+            "stop",
+            "iteration",
+            "top",
+            "top"
+          ],
+          [
+            "stop",
+            "final",
+            "bottom",
+            "top"
+          ],
+          [
+            "final",
+            "outputs"
+          ]
+        ],
+        "labels": [
+          {
+            "text": "否：繼續 gen1–20",
+            "x": 600,
+            "y": 374,
+            "w": 290
+          },
+          {
+            "text": "是：正常完成",
+            "x": 235,
+            "y": 594,
+            "w": 230
+          }
+        ]
+      },
+      "foot": "中斷／失敗：保留最後完整 checkpoint，以 --resume 接續"
+    },
+    {
+      "title": "DSL：策略與實作之間的固定契約",
+      "notes": "策略格式eagle-strategy-dsl-v1，上限16000字元、32rules、conditiondepth6、booleanfanout8。規則包含actor單位類型、when條件、action合法動作。choose是合法動作子集上的確定性hash選擇，沒有persistent RNG。策略本身仍由LLM反思改變，確定性的是policy到Java的物化映射，不等於不使用LLM。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/strategy_dsl.py",
+        "eagle/generation/dsl_java_compiler.py"
+      ],
+      "body": [
+        "策略是一個 version + rules 的 JSON object；每條 rule 包含 actor、when、action。空 rules 明確表示 idle。",
+        "條件只讀當前可觀測狀態；action、target、selector 使用封閉詞彙。禁止自訂 prose／Java 欄位。",
+        "Java 是離線編譯的 phenotype；固定 scaffold、compiler version 與 policy hash 一起保存。"
+      ],
+      "size": 33
+    },
+    {
+      "title": "DSL 規則順序：一條 rule 要通過三層檢查",
+      "subtitle": "每個閒置的我方單位，從 rules 第一條開始；採用第一個能合法發出的動作。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/java_templates/CandidateAgent.java"
+      ],
+      "notes": "先跳過不是我方或目前忙碌的單位。對每個閒置我方單位，從 rules 陣列第一條開始：actor 類型符合才判斷 when，when 成立才建立 action plan。目標、射程、路徑、資源、格子、遊戲合法性與本輪 reservations 都會影響 action 是否可發出。三層任一失敗就對同一個單位嘗試下一條規則，重新從 actor 檢查開始。只有成功 issue 才停止此單位的規則掃描。若所有規則失敗，輸出 TYPE_NONE（duration 10）。此圖把失敗分支分開畫，避免混淆成功路徑與重試路徑。",
+      "diagram": {
+        "nodes": [
+          {
+            "id": "rule",
+            "text": "讀取這個單位的當前 rule",
+            "x": 185,
+            "y": 240,
+            "w": 535,
+            "h": 70,
+            "size": 29
+          },
+          {
+            "id": "actor",
+            "text": "① actor 檢查\n單位類型符合這條規則？",
+            "x": 185,
+            "y": 345,
+            "w": 535,
+            "h": 80,
+            "size": 29
+          },
+          {
+            "id": "when",
+            "text": "② when 檢查\n當前狀態是否滿足條件？",
+            "x": 185,
+            "y": 465,
+            "w": 535,
+            "h": 80,
+            "size": 29
+          },
+          {
+            "id": "legal",
+            "text": "③ action 檢查\n是否真的能合法發出動作？",
+            "x": 185,
+            "y": 585,
+            "w": 535,
+            "h": 80,
+            "size": 29
+          },
+          {
+            "id": "success",
+            "text": "成功：加入本輪動作、更新預留\n停止此單位；換下一個單位",
+            "x": 185,
+            "y": 700,
+            "w": 535,
+            "h": 70,
+            "size": 27
+          },
+          {
+            "id": "type-fail",
+            "text": "類型不符 → 下一條 rule\n例如 Worker 跳過 Base 的規則",
+            "x": 955,
+            "y": 345,
+            "w": 520,
+            "h": 80,
+            "size": 28
+          },
+          {
+            "id": "condition-fail",
+            "text": "條件為否 → 下一條 rule\n例如攜帶 0 資源，不能 return",
+            "x": 955,
+            "y": 465,
+            "w": 520,
+            "h": 80,
+            "size": 28
+          },
+          {
+            "id": "action-fail",
+            "text": "動作失敗 → 下一條 rule\n例如無目標、超出射程、資源不足",
+            "x": 955,
+            "y": 585,
+            "w": 520,
+            "h": 80,
+            "size": 27
+          },
+          {
+            "id": "exhausted",
+            "text": "若已無下一條 rule → idle",
+            "x": 955,
+            "y": 700,
+            "w": 520,
+            "h": 70,
+            "size": 28
+          }
+        ],
+        "edges": [
+          [
+            "rule",
+            "actor",
+            "bottom",
+            "top"
+          ],
+          [
+            "actor",
+            "when",
+            "bottom",
+            "top"
+          ],
+          [
+            "when",
+            "legal",
+            "bottom",
+            "top"
+          ],
+          [
+            "legal",
+            "success",
+            "bottom",
+            "top"
+          ],
+          [
+            "actor",
+            "type-fail"
+          ],
+          [
+            "when",
+            "condition-fail"
+          ],
+          [
+            "legal",
+            "action-fail"
+          ]
+        ],
+        "labels": [
+          {
+            "text": "符合",
+            "x": 475,
+            "y": 427,
+            "w": 150,
+            "h": 34
+          },
+          {
+            "text": "成立",
+            "x": 475,
+            "y": 547,
+            "w": 150,
+            "h": 34
+          },
+          {
+            "text": "可發出",
+            "x": 475,
+            "y": 666,
+            "w": 150,
+            "h": 34
+          },
+          {
+            "text": "不符",
+            "x": 800,
+            "y": 356,
+            "w": 100,
+            "h": 44
+          },
+          {
+            "text": "否",
+            "x": 800,
+            "y": 476,
+            "w": 100,
+            "h": 44
+          },
+          {
+            "text": "不可",
+            "x": 800,
+            "y": 596,
+            "w": 100,
+            "h": 44
+          }
+        ]
+      },
+      "foot": "fallback = 對同一個單位往下試下一條規則；每次都重新檢查 actor → when → action。"
+    },
+    {
+      "title": "具體例子：同一個 Worker 如何 fallback？",
+      "subtitle": "機制示例：Worker 攜帶 0 資源；所有敵人都在射程外；旁邊有可採集的 Resource。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/java_templates/CandidateAgent.java"
+      ],
+      "example": true,
+      "notes": "三條規則的 actor 都是 Worker。Rule 1 的 when 是 actor_resources > 0，因此攜帶 0 時條件失敗，不執行 return。Rule 2 的 when 是 true；attack 會先將目標過濾為當前射程內可合法攻擊的敵方單位，示例中沒有任何合法目標，因此 plan 為 null 並繼續下一條規則。Rule 3 的 when 是 true，Worker 未攜帶資源，旁邊有 Resource，且採集動作通過遊戲與 reservation 檢查，所以發出一個 harvest primitive，終止此單位的掃描。此例的 harvest 目標已相鄰；非相鄰時可能發出朝資源前進的一步。attack 不會自動追敵；engage 才可在射程外嘗試走一步。所有數值為教學示例，非實驗結果。",
+      "diagram": {
+        "nodes": [
+          {
+            "id": "r1",
+            "text": "Rule 1：return\nwhen：攜帶資源 > 0",
+            "x": 165,
+            "y": 255,
+            "w": 390,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "test1",
+            "text": "Worker 攜帶 0\nwhen = false",
+            "x": 615,
+            "y": 255,
+            "w": 435,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "result1",
+            "text": "不嘗試 return\n繼續 Rule 2",
+            "x": 1110,
+            "y": 255,
+            "w": 397,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "r2",
+            "text": "Rule 2：attack\nwhen：true",
+            "x": 165,
+            "y": 445,
+            "w": 390,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "test2",
+            "text": "所有敵人都在射程外\n沒有合法 attack 目標",
+            "x": 615,
+            "y": 445,
+            "w": 435,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "result2",
+            "text": "條件成立，動作仍失敗\n繼續 Rule 3",
+            "x": 1110,
+            "y": 445,
+            "w": 397,
+            "h": 125,
+            "size": 28
+          },
+          {
+            "id": "r3",
+            "text": "Rule 3：harvest\nwhen：true",
+            "x": 165,
+            "y": 635,
+            "w": 390,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "test3",
+            "text": "鄰接資源，可合法採集\n動作檢查通過",
+            "x": 615,
+            "y": 635,
+            "w": 435,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "result3",
+            "text": "發出 1 個 harvest\n停止，不再檢查後續規則",
+            "x": 1110,
+            "y": 635,
+            "w": 397,
+            "h": 125,
+            "size": 28
+          }
+        ],
+        "edges": [
+          [
+            "r1",
+            "test1"
+          ],
+          [
+            "test1",
+            "result1"
+          ],
+          [
+            "r2",
+            "test2"
+          ],
+          [
+            "test2",
+            "result2"
+          ],
+          [
+            "r3",
+            "test3"
+          ],
+          [
+            "test3",
+            "result3"
+          ],
+          [
+            "r1",
+            "r2",
+            "bottom",
+            "top"
+          ],
+          [
+            "r2",
+            "r3",
+            "bottom",
+            "top"
+          ]
+        ],
+        "labels": []
+      },
+      "foot": "這一輪只發出 harvest；不是 return、attack、harvest 三個動作都一起執行。"
+    },
+    {
+      "title": "多個單位：先成功的動作會預留資源與格子",
+      "subtitle": "機制示例：兩座閒置 Base、共有 1 資源；Worker 成本 1，兩座 Base 都有空的鄰格。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/java_templates/CandidateAgent.java"
+      ],
+      "example": true,
+      "notes": "閒置我方單位按 unit ID 升序決策，因此 Base ID 10 先於 ID 20。兩者都使用 actor Base、when stockpile >= 1、action train Worker（first_free_adjacent）的規則，後面放一條 when true、action idle。stockpile 條件讀取當前 GameState 的資源；在同一次 PlayerAction 組裝中它仍是 1，並不因預留直接被改成 0。ID 10 成功發出 train 後，commandPlannedAction 把成本 1 與出生格併入 context.reservations。ID 20 的 when 仍成立，但 action 的 resourceUsage 與 reservations 不相容，因此無法再次消耗同一份資源，繼續下一條 idle 規則。資源的實際扣除與單位完成生產由遊戲引擎處理，不能把預留誤稱為即時完成生產。本輪可用資源的說明值為現有資源減已預留資源。位置同樣不可重複預留；後續單位會另選合法格子，找不到才 fallback。示例未量測實驗。",
+      "diagram": {
+        "nodes": [
+          {
+            "id": "shared",
+            "text": "共同規則：stockpile ≥ 1 → train Worker；下一條為 idle",
+            "x": 250,
+            "y": 235,
+            "w": 1172,
+            "h": 75,
+            "size": 30
+          },
+          {
+            "id": "base10",
+            "text": "先處理 ID 10\nwhen：1 ≥ 1，成立",
+            "x": 165,
+            "y": 370,
+            "w": 390,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "train10",
+            "text": "train 可合法發出\n成本 1、鄰格可用",
+            "x": 615,
+            "y": 370,
+            "w": 435,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "reserve10",
+            "text": "加入 train 動作\n預留 1 資源 + 出生格",
+            "x": 1110,
+            "y": 370,
+            "w": 397,
+            "h": 125,
+            "size": 28
+          },
+          {
+            "id": "base20",
+            "text": "再處理 ID 20\nwhen：1 ≥ 1，仍成立",
+            "x": 165,
+            "y": 610,
+            "w": 390,
+            "h": 125,
+            "size": 29
+          },
+          {
+            "id": "train20",
+            "text": "可用資源 = 1 − 1 = 0\ntrain 無法合法發出",
+            "x": 615,
+            "y": 610,
+            "w": 435,
+            "h": 125,
+            "size": 28
+          },
+          {
+            "id": "fallback20",
+            "text": "跳到下一條 idle\n不會再訓練一個 Worker",
+            "x": 1110,
+            "y": 610,
+            "w": 397,
+            "h": 125,
+            "size": 28
+          }
+        ],
+        "edges": [
+          [
+            "base10",
+            "train10"
+          ],
+          [
+            "train10",
+            "reserve10"
+          ],
+          [
+            "base20",
+            "train20"
+          ],
+          [
+            "train20",
+            "fallback20"
+          ],
+          [
+            "base10",
+            "base20",
+            "bottom",
+            "top"
+          ]
+        ],
+        "labels": [
+          {
+            "text": "依 unit ID 升序；ID 10 已先預留資源與格子",
+            "x": 390,
+            "y": 540,
+            "w": 1070,
+            "h": 44
+          }
+        ]
+      },
+      "foot": "stockpile 讀的是當前資源；合法性檢查還要扣除本輪預留。格子也不能被兩個動作重複占用。"
+    },
+    {
+      "title": "fallback 與 idle：何時往下試，何時停止？",
+      "subtitle": "每個單位每個 decision cycle 最多一個原始動作；下次決策時重新從第一條 rule 開始。",
+      "sources": [
+        "prompts/strategy_dsl_reference.txt",
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/java_templates/CandidateAgent.java"
+      ],
+      "notes": "fallback 並非另找 LLM 改策略，而是執行已編譯的同一份規則陣列時，對當前單位繼續向下試。合法 action 一旦加入本輪 PlayerAction 就停止當前單位的規則掃描，之後處理下一個閒置我方單位。explicit idle 是合法動作，會發出 TYPE_NONE duration 10，並停止掃描；若把 actor 符合、when=true 的 idle 放得太前面，會擋住該類型單位的後續規則。所有規則皆失敗時，compiler 同樣為該單位輸出 TYPE_NONE duration 10。忙碌單位不進入此輪規則掃描。cycle 在此是 AI 決策呼叫，不等於 10 個資源 tick 或實驗的 evolutionary generation。動作跨 tick 執行；單位再次閒置才會再被規則處理。",
+      "table": [
+        [
+          "當前規則／狀態",
+          "這個單位接下來做什麼"
+        ],
+        [
+          "actor／when 不符，\n或 action 無法合法發出",
+          "嘗試下一條 rule；不輸出這條動作"
+        ],
+        [
+          "成功發出非 idle 動作",
+          "停止此單位的規則掃描；更新本輪 reservations"
+        ],
+        [
+          "命中 idle 規則\n（actor、when 都通過）",
+          "停止此單位的規則掃描；輸出 TYPE_NONE"
+        ],
+        [
+          "所有 rule 都失敗，或 rules 是空陣列",
+          "預設輸出 TYPE_NONE；之後處理下一個單位"
+        ]
+      ],
+      "widths": [
+        550,
+        792
+      ],
+      "size": 28,
+      "foot": "idle 需 actor、when 通過才會停止；命中後不再往下試，全部失敗也會 idle。"
+    },
+    {
+      "title": "Gen0 與每代需要保存的狀態",
+      "notes": "初始化clone不是多樣化，10個policy相同。初始bootstrap評估由compiled候選提供對手；之後library去重可能將10個identicalJava候選縮為一個source。snapshotcontext改變時，gen1必須先更新父代fitness，而不是無條件重用gen0分數。相同context後可reuse_cached。",
+      "sources": [
+        "eagle/operators/initialization.py",
+        "eagle/evolution/search.py",
+        "eagle/evolution/generation.py",
+        "eagle/self_play.py"
+      ],
+      "table": [
+        [
+          "階段",
+          "候選／狀態",
+          "證據"
+        ],
+        [
+          "Gen0",
+          "單一 WorkerRush policy\n複製為 10 個候選",
+          "不同 candidate IDs\n相同 DSL 與 Java hash"
+        ],
+        [
+          "對手快照",
+          "bootstrap 後建立 run-local library\nJava／語意等價去重",
+          "固定 source IDs、slot IDs\n與 context_id"
+        ],
+        [
+          "Gen1–20",
+          "每代建立 10 offspring\n保存已完成 survivors",
+          "parents、strategy_parent_id\n反思與 lineage"
+        ],
+        [
+          "Checkpoint",
+          "只承認完整提交的 generation",
+          "config、compiler/scaffold hashes\nmanifest、snapshot、timing"
+        ]
+      ],
+      "widths": [
+        255,
+        580,
+        507
+      ],
+      "size": 28
+    },
+    {
+      "title": "Self-play opponent pool 的建立與刷新",
+      "notes": "select_self_play_library_candidates依libraryorder，以epoch=generation//refresh_interval與source_count=min(N,10)決定start=(epoch*source_count)%N，再循環填滿10slots。Gen0的10個相同Java候選在libraryhash去重後通常只剩一個source；gen1可因contextmigration重評父代。第5、10、15、20代加入當代可執行parents、刷新對手快照並重評父代。兩個刷新點之間，context一致時可reuse_cached。Library容量50、FIFO保留；每輪候選共享相同context。",
+      "sources": [
+        "eagle/self_play.py",
+        "eagle/evaluation/opponents.py",
+        "eagle/evolution/generation.py"
+      ],
+      "body": [
+        "只有完整、可執行且評估成功的 phenotype 可進入 library；依 candidate ID、Java hash 與完整語意簽章去重。",
+        "Library 容量 50，按 FIFO 保留；刷新時循環取最多 10 個來源，再填滿 10 個 evaluation slots。",
+        "每 5 代刷新對手快照：gen5、10、15、20。刷新或 context 改變時，先重評父代，再與 offspring 在相同快照下比較。"
+      ],
+      "size": 32
+    },
+    {
+      "title": "評估對手、繁殖父代與倖存者",
+      "notes": "GamePerformance的tier不是鏈式鄰近合併，最高分往下1.0以內屬tier。父代A在top tier選擇，B可用A語意簽章當reference。survivor先保留完整較好score tiers，容量截斷的tier才用farthest-first語意新穎度，不讓semantic distance把較差tier提升。missing/incompatible簽章走seeded fallback。finaltest固定roster，不混同搜尋的selfplay_000–009slots。",
+      "sources": [
+        "eagle/operators/selection.py",
+        "eagle/evolution/offspring.py",
+        "eagle/self_play.py",
+        "eagle/final_test.py"
+      ],
+      "table": [
+        [
+          "用途",
+          "從哪裡選",
+          "選擇規則"
+        ],
+        [
+          "Evaluation opponents",
+          "固定 self-play snapshot\n不是目前 breeding pool",
+          "library 循環來源 → 10 slots\n同輪所有候選共用 context"
+        ],
+        [
+          "Breeding parents",
+          "目前 evolving population",
+          "Game Performance 最高 tier\n第二父代 tie 可看語意距離"
+        ],
+        [
+          "Survivors",
+          "目前 parents + offspring",
+          "μ＋λ 選 10 人\ntier 邊界用 seeded novelty"
+        ],
+        [
+          "Final-test opponents",
+          "固定 10 種共同測試對手",
+          "與搜尋 self-play pool 分開\nchampion 測試後不回饋搜尋"
+        ]
+      ],
+      "widths": [
+        290,
+        480,
+        572
+      ],
+      "size": 28
+    },
+    {
+      "title": "每代變異與 Strategy Reflection",
+      "notes": "plan_offspring先依rootseed衍生父代、crossover與operator的taskstreams。deterministic模式以整份策略作crossover的選擇單位，strategy_parent_id記錄策略來源。每代有10個offspring，mutation_rate=1且Strategy probability=1。先serial決定計畫，再並行reflection，最後按slot順序整合。",
+      "sources": [
+        "eagle/evolution/offspring.py",
+        "eagle/operators/crossover.py",
+        "eagle/execution.py"
+      ],
+      "body": [
+        "先以 root seed 衍生各 slot 的父代、crossover 與 operator stream，再一次建立 10 個 offspring 計畫。",
+        "Crossover rate 0.75：從兩個父代選一份完整 policy；不拼接 rule 子樹，也不繼承 Java／generation prompt。",
+        "Mutation rate 1.0、Strategy probability 1：反思可改 policy；Code source gate、Prompt Mutation 都停用。"
+      ],
+      "size": 32
+    },
+    {
+      "title": "Strategy Reflection 的證據來源",
+      "notes": "選擇只從記錄的strategy_parent_id對應parent已完成matches中挑最低有限performance的一場；若無有限score，依loss=-100、draw=0、win=100 fallback。stablematch_id打破tie；failedmatches排除。Commentator看到該場canonicaltrace；Coach看到一份diagnosis與parent全部matches的global summary。JSONL結果經驗證後形成策略基因。缺trace不換成另一場。",
+      "sources": [
+        "eagle/operators/context.py",
+        "eagle/operators/strategy.py",
+        "docs/architecture/mutation.md"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "parent",
+            "text": "記錄的 strategy_parent_id",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "worst",
+            "text": "已完成 matches\n恰好選一場 worst",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "commentator",
+            "text": "Match Commentator\n單場 trace → diagnosis",
+            "x": 1115,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "summary",
+            "text": "parent 全場摘要\nglobal summary",
+            "x": 185,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "coach",
+            "text": "Coach\n單場診斷＋全場摘要",
+            "x": 650,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "dsl",
+            "text": "JSONL 完整 rules\n驗證 → 新 policy",
+            "x": 1115,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "parent",
+            "worst"
+          ],
+          [
+            "worst",
+            "commentator"
+          ],
+          [
+            "parent",
+            "summary",
+            "bottom",
+            "top"
+          ],
+          [
+            "commentator",
+            "coach",
+            "bottom",
+            "top"
+          ],
+          [
+            "summary",
+            "coach"
+          ],
+          [
+            "coach",
+            "dsl"
+          ]
+        ]
+      },
+      "foot": "單場診斷提供具體失敗證據；全場摘要保留整體表現"
+    },
+    {
+      "title": "JSONL：合法規則子集可形成策略",
+      "notes": "Coach輸出rule-per-lineJSONL，每個record使用new_strategy_prompt；策略contractrewrite使用revised_strategy_prompt。Parser獨立驗證每條rule，不修補非法子樹，按原始行序保留合法規則。Coach回應需要至少一條合法strategy_rule；這與完整DSL空rules的idle語意不同。最多三次嘗試，正常解析失敗耗盡可保留parentpolicy；backend/server例外仍可能中止run。",
+      "sources": [
+        "eagle/strategy_dsl.py",
+        "eagle/operators/strategy.py",
+        "prompts/coach_refine.txt"
+      ],
+      "body": [
+        "每個實體行是一筆 strategy_rule record；Coach 使用 new_strategy_prompt，contract rewrite 使用 revised_strategy_prompt。",
+        "每條 rule 獨立驗證 actor／when／action；丟棄 malformed、錯欄位或語意不合法的整條規則，保留合法行順序。",
+        "至少一條合法 rule 才成功；零條合法規則最多 3 次嘗試。耗盡可保留原 policy；transport exception 仍可能中止 run。"
+      ],
+      "size": 31,
+      "foot": "固定 compiler 接收的是完整、正規化 policy，不是未驗證的原始 JSONL"
+    },
+    {
+      "title": "確定性 Java 物化與失敗邊界",
+      "notes": "DSLcompiler先validate/normalize，生成typedIR，再用eagle-dsl-java-v1與固定scaffold發射完整source。下游一般validation、單次javac與integration維持，probe/matches有自身diagnostics。deterministic模式沒有JavaGeneration、CodeReflection、PromptReflection或compile-repairLLM。compiler/validation/javacfailure保持實際failurestage與source/hash，不假裝進入遊戲。",
+      "sources": [
+        "eagle/generation/dsl_java_compiler.py",
+        "eagle/evaluation/decoding.py",
+        "eagle/evaluation/pipeline.py"
+      ],
+      "diagram": {
+        "nodes": [
+          {
+            "id": "policy",
+            "text": "完整 canonical DSL policy",
+            "x": 185,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "ir",
+            "text": "validate／normalize\n建立 typed IR",
+            "x": 650,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "emit",
+            "text": "固定 compiler＋scaffold\n完整 Java phenotype",
+            "x": 1115,
+            "y": 260,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "validate",
+            "text": "source validation\n單次 javac、Integration",
+            "x": 1115,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "game",
+            "text": "語意 probe、matches\nfitness、diagnostics",
+            "x": 650,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          },
+          {
+            "id": "evidence",
+            "text": "phenotype、hashes\nresult、lineage、timing",
+            "x": 185,
+            "y": 500,
+            "w": 360,
+            "h": 100
+          }
+        ],
+        "edges": [
+          [
+            "policy",
+            "ir"
+          ],
+          [
+            "ir",
+            "emit"
+          ],
+          [
+            "emit",
+            "validate",
+            "bottom",
+            "top"
+          ],
+          [
+            "validate",
+            "game",
+            "left",
+            "right"
+          ],
+          [
+            "game",
+            "evidence",
+            "left",
+            "right"
+          ]
+        ]
+      },
+      "foot": "編譯失敗：保留原階段證據與失敗候選；沒有 Java LLM fallback"
+    },
+    {
+      "title": "評估規模與 fitness",
+      "notes": "game_performance使用每場result100/0/-100加[-10,10]shaping，以詳細telemetry計算資源及軍力等訊號，不等同winrate。semanticprobe為1.0tier tie新穎度，不能突破fitness tiers。finaltest若非mock且未skip在正常runcomplete後進行；中斷/失敗時不跑。180與600是定義的matrix大小，不是已完成場數。",
+      "sources": [
+        "eagle/evaluation/game_performance.py",
+        "eagle/evaluation/game_metrics.py",
+        "eagle/opponent_cases.py",
+        "eagle/final_test.py"
+      ],
+      "table": [
+        [
+          "項目",
+          "本設定",
+          "用途"
+        ],
+        [
+          "Search matrix",
+          "10 slots × 3 maps\n× 3 rounds × 2 sides = 180",
+          "每個候選完成一次評估\nslots 可重複同一來源"
+        ],
+        [
+          "地圖與 tick limit",
+          "8×8：1500；16×16：3000\n24×24：4000",
+          "雙方換邊、固定 match seeds\n超時／失敗保留診斷"
+        ],
+        [
+          "Game Performance",
+          "勝／和／敗基分 + bounded shaping\n跨 completed matches 聚合",
+          "唯一 optimizer objective\nCode Quality 只作診斷"
+        ],
+        [
+          "Champion final-test",
+          "10 opponents × 3 maps\n× 10 games × 2 sides = 600",
+          "正常完成後的共同測試\n與 search fitness 分開"
+        ]
+      ],
+      "widths": [
+        290,
+        540,
+        512
+      ],
+      "size": 28
+    },
+    {
+      "title": "平行執行與固定整合順序",
+      "notes": "LLM_WORKERS=2、MODEL_THREADS=8、MATCH_WORKERS=10為固定執行政策。每slotcontext32768使serverctx-size=65536。Population10代表每代10個offspring，不代表10個LLMslots；獨立反思最多兩請求並行。Candidate preparation可並行，全部完成後才建立對手pool；候選評估按序，每候選180matches用10workers。parallel_map依輸入順序回傳，taskseed穩定，三個runs依序執行。",
+      "sources": [
+        "eagle/execution.py",
+        "eagle/runtime/processes.py",
+        "eagle/evaluation/pipeline.py",
+        "eagle/evaluation/matches.py"
+      ],
+      "body": [
+        "Runtime 固定 2 request slots、每 slot context 32768；每代 10 個 offspring 的反思工作以最多 2 個同時請求處理。",
+        "DSL／Java preparation 可平行；完成全部 preparation 後才建立對手 pool。每個候選的 matches 用 10 workers。",
+        "parallel_map 按輸入順序回傳；父代／operator 計畫與 survivor 整合保留固定順序，跨 run 仍依序執行。"
+      ],
+      "size": 32
+    },
+    {
+      "title": "三次 replicate 與資料夾續跑",
+      "notes": "索引schemaeagle-experiment-index-v1；source config的runs跟random_seeds展開成orderedslots。路徑是實際run_dirs，由on_run_created更新。resume不可將不相容policyformat/compiler/scaffold默默轉換。三次同seed是重複性檢查，不能把它當三個獨立randomseed樣本；GPU/runtime差異仍需用hash與timing檢查。",
+      "sources": [
+        "eagle/experiment.py",
+        "eagle/evolution/resume.py",
+        "docs/operations/running_eagle.md"
+      ],
+      "table": [
+        [
+          "階段",
+          "experiment.yaml／run",
+          "恢復行為"
+        ],
+        [
+          "展開 config",
+          "random_seeds [8]、runs 3\n有效序列 [8,8,8]",
+          "run1、run2、run3\n各自獨立目錄與 checkpoint"
+        ],
+        [
+          "保存索引",
+          "每個 YAML filename\n對應有序 run paths 清單",
+          "按 replicate slot 更新\n不覆蓋其他 slot"
+        ],
+        [
+          "--resume folder",
+          "核對每槽 config／effective seed\n先處理未完成 indexed runs",
+          "已完成跳過\n未啟動 replicate 接續建立"
+        ],
+        [
+          "中斷時",
+          "以最後完整 generation 恢復\ngen0 前失敗無 checkpoint",
+          "無可用 checkpoint 可建替代run\n原始失敗證據保留"
+        ]
+      ],
+      "widths": [
+        290,
+        530,
+        522
+      ],
+      "size": 28
+    },
+    {
+      "title": "GPU 啟動與全層 offload 驗證",
+      "notes": "Runtime先以--list-devices確認CUDA/NVIDIAbackend，再以--n-gpu-layers999、--fitoff要求完整model-layeroffload。--log-verbosity4讓core模型資訊可見。啟動成功需要serverhealth與本次ownedchild的新log都通過；offloadedN/N且N>0才接受。缺失、部分或stale證據停止ownedprocess。此要求針對model-layerGPU執行，其他CPU上的runtime或MicroRTS工作仍依一般流程進行。",
+      "sources": [
+        "eagle/runtime/processes.py",
+        "eagle/runtime/config.py",
+        "tests/test_runtime_workflow.py"
+      ],
+      "table": [
+        [
+          "檢查",
+          "固定行為",
+          "不通過時"
+        ],
+        [
+          "裝置 preflight",
+          "llama-server --list-devices\n確認 CUDA／NVIDIA backend",
+          "停止啟動，不退回 CPU"
+        ],
+        [
+          "要求全層",
+          "--n-gpu-layers 999\n--fit off",
+          "禁止自動記憶體 fitting\n載入失敗即保留錯誤"
+        ],
+        [
+          "證據可見性",
+          "--log-verbosity 4",
+          "core INFO 才輸出 offload 行\nserver ready 不代表驗證成功"
+        ],
+        [
+          "實際 full offload",
+          "只讀這次 child 的新 log\n要求 offloaded N/N，N > 0",
+          "缺失／部分／stale 證據\n停止 owned process"
+        ]
+      ],
+      "widths": [
+        290,
+        530,
+        522
+      ],
+      "size": 28
+    },
+    {
+      "title": "執行與資料夾 resume 指令",
+      "notes": "從EAGLErepo root執行experiment.sh。config保持deterministic_dsl、runs3與random_seeds[8]。首次執行建立每個run目錄與有序索引；folderresume依experiment.yaml找到未完成的run，從最後完整checkpoint接續，完成者跳過。gen0前沒有可用checkpoint時可建立替代run。正常完成且未指定skip-final-test時，run接著執行champion共同final-test。",
+      "sources": [
+        "experiment.sh",
+        "eagle/cli/experiment.py",
+        "eagle/experiment.py"
+      ],
+      "body": [
+        "開始：\n./experiment.sh \\\n  configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs",
+        "中斷後接續：\n./experiment.sh --resume \\\n  configs/experiments/1015_deterministic_dsl_20x10_seed8_3runs",
+        "檢查 experiment.yaml 的 3 個 run paths；每次保存 gen0、gen1–20 與 final-test。"
+      ],
+      "size": 28
+    }
+  ]
+}
