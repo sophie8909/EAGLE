@@ -136,6 +136,13 @@ choose/hashed behavior plus a deterministic smoke run with zero Java LLM calls,
 reconstructible source, complete semantic probe, and executable matches. Do not
 run the full evolutionary experiment for this contract.
 
+WorkerRush validation additionally runs the compiled generation-zero reference
+and vendored `ai.abstraction.WorkerRush` in lockstep on all three canonical maps,
+both player sides, and compares every issued unit action across multiple cycles.
+It also verifies Gen 0 selects the reference policy and persists the exact
+vendored source hash. Match W/D/L is supplementary evidence, not the parity
+oracle.
+
 ### Verification recorded on 2026-10-14
 
 Use the existing project virtual environment for repository validation:

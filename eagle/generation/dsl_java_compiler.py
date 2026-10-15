@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from eagle.generation.agent_template import (
@@ -66,6 +67,8 @@ class CompiledDslJava:
     complete_source: str
     source_sha256: str
     diagnostics: tuple[str, ...] = ()
+    reference_agent: str | None = None
+    reference_source_sha256: str | None = None
 
 
 _UNIT = {
@@ -217,6 +220,52 @@ def _emit_rules(rules: tuple[Rule, ...]) -> str:
     return "\n".join(lines)
 
 
+def _emit_reference_agent(reference_agent: str) -> str:
+    if reference_agent != "WorkerRush":
+        raise ValueError(f"unsupported reference agent: {reference_agent}")
+    return r"""
+    private ai.abstraction.WorkerRush dslReferenceAgent;
+    private GameState dslReferenceGameState;
+    private int dslReferenceLastTime = -1;
+
+    private void decide(AgentContext context) {
+        actions.clear();
+        if (dslReferenceAgent == null
+                || dslReferenceGameState != context.gs
+                || context.gs.getTime() < dslReferenceLastTime) {
+            dslReferenceAgent = new ai.abstraction.WorkerRush(utt);
+            dslReferenceGameState = context.gs;
+        }
+        dslReferenceLastTime = context.gs.getTime();
+        PlayerAction referenceAction;
+        try {
+            referenceAction = dslReferenceAgent.getAction(context.player, context.gs);
+        } catch (Exception error) {
+            throw new IllegalStateException("canonical WorkerRush failed", error);
+        }
+        for (util.Pair<Unit, rts.UnitAction> issued : referenceAction.getActions()) {
+            if (!commandPlannedAction(issued.m_a, issued.m_b, context)) {
+                throw new IllegalStateException(
+                        "could not replay canonical WorkerRush action for unit "
+                        + issued.m_a.getID());
+            }
+        }
+    }
+""".strip()
+
+
+def _reference_source_sha256(reference_agent: str) -> str:
+    if reference_agent != "WorkerRush":
+        raise ValueError(f"unsupported reference agent: {reference_agent}")
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "third_party/microrts/src/ai/abstraction/WorkerRush.java"
+    )
+    if not source.is_file():
+        raise ValueError(f"canonical WorkerRush source is missing: {source}")
+    return hashlib.sha256(source.read_bytes()).hexdigest()
+
+
 def compile_strategy_dsl(
     policy: str | dict, *, scaffold: str,
     compiler_version: str = "eagle-dsl-java-v1",
@@ -235,8 +284,13 @@ def compile_strategy_dsl(
     if "private boolean commandPlannedAction(Unit actor, UnitAction action, AgentContext context)" not in scaffold or "private boolean commandReturn(Unit worker, Unit base, AgentContext context, UnitAction planned)" not in scaffold or "final ResourceUsage reservations;" not in scaffold:
         raise ValueError("scaffold lacks the deterministic planned-action API")
     normalized = normalize_strategy_dsl(policy)
-    rules = _rules(validate_strategy_dsl(normalized))
-    region = _emit_rules(rules) + _JAVA_HELPERS
+    validated = validate_strategy_dsl(normalized)
+    reference_agent = validated.get("reference_agent")
+    region = (
+        _emit_reference_agent(reference_agent)
+        if reference_agent is not None
+        else _emit_rules(_rules(validated)) + _JAVA_HELPERS
+    )
     source = scaffold[:start] + "\n" + region.rstrip() + "\n    " + scaffold[end:]
     if not fixed_scaffold_equivalent(source, scaffold):
         raise ValueError("compiled source changed fixed scaffold")
@@ -245,7 +299,10 @@ def compile_strategy_dsl(
         raise ValueError("compiled strategy violates Java contract: " + "; ".join(errors))
     return CompiledDslJava(
         normalized, _hash(normalized), compiler_version, _hash(scaffold),
-        extract_strategy_region(source), source, _hash(source),
+        extract_strategy_region(source), source, _hash(source), (),
+        reference_agent,
+        _reference_source_sha256(reference_agent)
+        if reference_agent is not None else None,
     )
 
 _JAVA_HELPERS = r"""

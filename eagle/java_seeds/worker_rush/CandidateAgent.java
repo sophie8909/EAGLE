@@ -86,126 +86,32 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     // EAGLE_AGENT_STRATEGY_START
-    // Canonical Worker Rush: continuously train Workers, retain one harvester,
-    // and send every additional Worker toward the nearest enemy Base or unit.
+    private ai.abstraction.WorkerRush referenceAgent;
+    private GameState referenceGameState;
+    private int referenceLastTime = -1;
+
     private void decide(AgentContext context) {
-        trainWorkers(context);
-
-        List<Unit> workers = new ArrayList<>();
-        for (Unit unit : context.units) {
-            if (unit.getPlayer() != context.player || !isIdleAlly(unit, context)) {
-                continue;
-            }
-            if (unit.getType() == workerType) {
-                workers.add(unit);
-            } else if (unit.getType().canAttack) {
-                attackNearestEnemy(unit, context);
-            }
+        actions.clear();
+        if (referenceAgent == null
+                || referenceGameState != context.gs
+                || context.gs.getTime() < referenceLastTime) {
+            referenceAgent = new ai.abstraction.WorkerRush(utt);
+            referenceGameState = context.gs;
         }
-        runWorkerRush(workers, context);
-    }
-
-    private void trainWorkers(AgentContext context) {
-        int resources = context.gs.getPlayer(context.player).getResources();
-        for (Unit unit : context.units) {
-            if (unit.getPlayer() == context.player
-                    && unit.getType() == baseType
-                    && isIdleAlly(unit, context)
-                    && resources >= workerType.cost) {
-                if (commandTrain(unit, workerType)) {
-                    resources -= workerType.cost;
-                }
+        referenceLastTime = context.gs.getTime();
+        PlayerAction referenceAction;
+        try {
+            referenceAction = referenceAgent.getAction(context.player, context.gs);
+        } catch (Exception error) {
+            throw new IllegalStateException("canonical WorkerRush failed", error);
+        }
+        for (util.Pair<Unit, UnitAction> issued : referenceAction.getActions()) {
+            if (!commandPlannedAction(issued.m_a, issued.m_b, context)) {
+                throw new IllegalStateException(
+                        "could not replay canonical WorkerRush action for unit "
+                        + issued.m_a.getID());
             }
         }
-    }
-
-    private void runWorkerRush(List<Unit> workers, AgentContext context) {
-        if (workers.isEmpty()) {
-            return;
-        }
-
-        Unit base = ownBase(context);
-        if (base == null) {
-            Unit builder = workers.remove(0);
-            int[] buildCell = adjacentBuildCell(builder, context);
-            if (buildCell != null
-                    && context.gs.getPlayer(context.player).getResources() >= baseType.cost) {
-                commandBuild(builder, baseType, buildCell[0], buildCell[1]);
-            }
-        }
-
-        if (!workers.isEmpty()) {
-            Unit harvester = workers.remove(0);
-            Unit resource = nearestResource(harvester, context);
-            Unit friendlyBase = nearestFriendlyBase(harvester, context);
-            if (resource != null && friendlyBase != null) {
-                commandHarvest(harvester, resource, friendlyBase);
-            } else {
-                attackNearestEnemy(harvester, context);
-            }
-        }
-
-        for (Unit worker : workers) {
-            attackNearestEnemy(worker, context);
-        }
-    }
-
-    private void attackNearestEnemy(Unit unit, AgentContext context) {
-        Unit target = nearestEnemyBase(unit, context);
-        if (target == null) {
-            target = nearestEnemy(unit, context);
-        }
-        if (target != null) {
-            commandAttack(unit, target);
-        } else {
-            commandIdle(unit);
-        }
-    }
-
-    private Unit nearestEnemyBase(Unit source, AgentContext context) {
-        Unit best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (Unit unit : context.units) {
-            if (unit.getPlayer() < 0
-                    || unit.getPlayer() == context.player
-                    || unit.getType() != baseType) {
-                continue;
-            }
-            int distance = manhattan(source, unit);
-            if (distance < bestDistance) {
-                best = unit;
-                bestDistance = distance;
-            }
-        }
-        return best;
-    }
-
-    private Unit nearestFriendlyBase(Unit source, AgentContext context) {
-        Unit best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (Unit unit : context.units) {
-            if (unit.getPlayer() != context.player || unit.getType() != baseType) {
-                continue;
-            }
-            int distance = manhattan(source, unit);
-            if (distance < bestDistance) {
-                best = unit;
-                bestDistance = distance;
-            }
-        }
-        return best;
-    }
-
-    private int[] adjacentBuildCell(Unit worker, AgentContext context) {
-        int[][] directions = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
-        for (int[] direction : directions) {
-            int x = worker.getX() + direction[0];
-            int y = worker.getY() + direction[1];
-            if (isFreeCell(context, x, y)) {
-                return new int[] {x, y};
-            }
-        }
-        return null;
     }
 
     private int manhattan(Unit first, Unit second) {

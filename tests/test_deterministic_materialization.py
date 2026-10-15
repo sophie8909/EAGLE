@@ -24,6 +24,7 @@ from eagle.generation.backend import GenerationBackend
 from eagle.generation.java_agent_generator import ValidationResult
 from eagle.operators.initialization import initialize_population
 from eagle.run_artifacts import load_candidate
+from eagle.strategy_dsl import worker_rush_reference_policy
 
 
 class ForbiddenBackend(GenerationBackend):
@@ -107,6 +108,63 @@ class DeterministicMaterializationTests(unittest.TestCase):
             payload["java_compiler_version"] = "unknown"
             snapshot.write_text(json.dumps(payload))
             with self.assertRaisesRegex(ValueError, "compiler version"):
+                load_candidate(root, candidate.id)
+
+    def test_gen_zero_worker_rush_uses_hashed_canonical_reference(self):
+        config = ExperimentConfig.from_mapping({
+            "java_materialization_mode": "deterministic_dsl",
+            "mutation_rate": 0,
+            "population_size": 1,
+            "seed_prompt_files": ["seeds/worker_rush_policy.txt"],
+        })
+        candidate = initialize_population(config)[0]
+        self.assertEqual(candidate.strategy_prompt, worker_rush_reference_policy())
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "eagle.evaluation.decoding.compile_agent_source",
+            return_value=CompileResult(True, ["javac"]),
+        ):
+            root = Path(temp)
+            write_candidate_inputs(root / "candidates", candidate)
+            evaluation = evaluate_candidate(
+                candidate,
+                config=config,
+                backend=ForbiddenBackend(),
+                generated_agents_dir=root / "agents",
+                classes_dir=root / "classes",
+                mock=True,
+                ordinal=0,
+                match_artifacts_dir=(
+                    root / "candidates" / candidate.id / "matches"
+                ),
+            )
+            write_candidate_artifacts(root / "candidates", evaluation)
+            candidate_dir = root / "candidates" / candidate.id
+            evidence = json.loads(
+                (candidate_dir / "generation/compiler_evidence.json").read_text()
+            )
+            canonical = Path(
+                "third_party/microrts/src/ai/abstraction/WorkerRush.java"
+            )
+            self.assertEqual(evidence["reference_agent"], "WorkerRush")
+            self.assertEqual(
+                evidence["reference_source_sha256"],
+                hashlib.sha256(canonical.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(evidence["llm_attempts"], [])
+            self.assertEqual(
+                load_candidate(root, candidate.id).strategy_prompt,
+                worker_rush_reference_policy(),
+            )
+
+            evidence["reference_source_sha256"] = "0" * 64
+            (candidate_dir / "generation/compiler_evidence.json").write_text(
+                json.dumps(evidence), encoding="utf-8",
+            )
+            result_path = candidate_dir / "generation/result.json"
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            result["reference_source_sha256"] = "0" * 64
+            result_path.write_text(json.dumps(result), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "reference source hash"):
                 load_candidate(root, candidate.id)
 
     def test_compiler_and_javac_failure_never_repair(self):

@@ -24,6 +24,9 @@ source repair、Java Generation 與 compile-repair LLM。版本為
 validation、javac、Integration、semantic probe 與 evaluation；失敗不會退回
 LLM。此 migration 的測試、真實整合與 smoke-run 結果尚待 implementation owner
 回報。
+Gen 0 的 WorkerRush seed 是唯一封閉的 reference policy：deterministic compiler
+直接委派到 vendored `ai.abstraction.WorkerRush` 並重播完整 action vector，同時
+記錄官方來源 SHA-256；LLM 生成與 Strategy Mutation 不得產生 reference policy。
 Deterministic 設定必須使用 `candidate_java_mode: generated_phenotype` 與 `parent_evaluation_mode: reuse_cached`，其他值會被拒絕。
 
 ### LLM materialization lifecycle

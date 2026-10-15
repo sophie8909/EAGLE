@@ -348,6 +348,7 @@ def _materialize_dsl(candidate: Candidate, *, config: ExperimentConfig,
                 "operation": "deterministic_dsl_compile", "materialization_mode": "deterministic_dsl",
                 "compiler_version": config.java_compiler_version, "llm_attempts": [],
                 "policy_sha256": None, "scaffold_sha256": None, "source_sha256": None,
+                "reference_agent": None, "reference_source_sha256": None,
                 "normalized_policy": None, "diagnostics": []}
     source, region, failure, scaffold = "", "", None, ""
     try:
@@ -360,6 +361,8 @@ def _materialize_dsl(candidate: Candidate, *, config: ExperimentConfig,
         source, region = compiled.complete_source, compiled.strategy_region
         evidence.update(normalized_policy=compiled.normalized_policy, policy_sha256=compiled.policy_sha256,
                         scaffold_sha256=compiled.scaffold_sha256, source_sha256=compiled.source_sha256,
+                        reference_agent=compiled.reference_agent,
+                        reference_source_sha256=compiled.reference_source_sha256,
                         diagnostics=compiled.diagnostics)
     except (ValueError, TypeError, RuntimeError, OSError) as exc:
         failure = str(exc)

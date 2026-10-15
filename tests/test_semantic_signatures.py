@@ -54,7 +54,11 @@ class SemanticSignatureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             classes = root / "candidate_classes"
-            source = ROOT / "eagle" / "java_seeds" / "worker_rush" / "CandidateAgent.java"
+            # The canonical WorkerRush seed intentionally delegates to the upstream
+            # stateful AI.  A semantic probe instantiates agents on isolated mid-game
+            # snapshots, which is not a valid lifecycle for that reference policy.
+            # Use an ordinary stateless DSL phenotype to test probe caching itself.
+            source = ROOT / "eagle" / "java_seeds" / "CandidateAgent.java"
             subprocess.run(
                 [
                     "javac", "-cp", f"{microrts / 'bin'}:{microrts / 'lib' / '*'}",

@@ -655,13 +655,23 @@ validation, or javac failure retains stage evidence and uses the canonical
 failure sentinel; no LLM fallback is allowed. Fitness, objective, self-play,
 fixed-roster, and selection formulas are unchanged.
 
+The checked-in generation-zero WorkerRush seed is the only reference policy in
+DSL v1. It has empty `rules` and `reference_agent: "WorkerRush"`. Deterministic
+materialization delegates to the vendored canonical
+`ai.abstraction.WorkerRush`, replays its complete `PlayerAction` through the
+fixed CandidateAgent action boundary, and records the exact vendored source
+hash. LLM initialization and Strategy mutation cannot emit reference policies;
+all evolved policies remain ordinary finite rules.
+
 Candidate artifacts record mode, compiler version, and
 `active_genotype_components`; deterministic values are exactly
 `["strategy_prompt"]`. Compiler evidence uses `generation/compiler_evidence.json`
 (`eagle-dsl-materialization-v1`), `generation/normalized_policy.json`,
 `generation/compiled_candidate.java`, and `generation/scaffold.java`. Evidence readback checks the normalized policy, emitted source, and scaffold hashes; resume checks the configured scaffold hash against persisted evidence. The result records operation
 `deterministic_dsl_compile`, policy/scaffold/source hashes, deterministic
-diagnostics, and an empty `llm_attempts` array. Deterministic candidate snapshots
+diagnostics, and an empty `llm_attempts` array. It also records nullable
+`reference_agent` and `reference_source_sha256`; readback verifies the vendored
+source hash whenever a reference policy is active. Deterministic candidate snapshots
 use `eagle-candidate-v7`, and their generation results use `phase4-v7`;
 shared downstream stage schemas retain their existing versions. The LLM path retains `eagle-candidate-v6`
 and `phase4-v6`. Deterministic configuration requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`; any other values are rejected. Resume rejects unknown compiler versions, protocol mismatches,

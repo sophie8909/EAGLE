@@ -171,3 +171,10 @@ through normal Java validation, one javac attempt, Integration, semantic probe,
 and evaluation. Compiler/validation/javac failure stays at its actual failure
 stage with source, hashes, diagnostics, and canonical fitness sentinel; no LLM
 fallback is allowed. Unknown compiler versions fail resume explicitly.
+
+The configured WorkerRush seed is a closed reference-policy exception rather
+than an approximation in ordinary DSL rules. Its generated CandidateAgent owns
+a vendored `ai.abstraction.WorkerRush` delegate and replays the delegate's full
+action vector. Compiler evidence pins `WorkerRush.java` by SHA-256. Generated
+initial policies and Strategy rewrites reject `reference_agent`, so this escape
+hatch is limited to the checked-in seed.

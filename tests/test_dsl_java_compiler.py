@@ -262,6 +262,127 @@ public final class DslBehaviorProbe {
                 )
                 self.assertTrue(result.ok, result.stderr or result.stdout)
                 self.assertEqual(len(result.checks), 7)
+
+    @unittest.skipUnless(shutil.which("javac"), "javac required")
+    def test_worker_rush_reference_matches_vendored_actions_over_time(self):
+        policy = (FIXTURES / "worker_rush_policy.json").read_text(encoding="utf-8")
+        compiled = compile_strategy_dsl(policy, scaffold=self.scaffold)
+        canonical_source = ROOT / "third_party/microrts/src/ai/abstraction/WorkerRush.java"
+        self.assertEqual(compiled.reference_agent, "WorkerRush")
+        self.assertEqual(
+            compiled.reference_source_sha256,
+            hashlib.sha256(canonical_source.read_bytes()).hexdigest(),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            source = output / "CandidateAgent.java"
+            source.write_text(compiled.complete_source, encoding="utf-8")
+            classes = output / "classes"
+            microrts = ROOT / "third_party" / "microrts"
+            javac = compile_generated_agent(
+                source, microrts_dir=microrts, output_dir=classes,
+            )
+            self.assertTrue(javac.ok, javac.stderr)
+            harness = output / "WorkerRushParityProbe.java"
+            harness.write_text(r"""
+import ai.PassiveAI;
+import ai.abstraction.WorkerRush;
+import ai.generated.CandidateAgent;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import rts.GameState;
+import rts.PhysicalGameState;
+import rts.PlayerAction;
+import rts.UnitAction;
+import rts.units.Unit;
+import rts.units.UnitTypeTable;
+import util.Pair;
+
+public final class WorkerRushParityProbe {
+    private static void assertSameActions(PlayerAction actual, PlayerAction expected, int tick) {
+        List<Pair<Unit, UnitAction>> left = new ArrayList<>(actual.getActions());
+        List<Pair<Unit, UnitAction>> right = new ArrayList<>(expected.getActions());
+        Comparator<Pair<Unit, UnitAction>> byActor =
+                (first, second) -> actorKey(first.m_a).compareTo(actorKey(second.m_a));
+        left.sort(byActor);
+        right.sort(byActor);
+        if (left.size() != right.size())
+            throw new AssertionError("action count differs at tick " + tick);
+        for (int index = 0; index < left.size(); index++) {
+            Pair<Unit, UnitAction> observed = left.get(index);
+            Pair<Unit, UnitAction> reference = right.get(index);
+            if (!actorKey(observed.m_a).equals(actorKey(reference.m_a))
+                    || !observed.m_b.equals(reference.m_b)) {
+                throw new AssertionError("action differs at tick " + tick
+                        + " for actor " + actorKey(reference.m_a)
+                        + ": " + observed.m_b + " != " + reference.m_b);
+            }
+        }
+    }
+
+    private static String actorKey(Unit unit) {
+        return unit.getPlayer() + ":" + unit.getType().name + ":"
+                + unit.getX() + ":" + unit.getY() + ":" + unit.getResources();
+    }
+
+    private static void compareTrajectory(String mapPath, int player, int cycles)
+            throws Exception {
+        UnitTypeTable utt = new UnitTypeTable();
+        GameState candidateState = new GameState(PhysicalGameState.load(mapPath, utt), utt);
+        GameState referenceState = new GameState(PhysicalGameState.load(mapPath, utt), utt);
+        CandidateAgent candidate = new CandidateAgent(utt);
+        WorkerRush reference = new WorkerRush(utt);
+        PassiveAI candidateOpponent = new PassiveAI(utt);
+        PassiveAI referenceOpponent = new PassiveAI(utt);
+        int opponent = 1 - player;
+        for (int tick = 0; tick < cycles; tick++) {
+            if (candidateState.gameover() != referenceState.gameover())
+                throw new AssertionError("gameover differs at tick " + tick);
+            if (candidateState.gameover()) break;
+            if (candidateState.canExecuteAnyAction(player)) {
+                PlayerAction actual = candidate.getAction(player, candidateState);
+                PlayerAction expected = reference.getAction(player, referenceState);
+                assertSameActions(actual, expected, tick);
+                candidateState.issueSafe(actual);
+                referenceState.issueSafe(expected);
+            }
+            if (candidateState.canExecuteAnyAction(opponent))
+                candidateState.issueSafe(candidateOpponent.getAction(opponent, candidateState));
+            if (referenceState.canExecuteAnyAction(opponent))
+                referenceState.issueSafe(referenceOpponent.getAction(opponent, referenceState));
+            candidateState.cycle();
+            referenceState.cycle();
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        for (String map : new String[] {
+                "maps/8x8/basesWorkers8x8.xml",
+                "maps/16x16/basesWorkers16x16.xml",
+                "maps/24x24/basesWorkers24x24.xml"
+        }) {
+            compareTrajectory(map, 0, 300);
+            compareTrajectory(map, 1, 300);
+        }
+        System.out.println("WORKER_RUSH_PARITY_OK");
+    }
+}
+""", encoding="utf-8")
+            classpath = os.pathsep.join(
+                (str(classes), str(microrts / "bin"), str(microrts / "lib" / "*"))
+            )
+            build = subprocess.run(
+                ["javac", "-cp", classpath, "-d", str(classes), str(harness)],
+                cwd=microrts, text=True, capture_output=True,
+            )
+            self.assertEqual(build.returncode, 0, build.stderr)
+            behavior = subprocess.run(
+                ["java", "-cp", classpath, "WorkerRushParityProbe"],
+                cwd=microrts, text=True, capture_output=True, timeout=60,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr or behavior.stdout)
+            self.assertIn("WORKER_RUSH_PARITY_OK", behavior.stdout)
     @unittest.skipUnless(shutil.which("javac"), "javac required")
     def test_real_java_choose_hash_and_adjacent_move_fallthrough(self):
         base = {"kind": "entity", "owner": "friendly",
@@ -331,11 +452,11 @@ public final class DslChoiceProbe {
             self.assertEqual(behavior.returncode, 0, behavior.stderr or behavior.stdout)
             self.assertIn("DSL_CHOICE_OK", behavior.stdout)
     def test_json_field_order_comparison_ops_and_metrics(self):
-        from eagle.strategy_dsl import worker_rush_policy
+        from eagle.strategy_dsl import worker_rush_reference_policy
 
         self.assertEqual(
             (FIXTURES / "worker_rush_policy.json").read_text(encoding="utf-8").strip(),
-            worker_rush_policy(),
+            worker_rush_reference_policy(),
         )
         target = {"owner": "enemy", "types": ["Ranged"]}
         metrics = ("stockpile", "time", "actor_hp", "actor_resources",

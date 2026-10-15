@@ -479,7 +479,8 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     compiler_evidence = {}
     if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
         compiler_evidence = {key: generation_timing.get(key) for key in
-            ("materialization_mode", "compiler_version", "policy_sha256", "scaffold_sha256", "source_sha256", "diagnostics", "llm_attempts")}
+            ("materialization_mode", "compiler_version", "policy_sha256", "scaffold_sha256", "source_sha256",
+             "reference_agent", "reference_source_sha256", "diagnostics", "llm_attempts")}
     write_json(generation_dir / "result.json", {
         **compiler_evidence,
         "artifact_schema_version": "phase4-v7" if compiler_evidence else ARTIFACT_SCHEMA_VERSION,

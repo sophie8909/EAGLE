@@ -83,245 +83,32 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     // EAGLE_AGENT_STRATEGY_START
+private ai.abstraction.WorkerRush dslReferenceAgent;
+    private GameState dslReferenceGameState;
+    private int dslReferenceLastTime = -1;
+
     private void decide(AgentContext context) {
         actions.clear();
-        java.util.List<Unit> actors = new java.util.ArrayList<>(context.units);
-        actors.sort((a, b) -> Long.compare(a.getID(), b.getID()));
-        for (Unit actor : actors) {
-            if (!isIdleAlly(actor, context)) continue;
-            if (dslDecideActor(context, actor)) continue;
-            commandPlannedAction(actor, new rts.UnitAction(rts.UnitAction.TYPE_NONE, 10), context);
+        if (dslReferenceAgent == null
+                || dslReferenceGameState != context.gs
+                || context.gs.getTime() < dslReferenceLastTime) {
+            dslReferenceAgent = new ai.abstraction.WorkerRush(utt);
+            dslReferenceGameState = context.gs;
         }
-    }
-
-    private boolean dslDecideActor(AgentContext context, Unit actor) {
-        if (actor.getType() == baseType && true) {
-            DslPlan plan = dslRule0(context, actor);
-            if (plan != null && dslIssue(context, actor, plan)) return true;
+        dslReferenceLastTime = context.gs.getTime();
+        PlayerAction referenceAction;
+        try {
+            referenceAction = dslReferenceAgent.getAction(context.player, context.gs);
+        } catch (Exception error) {
+            throw new IllegalStateException("canonical WorkerRush failed", error);
         }
-        if (actor.getType() == workerType && (dslActorRank(context, actor) < 1)) {
-            DslPlan plan = dslRule1(context, actor);
-            if (plan != null && dslIssue(context, actor, plan)) return true;
-        }
-        if (actor.getType() == workerType && (dslActorRank(context, actor) < 1)) {
-            DslPlan plan = dslRule2(context, actor);
-            if (plan != null && dslIssue(context, actor, plan)) return true;
-        }
-        if (actor.getType() == workerType && true) {
-            DslPlan plan = dslRule3(context, actor);
-            if (plan != null && dslIssue(context, actor, plan)) return true;
-        }
-        if (actor.getType() == workerType && true) {
-            DslPlan plan = dslRule4(context, actor);
-            if (plan != null && dslIssue(context, actor, plan)) return true;
-        }
-        return false;
-    }
-
-    private DslPlan dslRule0(AgentContext context, Unit actor) {
-        return dslSelectCell(context, actor, 7, workerType, 0);
-    }
-
-    private DslPlan dslRule1(AgentContext context, Unit actor) {
-        return dslSelectEntity(context, actor, 2, 0, new UnitType[]{baseType}, 0);
-    }
-
-    private DslPlan dslRule2(AgentContext context, Unit actor) {
-        return dslSelectEntity(context, actor, 1, 2, new UnitType[]{resourceType}, 0);
-    }
-
-    private DslPlan dslRule3(AgentContext context, Unit actor) {
-        return dslSelectEntity(context, actor, 4, 1, new UnitType[]{baseType}, 0);
-    }
-
-    private DslPlan dslRule4(AgentContext context, Unit actor) {
-        return dslSelectEntity(context, actor, 4, 1, new UnitType[]{barracksType, baseType, heavyType, lightType, rangedType, workerType}, 0);
-    }
-
-    private static final class DslPlan {
-        final int kind;
-        final rts.UnitAction action;
-        final Unit target;
-        DslPlan(int kind, rts.UnitAction action, Unit target) {
-            this.kind = kind;
-            this.action = action;
-            this.target = target;
-        }
-    }
-
-    private DslPlan dslIdlePlan() {
-        return new DslPlan(0, null, null);
-    }
-
-    private long dslHash(AgentContext context, Unit actor) {
-        return ((long) context.gs.getTime()) * 31L
-                + ((long) context.player) * 17L + actor.getID() * 13L;
-    }
-
-    private int dslActorRank(AgentContext context, Unit actor) {
-        int rank = 0;
-        for (Unit other : context.units) {
-            if (other.getPlayer() == context.player && other.getType() == actor.getType()
-                    && other.getID() < actor.getID()) rank++;
-        }
-        return rank;
-    }
-
-    private boolean dslMatches(Unit unit, int owner, UnitType[] types, int player) {
-        boolean ownership = owner == 0 ? unit.getPlayer() == player
-                : owner == 1 ? unit.getPlayer() >= 0 && unit.getPlayer() != player
-                : unit.getPlayer() < 0;
-        if (!ownership) return false;
-        for (UnitType type : types) if (unit.getType() == type) return true;
-        return false;
-    }
-
-    private int dslManhattan(Unit a, Unit b) {
-        return Math.abs(a.getX() - b.getX()) + Math.abs(a.getY() - b.getY());
-    }
-
-    private int dslCount(AgentContext context, Unit actor, int owner, UnitType[] types, double radius) {
-        int count = 0;
-        for (Unit other : context.units) {
-            if (dslMatches(other, owner, types, context.player)
-                    && (radius < 0 || dslManhattan(actor, other) <= radius)) count++;
-        }
-        return count;
-    }
-
-    private double dslDistance(AgentContext context, Unit actor, int owner, UnitType[] types) {
-        double best = Double.POSITIVE_INFINITY;
-        for (Unit other : context.units) {
-            if (dslMatches(other, owner, types, context.player))
-                best = Math.min(best, dslManhattan(actor, other));
-        }
-        return best;
-    }
-
-    private int dslPosition(AgentContext context, int x, int y) {
-        return x + y * context.gs.getPhysicalGameState().getWidth();
-    }
-
-    private boolean dslLegal(AgentContext context, Unit actor, DslPlan plan) {
-        if (plan == null) return false;
-        if (plan.kind == 0) return true;
-        if (!actor.canExecuteAction(plan.action, context.gs)
-                || !context.gs.isUnitActionAllowed(actor, plan.action)) return false;
-        return context.reservations.consistentWith(
-                plan.action.resourceUsage(actor, context.gs.getPhysicalGameState()), context.gs);
-    }
-
-    private DslPlan dslPrimitive(AgentContext context, Unit actor, int kind,
-            rts.UnitAction action, Unit target) {
-        if (action == null) return null;
-        DslPlan plan = new DslPlan(kind, action, target);
-        return dslLegal(context, actor, plan) ? plan : null;
-    }
-
-    private rts.UnitAction dslPath(AgentContext context, Unit actor, Unit target, int range) {
-        int position = dslPosition(context, target.getX(), target.getY());
-        return pf.findPathToPositionInRange(actor, position, range,
-                context.gs, context.reservations);
-    }
-
-    private int dslDirection(Unit actor, Unit target) {
-        int dx = target.getX() - actor.getX();
-        int dy = target.getY() - actor.getY();
-        if (dx == 0 && dy == -1) return rts.UnitAction.DIRECTION_UP;
-        if (dx == 1 && dy == 0) return rts.UnitAction.DIRECTION_RIGHT;
-        if (dx == 0 && dy == 1) return rts.UnitAction.DIRECTION_DOWN;
-        if (dx == -1 && dy == 0) return rts.UnitAction.DIRECTION_LEFT;
-        return -1;
-    }
-
-    private DslPlan dslPlanEntity(AgentContext context, Unit actor, int kind, Unit target) {
-        rts.UnitAction action;
-        if (kind == 1 || kind == 2) {
-            if (actor.getType() != workerType || (kind == 1 ? actor.getResources() != 0
-                    : actor.getResources() <= 0)) return null;
-            int direction = dslDirection(actor, target);
-            if (direction >= 0) action = new rts.UnitAction(
-                    kind == 1 ? rts.UnitAction.TYPE_HARVEST : rts.UnitAction.TYPE_RETURN, direction);
-            else action = dslPath(context, actor, target, 1);
-        } else if (kind == 3 || kind == 4) {
-            if (!actor.getType().canAttack) return null;
-            int dx = target.getX() - actor.getX();
-            int dy = target.getY() - actor.getY();
-            boolean inRange = ((long) dx * dx + (long) dy * dy)
-                    <= ((long) actor.getType().attackRange * actor.getType().attackRange);
-            if (inRange) action = new rts.UnitAction(rts.UnitAction.TYPE_ATTACK_LOCATION,
-                    target.getX(), target.getY());
-            else if (kind == 4) action = dslPath(context, actor, target, actor.getType().attackRange);
-            else return null;
-        } else if (kind == 5) {
-            if (!actor.getType().canMove || target == actor || dslManhattan(actor, target) <= 1)
-                return null;
-            action = dslPath(context, actor, target, 1);
-        } else return null;
-        return dslPrimitive(context, actor, kind, action, target);
-    }
-
-    private DslPlan dslSelectEntity(AgentContext context, Unit actor,
-            int kind, int owner, UnitType[] types, int selector) {
-        java.util.List<DslPlan> legal = new java.util.ArrayList<>();
-        for (Unit target : context.units) {
-            if (!dslMatches(target, owner, types, context.player)) continue;
-            DslPlan plan = dslPlanEntity(context, actor, kind, target);
-            if (plan != null) legal.add(plan);
-        }
-        if (legal.isEmpty()) return null;
-        legal.sort((a, b) -> {
-            int value = 0;
-            if (selector == 0 || selector == 1) {
-                value = Integer.compare(dslManhattan(actor, a.target), dslManhattan(actor, b.target));
-                if (selector == 1) value = -value;
-            } else if (selector == 2 || selector == 3) {
-                value = Integer.compare(a.target.getHitPoints(), b.target.getHitPoints());
-                if (selector == 3) value = -value;
-            }
-            return value != 0 ? value : Long.compare(a.target.getID(), b.target.getID());
-        });
-        int index = selector == 5
-                ? (int) Math.floorMod(dslHash(context, actor), (long) legal.size()) : 0;
-        return legal.get(index);
-    }
-
-    private DslPlan dslSelectCell(AgentContext context, Unit actor,
-            int kind, UnitType unitType, int selector) {
-        java.util.List<DslPlan> legal = new java.util.ArrayList<>();
-        for (int y = actor.getY() - 1; y <= actor.getY() + 1; y++) {
-            for (int x = actor.getX() - 1; x <= actor.getX() + 1; x++) {
-                if (Math.abs(x - actor.getX()) + Math.abs(y - actor.getY()) != 1
-                        || !isFreeCell(context, x, y)) continue;
-                int direction = x < actor.getX() ? rts.UnitAction.DIRECTION_LEFT
-                        : x > actor.getX() ? rts.UnitAction.DIRECTION_RIGHT
-                        : y < actor.getY() ? rts.UnitAction.DIRECTION_UP
-                        : rts.UnitAction.DIRECTION_DOWN;
-                rts.UnitAction action = kind == 5
-                        ? new rts.UnitAction(rts.UnitAction.TYPE_MOVE, direction)
-                        : new rts.UnitAction(rts.UnitAction.TYPE_PRODUCE, direction, unitType);
-                DslPlan plan = dslPrimitive(context, actor, kind, action, null);
-                if (plan != null) legal.add(plan);
+        for (util.Pair<Unit, rts.UnitAction> issued : referenceAction.getActions()) {
+            if (!commandPlannedAction(issued.m_a, issued.m_b, context)) {
+                throw new IllegalStateException(
+                        "could not replay canonical WorkerRush action for unit "
+                        + issued.m_a.getID());
             }
         }
-        if (legal.isEmpty()) return null;
-        int index = selector == 0 ? 0
-                : (int) Math.floorMod(dslHash(context, actor), (long) legal.size());
-        return legal.get(index);
-    }
-
-    private DslPlan dslChoose(AgentContext context, Unit actor, DslPlan[] options) {
-        java.util.List<DslPlan> legal = new java.util.ArrayList<>();
-        for (DslPlan option : options) if (dslLegal(context, actor, option)) legal.add(option);
-        return legal.isEmpty() ? null
-                : legal.get((int) Math.floorMod(dslHash(context, actor), (long) legal.size()));
-    }
-
-    private boolean dslIssue(AgentContext context, Unit actor, DslPlan plan) {
-        if (!dslLegal(context, actor, plan)) return false;
-        if (plan.kind == 0) return commandPlannedAction(actor, new rts.UnitAction(rts.UnitAction.TYPE_NONE, 10), context);
-        if (plan.kind == 2) return commandReturn(actor, plan.target, context, plan.action);
-        return commandPlannedAction(actor, plan.action, context);
     }
     // EAGLE_AGENT_STRATEGY_END
 

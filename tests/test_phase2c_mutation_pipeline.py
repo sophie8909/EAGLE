@@ -5,7 +5,7 @@ from pathlib import Path
 
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate
-from eagle.strategy_dsl import worker_rush_policy
+from eagle.strategy_dsl import worker_rush_policy, worker_rush_reference_policy
 from eagle.config import ExperimentConfig
 from eagle.evaluation.pipeline import evaluate_candidate
 from eagle.operators.context import ReflectionContext
@@ -121,6 +121,23 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         self.assertEqual(mutated.strategy_prompt, candidate.strategy_prompt)
         self.assertFalse(mutated.metadata["mutation"]["applied"])
         self.assertIn("size limit", mutated.metadata["mutation"]["rewrite_error"])
+
+    def test_reference_dsl_rewrite_is_reserved_for_configured_seed(self):
+        backend = ScriptedMutationBackend((
+            self._strategy_reflection(),
+            json.dumps({"revised_strategy_prompt": worker_rush_reference_policy()}),
+        ))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 1})
+        candidate = self._candidate()
+        mutated = PromptRewriteMutation(
+            config,
+            mutation_type="strategy",
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(candidate, self._context())
+        self.assertEqual(mutated.strategy_prompt, candidate.strategy_prompt)
+        self.assertFalse(mutated.metadata["mutation"]["applied"])
+        self.assertIn("reserved", mutated.metadata["mutation"]["rewrite_error"])
 
     def _assert_complete_pipeline(self, *, mutation_type, rewritten, untouched):
         reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()

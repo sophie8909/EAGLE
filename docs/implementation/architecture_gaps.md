@@ -5,6 +5,7 @@
 | ID | Gap | Decision | Verification | Status |
 | --- | --- | --- | --- | --- |
 | DSL-COMP-01 | Entity-target `move` endpoint and adjacent/self-target behavior | User explicitly decided that entity-target `move` uses the existing deterministic pathfinder to an adjacent position (range 1). Already adjacent, self-target and unreachable actions cannot issue and fall through; target filtering uses that same legal-step contract. Recorded in `prompts/strategy_dsl_reference.txt`. | Golden sources plus real adjacent/self-target/fallthrough fixtures in `tests/test_dsl_java_compiler.py`. | Resolved and implemented |
+| DSL-COMP-02 | Gen 0 WorkerRush was only an approximate finite-rule policy | Reserve one checked-in `reference_agent: WorkerRush` seed; deterministic materialization delegates to and replays the vendored implementation, pins its source hash, and rejects reference agents from LLM-produced/evolved policies. | Multi-map, both-side, multi-cycle differential action test plus Gen 0 wiring/hash artifact test. | Resolved and implemented |
 
 ## DSL and pre-crossover source contract (2026-10-11)
 

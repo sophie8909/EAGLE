@@ -5,6 +5,7 @@ import math
 import re
 
 VERSION = "eagle-strategy-dsl-v1"
+REFERENCE_AGENTS = {"WorkerRush"}
 UNIT_TYPES = {"Worker", "Base", "Barracks", "Light", "Heavy", "Ranged"}
 MOBILE = {"Worker", "Light", "Heavy", "Ranged"}
 MAX_CHARS = 16000
@@ -381,8 +382,13 @@ def validate_strategy_dsl(source, *, max_chars=MAX_CHARS, max_rules=32):
             raise ValueError("strategy_prompt must be versioned JSON strategy DSL") from exc
     else:
         data = source
-    _fields(data, {"version", "rules"})
+    _fields(data, {"version", "rules"}, {"reference_agent"})
     _choice(data["version"], {VERSION})
+    if "reference_agent" in data:
+        _choice(data["reference_agent"], REFERENCE_AGENTS)
+        if data["rules"] != []:
+            raise ValueError("reference policies must have an empty rules list")
+        return data
     if not isinstance(data["rules"], list) or len(data["rules"]) > max_rules:
         raise ValueError(f"rules must be a list of at most {max_rules} rules")
     for rule in data["rules"]:
@@ -396,13 +402,27 @@ def validate_strategy_dsl(source, *, max_chars=MAX_CHARS, max_rules=32):
     return data
 
 
-def normalize_strategy_dsl(source, *, max_chars=MAX_CHARS, max_rules=32):
+def normalize_strategy_dsl(
+    source, *, max_chars=MAX_CHARS, max_rules=32, allow_reference=True,
+):
     """Canonical JSON preserves rule priority and unit-type lists."""
-    return json.dumps(validate_strategy_dsl(source, max_chars=max_chars, max_rules=max_rules), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    validated = validate_strategy_dsl(source, max_chars=max_chars, max_rules=max_rules)
+    if not allow_reference and "reference_agent" in validated:
+        raise ValueError("reference_agent is reserved for checked-in configured seeds")
+    return json.dumps(validated, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def worker_rush_reference_policy():
+    """Policy that materializes the vendored canonical MicroRTS WorkerRush."""
+    return normalize_strategy_dsl({
+        "version": VERSION,
+        "rules": [],
+        "reference_agent": "WorkerRush",
+    })
 
 
 def worker_rush_policy(worker_limit=1):
-    """Deterministic mock and seed policy with one economic Worker."""
+    """Deterministic WorkerRush-like rule policy used by mocks and examples."""
     def target(owner, types):
         return {"kind": "entity", "owner": owner, "types": types, "selector": "nearest"}
     rules = [{"actor": "Base", "when": True, "action": {"type": "train", "unit": "Worker", "target": {"kind": "cell", "selector": "first_free_adjacent"}}}]

@@ -622,7 +622,7 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
                     raise ValueError(f"Deterministic generation/compiler evidence mismatch: {key}")
         elif payload.get("compile_status") == "success":
             raise ValueError("Successful deterministic candidate lacks generation result evidence.")
-        from eagle.strategy_dsl import normalize_strategy_dsl
+        from eagle.strategy_dsl import normalize_strategy_dsl, validate_strategy_dsl
         if evidence.get("schema_version") != "eagle-dsl-materialization-v1":
             raise ValueError("Unsupported deterministic compiler evidence schema.")
         policy = normalize_strategy_dsl(text("genotype/policy_prompt.txt"))
@@ -638,6 +638,22 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         scaffold = text("generation/scaffold.java")
         if source and hashlib.sha256(scaffold.encode("utf-8")).hexdigest() != evidence["scaffold_sha256"]:
             raise ValueError("Deterministic scaffold evidence hash mismatch.")
+        reference_agent = evidence.get("reference_agent")
+        policy_reference_agent = validate_strategy_dsl(policy).get("reference_agent")
+        if reference_agent != policy_reference_agent:
+            raise ValueError("Deterministic reference policy/evidence mismatch.")
+        if reference_agent is not None:
+            if reference_agent != "WorkerRush":
+                raise ValueError(f"Unsupported deterministic reference agent: {reference_agent!r}")
+            reference_source = (
+                Path(__file__).resolve().parents[1]
+                / "third_party/microrts/src/ai/abstraction/WorkerRush.java"
+            )
+            reference_hash = hashlib.sha256(reference_source.read_bytes()).hexdigest()
+            if evidence.get("reference_source_sha256") != reference_hash:
+                raise ValueError("Deterministic reference source hash mismatch.")
+        elif evidence.get("reference_source_sha256") is not None:
+            raise ValueError("Ordinary deterministic policy has a reference source hash.")
     elif mode != "llm":
         raise ValueError(f"Unsupported Java materialization mode: {mode!r}")
     candidate_java_mode = payload.get("candidate_java_mode")

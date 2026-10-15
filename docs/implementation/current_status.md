@@ -3,6 +3,10 @@
 ## DSL and pre-crossover source contract (2026-10-11)
 
 Canonical `eagle-strategy-dsl-v1` policies are validated by `eagle/strategy_dsl.py`.
+The checked-in WorkerRush seed is a closed canonical-reference policy. In
+deterministic mode its CandidateAgent delegates to the vendored upstream
+WorkerRush, replays the exact action vector, and persists the reference source
+hash; LLM-generated and mutated policies remain finite-rule-only.
 In LLM materialization mode, every reproduction source is independently gated before actual variation. Defects
 yield corrective one-parent children; failed checks cannot enter variation. Normal
 mutation/AOS covers Strategy/Prompt. Code v6 permits fidelity/correctness repair

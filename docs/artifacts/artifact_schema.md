@@ -70,6 +70,12 @@ tick_limit}` mapping, even when the source config used a string map path and
 inherited the top-level fallback. New runs do not write `source_config`,
 `resolved_config.json`, or `prompt_snapshot.json`.
 
+For deterministic reference policies, `generation/compiler_evidence.json` and
+the projected generation result include `reference_agent` and
+`reference_source_sha256`. Both are null for ordinary rule policies. Readers
+accept only `WorkerRush` and verify the hash against the vendored canonical
+source before reconstructing a successful candidate.
+
 `manifest.json` stays small: schema/run identity, timestamps, status,
 experiment/reflection identity, `model_name`, `generation_model_name`, and
 `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`;

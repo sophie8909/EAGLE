@@ -18,7 +18,11 @@ from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
 from eagle.prompts import load_prompt
 from eagle.timing import utc_now
-from eagle.strategy_dsl import normalize_strategy_dsl, worker_rush_policy
+from eagle.strategy_dsl import (
+    normalize_strategy_dsl,
+    validate_strategy_dsl,
+    worker_rush_policy,
+)
 
 
 LLM_GENERATED_POLICIES = "llm_generated_policies"
@@ -275,9 +279,16 @@ def _generate_initial_policy(
                     strategy_source = parse_json_object_response(strategy_source)
                 except (TypeError, ValueError, json.JSONDecodeError):
                     pass
-            final_prompt = normalize_strategy_dsl(strategy_source, max_chars=config.max_prompt_chars)
+            final_prompt = normalize_strategy_dsl(
+                strategy_source,
+                max_chars=config.max_prompt_chars,
+            )
             if final_prompt in selected_prompts:
                 raise ValueError("strategy_prompt duplicates an existing population policy")
+            if "reference_agent" in validate_strategy_dsl(final_prompt):
+                raise ValueError(
+                    "reference_agent is reserved for checked-in configured seeds"
+                )
             status = "success"
             failure_reason = None
             selected_attempt = attempt
