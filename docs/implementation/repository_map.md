@@ -27,15 +27,16 @@ kept as documentation entries.
 | `eagle/execution.py` | Fixed GPU/model/LLM/match concurrency policy and ordered bounded parallel mapping |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
-| `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, EA/model/evaluation validation |
+| `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, framework evolution policy, EA/model/evaluation validation |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/evolution/search.py` | Fresh run initialization, generation loop, and finalization |
 | `eagle/evolution/generation.py` | Shared fresh/resume generation ordering, evaluation, credit, selection, and persistence |
 | `eagle/evolution/offspring.py` | LLM-mode selected-source Code gate and corrective Java path; mode-aware variation and evidence-parent lookup |
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/self_play.py` | Managed self-play opponent library, five-generation context selection, context hashes, resume loading, and selection guards |
-| `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
+| `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction, framework genome initialization, and candidate-owned evidence |
 | `eagle/operators/framework_slots.py` | Seeded per-slot crossover, one-slot mutation, and exact slot provenance |
+| `eagle/operators/framework_coach.py` | Framework initial-genome and Coach selection schemas, prompts, and strict validation |
 | `eagle/evolution/resume.py` | v2 snapshot load/finalization around the shared generation step |
 | `eagle/operators/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/operators/adaptive.py` | Static and adaptive reflection-operator selection |
@@ -51,7 +52,7 @@ kept as documentation entries.
 | `eagle/operators/reflection.py` | Reflection context and transport contracts |
 | `eagle/operators/prompt.py` | Prompt-only mutation rewrite |
 | `eagle/operators/code.py` | LLM-mode diagnosis-guided direct parent-Java Code Reflection |
-| `eagle/operators/strategy.py` | Match sampling, Commentator, Coach, trace lifecycle |
+| `eagle/operators/strategy.py` | Match sampling, Commentator, DSL/framework Coach roles, trace lifecycle |
 | `eagle/operators/context.py` | Structured mutation evidence |
 | `eagle/operators/reflection_prompts.py` | Prompt Reflection reviewer rendering |
 | `eagle/prompts.py` | Prompt manifest loading, rendering, and bounds |

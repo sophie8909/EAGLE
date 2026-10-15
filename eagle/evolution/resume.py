@@ -132,6 +132,8 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
             if manifest.get("schema_version") != RUN_SCHEMA_VERSION:
                 raise ValueError("Resume framework_slots run has an unsupported manifest schema.")
             framework = payload["framework"]
+            if manifest.get("framework_evolution_mode", "local") != framework.get("evolution_mode", "local"):
+                raise ValueError("Resume config/manifest framework evolution mode mismatch.")
             framework_fences = (
                 ("java_compiler_version", payload.get("java_compiler_version")),
                 ("framework_bundle_version", framework.get("bundle_version")),

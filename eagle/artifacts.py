@@ -704,10 +704,9 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         elif failed_source:
             artifact_references["failed_generation_source"] = failed_source
     if (candidate_dir / "mutation" / "strategy_reflection" / "metadata.json").is_file():
-        artifact_references.update({
-            "strategy_reflection": "mutation/strategy_reflection/metadata.json",
-            "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
-        })
+        artifact_references["strategy_reflection"] = "mutation/strategy_reflection/metadata.json"
+        if candidate.java_materialization_mode != "framework_slots":
+            artifact_references["generator_strategy_input"] = "mutation/strategy_reflection/generator_strategy_input.txt"
     for mutation_name in ("prompt_reflection", "code_reflection"):
         if (candidate_dir / "mutation" / mutation_name / "metadata.json").is_file():
             artifact_references[mutation_name] = f"mutation/{mutation_name}/metadata.json"
@@ -715,6 +714,11 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         artifact_references["initial_policy_generation"] = (
             "initialization/policy_generation/result.json"
         )
+    framework_selection_dir = candidate_dir / "initialization" / "framework_coach"
+    for name in ("selection.json", "failure.json"):
+        if (framework_selection_dir / name).is_file():
+            artifact_references["initial_framework_selection"] = f"initialization/framework_coach/{name}"
+            break
     payload = {
         "candidate_schema_version": (
             candidate.candidate_schema_version

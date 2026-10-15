@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eagle.generation.framework_slots import load_framework_bundle
 from eagle.generation.backend import MockGenerationBackend
 from eagle.evaluation.determinism import derive_seed
 
@@ -70,6 +71,7 @@ def build_search_runtime(
         timing_path=run_dir / "timing.jsonl",
     )
     framework_slots = config.java_materialization_mode == "framework_slots"
+    framework_coach = framework_slots and config.framework_evolution_mode == "llm_coach"
     generation_backend = (
         MockGenerationBackend(config.agent_template_path)
         if mock or config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
@@ -77,7 +79,7 @@ def build_search_runtime(
     )
     initial_policy_backend = (
         MockInitialPolicyBackend()
-        if mock or framework_slots
+        if mock or (framework_slots and not framework_coach)
         else client.prompt_backend(
             operation="initial_policy_generation",
             temperature=config.initial_policy_temperature,
@@ -86,7 +88,7 @@ def build_search_runtime(
     # The mock and production generator must render the same configured
     # immutable scaffold, including inherited-Java requests.
     generation_backend.agent_template_path = config.agent_template_path
-    if mock or framework_slots:
+    if mock or (framework_slots and not framework_coach):
         reflection_backend = build_reflection_backend("mock")
         rewrite_backend = reflection_backend
         strategy_role_backend = MockRoleBackend()
@@ -97,10 +99,25 @@ def build_search_runtime(
             operation="match_commentator",
             temperature=config.match_commentator_temperature,
         )
+    framework_options = {}
+    if framework_coach:
+        from eagle.operators.framework_coach import MockFrameworkRoleBackend
+
+        bundle = load_framework_bundle(
+            config.framework_bundle_path,
+            expected_sha256=config.framework_bundle_sha256,
+        )
+        framework_options = {
+            "framework_bundle": bundle,
+            "framework_bundle_sha256": config.framework_bundle_sha256,
+        }
+        if mock:
+            strategy_role_backend = MockFrameworkRoleBackend(bundle, config.framework_bundle_sha256)
+            initial_policy_backend = strategy_role_backend
     enabled_roles = {"coach"}
     if config.match_commentator_enabled:
         enabled_roles.add("match_commentator")
-    mutations = {} if framework_slots else {
+    mutations = {} if framework_slots and not framework_coach else {
         "strategy": StrategyReflectionMutation(
             strategy_role_backend,
             max_attempts=config.mutation_max_attempts,
@@ -111,6 +128,7 @@ def build_search_runtime(
             selection_seed=config.random_seed,
             sample_budget=config.match_commentator_sample_count,
             timing_logger=logger,
+            **framework_options,
         ),
     }
     if config.java_materialization_mode == "llm":

@@ -20,6 +20,7 @@ from typing import Any, Callable, Protocol
 
 from eagle.evaluation.determinism import derive_seed
 from eagle.evaluation.match_trace import iter_match_trace
+from eagle.generation.framework_slots import FrameworkBundle, validate_genome
 
 from eagle.candidate import Candidate
 from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, generate_seeded, truncate_prompt
@@ -172,6 +173,8 @@ class StrategyReflectionPipeline:
         selection_seed: int = 0,
         sample_budget: int = 1,
         timing_logger: LLMCallLogger | None = None,
+        framework_bundle: FrameworkBundle | None = None,
+        framework_bundle_sha256: str | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
@@ -187,6 +190,8 @@ class StrategyReflectionPipeline:
         # Legacy sample budgets remain accepted; reflection always uses one match.
         self.sample_budget = 1
         self.timing_logger = timing_logger
+        self.framework_bundle = framework_bundle
+        self.framework_bundle_sha256 = framework_bundle_sha256
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
         result = self.run(candidate, context, artifact_dir=artifact_dir, mutation_intent=mutation_intent)
@@ -194,6 +199,8 @@ class StrategyReflectionPipeline:
         return result.candidate
 
     def run(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> StrategyReflectionResult:
+        if candidate.java_materialization_mode == "framework_slots":
+            return self._run_framework(candidate, context, artifact_dir=artifact_dir)
         required_roles = {"match_commentator", "coach"}
         original_generation_prompt = candidate.generation_prompt
         intent = normalize_mutation_intent(mutation_intent) or select_strategy_mutation_intent(
@@ -438,6 +445,425 @@ class StrategyReflectionPipeline:
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
             return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses)
 
+    def select_initial_framework_genome(
+        self,
+        candidate: Candidate,
+        *,
+        artifact_dir: Path | None = None,
+    ) -> Candidate:
+        """Select one complete initial genome through the bounded Coach call path."""
+
+        stage = "initialization/framework_coach"
+        attempt_timings: list[dict[str, Any]] = []
+        try:
+            bundle, bundle_hash = self._framework_contract(candidate)
+            from eagle.operators.framework_coach import (
+                framework_bundle_evidence,
+                framework_initial_selection_prompt,
+                validate_framework_selection_response,
+            )
+
+            current_genome = validate_genome(bundle, candidate.control_genome)
+            request = framework_initial_selection_prompt(
+                bundle,
+                framework_bundle_sha256=bundle_hash,
+                current_control_genome=current_genome,
+            )
+            if len(request) > self.max_prompt_chars:
+                raise ValueError(
+                    "framework initial Coach prompt exceeds max_prompt_chars; "
+                    "authoritative slot domains cannot be truncated"
+                )
+            _write_stage_json(
+                artifact_dir,
+                stage,
+                "input.json",
+                {
+                    "schema_version": "eagle-framework-selection-v1",
+                    "framework_bundle_sha256": bundle_hash,
+                    "framework_bundle": framework_bundle_evidence(bundle),
+                    "current_control_genome": current_genome,
+                },
+            )
+            _, validated = self._call_role(
+                "coach",
+                request,
+                candidate,
+                artifact_dir,
+                suffix="initial_selection",
+                artifact_stage=stage,
+                operation_type="initialization",
+                preserve_original_prompt=True,
+                attempt_timings=attempt_timings,
+                extra={"framework_bundle_sha256": bundle_hash},
+                validator=lambda raw: validate_framework_selection_response(
+                    raw,
+                    bundle=bundle,
+                    framework_bundle_sha256=bundle_hash,
+                ),
+            )
+            payload, genome = validated
+            _write_stage_json(artifact_dir, stage, "selection.json", payload)
+            return replace(
+                candidate,
+                control_genome=genome,
+                timing={
+                    **candidate.timing,
+                    "reflection_llm": _llm_attempt_timing(attempt_timings),
+                },
+                metadata={
+                    **candidate.metadata,
+                    "framework_coach_selection": {
+                        "schema_version": "eagle-framework-selection-v1",
+                        "stage": "initialization",
+                        "framework_bundle_sha256": bundle_hash,
+                    },
+                },
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            error = f"framework initialization Coach: {exc}"
+            _write_stage_json(
+                artifact_dir,
+                stage,
+                "failure.json",
+                {
+                    "schema_version": "eagle-framework-selection-v1",
+                    "candidate_id": candidate.id,
+                    "error": error,
+                },
+            )
+            return replace(
+                candidate,
+                status="failed",
+                failure_stage="initialization",
+                failure_reason=error,
+                timing={
+                    **candidate.timing,
+                    **(
+                        {"reflection_llm": _llm_attempt_timing(attempt_timings)}
+                        if attempt_timings
+                        else {}
+                    ),
+                },
+                metadata={
+                    **candidate.metadata,
+                    "mutation": {
+                        "applied": False,
+                        "type": "framework_coach",
+                        "reflection_error": error,
+                        "rewrite_error": None,
+                    },
+                },
+            )
+
+    def _framework_contract(
+        self,
+        candidate: Candidate,
+    ) -> tuple[FrameworkBundle, str]:
+        bundle = self.framework_bundle
+        bundle_hash = self.framework_bundle_sha256
+        if bundle is None or not bundle_hash:
+            raise ValueError(
+                "framework_slots LLM Coach requires a validated bundle and exact-byte hash"
+            )
+        if candidate.framework_bundle_sha256 != bundle_hash:
+            raise ValueError(
+                "candidate framework bundle hash does not match the Coach run bundle"
+            )
+        validate_genome(bundle, candidate.control_genome)
+        return bundle, bundle_hash
+
+    def _run_framework(
+        self,
+        candidate: Candidate,
+        context: ReflectionContext,
+        *,
+        artifact_dir: Path | None,
+    ) -> StrategyReflectionResult:
+        analyses: list[MatchAnalysis] = []
+        attempt_timings: list[dict[str, Any]] = []
+        try:
+            bundle, bundle_hash = self._framework_contract(candidate)
+            if {"match_commentator", "coach"} - self.enabled_roles:
+                raise ValueError("framework Coach roles disabled")
+            parent_genome = validate_genome(
+                bundle,
+                context.parent_comparison.get("framework_control_genome"),
+            )
+            current_genome = validate_genome(bundle, candidate.control_genome)
+        except (TypeError, ValueError) as exc:
+            return self._failed_framework_result(
+                candidate,
+                artifact_dir,
+                str(exc),
+                analyses,
+                attempt_timings=attempt_timings,
+            )
+
+        from eagle.operators.framework_coach import (
+            framework_bundle_evidence,
+            framework_coach_selection_prompt,
+            validate_framework_selection_response,
+        )
+
+        base_metadata = {
+            "schema_version": "framework-coach-artifacts-v1",
+            "generation": candidate.generation,
+            "child_candidate_id": candidate.id,
+            "parent_candidate_id": context.candidate.candidate_id or context.candidate_id,
+            "mutation_operator": "framework_coach",
+            "commentator_prompt_name": "match_commentator",
+            "coach_prompt_name": "framework_coach_selection",
+            "framework_bundle_sha256": bundle_hash,
+        }
+        _write_json(artifact_dir, "reflection/metadata.json", base_metadata)
+        selection = select_reflection_matches(
+            context.per_match_results,
+            run_seed=self.selection_seed,
+            generation_index=context.evolution.generation_index,
+            candidate_id=candidate.id,
+            reflection_invocation=context.index,
+            sample_budget=self.sample_budget,
+        )
+        _write_json(artifact_dir, "reflection/match_selection.json", selection)
+        global_summary = build_global_evaluation_summary(
+            context.game_evidence or {}, context.per_match_results
+        )
+        _write_json(
+            artifact_dir,
+            "reflection/global_evaluation_summary.json",
+            global_summary,
+        )
+        by_id = {_match_id(item): item for item in context.per_match_results}
+        selected_items = [
+            by_id[match_id]
+            for match_id in selection["selected_match_ids"]
+            if match_id in by_id
+        ]
+        _write_json(
+            artifact_dir,
+            "reflection/selected_matches.json",
+            [_selected_match_record(item) for item in selected_items],
+        )
+        failures: list[str] = []
+        commentator_strategy = {
+            "framework_bundle_sha256": bundle_hash,
+            "framework_bundle": framework_bundle_evidence(bundle),
+            "control_genome": parent_genome,
+        }
+        commentator_call_count = 0
+        for item in selected_items:
+            match_id = str(
+                item.get("match_id")
+                or f"match_{item.get('match_index', len(analyses)):03d}"
+            )
+            log_path = _resolve_path(item.get("match_trace_path"))
+            if log_path is None or not log_path.exists():
+                failures.append(f"{match_id}: commentary unavailable")
+                _write_status(
+                    artifact_dir, match_id, "unavailable", failures[-1]
+                )
+                continue
+            try:
+                commentator_call_count += 1
+                analyses.append(
+                    self._commentate(
+                        candidate,
+                        context,
+                        item,
+                        match_id,
+                        log_path,
+                        artifact_dir,
+                        artifact_index=commentator_call_count,
+                        candidate_basic_strategy=commentator_strategy,
+                        attempt_timings=attempt_timings,
+                    )
+                )
+            except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                failures.append(f"{match_id}: {exc}")
+                _write_status(artifact_dir, match_id, "failed", str(exc))
+
+        _write_json(
+            artifact_dir,
+            "reflection/metadata.json",
+            {
+                **base_metadata,
+                "selected_match_count": len(selected_items),
+                "commentator_call_count": commentator_call_count,
+                "successful_commentator_count": len(analyses),
+            },
+        )
+        if not analyses:
+            return self._failed_framework_result(
+                candidate,
+                artifact_dir,
+                "match_commentator: no valid match analyses",
+                analyses,
+                attempt_timings=attempt_timings,
+            )
+
+        try:
+            coach_evidence = _coach_payload(
+                candidate,
+                context,
+                analyses,
+                selection,
+                failures,
+                global_summary,
+            )
+            request = framework_coach_selection_prompt(
+                bundle,
+                framework_bundle_sha256=bundle_hash,
+                evaluated_parent_control_genome=parent_genome,
+                current_child_control_genome=current_genome,
+                coach_evidence=coach_evidence,
+            )
+            if len(request) > self.max_prompt_chars:
+                raise ValueError(
+                    "framework Coach prompt exceeds max_prompt_chars; "
+                    "authoritative slot domains cannot be truncated"
+                )
+            _write_json(
+                artifact_dir,
+                "reflection/coach_input.json",
+                {
+                    "prompt_name": "framework_coach_selection",
+                    "semantic_payload": {
+                        "framework_bundle_sha256": bundle_hash,
+                        "framework_bundle": framework_bundle_evidence(bundle),
+                        "evaluated_parent_control_genome": parent_genome,
+                        "current_child_control_genome": current_genome,
+                        "commentator_diagnoses_and_evaluation_metadata": coach_evidence,
+                    },
+                },
+            )
+            _, validated = self._call_role(
+                "coach",
+                request,
+                candidate,
+                artifact_dir,
+                extra={
+                    "parent_candidate_id": context.candidate.candidate_id
+                    or context.candidate_id,
+                    "framework_bundle_sha256": bundle_hash,
+                },
+                preserve_original_prompt=True,
+                attempt_timings=attempt_timings,
+                validator=lambda raw: validate_framework_selection_response(
+                    raw,
+                    bundle=bundle,
+                    framework_bundle_sha256=bundle_hash,
+                ),
+            )
+            payload, genome = validated
+            changed_slot_ids = [
+                slot.slot_id
+                for slot in bundle.slots
+                if current_genome[slot.slot_id] != genome[slot.slot_id]
+            ]
+            _write_json(artifact_dir, "reflection/coach_output.json", payload)
+            _write_json(
+                artifact_dir,
+                "reflection/coach_result.json",
+                {
+                    **payload,
+                    "changed_slot_ids": changed_slot_ids,
+                },
+            )
+            child = replace(
+                candidate,
+                control_genome=genome,
+                mutation_type="framework_coach",
+                timing={
+                    **candidate.timing,
+                    "reflection_llm": _llm_attempt_timing(attempt_timings),
+                },
+                metadata={
+                    **candidate.metadata,
+                    "framework_coach_selection": {
+                        "schema_version": "eagle-framework-selection-v1",
+                        "parent_candidate_id": context.candidate.candidate_id
+                        or context.candidate_id,
+                        "framework_bundle_sha256": bundle_hash,
+                        "evaluated_parent_control_genome": parent_genome,
+                        "previous_control_genome": current_genome,
+                        "control_genome": genome,
+                        "changed_slot_ids": changed_slot_ids,
+                        "analyses": [item.to_dict() for item in analyses],
+                        "coach_input": coach_evidence,
+                        "commentary_failures": failures,
+                        "match_selection": selection,
+                    },
+                    "mutation": {
+                        "applied": bool(changed_slot_ids),
+                        "type": "framework_coach",
+                        "reflection_status": "success",
+                        "reflection_error": None,
+                        "rewrite_error": None,
+                    },
+                },
+            )
+            assert child.slot_parent_ids == candidate.slot_parent_ids
+            assert child.generation_prompt == candidate.generation_prompt
+            return StrategyReflectionResult(
+                child, "success", tuple(analyses), None, None
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return self._failed_framework_result(
+                candidate,
+                artifact_dir,
+                f"coach: {exc}",
+                analyses,
+                attempt_timings=attempt_timings,
+            )
+
+    def _failed_framework_result(
+        self,
+        candidate: Candidate,
+        artifact_dir: Path | None,
+        error: str,
+        analyses: list[MatchAnalysis],
+        *,
+        attempt_timings: list[dict[str, Any]],
+    ) -> StrategyReflectionResult:
+        _write_json(
+            artifact_dir,
+            "reflection/commentary_failure.json",
+            {
+                "role": error.split(":", 1)[0],
+                "candidate_id": candidate.id,
+                "generation_index": candidate.generation,
+                "error": error,
+                "schema_version": "framework-coach-artifacts-v1",
+            },
+        )
+        child = replace(
+            candidate,
+            status="failed",
+            failure_stage="reflection",
+            failure_reason=error,
+            timing={
+                **candidate.timing,
+                **(
+                    {"reflection_llm": _llm_attempt_timing(attempt_timings)}
+                    if attempt_timings
+                    else {}
+                ),
+            },
+            metadata={
+                **candidate.metadata,
+                "mutation": {
+                    "applied": False,
+                    "type": "framework_coach",
+                    "reflection_error": error,
+                    "rewrite_error": None,
+                },
+            },
+        )
+        return StrategyReflectionResult(
+            child, "failed", tuple(analyses), None, error
+        )
+
     def _commentate(
         self,
         candidate: Candidate,
@@ -448,17 +874,28 @@ class StrategyReflectionPipeline:
         artifact_dir: Path | None,
         *,
         artifact_index: int,
+        candidate_basic_strategy: object | None = None,
+        attempt_timings: list[dict[str, Any]] | None = None,
     ) -> MatchAnalysis:
         raw_log = list(iter_match_trace(log_path))
         if not raw_log:
             raise ValueError("match log contains no ticks")
-        request = _commentator_prompt(candidate, context, item, match_id, raw_log)
+        request = _commentator_prompt(
+            candidate,
+            context,
+            item,
+            match_id,
+            raw_log,
+            candidate_basic_strategy=candidate_basic_strategy,
+        )
         raw, validated_commentary = self._call_role(
             "match_commentator",
             request,
             candidate,
             artifact_dir,
             match_id=match_id,
+            preserve_original_prompt=candidate_basic_strategy is not None,
+            attempt_timings=attempt_timings,
             validator=lambda response: _validate_commentary_response(response, match_id),
         )
         parsed_output, analysis = validated_commentary
@@ -482,6 +919,10 @@ class StrategyReflectionPipeline:
         match_id: str | None = None,
         suffix: str = "",
         extra: dict[str, Any] | None = None,
+        artifact_stage: str = "mutation/strategy_reflection",
+        operation_type: str = "mutation",
+        attempt_timings: list[dict[str, Any]] | None = None,
+        preserve_original_prompt: bool = False,
     ) -> tuple[str, Any]:
         request_id = _role_request_id(
             candidate,
@@ -499,12 +940,12 @@ class StrategyReflectionPipeline:
         stage_dir = (
             None
             if artifact_dir is None
-            else artifact_dir / "mutation" / "strategy_reflection"
+            else artifact_dir / artifact_stage
         )
         artifact_base = _run_relative_artifact_base(
             stage_dir,
             self.timing_logger,
-            fallback=f"candidates/{candidate.id}/mutation/strategy_reflection",
+            fallback=f"candidates/{candidate.id}/{artifact_stage}",
         )
         bounded = truncate_prompt(prompt, max_chars=self.max_prompt_chars)
         last_error = ""
@@ -513,18 +954,23 @@ class StrategyReflectionPipeline:
             started_at = utc_now()
             started = time.monotonic()
             raw = ""
-            attempt_prompt = (
-                bounded
-                if not last_error
-                else truncate_prompt(
-                    render_prompt("role_validation_retry", {
-                        "validation_error": last_error,
-                        "previous_response": last_response,
-                        "original_request": bounded,
-                    }),
+            if not last_error:
+                attempt_prompt = bounded
+            else:
+                retry_prompt = render_prompt("role_validation_retry", {
+                    "validation_error": last_error,
+                    "previous_response": last_response,
+                    "original_request": bounded,
+                })
+                if preserve_original_prompt and len(retry_prompt) > self.max_prompt_chars:
+                    raise ValueError(
+                        "framework Coach validation retry exceeds max_prompt_chars; "
+                        "authoritative slot domains cannot be truncated"
+                    )
+                attempt_prompt = truncate_prompt(
+                    retry_prompt,
                     max_chars=self.max_prompt_chars,
                 )
-            )
             request_seed = derive_seed(
                 self.selection_seed, "llm", candidate.generation, candidate.id,
                 role, match_id or "", suffix, attempt,
@@ -542,8 +988,9 @@ class StrategyReflectionPipeline:
                 if match_id
                 else f"{role}_{attempt_name}"
             )
-            _write_json(
+            _write_stage_json(
                 artifact_dir,
+                artifact_stage,
                 f"commentary/{match_id}/{attempt_request_name}"
                 if match_id
                 else f"reflection/{role}_{attempt_request_name}",
@@ -554,8 +1001,9 @@ class StrategyReflectionPipeline:
                 last_response = raw
                 # Persist the exact raw transport payload before any semantic
                 # parsing or validation can fail or be interrupted.
-                _write_json(
+                _write_stage_json(
                     artifact_dir,
+                    artifact_stage,
                     f"commentary/{match_id}/{attempt_name}"
                     if match_id
                     else f"reflection/{role}_{attempt_name}",
@@ -585,7 +1033,19 @@ class StrategyReflectionPipeline:
                 extraction_report = getattr(exc, "report", None)
                 if isinstance(extraction_report, dict):
                     envelope["strategy_extraction"] = extraction_report
-                _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
+                if attempt_timings is not None:
+                    attempt_timings.append(
+                        {
+                            "attempt": attempt,
+                            "role": role,
+                            "started_at": started_at,
+                            "finished_at": finished_at,
+                            "duration_seconds": duration_seconds,
+                            "status": "error",
+                            "error": last_error,
+                        }
+                    )
+                _write_stage_json(artifact_dir, artifact_stage, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
                 self._write_role_timing(
                     trace,
                     role=role,
@@ -595,6 +1055,7 @@ class StrategyReflectionPipeline:
                     finished_at=finished_at,
                     duration_seconds=duration_seconds,
                     failure_category=type(exc).__name__,
+                    operation_type=operation_type,
                 )
                 continue
 
@@ -609,14 +1070,26 @@ class StrategyReflectionPipeline:
                 "duration_seconds": duration_seconds,
                 "response": raw,
             }
-            _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
+            if attempt_timings is not None:
+                attempt_timings.append(
+                    {
+                        "attempt": attempt,
+                        "role": role,
+                        "started_at": started_at,
+                        "finished_at": finished_at,
+                        "duration_seconds": duration_seconds,
+                        "status": "success",
+                        "error": None,
+                    }
+                )
+            _write_stage_json(artifact_dir, artifact_stage, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
             result_name = "result.json" if not suffix else f"result_{suffix}.json"
             result_path = (
                 f"commentary/{match_id}/{result_name}"
                 if match_id
                 else f"reflection/{role}_call.json"
             )
-            _write_json(artifact_dir, result_path, {
+            _write_stage_json(artifact_dir, artifact_stage, result_path, {
                 **trace,
                 "status": "success",
                 "selected_attempt": attempt,
@@ -643,6 +1116,7 @@ class StrategyReflectionPipeline:
                 finished_at=finished_at,
                 duration_seconds=duration_seconds,
                 failure_category=None,
+                operation_type=operation_type,
             )
             return raw, validated
         result_name = "result.json" if not suffix else f"result_{suffix}.json"
@@ -652,7 +1126,7 @@ class StrategyReflectionPipeline:
             else f"reflection/{role}_call.json"
         )
         final_attempt = self.max_attempts
-        _write_json(artifact_dir, result_path, {
+        _write_stage_json(artifact_dir, artifact_stage, result_path, {
             **trace,
             "status": "failed",
             "selected_attempt": None,
@@ -684,6 +1158,7 @@ class StrategyReflectionPipeline:
         finished_at: str,
         duration_seconds: float,
         failure_category: str | None,
+        operation_type: str,
     ) -> None:
         if self.timing_logger is None:
             return
@@ -703,7 +1178,7 @@ class StrategyReflectionPipeline:
             finished_at=finished_at,
             duration_seconds=duration_seconds,
             metadata={
-                "operation_type": "mutation",
+                "operation_type": operation_type,
                 "endpoint": trace.get("endpoint") or endpoint,
                 "sampling_seed": trace["sampling_seed"],
                 "failure_category": failure_category,
@@ -1011,7 +1486,15 @@ def cleanup_retired_match_traces(
 
 
 # Role prompt construction and response parsing -----------------------------
-def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, raw_log: list[dict[str, Any]]) -> str:
+def _commentator_prompt(
+    candidate: Candidate,
+    context: ReflectionContext,
+    item: dict[str, Any],
+    match_id: str,
+    raw_log: list[dict[str, Any]],
+    *,
+    candidate_basic_strategy: object | None = None,
+) -> str:
     return render_prompt("match_commentator", {
         "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
         "match_id": json.dumps(match_id),
@@ -1019,7 +1502,13 @@ def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: 
         "map": json.dumps(item.get("map_name") or item.get("map_id") or item.get("map") or "unknown"),
         "player_position": json.dumps(_player_position(item)),
         "result": json.dumps(_match_outcome(item) or "unknown"),
-        "candidate_basic_strategy": json.dumps(candidate.strategy_prompt, ensure_ascii=False),
+        "candidate_basic_strategy": json.dumps(
+            candidate.strategy_prompt
+            if candidate_basic_strategy is None
+            else candidate_basic_strategy,
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
         "opponent_basic_strategy": json.dumps({
             "identity": item.get("opponent_name") or item.get("opponent") or "unknown",
             "class": item.get("opponent") or "unknown",
@@ -1383,6 +1872,30 @@ def _selected_match_record(item: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _llm_attempt_timing(attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    if not attempts:
+        return {
+            "started_at": None,
+            "finished_at": None,
+            "duration_seconds": None,
+            "status": "skipped",
+            "error": None,
+            "attempts": [],
+        }
+    final = attempts[-1]
+    return {
+        "started_at": attempts[0]["started_at"],
+        "finished_at": final["finished_at"],
+        "duration_seconds": round(
+            sum(float(item["duration_seconds"]) for item in attempts),
+            9,
+        ),
+        "status": final["status"],
+        "error": final["error"],
+        "attempts": [dict(item) for item in attempts],
+    }
+
+
 def _write_status(root: Path | None, match_id: str, status: str, error: str | None) -> None:
     _write_json(root, f"commentary/{match_id}/commentary_status.json", {"role": "match_commentator", "match_id": match_id, "status": status, "error": error, "schema_version": ROLE_SCHEMA_VERSION})
 
@@ -1396,11 +1909,25 @@ def _write_text(root: Path | None, relative: str, value: str) -> None:
 
 
 def _write_json(root: Path | None, relative: str, payload: object) -> None:
+    _write_stage_json(root, "mutation/strategy_reflection", relative, payload)
+
+
+def _write_stage_json(
+    root: Path | None,
+    stage: str,
+    relative: str,
+    payload: object,
+) -> None:
     if root is None:
         return
-    path = _artifact_path(root, relative)
+    if relative.startswith("reflection/"):
+        relative = relative.removeprefix("reflection/")
+    path = root / stage / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def _artifact_path(root: Path, relative: str) -> Path:

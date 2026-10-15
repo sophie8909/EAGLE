@@ -8,6 +8,12 @@
 | DSL-COMP-02 | Gen 0 WorkerRush was only an approximate finite-rule policy | Reserve one checked-in `reference_agent: WorkerRush` seed; deterministic materialization delegates to and replays the vendored implementation, pins its source hash, and rejects reference agents from LLM-produced/evolved policies. | Multi-map, both-side, multi-cycle differential action test plus Gen 0 wiring/hash artifact test. | Resolved and implemented |
 | FWSLOT-01 | Allow one generated full Java architecture while keeping candidate evolution bounded, reproducible, and controllable | Use an explicit one-time Groq structured bootstrap to create an exact versioned bundle; freeze its bytes/hash per run; expose only finite typed numeric or enumerated-expression slots; perform local deterministic sampling/crossover/mutation/rendering; disable all candidate-time LLM/reflection/repair; retain the normal validation and evaluation pipeline. | Bootstrap/core/config/candidate/materialization/artifact/resume contract tests. A live provider call and real MicroRTS smoke remain optional operational validation. | Resolved and implemented |
 
+## Framework Coach evolution decision (2026-10-15)
+
+| ID | Question | Decision | Verification | Status |
+| --- | --- | --- | --- | --- |
+| FWSLOT-02 | Add model-guided genome choice without changing frozen framework materialization | Keep `framework.evolution_mode: local` as the default. Opt-in `llm_coach` uses the experiment model for complete initial genomes and the existing worst-match Commentator→Coach Strategy path. Both return the exact bundle-hash-pinned `eagle-framework-selection-v1` genome; Java materialization stays `eagle-framework-slots-v1`. Raw responses precede parsing; attempts are bounded and timed; failed mutation preserves the pre-Coach child genome and fails the child without random fallback. | Framework config, selection, Coach, artifact, timing, failure, and resume contracts; one-generation mock search/resume; bounded real javac and seven-check Integration | Resolved and implemented |
+
 ## DSL and pre-crossover source contract (2026-10-11)
 
 The [integration plan](dsl_pre_crossover_reflection_plan.md) tracks DSL/source-gate

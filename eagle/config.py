@@ -169,6 +169,7 @@ class ExperimentConfig:
     framework_bundle_path: Path | None = None
     framework_bundle_version: str | None = None
     framework_bundle_sha256: str | None = None
+    framework_evolution_mode: str = "local"
     # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
@@ -457,6 +458,7 @@ class ExperimentConfig:
             framework_bundle_path=framework_bundle_path,
             framework_bundle_version=framework_bundle_version,
             framework_bundle_sha256=framework_bundle_sha256,
+            framework_evolution_mode=str((payload.get("framework") or {}).get("evolution_mode", "local")),
             seed_prompts=seed_prompts,
             seed_prompt_files=seed_prompt_files,
             initial_population_mode=str(
@@ -567,6 +569,10 @@ class ExperimentConfig:
                 raise ValueError("deterministic_dsl requires candidate_java_mode=generated_phenotype.")
             if self.parent_evaluation_mode != "reuse_cached":
                 raise ValueError("deterministic_dsl requires parent_evaluation_mode=reuse_cached.")
+        if self.framework_evolution_mode not in {"local", "llm_coach"}:
+            raise ValueError("framework.evolution_mode must be local or llm_coach.")
+        if self.framework_evolution_mode != "local" and self.java_materialization_mode != "framework_slots":
+            raise ValueError("framework.evolution_mode requires framework_slots materialization.")
         if self.java_materialization_mode == "framework_slots":
             if self.java_compiler_version != FRAMEWORK_SLOTS_MATERIALIZATION_VERSION:
                 raise ValueError(
@@ -929,6 +935,7 @@ class ExperimentConfig:
                 "bundle_path": str(self.framework_bundle_path.resolve()),
                 "bundle_version": self.framework_bundle_version,
                 "bundle_sha256": self.framework_bundle_sha256,
+                "evolution_mode": self.framework_evolution_mode,
             }
         if self.generation_model is not None:
             mapping["generation_model"] = _model_mapping(self.generation_model)
@@ -974,7 +981,7 @@ class ExperimentConfig:
     @property
     def needs_llm_runtime(self) -> bool:
         if self.java_materialization_mode == "framework_slots":
-            return False
+            return self.framework_evolution_mode == "llm_coach"
         return self.java_materialization_mode == "llm" or self.mutation_rate > 0 or self.initial_population_mode == "llm_generated_policies"
 
     @property
@@ -1075,7 +1082,7 @@ def _parse_framework_bundle(
             "framework_slots requires a framework mapping with bundle_path."
         )
     unknown = sorted(
-        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256"})
+        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256", "evolution_mode"})
     )
     if unknown:
         raise ValueError(

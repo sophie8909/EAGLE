@@ -5,7 +5,7 @@
 
 ## 系統定位
 
-在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 則先由明確的一次性 Groq GPT-OSS bootstrap 建立完整 Java framework，之後只由本地 EA 控制有限 typed slots。實際比賽執行時
+在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 先由明確的一次性 Groq GPT-OSS bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA 或 Coach 輔助的完整 genome 選擇。實際比賽執行時
 不會呼叫 LLM。每個 phenotype 都是一份完整的
 `ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
 runtime LLM policy。
@@ -41,14 +41,20 @@ prompt 與結構化 report。Bundle 版本為 `eagle-framework-bundle-v1`；每�
 
 Experiment 啟動時會把 bundle exact bytes 複製到 run 的
 `framework/bundle.json` 並記錄 SHA-256。Candidate 的唯一 active genotype 是
-`control_genome`，crossover 逐 slot 選 parent，mutation 最多改一個 slot，且
-完整記錄 `slot_parent_ids`。演化期間不呼叫 Groq GPT-OSS 或其他 LLM，也不執行
-Strategy／Prompt／Code Reflection、source repair 或 compile repair。Rendered
-Java 仍通過原本 validation、javac、Integration、semantic probe 與 180-match
-evaluation。Resume 只信任 run-frozen bundle，版本或 hash 漂移會明確失敗。
-`GROQ_API_KEY` 僅從 bootstrap process environment 讀取，絕不寫入 config 或
-artifact。完整 schema 與 artifact 契約見
-[framework slots](architecture/framework_slots.md)。
+`control_genome`。`framework.evolution_mode` 預設 `local`，以 seeded local
+sampling、逐 slot crossover 與最多一個 slot mutation 演化；`llm_coach` 是 opt-in，
+由 experiment model 為每個 Gen 0 slot 選一份完整 genome，Strategy Mutation 則沿用
+最差 completed match → Commentator → Coach，讓 Coach 回傳完整 genome JSON。
+該 schema 固定為 `eagle-framework-selection-v1`，每次回應必須帶 run-frozen
+bundle SHA-256 和所有合法 slot 值。原始回應先落盤再解析，attempt 有界且有 timing；
+失敗 mutation 保留 Coach 呼叫前 child 的完整 genome 並讓 candidate 失敗，不採用隨機 fallback。
+兩種 evolution policy 都使用相同凍結 bundle、`eagle-framework-slots-v1`
+materializer 與完整的本地 Java render、validation、javac、Integration、semantic
+probe 和 evaluation；不呼叫 Java Generator、source repair 或 compile repair。Resume
+會驗證 bundle hash 並比較 evolution mode。Bootstrap 仍是明確執行的
+`python -m eagle framework`，不會由 experiment 自動啟動。`GROQ_API_KEY` 僅從
+bootstrap process environment 讀取，絕不寫入 config 或 artifact。完整 schema 與
+artifact 契約見 [framework slots](architecture/framework_slots.md)。
 
 ### LLM materialization lifecycle
 

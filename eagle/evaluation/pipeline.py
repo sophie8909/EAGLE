@@ -703,6 +703,9 @@ def evaluate_candidate(
         "status": "failed" if failure_stage else "success",
         "failure_stage": failure_stage,
     }
+    if framework_slots and candidate.generation == 0 and timing.get("reflection_llm"):
+        timing["child_total"]["duration_seconds"] += float(timing["reflection_llm"].get("duration_seconds") or 0.0)
+        timing["child_total"]["includes"].append("reflection_llm")
     # Stage 7: rebuild the candidate with evaluated phenotype, objectives,
     # lineage, failure state, reflection evidence, and timing.
     evaluated_candidate = Candidate(

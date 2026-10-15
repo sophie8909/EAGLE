@@ -452,6 +452,13 @@ def compact_candidate_metadata(
     ):
         if key in metadata:
             compact[key] = metadata[key]
+    framework_selection = metadata.get("framework_coach_selection")
+    if isinstance(framework_selection, dict):
+        compact["framework_coach_selection"] = {
+            key: framework_selection[key]
+            for key in ("schema_version", "stage", "framework_bundle_sha256", "parent_candidate_id", "changed_slot_ids")
+            if key in framework_selection
+        }
     aos = metadata.get("aos")
     if isinstance(aos, dict):
         compact["aos"] = dict(aos)

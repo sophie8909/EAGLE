@@ -31,10 +31,10 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Candidate | in `llm` mode, default two-prompt and opt-in prompt/prompt/Java modes; in deterministic mode, active policy-only genotype; generation-qualified automatic IDs and explicit-ID preservation; inherited Java versus generated phenotype separation; terminal failure retains state |
 | Lineage | seed/copy/crossover/mutation schemas; active component parent IDs resolve for the selected materialization mode; graph acyclic |
 | Crossover | in `llm` mode, independent whole-component choices for both prompts and, when enabled, Java; in deterministic mode, whole-policy only; exact provenance; equal-text case; default mode has no Java inheritance |
-| Strategy Mutation | Strategy mutation in both modes; in `llm`, Commentator per selected match → Coach → final Java generation; in deterministic mode → policy compiler; only policy changes; no Java/code-prompt evidence |
+| Strategy Mutation | Strategy mutation in both modes; in `llm`, Commentator per selected match → Coach → final Java generation; in deterministic DSL mode → policy compiler; only policy changes; no Java/code-prompt evidence; in framework `llm_coach`, exactly one worst completed parent match → Commentator → Coach complete-genome response, with strict schema/hash/domain validation and failed-child pre-Coach genome retention |
 | Prompt Mutation | in `llm` only: Strategy-region Policy-Code Reviewer → exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; only code-generation prompt changes; no raw game logs |
 | Independent Code source gate | in `llm` only: Policy + selected parent Java + immutable gameplay/API/scaffold context → structured diagnosis during reflection phase → deferred complete corrected Java during final materialization → direct validation/compilation; LLM-mode prompt genes and configured inherited Java input are preserved; no W/D/L, matches, traces, fitness, or reusable generation prompt; source-matching compiler diagnostics are allowed; successful output is not overwritten by Generator |
-| Generation | in `llm`: each source-policy/Java check precedes actual crossover/mutation; all contributors must pass; all reflection/rewrite work precedes final Java materialization; optional distinct generation model switches only at that boundary; resolved experiment seed is present in every OpenAI-compatible LLM request; default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one Java decode per policy with WorkerRush only as inherited context; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
+| Generation | in `llm`: each source-policy/Java check precedes actual crossover/mutation; all contributors must pass; all reflection/rewrite work precedes final Java materialization; optional distinct generation model switches only at that boundary; resolved experiment seed is present in every OpenAI-compatible LLM request; default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one Java decode per policy with WorkerRush only as inherited context; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs; in framework `llm_coach`, initial selection returns one exact complete bundle-hash-pinned genome per slot with raw-before-parse bounded attempts and no random fallback |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, direct strategy-map reads rejected in favor of bounds-safe `isFreeCell`, and no fixed internal layout |
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |
@@ -42,7 +42,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | run-v2/generation-v3, with LLM phase4-v6/candidate-v6 and deterministic phase4-v7/candidate-v7 contracts; v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |
-| Timing | UTC fields, monotonic durations, LLM attempts or deterministic materialization timing, optional null stages, 180 match durations; match timing lives in `result.json`; deterministic-mode match seeds are stable and persisted |
+| Timing | UTC fields, monotonic durations, LLM attempts or deterministic materialization timing, optional null stages, 180 match durations; match timing lives in `result.json`; deterministic-mode match seeds are stable and persisted; framework `llm_coach` initialization and Coach attempts are timed with one run event per actual request while Java `generation_llm` remains empty |
 | Opponent-wise lexicase | exactly ten maximized opponent cases; seeded case-order filtering; joint parent-plus-offspring selection without replacement; failed offspring cannot displace completed parents; fixed-size survivor behavior |
 | Self-play | explicit config gating; validated FIFO opponent-library capacity; failed/incomplete phenotype exclusion from the library; empty-valid-pool failure; persisted opponent-library seed/merge at the five-generation boundary; LISS-style exact semantic probe/action-vector deduplication with v1 readback/v2 writes; deterministic library selection and ten `self_play_*` uniform diagnostic slots; scalar Game Performance objective; inclusive `1.0` non-chained tiers; all-failed survivor-pool rejection; semantic second-parent/boundary-survivor diversity; deterministic cycling; immutable context IDs; zero-LLM phenotype-preserving parent refresh; mismatched-context rejection; library/context readback; legacy checkpoint migration; resume parity |
 | Semantic signatures | exactly three maps × early/mid/late states; full compiled agent actions; deterministic canonical hashes and cache hits; dataset-scoped exact equivalence; missing/incompatible fallback; artifact-only offline analysis |
@@ -205,6 +205,15 @@ the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.
 
 ## Groq framework and finite slots
 
+For `framework.evolution_mode`, test that omission resolves to `local`,
+`llm_coach` is opt-in, and resume rejects a mode mismatch while keeping the
+materializer version unchanged. Local mode retains seeded sampling/per-slot
+variation and zero candidate-time LLM calls. Coach mode tests exact response
+keys, frozen byte hash, complete slot coverage, numeric lattices, declared
+expression choices, duplicate-key and non-JSON-wrapper rejection, raw-before-parse persistence, bounded attempts, attempt/run
+timing, one-worst-match Commentator→Coach context, parent-genome retention on
+failed mutation, and absence of Java Generation/repair requests.
+
 Tests must prove the bootstrap sends user-message content, model, temperature,
 and `max_completion_tokens` to the Groq Chat Completions endpoint; requests
 `response_format` JSON Schema named `eagle_framework` with `strict: false`; and
@@ -225,7 +234,7 @@ Pipeline/artifact/resume tests must prove the run-owned
 `framework/bundle.json` is immutable; candidate inputs precede materialization;
 source is reconstructible from bundle plus genome; framework evidence contains
 all hashes; validation/javac/Integration/matches are unchanged; render or compile
-failure has no LLM fallback; all reflection/generation timing streams are empty;
+failure has no LLM fallback; local mode has empty reflection/generation timing streams;
 and drift, unknown versions, incomplete slot provenance, or mismatched hashes
 fail before replay. The focused command is:
 
@@ -235,5 +244,7 @@ python3 -m unittest \
   tests.test_framework_slots \
   tests.test_framework_slots_candidate_config \
   tests.test_framework_slots_artifacts \
-  tests.test_framework_slots_integration
+  tests.test_framework_slots_integration \
+  tests.test_framework_coach \
+  tests.test_framework_coach_integration
 ```

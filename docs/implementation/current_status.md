@@ -32,11 +32,13 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
 
 - `candidate_java_mode` controls Java phenotype versus inherited-Java state;
   `java_materialization_mode` independently selects `llm` (the backward-
-  compatible default) or `deterministic_dsl`. Deterministic mode activates only
-  `strategy_prompt`; generation prompt and inherited Java are inactive.
-  Prompt/Code Reflection and Java generation/repair LLM paths are disabled there.
-  Protocol/compiler markers are `eagle-dsl-compiler-v1` and
-  `eagle-dsl-java-v1`; the bounded real smoke passes.
+  compatible default), `deterministic_dsl`, or `framework_slots`. Deterministic
+  DSL activates only `strategy_prompt`; framework slots activate only
+  `control_genome`. Framework evolution defaults to seeded local operators;
+  opt-in `framework.evolution_mode: llm_coach` uses the experiment model only for
+  initial full-genome selection and the existing Commentator/Coach Strategy
+  path. Both framework policies retain the frozen bundle and
+  `eagle-framework-slots-v1` materializer. Java Generation and repair remain off.
 - Automatically created candidate IDs use `gen_<zero-padded-generation>_<12-hex>`;
   explicitly loaded IDs remain unchanged for artifact and resume compatibility.
 - `initial_population_mode: llm_generated_policies` keeps one configured policy
@@ -565,3 +567,20 @@ pipeline without changing the 180-match fixed-roster matrix or objective and
 selection formulas. The Groq bootstrap, framework core/config/artifact/integration,
 and prompt-resource contracts pass in the project WSL venv (49 tests). No live
 Groq request, full repository suite, or bounded Java/MicroRTS smoke was run.
+
+
+## Framework Coach selection (2026-10-16)
+
+`framework.evolution_mode: llm_coach` is implemented with strict complete-genome
+JSON, frozen-bundle hash checks, candidate-owned raw attempts and role timing,
+worst-match Commentator evidence, legal no-op handling, and mode-aware resume.
+Seventeen focused Coach tests pass, including a complete one-generation mock
+search and resume, failure sentinels, and artifact readback. A selected genome
+also passed real javac and the seven-check two-side MicroRTS Integration probe.
+No live provider bootstrap or full evolutionary experiment was launched.
+
+Validation boundary: full unittest discovery completed 670 tests with one skip
+before the concurrent multi-endpoint update was integrated. After resolving that
+update's two overlapping conflicts, 142 focused endpoint, concurrency, LLM,
+runtime, prompt, framework, Coach, and legacy Strategy tests passed, together
+with compileall. Full discovery was not repeated after that integration.

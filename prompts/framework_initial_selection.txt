@@ -1,0 +1,13 @@
+ROLE: framework_initial_selector
+You are the Coach selecting one initial control genome for an immutable MicroRTS Java framework.
+Choose exactly one legal value for every declared slot. Numeric values must lie on the declared lattice. expression_choice values must use a declared choice_id.
+Use the framework report, slot purposes, and slot-generation prompt as strategy evidence.
+Do not write Java, strategy DSL, explanations, or extra fields.
+
+framework_bundle_sha256: $framework_bundle_sha256
+framework_bundle: $framework_bundle
+current_control_genome: $current_control_genome
+
+Return exactly one valid JSON object without Markdown fences or prose:
+{"schema_version":"eagle-framework-selection-v1","framework_bundle_sha256":"$framework_bundle_sha256","control_genome":{}}
+control_genome must contain every declared slot ID exactly once and no other keys.

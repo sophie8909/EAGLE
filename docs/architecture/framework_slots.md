@@ -11,6 +11,89 @@ bootstrap boundary. The shared downstream Java and MicroRTS stages remain owned
 by [Java generation](java_generation.md) and the
 [evaluation pipeline](../evaluation/evaluation_pipeline.md).
 
+## Evolution policy
+
+`framework.evolution_mode` selects how complete `control_genome` values are
+chosen. It defaults to `local`, preserving seeded local sampling, per-slot
+crossover, and at-most-one-slot mutation. The opt-in `llm_coach` mode keeps the
+same bundle schema, exact-byte run freeze, active genotype, renderer, and
+materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
+part of run identity; resume rejects a mode mismatch.
+
+Bootstrap remains an explicit preparation step: `python -m eagle framework`
+uses the existing Groq GPT-OSS flow to design the Java framework and its rich
+finite control surface. Bootstrap is never run by an experiment. The bootstrap
+request targets at least 24 nonconstant slots, including at least six
+`expression_choice` slots with at least four distinct choices each, covering
+economy, production, targeting, combat, conditions, and priorities. These are
+requested design targets; slot counts do not prove that evolved agents achieve
+strategic diversity. Numeric domains remain finite lattices and formula domains
+remain enumerated expressions. Once the run starts, the bundle bytes, Java
+template, slot IDs, domains, and expressions are frozen.
+
+With `llm_coach`, the configured experiment model selects one complete initial
+genome for each generation-zero population slot and, when Strategy mutation is
+assigned, proposes one complete replacement genome for that child. Strategy
+mutation reuses the existing evidence path: use the evaluated mutation-context
+parent (parent A), distinct from the per-slot crossover donors, select exactly
+that parent's one worst completed match, have Match Commentator diagnose that
+match, then give the Coach that diagnosis and the parent's all-match summary.
+The Coach returns only the complete fixed-shape object below; it cannot
+edit the Java template, bundle, slot schema, prompts, or arbitrary Java:
+
+```json
+{
+  "schema_version": "eagle-framework-selection-v1",
+  "framework_bundle_sha256": "<exact-byte frozen hash>",
+  "control_genome": {
+    "<every exact bundle slot_id>": "<one legal value for that slot>"
+  }
+}
+```
+
+The genome must contain every bundle slot exactly once. Numeric values must be
+on their declared lattice; expression values must be declared `choice_id`
+strings. Unknown or missing slot IDs, extra response keys, arbitrary Java,
+prompt text, and values outside a slot's domain fail validation. Raw response
+bytes are persisted before parsing, and every bounded attempt has request,
+response, result, and timing evidence. Initial selection is candidate-owned under
+`initialization/framework_coach/`; failed selection retains the sampled genome
+and marks the candidate failed at `initialization`. Failed Strategy mutation
+preserves the child's complete pre-Coach genome and lineage, then marks it failed
+at `reflection`; it never substitutes a random genome or partially applies a
+response. `slot_parent_ids` continues to describe the pre-mutation genotype's
+slot sources, while Coach metadata and its result artifacts record the complete
+selected genome, changed slot IDs, and evidence parent.
+
+`llm_coach` makes no candidate-time Java-generation, Code Reflection, source
+repair, or compile-repair request. Its only candidate-time LLM work is initial
+genome selection and the existing Commentator/Coach Strategy path. Rendering
+and Java validation remain local and deterministic.
+
+
+## Minimal use
+
+Create and review the framework explicitly; the default model is the existing
+Groq GPT-OSS bootstrap model:
+
+```bash
+python -m eagle framework --output runs/framework_bootstrap/my_framework --brief "Design a complete CandidateAgent framework with a rich finite control surface."
+```
+
+Start from an ordinary experiment config that already contains the desired
+`model` profile and add this fragment:
+
+```yaml
+java_materialization_mode: framework_slots
+framework:
+  bundle_path: runs/framework_bootstrap/my_framework/bundle.json
+  evolution_mode: llm_coach
+```
+
+Then run that config through the usual `python -m eagle experiment` or
+`./experiment.sh` entrypoint. Omitting `evolution_mode` keeps the local EA
+behavior. The experiment never invokes the bootstrap command.
+
 ## Two-stage boundary
 
 1. An operator runs `python -m eagle framework` with a design brief and new
@@ -33,9 +116,11 @@ by [Java generation](java_generation.md) and the
    creation copies the validated bundle into run-owned evidence and freezes the
    same hash. Resume must use the run-frozen bytes and reject a version or hash
    mismatch.
-5. Generation zero samples legal values from the finite domains. Later local EA
+5. In `local`, generation zero samples legal values and later seeded EA
    operators cross over values independently by slot and mutate at most one slot
-   to another legal value. Rendering replaces every declared marker exactly once.
+   to another legal value. In `llm_coach`, the experiment model selects complete
+   generation-zero genomes and returns a complete genome for each assigned
+   Strategy mutation. Rendering replaces every declared marker exactly once.
 6. The complete rendered Java follows the existing validation, one-attempt
    `javac`, Integration, semantic-probe, and evaluation pipeline. Fixed-roster
    evaluation is still ten opponents x three maps x three rounds x two sides,
@@ -138,13 +223,15 @@ snapshots pin `framework_bundle_sha256`; lineage records `slot_parent_ids` for
 every slot. Framework source, report, and prompt are immutable run input, not
 candidate genes.
 
-Generation-zero sampling and variation derive independent per-slot RNG streams
-from the experiment seed and stable identities. Uniform crossover chooses each
-slot from one parent and retains exact slot provenance. Mutation selects at most
-one mutable slot and selects a different legal lattice point or expression
-choice. Equal seed, bundle, parents, generation, and child index must produce the
-same genome and source bytes regardless of mapping insertion order or worker
-completion order.
+In `local`, generation-zero sampling and variation derive independent per-slot
+RNG streams from the experiment seed and stable identities. Uniform crossover
+chooses each slot from one parent and retains exact slot provenance. Mutation
+selects at most one mutable slot and chooses a different legal lattice point or
+expression choice. Equal seed, bundle, parents, generation, and child index must
+produce the same genome and source bytes regardless of mapping insertion order
+or worker completion order. In `llm_coach`, initial selection and Strategy
+mutation return complete validated genomes; their external model outputs are
+recorded with exact bundle-hash and slot-domain validation evidence.
 
 This mode requires:
 
@@ -154,11 +241,14 @@ This mode requires:
 - evolution protocol and materializer version `eagle-framework-slots-v1`;
 - active genotype metadata `['control_genome']`.
 
-The local EA performs no candidate-time provider or other LLM request. Strategy
-Reflection, Prompt Reflection, Code Reflection/source gating, Java Generation,
-and compile-guided repair are all disabled. A render, validation, or compilation
-failure remains at its actual stage with hashes and diagnostics; it never falls
-back to an LLM.
+With `framework.evolution_mode: local`, the EA performs no candidate-time
+provider or other LLM request. Strategy Reflection, Prompt Reflection, Code
+Reflection/source gating, Java Generation, and compile-guided repair are all
+disabled. Under `llm_coach`, only initial genome selection and the
+Commentator/Coach Strategy path make candidate-time requests; Prompt Reflection,
+Code Reflection/source gating, Java Generation, source repair, and compile
+repair remain disabled. A render, validation, or compilation failure remains at
+its actual stage with hashes and diagnostics; it never falls back to an LLM.
 
 ## Bootstrap artifacts and security
 

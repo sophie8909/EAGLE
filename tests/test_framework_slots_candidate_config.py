@@ -193,6 +193,7 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                 "bundle_path": str(bundle.resolve()),
                 "bundle_version": FRAMEWORK_BUNDLE_VERSION,
                 "bundle_sha256": expected_hash,
+                "evolution_mode": "local",
             },
         )
         self.assertFalse(config.needs_llm_runtime)

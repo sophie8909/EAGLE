@@ -7,7 +7,8 @@
 
 | Stage | Success output | Failure evidence |
 | --- | --- | --- |
-| Java materialization | complete `CandidateAgent.java` from LLM decoding or deterministic DSL compilation | mode-specific generation/compiler evidence |
+| Framework genome selection | complete validated `control_genome` in `llm_coach` initialization or Strategy mutation | candidate-owned raw-before-parse attempts; `initialization` or `reflection` failure with the canonical objective sentinels |
+| Java materialization | complete `CandidateAgent.java` from LLM decoding, deterministic DSL compilation, or frozen framework rendering | mode-specific generation/compiler evidence |
 | Source validation | validated source | validation diagnostics |
 | Compilation | isolated class directory | compiler stdout/stderr and structured errors |
 | Integration | loadable MicroRTS agent | seven integration checks |

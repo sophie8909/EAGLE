@@ -76,7 +76,7 @@ def initialize_population(
             config.framework_bundle_path,
             expected_sha256=config.framework_bundle_sha256,
         )
-        return [
+        population = [
             Candidate(
                 id=derive_candidate_id(
                     config.random_seed,
@@ -105,6 +105,25 @@ def initialize_population(
             )
             for index in range(config.population_size)
         ]
+        if config.framework_evolution_mode == "llm_coach":
+            from eagle.operators.framework_coach import select_initial_framework_genome
+
+            if policy_backend is None or candidates_dir is None:
+                raise ValueError("framework llm_coach initialization requires a backend and artifact directory.")
+
+            def select_genome(candidate: Candidate) -> Candidate:
+                write_candidate_inputs(candidates_dir, candidate)
+                return select_initial_framework_genome(
+                    candidate, bundle, policy_backend,
+                    artifact_dir=candidates_dir / candidate.id,
+                    timing_logger=timing_logger,
+                    max_attempts=config.initial_policy_max_attempts,
+                    model_identity=config.llm_model,
+                    selection_seed=config.random_seed,
+                )
+
+            population = parallel_map(select_genome, population)
+        return population
 
     inherited_java = (
         config.initial_java_seed_path.read_text(encoding="utf-8")

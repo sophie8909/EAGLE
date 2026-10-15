@@ -24,8 +24,10 @@ scaffold.
 In `framework_slots`, the only active gene is `control_genome`: an exact mapping
 from every run-frozen bundle slot ID to one typed finite-domain value. The
 framework template, structured report, and `slot_generation_prompt` are immutable
-run inputs, never genes. Each candidate pins `framework_bundle_sha256`, uses
-`candidate_java_mode: generated_phenotype`, and records
+run inputs, never genes. `framework.evolution_mode` selects local seeded genome
+sampling/variation or Coach-assisted complete-genome selection/mutation without
+changing the active component. Each candidate pins `framework_bundle_sha256`,
+uses `candidate_java_mode: generated_phenotype`, and records
 `active_genotype_components: ["control_genome"]`. See
 [framework slots](framework_slots.md) for the exact bundle and domain schema.
 
@@ -65,8 +67,8 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 - In `framework_slots` mode, per-slot crossover chooses each value independently
   and mutation changes at most one slot to a different legal value. Every slot
   has `slot_parent_ids` provenance; prompt/Java component provenance is absent.
-- Strategy mutation may change only `strategy_prompt` in either materialization
-  mode.
+- Strategy mutation changes only `strategy_prompt` in LLM and deterministic
+  DSL modes; framework `llm_coach` may replace the complete `control_genome`.
 - Prompt Reflection may change only `generation_prompt` in `llm` mode and is
   disabled in deterministic mode.
 - Code Reflection preserves active genes and revises Java only in `llm` mode;

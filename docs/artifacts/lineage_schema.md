@@ -61,7 +61,13 @@ bundle, and `slot_parent_ids` maps exactly every bundle slot ID to the candidate
 that supplied its value. `source_candidate_ids` is the stable ordered unique set
 of those values. Generation-zero candidates have empty parents and an empty
 slot-parent map; later copy, per-slot crossover, and one-slot mutation retain
-complete provenance independent of whether two values happen to be equal.
-Framework lineage does not contain policy, generation-prompt, or Java-parent
-fields. Resume verifies the slot keys and every referenced parent against the
-frozen bundle and prior generation before reconstruction.
+complete provenance independent of whether two values happen to be equal. With
+`framework.evolution_mode: llm_coach`, initial selection still has no parent
+lineage. `slot_parent_ids` retains the pre-mutation genotype's per-slot sources,
+including selected crossover donors; it is not rewritten to the evidence parent
+when Coach proposes a complete genome. Compact candidate metadata records the evidence parent and changed slot IDs;
+request/result artifacts record the previous genome, selected genome, and
+Coach evidence. Framework lineage does
+not contain policy, generation-prompt, or Java-parent fields. Resume verifies the
+slot keys and every referenced parent against the frozen bundle and prior
+generation before reconstruction. The evolution mode is also compared on resume.

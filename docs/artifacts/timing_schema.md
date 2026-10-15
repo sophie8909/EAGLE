@@ -246,17 +246,29 @@ compile-repair `llm_request` timing event. LLM-mode timing remains unchanged.
 
 ## Framework-slot timing
 
-Candidate-time framework rendering uses the same
-`eagle-java-materialization-v1` `java_materialization` envelope with mode
-`framework_slots`, compiler/materializer version `eagle-framework-slots-v1`,
-operation `framework_slot_assembly`, UTC boundaries, monotonic duration, status,
-and nullable error. Validation, compilation, Integration, semantic probe, and
-matches retain their existing timing owners. `generation_llm` and all reflection
-streams are null with empty attempts, and the run emits no candidate-time
-`llm_request` event.
+Framework rendering uses the same `eagle-java-materialization-v1`
+`java_materialization` envelope with mode `framework_slots`,
+compiler/materializer version `eagle-framework-slots-v1`, operation
+`framework_slot_assembly`, UTC boundaries, monotonic duration, status, and
+nullable error. Validation, compilation, Integration, semantic probe, and
+matches retain their existing timing owners. `generation_llm` is null with empty
+attempts in both evolution policies. Under `framework.evolution_mode: local`,
+all reflection streams are null with empty attempts and the run emits no
+candidate-time `llm_request` event.
 
 The explicit Groq bootstrap is outside run/candidate timing. Its standalone
 `bootstrap.json` and per-attempt `result.json` retain UTC boundaries, monotonic
 duration, success/failure/retryability, HTTP status, and request/response hashes.
 Those records must not be copied into `timing.jsonl` or charged to any candidate,
 generation, or EA operator.
+
+For `framework.evolution_mode: llm_coach`, each initial-selection and Coach
+request retains a bounded attempt record with UTC boundaries, monotonic duration,
+status, and its request/raw-response artifacts. Each actual request has one
+run-level `llm_request` event. Initial selection is recorded as initialization
+work; Match Commentator and Coach use their existing role timing owners. The
+candidate `reflection_llm` envelope retains the actual role attempts and their
+summed duration so generation LLM aggregates include these calls. These
+calls do not populate `generation_llm`, which remains null with empty attempts
+because no Java Generator runs. Local framework evolution has no LLM attempts or
+request events. Bootstrap timing remains separate from both modes.

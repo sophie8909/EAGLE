@@ -8,8 +8,9 @@ compilation, or run-frozen framework-slot rendering. Deterministic DSL and
 framework-slot configurations require `candidate_java_mode: generated_phenotype`
 and `parent_evaluation_mode: reuse_cached`. Framework-slot mode is a two-stage
 protocol: an explicit one-time Groq bootstrap creates the complete framework
-and finite domains; the experiment performs only local deterministic EA. The
-active evolutionary contract is documented in
+and finite domains. `framework.evolution_mode` defaults to local deterministic
+EA; opt-in `llm_coach` uses the experiment model for initial genome selection and
+Strategy mutation while Java rendering stays local. The active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
 
 ## System boundary
@@ -21,8 +22,9 @@ In scope:
 - whole-policy crossover/copy and Strategy Reflection in deterministic DSL
   mode; LLM mode additionally supports Prompt Reflection, Code Reflection, and
   Java generation;
-- per-slot crossover and one-slot mutation over finite `integer`, `number`, or
-  enumerated `expression_choice` domains in framework-slot mode;
+- per-slot crossover and local one-slot mutation, or opt-in complete-genome
+  Coach selection/mutation, over finite `integer`, `number`, or enumerated
+  `expression_choice` domains in framework-slot mode;
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
@@ -40,7 +42,7 @@ telemetry remain diagnostics. They are not additional evolutionary objectives.
 flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
-    L --> Z["Generation 0: configured or LLM-generated policies"]
+    L --> Z["Generation 0: configured policy, sampled genome, or LLM selection"]
     L -->|LLM roles enabled| RT["Owned local llama.cpp primary"]
     L -->|optional per phase| EXT["Unmanaged additional endpoint"]
     RT --> PF["Fail-closed chat preflight for all endpoints"]
@@ -54,9 +56,12 @@ flowchart TD
     GATE -->|Defect| CR["One-parent corrective child; preserve genes"]
     GATE -->|Diagnosis failure| FAIL["Failed child; no crossover/mutation"]
     CG -->|deterministic_dsl| XDSL["Whole-policy copy/crossover"]
-    CG -->|framework_slots| XFS["Local per-slot crossover/mutation"]
+    CG -->|framework_slots| FM{"Framework evolution mode"}
+    FM -->|local| XFS["Local per-slot crossover/mutation"]
+    FM -->|llm_coach| XFC["Complete-genome selection/Coach mutation"]
     XDSL --> M
     XFS --> SW
+    XFC --> SW
     X --> M{"Run mode-allowed reflection work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Prompt (llm only)| PR["Prompt Reflection + prompt rewrite"]
@@ -124,11 +129,13 @@ flowchart TD
   policy component: crossover copies a whole policy, Strategy mutation remains
   enabled, and Prompt Reflection, Code Reflection/source repair, and Java LLM
   generation/repair are disabled.
-- Under `framework_slots`, an external one-time Groq bootstrap is the only LLM
-  boundary. The run freezes the exact `eagle-framework-bundle-v1` bytes and
-  SHA-256; candidates evolve only `control_genome`. Formula-like control is an
-  enumerated choice among bundle-frozen Java expressions. Strategy/Prompt/Code
-  Reflection, source gating, Java Generation, and repair are disabled.
+- Under `framework_slots`, an external one-time Groq bootstrap freezes the
+  `eagle-framework-bundle-v1` bytes and SHA-256; candidates evolve only
+  `control_genome`. The local default uses seeded EA operators. Opt-in
+  `llm_coach` uses the experiment model for initial complete-genome selection
+  and the one-worst-match Commentator/Coach Strategy path. Formula-like control
+  remains an enumerated choice among bundle-frozen Java expressions. Prompt/Code
+  Reflection, source gating, Java Generation, and Java repair are disabled.
 - LLM-mode Code diagnosis has only strategy fidelity and code correctness; cosmetic
   simplification is forbidden and ambiguous/correct Java needs no revision.
 - `model` handles initialization and mode-allowed reflection/rewrite work. In

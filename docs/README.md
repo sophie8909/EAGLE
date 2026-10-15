@@ -23,7 +23,7 @@ When code and the specification differ, preserve the specification and update [`
 | Modify Strategy/Prompt mutation or Code source gating | [architecture spec](eagle_architecture_spec.md) + [mutation](architecture/mutation.md) + [artifact schema](artifacts/artifact_schema.md) + [timing schema](artifacts/timing_schema.md) |
 | Modify Uniform Crossover | [architecture spec](eagle_architecture_spec.md) + [crossover](architecture/crossover.md) + [lineage schema](artifacts/lineage_schema.md) |
 | Modify Java generation, validation, or compilation | [architecture spec](eagle_architecture_spec.md) + [Java generation](architecture/java_generation.md) + [failure classification](evaluation/failure_classification.md) |
-| Modify Groq framework bootstrap or finite slot evolution | [framework slots](architecture/framework_slots.md) + [candidate model](architecture/candidate_model.md) + [artifact schema](artifacts/artifact_schema.md) |
+| Modify Groq framework bootstrap, local slots, or Coach-assisted slot evolution | [framework slots](architecture/framework_slots.md) + [candidate model](architecture/candidate_model.md) + [artifact schema](artifacts/artifact_schema.md) |
 | Modify MicroRTS execution | [evaluation pipeline](evaluation/evaluation_pipeline.md) + [failure classification](evaluation/failure_classification.md) + [artifact schema](artifacts/artifact_schema.md) |
 | Modify `game_performance` | [game performance](evaluation/game_performance.md) + [evaluation pipeline](evaluation/evaluation_pipeline.md) |
 | Modify `code_quality` | [code quality](evaluation/code_quality.md) + [failure classification](evaluation/failure_classification.md) |
@@ -49,7 +49,7 @@ The [2026-10-02 refactor plan](implementation/maintainability_refactor_plan.md) 
 | Uniform Crossover | [`architecture/crossover.md`](architecture/crossover.md) |
 | Strategy/Prompt mutation and Code source gate | [`architecture/mutation.md`](architecture/mutation.md) |
 | Full-file Java generation, validation, and compilation | [`architecture/java_generation.md`](architecture/java_generation.md) |
-| One-time Groq framework bootstrap and finite slot evolution | [`architecture/framework_slots.md`](architecture/framework_slots.md) |
+| Framework bootstrap, finite slots, and local/Coach evolution policy | [`architecture/framework_slots.md`](architecture/framework_slots.md) |
 | Evaluation protocol | [`evaluation/evaluation_pipeline.md`](evaluation/evaluation_pipeline.md) |
 | `game_performance` formula | [`evaluation/game_performance.md`](evaluation/game_performance.md) |
 | Successful `code_quality` formula | [`evaluation/code_quality.md`](evaluation/code_quality.md) |

@@ -109,6 +109,7 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "framework_bundle_version": config.framework_bundle_version if config.java_materialization_mode == "framework_slots" else None,
             "framework_bundle_sha256": config.framework_bundle_sha256 if config.java_materialization_mode == "framework_slots" else None,
             "framework_bundle_artifact": FRAMEWORK_BUNDLE_ARTIFACT if config.java_materialization_mode == "framework_slots" else None,
+            "framework_evolution_mode": config.framework_evolution_mode if config.java_materialization_mode == "framework_slots" else None,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "run_id": run_dir.name,
             "created_at": utc_now(),

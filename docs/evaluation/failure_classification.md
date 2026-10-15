@@ -1,6 +1,6 @@
 # Failure classification and objective sentinels
 
-The evaluation pipeline records the first terminal stage and retains all earlier evidence. A candidate that fails materialization, validation, compilation, integration, runtime execution, timeout handling, or the expected complete batch receives the same objective sentinel:
+The evaluation pipeline records the first terminal stage and retains all earlier evidence. Framework Coach selection failures before rendering retain the candidate's complete genome and use `failure_stage: initialization` for generation-zero selection or `failure_stage: reflection` for Strategy mutation. They receive the same objective sentinel as failures in materialization, validation, compilation, integration, runtime execution, timeout handling, or the expected complete batch:
 
 | Objective | Failure value | Direction |
 | --- | ---: | --- |
@@ -14,7 +14,7 @@ diagnostics, validation diagnostics, integration results, retained matches,
 and any diagnostic complexity metrics remain available in artifacts and
 reflection context.
 
-LLM-mode bounded Java decoding retains each attempt's request, source, structured failure evidence, and repair-chain reference. A complete validation or javac failure may guide the next decoder attempt; extraction failure repeats the base request. The first successful validation and compilation proceeds to Integration. If the attempt budget is exhausted, the final attempt determines the terminal failure. Deterministic DSL materialization has no Java generation or compile-repair LLM: a compiler, validation, or javac failure is terminal and retains stage evidence.
+LLM-mode bounded Java decoding retains each attempt's request, source, structured failure evidence, and repair-chain reference. A complete validation or javac failure may guide the next decoder attempt; extraction failure repeats the base request. The first successful validation and compilation proceeds to Integration. If the attempt budget is exhausted, the final attempt determines the terminal failure. Deterministic DSL and framework-slot materialization have no Java generation or compile-repair LLM: a compiler, validation, or javac failure is terminal and retains stage evidence. In framework `llm_coach`, an invalid/exhausted initial genome selection fails at initialization; an invalid/exhausted Coach mutation fails at reflection and retains the child genome that existed before the Coach call. Neither failure falls back to a random genome.
 The Integration boundary is not a decoder-repair input. It runs a real
 populated 8×8 two-side probe with independent agent instances/states and checks
 `PlayerAction` integrity, safe issuance, and one cycle; an exception or invalid

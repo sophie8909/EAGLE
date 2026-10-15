@@ -65,6 +65,7 @@ def plan_offspring(
             population,
             config=config,
             generation=generation,
+            mutations=mutations,
         )
     deterministic = config.java_materialization_mode == "deterministic_dsl"
     if not deterministic and "code" not in mutations:
@@ -329,8 +330,9 @@ def _plan_framework_slot_offspring(
     *,
     config: ExperimentConfig,
     generation: int,
+    mutations: dict[str, Any],
 ) -> list[OffspringPlan]:
-    """Plan framework children using only deterministic typed-slot operators."""
+    """Plan typed-slot crossover and either local or Coach-guided mutation."""
 
     if config.framework_bundle_path is None or config.framework_bundle_sha256 is None:
         raise ValueError("framework_slots reproduction requires a validated bundle.")
@@ -348,6 +350,9 @@ def _plan_framework_slot_offspring(
             )
         validate_genome(bundle, parent.control_genome)
 
+    framework_coach = config.framework_evolution_mode == "llm_coach"
+    if framework_coach and "strategy" not in mutations:
+        raise ValueError("framework llm_coach reproduction requires the Strategy Coach.")
     plans: list[OffspringPlan] = []
     for context_index in range(config.population_size):
         parent_a_rng = random.Random(
@@ -410,7 +415,8 @@ def _plan_framework_slot_offspring(
         mutation_record: dict[str, Any] | None = None
         mutation_timing: dict[str, Any] | None = None
         mutation_type: str | None = None
-        if mutation_rng.random() < config.mutation_rate:
+        use_mutation = mutation_rng.random() < config.mutation_rate
+        if use_mutation and not framework_coach:
             mutation_started_at = utc_now()
             mutation_started = time.monotonic()
             mutated = mutate_framework_slot(
@@ -483,11 +489,28 @@ def _plan_framework_slot_offspring(
             timing=timing,
             metadata=metadata,
         )
+        mutation_context = None
+        if framework_coach and use_mutation:
+            mutation_context = mutation_context_from_candidate(
+                parent_a, generation=generation, index=context_index,
+                reflection_type="strategy", evolution_candidate=child,
+            )
+            mutation_context = replace(
+                mutation_context,
+                parent_comparison={
+                    **mutation_context.parent_comparison,
+                    "framework_control_genome": dict(parent_a.control_genome),
+                },
+            )
         plans.append(
             OffspringPlan(
                 candidate=child,
                 context_index=context_index,
                 parent_selection_duration=parent_selection_duration,
+                mutation_name="strategy" if mutation_context is not None else None,
+                mutation=mutations.get("strategy") if mutation_context is not None else None,
+                mutation_context=mutation_context,
+                comparison_parent_id=parent_a.id if mutation_context is not None else None,
             )
         )
 
@@ -544,6 +567,11 @@ def apply_offspring_mutations(
             )
         mutation_record = child.metadata.get("mutation") or {}
         mutation_applied = bool(mutation_record.get("applied"))
+        framework_selected = (
+            child.java_materialization_mode == "framework_slots"
+            and mutation_record.get("reflection_status") == "success"
+            and child.failure_stage is None
+        )
         code_diagnosed = (
             plan.mutation_name == "code"
             and mutation_record.get("reflection_status") == "success"
@@ -562,7 +590,7 @@ def apply_offspring_mutations(
                 "finished_at": utc_now(),
                 "generation_only_duration_seconds": max(0.0, time.monotonic() - mutation_started),
                 "parent_selection_duration_seconds": plan.parent_selection_duration,
-                "status": "success" if mutation_applied or code_diagnosed else "failed",
+                "status": "success" if mutation_applied or code_diagnosed or framework_selected else "failed",
                 "error": mutation_error,
             },
         })
@@ -579,7 +607,7 @@ def apply_offspring_mutations(
                 "eligible_operator_ids": list(plan.eligible_operator_ids),
             },
         })
-        mutation_status = "completed" if mutation_applied or code_diagnosed else "failed"
+        mutation_status = "completed" if mutation_applied or code_diagnosed or framework_selected else "failed"
         pending_suffix = (
             " materialization=pending"
             if mutation_record.get("revision_status") == "pending"

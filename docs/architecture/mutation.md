@@ -179,12 +179,21 @@ Reflection, Code Reflection/source repair, and the pre-crossover Java source gat
 are disabled. The active genotype is one complete policy component, with no
 rule-level crossover. Existing Strategy Reflection changes only that policy.
 
-In `framework_slots`, none of the reflection or source-gate workflows in this
-document run. Mutation is a local seeded operation over the exact finite domains
-in the run-frozen bundle: it chooses at most one mutable slot and replaces its
-value with a different legal lattice point or enumerated `choice_id`. Formula
-mutation selects a predeclared Java expression; it cannot write expression text.
-There is no candidate-time LLM prompt, diagnosis, reflection, source repair,
-Java Generation, or compile repair, and static mode records no fabricated AOS
-credit. Per-slot crossover/mutation provenance is defined by
-[framework slots](framework_slots.md) and the [lineage schema](../artifacts/lineage_schema.md).
+In `framework_slots`, `framework.evolution_mode: local` uses seeded mutation over
+the exact finite domains in the run-frozen bundle: it chooses at most one
+mutable slot and replaces its value with a different legal lattice point or
+enumerated `choice_id`. Formula mutation selects a predeclared Java expression;
+it cannot write expression text. No reflection, diagnosis, source repair, Java
+Generation, or compile repair runs, and static mode records no fabricated AOS
+credit.
+
+With `framework.evolution_mode: llm_coach`, Strategy mutation uses the existing
+worst-completed-match selection and Match Commentator, then asks the Coach for a
+complete `eagle-framework-selection-v1` genome. The Coach receives the single
+match diagnosis and all-match parent summary. Its output must match the frozen
+bundle hash and every slot's exact legal domain. A bounded invalid/exhausted
+attempt preserves the complete genome the child held before the Coach call and fails the child; there is no random or
+partial fallback. Initial genome selection follows the same fixed response
+schema. These are the only candidate-time LLM requests in this mode; Java
+rendering remains local. Per-slot provenance is defined by [framework
+slots](framework_slots.md) and the [lineage schema](../artifacts/lineage_schema.md).

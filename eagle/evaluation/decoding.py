@@ -474,6 +474,8 @@ def _materialize_framework_slots(
     immutable_scaffold_source: str | None = None
     failure: str | None = None
     try:
+        if config.framework_evolution_mode == "llm_coach" and candidate.failure_stage:
+            raise ValueError(candidate.failure_reason or "Framework option selection failed.")
         bundle = load_framework_bundle(
             config.framework_bundle_path,
             expected_sha256=config.framework_bundle_sha256,
@@ -555,7 +557,7 @@ def _materialize_framework_slots(
         validation_result=validation,
         validation_timing=validation_timing,
         agent=agent,
-        failure_stage="materialization" if failure else None if validation.ok else "validation",
+        failure_stage=(candidate.failure_stage or "materialization") if failure else None if validation.ok else "validation",
         failure_reason=failure or validation.error or None,
     )
     compilation = {

@@ -1,7 +1,7 @@
 Groq GPT-OSS Framework Design stage.
 
 Design one complete Java MicroRTS CandidateAgent framework whose evolutionary
-variation is restricted to a small, explicit set of typed slots. The framework
+variation is restricted to a rich, explicit set of finite typed slots. The framework
 itself is immutable after this bootstrap call. Later evolutionary code may
 replace only the declared slot markers; it must never ask an LLM to regenerate
 the framework.
@@ -35,11 +35,26 @@ additional semantic requirements:
 - Expression-choice slots have null minimum/maximum/step. Their default is one
   declared choice_id. Every choice is one side-effect-free Java expression,
   not a statement, method, block, declaration, patch, or complete source file.
-- Prefer a small set of high-leverage, orthogonal controls. Do not expose file,
+- Provide enough independently combinable rules and parameters for meaningful
+  evolutionary search: target at least 24 nonconstant slots, including at least
+  6 expression-choice slots with at least 4 behaviorally distinct choices each.
+  Cover economy/harvesting, expansion/building, unit production/composition,
+  target selection, combat/movement/retreat, and state-dependent conditions and
+  rule priorities. Use numeric controls for thresholds, ratios, and priorities,
+  and expression choices to select genuinely different decision rules, not just
+  alternate names or a menu of complete fixed strategies.
+- Every exposed control must influence a reachable decision. Choices must be
+  type-compatible at their marker, valid in their Java scope, and composable
+  with the other controls. Keep legality checks and a deterministic fallback
+  outside the configurable choices; explain interactions in the report.
+- Do not expose file,
   network, reflection, process, class-loading, environment, or runtime-LLM APIs.
 - slot_generation_prompt is a complete reusable prompt that asks another model
-  for only a JSON mapping from every slot_id to a legal value/choice_id. It must
-  restate bounds and choices and forbid Java/framework rewrites.
+  for only the fixed JSON selection envelope supplied by the experiment,
+  containing every slot_id mapped to a legal value/choice_id in control_genome.
+  It must restate bounds, choices, and their behavioral meaning, and forbid
+  Java/framework rewrites. The experiment supplies the exact-byte bundle hash;
+  never invent a hash or add explanatory fields to the selection envelope.
 - report is structural rather than prose wrapped around the bundle. It records
   architecture summary, ordered decision flow, invariants, assumptions, and
   risks. `slot_rationale` is an object whose keys are exactly all declared

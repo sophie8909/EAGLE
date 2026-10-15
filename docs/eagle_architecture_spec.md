@@ -722,8 +722,9 @@ two-stage boundary. Before a run, `python -m eagle framework` performs one
 bounded Groq `chat-completions` bootstrap using the checked-in gameplay and API
 contracts. It persists every credential-free request and raw response before
 parsing and publishes one strictly validated `eagle-framework-bundle-v1`.
-Bootstrap is never implicit in experiment startup and is the only Groq/LLM
-work in this mode.
+Bootstrap is never implicit in experiment startup. It is the only Groq call;
+`framework.evolution_mode` separately selects local evolution (the default) or
+the opt-in Coach-assisted selection path described below.
 
 The structured bundle has exactly `schema_version`, `framework_id`,
 `java_template`, `slots`, `slot_generation_prompt`, and `report`. Each slot has
@@ -742,23 +743,41 @@ schema and bootstrap prompt contract are canonical in
 Config resolution validates the exact bundle bytes and records their schema
 version and SHA-256. Run creation freezes a run-owned copy; resume rejects
 version/hash drift and never adopts a changed external file. The only active
-candidate component is `control_genome`. Generation zero samples complete legal
-genomes; seeded local uniform crossover selects each slot independently with
-`slot_parent_ids`, and local mutation changes at most one slot to a different
-legal value. Equal bundle/genome/materializer inputs produce byte-identical
-complete Java and reconstructible hashes.
+candidate component is `control_genome`. In the default `local` evolution policy,
+generation zero samples complete legal genomes; seeded uniform crossover selects
+each slot independently with `slot_parent_ids`, and mutation changes at most one
+slot to a different legal value. `llm_coach` instead requests one complete legal
+genome for each initial slot and uses the Coach for each assigned Strategy
+mutation; validation is against the same frozen bundle. Equal bundle/genome/
+materializer inputs produce byte-identical complete Java and reconstructible
+hashes.
 
 Framework-slot mode uses `candidate_java_mode: generated_phenotype`,
 `parent_evaluation_mode: reuse_cached`, `reflection_operator_mode: static`, and
-protocol/materializer version `eagle-framework-slots-v1`. It performs no
-candidate-time LLM generation, Strategy/Prompt/Code Reflection, source repair,
-or compile repair. Render failure has no fallback. Successfully rendered source
-continues through the unchanged security validation, one javac, Integration,
-semantic probe, objectives, parent-plus-offspring selection, and ten-opponent x
-three-map x three-round x two-side evaluation.
+protocol/materializer version `eagle-framework-slots-v1`. The default
+`framework.evolution_mode: local` performs no candidate-time LLM request. The
+opt-in `llm_coach` mode uses the configured experiment model only for initial
+complete-genome selection and the existing one-worst-match Commentator/Coach
+Strategy path. It does not call a Java Generator, Code Reflection, source repair,
+or compile repair. Both modes render locally, and render failure has no fallback.
+Successfully rendered source continues through unchanged security validation,
+one javac, Integration, semantic probe, objectives, parent-plus-offspring
+selection, and ten-opponent x three-map x three-round x two-side evaluation.
+The bundle, slot domains, template, materializer version, and bundle hash remain
+frozen across both evolution policies; resume also compares the resolved
+`framework.evolution_mode`.
 
 `GROQ_API_KEY` is accepted only from the bootstrap process environment and is
 never written to prompt, request, config, bootstrap, run, candidate, or failure
 artifacts. Raw provider output and structured report are untrusted evidence;
 schema validation, Java-envelope checks, ordinary validation, javac, and
 Integration remain mandatory trust boundaries.
+
+In `llm_coach`, each initial-selection and Coach response must be exactly an
+`eagle-framework-selection-v1` object with `schema_version`, the run-frozen
+`framework_bundle_sha256`, and a complete `control_genome`. Every slot key must
+match the bundle exactly and every value must belong to its finite domain;
+expression slots contain declared `choice_id` values only. Raw responses are
+persisted before parsing, attempts are bounded and timed, and invalid/exhausted
+initial selection fails initialization. Invalid/exhausted mutation retains the complete pre-Coach child genome on a
+failed child and does not choose a random fallback.

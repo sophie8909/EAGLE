@@ -98,6 +98,9 @@ search and rewrites the in-memory config path to that run-owned file. The
 manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
 `framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable;
 resume validates its exact bytes and never adopts a changed external bundle.
+The resolved `framework.evolution_mode` is persisted as run configuration,
+defaults to `local`, and must match on resume; it does not alter the bundle or
+materializer version.
 
 ## Generation snapshot
 
@@ -211,6 +214,19 @@ Framework evidence schema `eagle-framework-materialization-v1` records operation
 canonical bundle hashes, template/genome/source hashes, complete control genome,
 and slot provenance. Successful compilation still promotes the only canonical
 phenotype to `phenotype/CandidateAgent.java`.
+
+Under `framework.evolution_mode: llm_coach`, initial selection artifacts live
+under the candidate's `initialization/framework_coach/` directory; the stage
+retains `input.json`, numbered `coach_request_attempt_NNN.json` and
+`coach_response_attempt_NNN.json` files, `coach_call.json`, and either
+`selection.json` or `failure.json`. Strategy
+mutation retains its Commentator and Coach attempts under the candidate's
+`mutation/strategy_reflection/` owner. The exact response schema is
+`eagle-framework-selection-v1`; raw bytes precede parsing, and each attempt
+records validation outcome and timing. A failed initial selection has
+`failure_stage: initialization`; a failed Coach child retains its pre-Coach
+complete `control_genome`, records `failure_stage: reflection`, and is not
+silently replaced by random values. Local mode has no such LLM artifacts.
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, active-mode fitness, aggregate Game Performance, compact executable semantic summary, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Full canonical probe actions remain in the run-local cache rather than the index. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 

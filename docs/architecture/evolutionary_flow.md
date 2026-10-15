@@ -214,11 +214,13 @@ their declared lattices. Formula controls select a declared `choice_id`; their
 Java expressions are immutable bundle data. No policy, prompt, Java body, or
 free-form formula is generated during evolution.
 
-Each child is deterministically rendered from the run-frozen template and
-complete control genome, then enters the existing validation, one `javac`,
-Integration, semantic probe, and 180-match fixed-roster evaluation (or the
-configured unchanged self-play path). Render/validation/compiler failure has no
-LLM fallback. Parent-plus-offspring survivor selection and objective formulas are
-identical to the other modes. Strategy, Prompt, and Code Reflection, source
-gating, Java Generation, and compile repair do not run and receive no timing or
-AOS record.
+Each child is rendered locally from the run-frozen template and complete
+control genome, then enters the existing validation, one `javac`, Integration,
+semantic probe, and 180-match fixed-roster evaluation (or the configured
+unchanged self-play path). In `local`, genome selection and variation use seeded
+EA operators and no LLM. In `llm_coach`, the experiment model selects each
+initial complete genome and Strategy mutation uses the existing one-worst-match
+Commentator→Coach evidence path to return a complete genome. Both modes preserve
+parent-plus-offspring survivor selection and objective formulas. Prompt and Code
+Reflection, source gating, Java Generation, and compile repair remain disabled;
+render/validation/compiler failure has no LLM fallback.

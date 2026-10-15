@@ -58,16 +58,21 @@ framework:
   # Optional input fences; config resolution always fills both in config.yaml.
   bundle_version: eagle-framework-bundle-v1
   bundle_sha256: <sha256-of-exact-bundle.json-bytes>
+  # Optional; defaults to local. Use llm_coach for Coach-selected full genomes.
+  evolution_mode: llm_coach
 ```
 
 Keep the normal population, generation, evaluation-map, opponent, and runtime
-settings. EAGLE validates the bundle at config load, copies it to
-`runs/<run_id>/framework/bundle.json`, records the exact byte hash, and runs
-without an LLM server. Generation zero samples finite slot values; later EA work
-uses only seeded local per-slot crossover and one-slot mutation. Formula controls
-are choice IDs for bundle-frozen Java expressions. Validation, javac,
-Integration, semantic probing, and the configured 180-match fixed-roster matrix
-remain unchanged. See [framework slots](../architecture/framework_slots.md).
+settings, including the model profile used by the experiment. EAGLE validates
+the bundle at config load, copies it to `runs/<run_id>/framework/bundle.json`,
+records the exact byte hash, and compares `evolution_mode` on resume. The
+`local` default samples finite slot values and uses seeded per-slot crossover
+and one-slot mutation without candidate-time LLM requests. `llm_coach` asks the
+experiment model for initial complete genomes and uses the existing one-worst-
+match Commentator/Coach path for Strategy mutation. Neither mode calls a Java
+Generator or repair model; rendering, validation, javac, Integration, semantic
+probing, and the configured 180-match fixed-roster matrix remain unchanged. See
+[framework slots](../architecture/framework_slots.md).
 
 The resolved `model` section selects the GGUF, llama-server executable, host,
 port, per-request context size, batch size, and health/startup timeouts. An
