@@ -17,8 +17,8 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/__main__.py` | Dispatches `experiment`, `analyze`, read-only `monitor`, and explicit Gemini framework bootstrap |
-| `eagle/cli/framework.py` | One-time Gemini framework-bootstrap arguments and exit codes |
+| `eagle/__main__.py` | Dispatches `experiment`, `analyze`, read-only `monitor`, and explicit Groq framework bootstrap |
+| `eagle/cli/framework.py` | One-time Groq framework-bootstrap arguments and exit codes |
 | `eagle/cli/monitor.py` | Local experiment monitor arguments and server lifecycle |
 | `eagle/monitoring.py` | Canonical run status collection and read-only HTTP API |
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
@@ -62,7 +62,7 @@ kept as documentation entries.
 | Path | Responsibility |
 | --- | --- |
 | `eagle/generation/backend.py` | LLM-mode mock/OpenAI-compatible complete-source generation |
-| `eagle/generation/gemini_framework.py` | Standalone Gemini structured bootstrap, bounded attempt evidence, and normalized bundle publication |
+| `eagle/generation/groq_framework.py` | Standalone Groq structured bootstrap, bounded attempt evidence, and normalized bundle publication |
 | `eagle/generation/framework_slots.py` | Strict bundle/genome validation, finite domains, hashing, seeded sampling, and deterministic marker rendering |
 | `eagle/generation/java_agent_generator.py` | LLM-mode complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
 | `eagle/generation/agent_template.py` | Java template and canonical scaffold assembly contract |

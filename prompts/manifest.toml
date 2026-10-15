@@ -168,8 +168,8 @@ role = "preflight"
 stages = ["endpoint_preflight"]
 required_variables = []
 
-[prompts.gemini_framework_design]
-file = "gemini_framework_design.txt"
+[prompts.groq_framework_design]
+file = "groq_framework_design.txt"
 role = "generator"
 stages = ["framework_bootstrap"]
 required_variables = ["design_brief", "gameplay_contract", "action_api_guide"]

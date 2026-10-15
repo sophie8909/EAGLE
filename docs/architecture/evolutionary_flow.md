@@ -191,7 +191,7 @@ LLM. Resolved protocol/compiler versions are `eagle-dsl-compiler-v1` and
 
 ## Framework-slot evolution
 
-Before the experiment, the operator explicitly creates and reviews one Gemini
+Before the experiment, the operator explicitly creates and reviews one Groq
 bundle as specified by [framework slots](framework_slots.md). The run copies and
 hash-pins that bundle. Generation zero samples one complete valid
 `control_genome` per population slot with independent derived RNG streams.

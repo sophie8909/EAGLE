@@ -178,15 +178,16 @@ by unit/regression tests; a real fixed-roster smoke requires that existing asset
 The 1- and 10-tick trial caps were too short for three distinct actionable phases;
 the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.
 
-## Gemini framework and finite slots
+## Groq framework and finite slots
 
-Tests must prove the bootstrap uses native Gemini `generateContent` structured
-JSON with the REST enum encoding required by `responseFormat`; persists
-credential-free requests and raw bytes before parsing; retains failed attempts;
-surfaces bounded provider error diagnostics; applies bounded retry
-classification; validates the exact bundle/report/marker schema; normalizes the
-selected bundle; and never persists `GEMINI_API_KEY`. CLI dispatch and
-non-overwrite behavior are contracts.
+Tests must prove the bootstrap sends user-message content, model, temperature,
+and `max_completion_tokens` to the Groq Chat Completions endpoint; requests
+`response_format` JSON Schema named `eagle_framework` with `strict: false`; and
+persists credential-free requests and raw bytes before parsing. They also cover
+failed attempts, bounded provider diagnostics and retry classification, exact
+bundle/report/marker validation, normalized bundle selection, and that
+`GROQ_API_KEY` is never persisted. Provider schema enforcement is best-effort;
+local exact validation, CLI dispatch, and non-overwrite behavior are contracts.
 
 Core tests must cover exact-key rejection, finite numeric lattices, enumerated
 expression choices, canonical hashes, insertion-order-independent rendering,
@@ -205,7 +206,7 @@ fail before replay. The focused command is:
 
 ```bash
 python3 -m unittest \
-  tests.test_gemini_framework \
+  tests.test_groq_framework \
   tests.test_framework_slots \
   tests.test_framework_slots_candidate_config \
   tests.test_framework_slots_artifacts \

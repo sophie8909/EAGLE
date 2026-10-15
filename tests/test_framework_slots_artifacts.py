@@ -282,7 +282,7 @@ class FrameworkSlotsArtifactTests(unittest.TestCase):
             root = Path(directory)
             _, source_config, frozen, _ = self.initialize_run(root)
             with patch(
-                "eagle.generation.gemini_framework.generate_framework_bundle"
+                "eagle.generation.groq_framework.generate_framework_bundle"
             ) as generate:
                 persisted = load_resume_config(root / "run")
             generate.assert_not_called()

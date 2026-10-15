@@ -195,6 +195,6 @@ The rendered complete source follows the same external/security validation,
 isolated `javac`, Integration, semantic probe, and match evaluation as other
 modes. It does not use the LLM Generator, Code Reflection/source gate, Prompt or
 Strategy Reflection, or compile-guided repair. Render, validation, or javac
-failure retains exact stage evidence and never falls back to Gemini or another
-LLM. The one-time Gemini creation step and exact bundle schema are owned by
+failure retains exact stage evidence and never falls back to Groq or another
+LLM. The one-time Groq creation step and exact bundle schema are owned by
 [framework slots](framework_slots.md), not by candidate decoding.

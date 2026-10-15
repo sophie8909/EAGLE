@@ -511,12 +511,14 @@ genotype, disables Java-generation and repair LLM roles, and records protocol
 the bounded self-play smoke pass. See `../testing/test_contracts.md` for recorded
 commands, evidence, and the fixed-roster asset limitation.
 
-## Gemini framework and finite-slot evolution (2026-10-15)
+## Groq framework and finite-slot evolution (2026-10-15)
 
 The explicit two-stage `framework_slots` mode is implemented. The standalone
-`python -m eagle framework` command uses native Gemini structured JSON with
-bounded attempts, raw-before-parse evidence, timing/hashes, normalized bundle
-publication, and environment-only credentials. Its exact schema is
+`python -m eagle framework` command uses Groq Chat Completions with
+`GROQ_API_KEY`, bounded attempts, raw-before-parse evidence, timing/hashes,
+and normalized bundle publication. Its JSON Schema request uses `strict: false`
+because `report.slot_rationale` has dynamic keys. Provider enforcement is
+best-effort; local exact validation remains authoritative. Its exact schema is
 `eagle-framework-bundle-v1`; the generated report and
 `slot_generation_prompt` remain audit/provenance inputs rather than candidate
 genes.
@@ -532,15 +534,6 @@ The candidate-time path has no LLM runtime, policy/prompt genes, reflection,
 source gate, or repair. It renders complete Java deterministically and reuses
 the existing validation, javac, Integration, semantic-probe, and evaluation
 pipeline without changing the 180-match fixed-roster matrix or objective and
-selection formulas. The focused framework/bootstrap/config/artifact/validation
-suite passes (64 tests), and the complete repository suite passes (650 tests,
-4 skipped).
-A live Gemini call and bounded real Java/MicroRTS evolutionary smoke were not run
-as part of this repository change; those are operational validation, not a
-fallback or alternate execution path.
-
-A first live bootstrap request subsequently exposed a REST wire-format mismatch:
-`responseFormat.text.mimeType` requires the `APPLICATION_JSON` enum token rather
-than the SDK-facing `application/json` spelling. The request builder and focused
-contract now enforce that encoding, and HTTP failures surface Google's bounded
-provider message while retaining the complete raw response artifact.
+selection formulas. The Groq bootstrap, framework core/config/artifact/integration,
+and prompt-resource contracts pass in the project WSL venv (49 tests). No live
+Groq request, full repository suite, or bounded Java/MicroRTS smoke was run.

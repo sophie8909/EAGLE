@@ -1,4 +1,4 @@
-Gemini Framework Design stage.
+Groq GPT-OSS Framework Design stage.
 
 Design one complete Java MicroRTS CandidateAgent framework whose evolutionary
 variation is restricted to a small, explicit set of typed slots. The framework

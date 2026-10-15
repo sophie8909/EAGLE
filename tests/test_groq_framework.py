@@ -11,12 +11,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eagle.__main__ import main as eagle_main
-from eagle.generation.gemini_framework import (
+from eagle.generation.groq_framework import (
+    ATTEMPT_SCHEMA_VERSION,
+    BOOTSTRAP_SCHEMA_VERSION,
+    DEFAULT_GROQ_MODEL,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
-    GeminiFrameworkError,
+    GroqFrameworkError,
     generate_framework_bundle,
-    parse_gemini_framework_response,
+    parse_groq_framework_response,
 )
 
 
@@ -100,12 +103,12 @@ public final class CandidateAgent extends AbstractionLayerAI {
 def _provider_response(bundle: dict[str, object] | None = None) -> bytes:
     content = json.dumps(_bundle() if bundle is None else bundle, ensure_ascii=False)
     return json.dumps(
-        {"candidates": [{"content": {"role": "model", "parts": [{"text": content}]}}]},
+        {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}]},
         ensure_ascii=False,
     ).encode("utf-8")
 
 
-class GeminiFrameworkTests(unittest.TestCase):
+class GroqFrameworkTests(unittest.TestCase):
     def test_bootstrap_persists_schema_artifacts_hashes_and_no_secret(self) -> None:
         secret = "test-api-key-that-must-not-be-persisted"
         captured_requests = []
@@ -115,18 +118,20 @@ class GeminiFrameworkTests(unittest.TestCase):
             return _Response(_provider_response())
 
         with tempfile.TemporaryDirectory() as directory, patch.dict(
-            os.environ, {"GEMINI_API_KEY": secret}, clear=True
+            os.environ, {"GROQ_API_KEY": secret}, clear=True
         ), patch(
-            "eagle.generation.gemini_framework.urllib.request.urlopen",
+            "eagle.generation.groq_framework.urllib.request.urlopen",
             side_effect=transport,
         ):
             output = Path(directory) / "framework"
             result = generate_framework_bundle(
                 output,
-                model="gemini-test",
+                model="openai/gpt-oss-120b",
                 design_brief="Build a bounded economy and combat controller.",
                 max_attempts=2,
                 timeout_seconds=12.0,
+                temperature=0.3,
+                max_output_tokens=4096,
             )
 
             self.assertEqual(result.bundle, _bundle())
@@ -151,15 +156,25 @@ class GeminiFrameworkTests(unittest.TestCase):
             self.assertEqual(timeout, 12.0)
             self.assertEqual(
                 request.full_url,
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                "gemini-test:generateContent",
+                "https://api.groq.com/openai/v1/chat/completions",
             )
             headers = {key.lower(): value for key, value in request.header_items()}
-            self.assertEqual(headers["x-goog-api-key"], secret)
+            self.assertEqual(headers["authorization"], f"Bearer {secret}")
             payload = json.loads(request.data.decode("utf-8"))
-            text_format = payload["generationConfig"]["responseFormat"]["text"]
-            self.assertEqual(text_format["mimeType"], "APPLICATION_JSON")
-            self.assertEqual(text_format["schema"], FRAMEWORK_RESPONSE_SCHEMA)
+            self.assertEqual(bootstrap["schema_version"], BOOTSTRAP_SCHEMA_VERSION)
+            self.assertEqual(payload["model"], "openai/gpt-oss-120b")
+            self.assertEqual(payload["temperature"], 0.3)
+            self.assertEqual(payload["max_completion_tokens"], 4096)
+            self.assertEqual(payload["response_format"]["type"], "json_schema")
+            self.assertEqual(bootstrap["provider"], "groq")
+            self.assertEqual(payload["messages"][0]["role"], "user")
+            self.assertIn("Build a bounded economy and combat controller.", payload["messages"][0]["content"])
+            schema_format = payload["response_format"]["json_schema"]
+            self.assertEqual(schema_format["name"], "eagle_framework")
+            self.assertFalse(schema_format["strict"])
+            self.assertEqual(schema_format["schema"], FRAMEWORK_RESPONSE_SCHEMA)
+            attempt = json.loads((output / "attempts" / "attempt_001" / "result.json").read_text())
+            self.assertEqual(attempt["schema_version"], ATTEMPT_SCHEMA_VERSION)
 
             persisted = b"\n".join(
                 path.read_bytes() for path in output.rglob("*") if path.is_file()
@@ -168,19 +183,19 @@ class GeminiFrameworkTests(unittest.TestCase):
 
     def test_invalid_first_response_is_retained_before_retry(self) -> None:
         responses = [
-            _Response(b'{"candidates":[{"content":{"parts":[{"text":"not json"}]}}]}'),
+            _Response(b'{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"not json"}}]}'),
             _Response(_provider_response()),
         ]
         with tempfile.TemporaryDirectory() as directory, patch.dict(
-            os.environ, {"GEMINI_API_KEY": "secret"}, clear=True
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
         ), patch(
-            "eagle.generation.gemini_framework.urllib.request.urlopen",
+            "eagle.generation.groq_framework.urllib.request.urlopen",
             side_effect=responses,
         ):
             output = Path(directory) / "framework"
             result = generate_framework_bundle(
                 output,
-                model="gemini-test",
+                model="openai/gpt-oss-120b",
                 design_brief="Build a framework.",
                 max_attempts=2,
             )
@@ -199,18 +214,18 @@ class GeminiFrameworkTests(unittest.TestCase):
             self.assertEqual(len(first_result["response_sha256"]), 64)
 
     def test_exhaustion_keeps_raw_attempts_and_failure_summary(self) -> None:
-        raw = b'{"candidates":[]}'
+        raw = b'{"choices":[]}'
         with tempfile.TemporaryDirectory() as directory, patch.dict(
-            os.environ, {"GEMINI_API_KEY": "secret"}, clear=True
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
         ), patch(
-            "eagle.generation.gemini_framework.urllib.request.urlopen",
+            "eagle.generation.groq_framework.urllib.request.urlopen",
             return_value=_Response(raw),
         ):
             output = Path(directory) / "framework"
-            with self.assertRaisesRegex(GeminiFrameworkError, "after 2 attempt"):
+            with self.assertRaisesRegex(GroqFrameworkError, "after 2 attempt"):
                 generate_framework_bundle(
                     output,
-                    model="gemini-test",
+                    model="openai/gpt-oss-120b",
                     design_brief="Build a framework.",
                     max_attempts=2,
                 )
@@ -236,24 +251,24 @@ class GeminiFrameworkTests(unittest.TestCase):
         http_error = urllib.error.HTTPError(
             "https://example.invalid",
             400,
-            "Bad Request",
+            "Bad Request: secret",
             {},
             io.BytesIO(raw),
         )
         with tempfile.TemporaryDirectory() as directory, patch.dict(
-            os.environ, {"GEMINI_API_KEY": "secret"}, clear=True
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
         ), patch(
-            "eagle.generation.gemini_framework.urllib.request.urlopen",
+            "eagle.generation.groq_framework.urllib.request.urlopen",
             side_effect=http_error,
         ):
             output = Path(directory) / "framework"
             with self.assertRaisesRegex(
-                GeminiFrameworkError,
+                GroqFrameworkError,
                 "Invalid structured-output field value",
-            ):
+            ) as caught:
                 generate_framework_bundle(
                     output,
-                    model="gemini-test",
+                    model="openai/gpt-oss-120b",
                     design_brief="Build a framework.",
                 )
 
@@ -267,6 +282,55 @@ class GeminiFrameworkTests(unittest.TestCase):
                 )
             )
             self.assertIn("Invalid structured-output field value", result["error"])
+            self.assertNotIn("secret", result["error"])
+            self.assertNotIn("secret", str(caught.exception))
+            self.assertEqual(len(list(output.joinpath("attempts").iterdir())), 1)
+
+    def test_parser_rejects_malformed_groq_envelopes(self) -> None:
+        valid_message = {"role": "assistant", "content": json.dumps(_bundle())}
+        malformed = (
+            ([], "envelope must be an object"),
+            ({}, "exactly one choice"),
+            ({"choices": [None]}, "finish with stop"),
+            ({"choices": [{"finish_reason": "stop"}]}, "message must be an object"),
+            ({"choices": [{"finish_reason": "stop", "message": valid_message}, {"finish_reason": "stop", "message": valid_message}]}, "exactly one choice"),
+            ({"choices": [{"finish_reason": "length", "message": valid_message}]}, "finish with stop"),
+            ({"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "refusal": "no", "content": "{}"}}]}, "refused"),
+            ({"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": None}}]}, "JSON text"),
+        )
+        for payload, message in malformed:
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                parse_groq_framework_response(json.dumps(payload))
+
+    def test_cli_uses_default_model_and_allows_override(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=[_Response(_provider_response()), _Response(_provider_response())],
+        ) as urlopen:
+            for name, extra in (("default", []), ("override", ["--model", "org/model-x"])):
+                output = Path(directory) / name
+                self.assertEqual(eagle_main(["framework", "--output", str(output), "--brief", "Build a framework.", *extra]), 0)
+            payloads = [json.loads(call.args[0].data) for call in urlopen.call_args_list]
+            self.assertEqual(payloads[0]["model"], DEFAULT_GROQ_MODEL)
+            self.assertEqual(payloads[1]["model"], "org/model-x")
+
+    def test_transient_429_retries_then_succeeds(self) -> None:
+        rate_limited = urllib.error.HTTPError(
+            "https://api.groq.com/openai/v1/chat/completions", 429,
+            "Too Many Requests", {}, io.BytesIO(b'{"error":{"message":"rate limited"}}'),
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=[rate_limited, _Response(_provider_response())],
+        ):
+            result = generate_framework_bundle(Path(directory) / "framework", design_brief="Build a framework.", max_attempts=2)
+            self.assertEqual(result.bundle, _bundle())
+            first = json.loads((result.bundle_path.parent / "attempts/attempt_001/result.json").read_text())
+            self.assertTrue(first["retryable"])
 
     def test_bundle_validation_rejects_marker_mismatch(self) -> None:
         bundle = _bundle()
@@ -274,26 +338,26 @@ class GeminiFrameworkTests(unittest.TestCase):
         slots[0] = {**slots[0], "marker": "{{EAGLE_SLOT:not_worker_target}}"}
         bundle["slots"] = slots
         with self.assertRaisesRegex(ValueError, "canonical marker"):
-            parse_gemini_framework_response(_provider_response(bundle))
+            parse_groq_framework_response(_provider_response(bundle))
 
     def test_missing_api_key_fails_without_creating_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch.dict(
             os.environ, {}, clear=True
         ):
             output = Path(directory) / "framework"
-            with self.assertRaisesRegex(GeminiFrameworkError, "GEMINI_API_KEY"):
+            with self.assertRaisesRegex(GroqFrameworkError, "GROQ_API_KEY"):
                 generate_framework_bundle(
                     output,
-                    model="gemini-test",
+                    model="openai/gpt-oss-120b",
                     design_brief="Build a framework.",
                 )
             self.assertFalse(output.exists())
 
     def test_framework_command_is_dispatched(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch.dict(
-            os.environ, {"GEMINI_API_KEY": "secret"}, clear=True
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
         ), patch(
-            "eagle.generation.gemini_framework.urllib.request.urlopen",
+            "eagle.generation.groq_framework.urllib.request.urlopen",
             return_value=_Response(_provider_response()),
         ):
             output = Path(directory) / "framework"
@@ -303,7 +367,7 @@ class GeminiFrameworkTests(unittest.TestCase):
                     "--output",
                     str(output),
                     "--model",
-                    "gemini-test",
+                    "openai/gpt-oss-120b",
                     "--brief",
                     "Build a framework.",
                 ]

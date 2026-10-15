@@ -1,10 +1,10 @@
-# Gemini framework and finite-slot evolution
+# Groq GPT-OSS framework and finite-slot evolution
 
 `java_materialization_mode: framework_slots` is a two-stage execution mode. An
-explicit bounded bootstrap operation asks Gemini to design a complete Java agent
-framework and a finite control surface. A later EAGLE run freezes that validated
-bundle and evolves only typed slot values. Gemini is not part of the evolutionary
-loop; transport retries belong only to that one explicit bootstrap operation.
+explicit bounded bootstrap operation asks Groq GPT-OSS to design a complete
+Java agent framework and a finite control surface. A later EAGLE run freezes the
+validated bundle and evolves only typed slot values. Groq is outside the
+evolutionary loop; transport retries belong to the explicit bootstrap operation.
 
 This document is the canonical owner of the framework-bundle, slot-domain, and
 bootstrap boundary. The shared downstream Java and MicroRTS stages remain owned
@@ -13,13 +13,17 @@ by [Java generation](java_generation.md) and the
 
 ## Two-stage boundary
 
-1. An operator runs `python -m eagle framework` with an explicit Gemini model,
-   design brief, and new output directory. `GEMINI_API_KEY` is read from the
-   environment only.
-2. The bootstrap sends the checked-in `gemini_framework_design` prompt through
-   Gemini `generateContent` with `application/json` and a provider-enforced JSON
-   response schema. Retries are bounded. Each raw provider response is persisted
-   before parsing.
+1. An operator runs `python -m eagle framework` with a design brief and new
+   output directory. The command defaults to `openai/gpt-oss-120b`; `--model`
+   selects an override. `GROQ_API_KEY` is read from the environment only.
+2. The bootstrap sends the checked-in `groq_framework_design` prompt to
+   `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
+   The request includes user-message content, model, temperature,
+   `max_completion_tokens`, and `response_format` JSON Schema named
+   `eagle_framework` with `strict: false`. Strict mode cannot express dynamic
+   keys in the preserved `report.slot_rationale` map. Provider schema enforcement
+   is best-effort; local exact validation remains authoritative. Retries are
+   bounded, and raw responses are persisted before parsing.
 3. EAGLE validates and normalizes the response into one
    `eagle-framework-bundle-v1` `bundle.json`. The output also retains the exact
    rendered bootstrap prompt, request bodies, raw responses, timing, hashes,
@@ -117,10 +121,10 @@ region. Undeclared, duplicate, malformed, or unresolved markers are invalid.
 other lists may be empty, but every item they contain is nonempty. The report is
 audit evidence; it does not alter selection, rendering, or evaluation.
 
-The checked-in bootstrap prompt is `prompts/gemini_framework_design.txt`,
-registered as `gemini_framework_design` in `prompts/manifest.toml`. Its exact
+The checked-in bootstrap prompt is `prompts/groq_framework_design.txt`,
+registered as `groq_framework_design` in `prompts/manifest.toml`. Its exact
 rendering inputs are `design_brief`, `gameplay_contract`, and `action_api_guide`.
-It instructs Gemini to return the exact bundle above and to place in
+It instructs the model to return the exact bundle above and to place in
 `slot_generation_prompt` the reusable instructions that guided the finite
 control-surface design. The stored prompt is explanatory provenance only after
 bootstrap: candidate generation, mutation, repair, and evaluation never execute
@@ -150,7 +154,7 @@ This mode requires:
 - evolution protocol and materializer version `eagle-framework-slots-v1`;
 - active genotype metadata `['control_genome']`.
 
-The local EA performs no candidate-time Gemini or other LLM request. Strategy
+The local EA performs no candidate-time provider or other LLM request. Strategy
 Reflection, Prompt Reflection, Code Reflection/source gating, Java Generation,
 and compile-guided repair are all disabled. A render, validation, or compilation
 failure remains at its actual stage with hashes and diagnostics; it never falls
@@ -182,8 +186,8 @@ SHA-256. `bootstrap.json` identifies the selected attempt and exact published
 bundle bytes. The command refuses a nonempty output directory.
 
 Credentials are never accepted in YAML or CLI arguments, embedded in request
-bodies, or persisted in any artifact. Only the `x-goog-api-key` transport header
-receives `GEMINI_API_KEY`; stored errors redact that value. Bundle content is
+bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
+receives `GROQ_API_KEY`; stored errors redact that value. Bundle content is
 untrusted generated input until strict schema, Java-envelope, marker, normal
 validation, `javac`, and Integration checks succeed.
 

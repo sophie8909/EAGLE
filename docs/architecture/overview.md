@@ -7,7 +7,7 @@ whether generated Java is phenotype-only or an inherited genotype component;
 compilation, or run-frozen framework-slot rendering. Deterministic DSL and
 framework-slot configurations require `candidate_java_mode: generated_phenotype`
 and `parent_evaluation_mode: reuse_cached`. Framework-slot mode is a two-stage
-protocol: an explicit one-time Gemini bootstrap creates the complete framework
+protocol: an explicit one-time Groq bootstrap creates the complete framework
 and finite domains; the experiment performs only local deterministic EA. The
 active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
@@ -120,7 +120,7 @@ flowchart TD
   policy component: crossover copies a whole policy, Strategy mutation remains
   enabled, and Prompt Reflection, Code Reflection/source repair, and Java LLM
   generation/repair are disabled.
-- Under `framework_slots`, an external one-time Gemini bootstrap is the only LLM
+- Under `framework_slots`, an external one-time Groq bootstrap is the only LLM
   boundary. The run freezes the exact `eagle-framework-bundle-v1` bytes and
   SHA-256; candidates evolve only `control_genome`. Formula-like control is an
   enumerated choice among bundle-frozen Java expressions. Strategy/Prompt/Code

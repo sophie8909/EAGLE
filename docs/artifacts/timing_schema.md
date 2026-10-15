@@ -255,7 +255,7 @@ matches retain their existing timing owners. `generation_llm` and all reflection
 streams are null with empty attempts, and the run emits no candidate-time
 `llm_request` event.
 
-The explicit Gemini bootstrap is outside run/candidate timing. Its standalone
+The explicit Groq bootstrap is outside run/candidate timing. Its standalone
 `bootstrap.json` and per-attempt `result.json` retain UTC boundaries, monotonic
 duration, success/failure/retryability, HTTP status, and request/response hashes.
 Those records must not be copied into `timing.jsonl` or charged to any candidate,
