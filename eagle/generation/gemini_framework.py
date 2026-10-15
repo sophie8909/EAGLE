@@ -270,7 +270,7 @@ def generate_framework_bundle(
             http_status = int(exc.code)
             raw_response = exc.read()
             raw_path.write_bytes(raw_response)
-            error = f"Gemini API HTTP {exc.code}: {exc.reason}"
+            error = _http_error_summary(exc, raw_response)
             retryable = exc.code in {408, 409, 429} or 500 <= exc.code <= 599
         except (urllib.error.URLError, TimeoutError) as exc:
             error = f"Gemini API request failed: {exc}"
@@ -468,12 +468,28 @@ def _request_payload(
             "maxOutputTokens": max_output_tokens,
             "responseFormat": {
                 "text": {
-                    "mimeType": "application/json",
+                    "mimeType": "APPLICATION_JSON",
                     "schema": FRAMEWORK_RESPONSE_SCHEMA,
                 }
             },
         },
     }
+
+
+def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str:
+    """Return a bounded provider diagnostic without replacing the raw artifact."""
+
+    prefix = f"Gemini API HTTP {exc.code}: {exc.reason}"
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+        provider_error = payload.get("error") if isinstance(payload, dict) else None
+        message = provider_error.get("message") if isinstance(provider_error, dict) else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        message = None
+    if not isinstance(message, str) or not message.strip():
+        return prefix
+    compact_message = " ".join(message.split())[:1000]
+    return f"{prefix}: {compact_message}"
 
 
 def _validate_settings(

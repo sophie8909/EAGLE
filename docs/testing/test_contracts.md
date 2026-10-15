@@ -181,10 +181,12 @@ the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.
 ## Gemini framework and finite slots
 
 Tests must prove the bootstrap uses native Gemini `generateContent` structured
-JSON; persists credential-free requests and raw bytes before parsing; retains
-failed attempts; applies bounded retry classification; validates the exact
-bundle/report/marker schema; normalizes the selected bundle; and never persists
-`GEMINI_API_KEY`. CLI dispatch and non-overwrite behavior are contracts.
+JSON with the REST enum encoding required by `responseFormat`; persists
+credential-free requests and raw bytes before parsing; retains failed attempts;
+surfaces bounded provider error diagnostics; applies bounded retry
+classification; validates the exact bundle/report/marker schema; normalizes the
+selected bundle; and never persists `GEMINI_API_KEY`. CLI dispatch and
+non-overwrite behavior are contracts.
 
 Core tests must cover exact-key rejection, finite numeric lattices, enumerated
 expression choices, canonical hashes, insertion-order-independent rendering,

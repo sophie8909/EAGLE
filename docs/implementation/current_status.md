@@ -538,3 +538,9 @@ suite passes (64 tests), and the complete repository suite passes (650 tests,
 A live Gemini call and bounded real Java/MicroRTS evolutionary smoke were not run
 as part of this repository change; those are operational validation, not a
 fallback or alternate execution path.
+
+A first live bootstrap request subsequently exposed a REST wire-format mismatch:
+`responseFormat.text.mimeType` requires the `APPLICATION_JSON` enum token rather
+than the SDK-facing `application/json` spelling. The request builder and focused
+contract now enforce that encoding, and HTTP failures surface Google's bounded
+provider message while retaining the complete raw response artifact.

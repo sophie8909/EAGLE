@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -156,7 +158,7 @@ class GeminiFrameworkTests(unittest.TestCase):
             self.assertEqual(headers["x-goog-api-key"], secret)
             payload = json.loads(request.data.decode("utf-8"))
             text_format = payload["generationConfig"]["responseFormat"]["text"]
-            self.assertEqual(text_format["mimeType"], "application/json")
+            self.assertEqual(text_format["mimeType"], "APPLICATION_JSON")
             self.assertEqual(text_format["schema"], FRAMEWORK_RESPONSE_SCHEMA)
 
             persisted = b"\n".join(
@@ -220,6 +222,51 @@ class GeminiFrameworkTests(unittest.TestCase):
             failure = json.loads((output / "bootstrap.json").read_text(encoding="utf-8"))
             self.assertEqual(failure["status"], "failed")
             self.assertEqual(len(failure["attempts"]), 2)
+
+    def test_http_error_surfaces_provider_message_and_retains_raw_body(self) -> None:
+        raw = json.dumps(
+            {
+                "error": {
+                    "code": 400,
+                    "message": "Invalid structured-output field value.",
+                    "status": "INVALID_ARGUMENT",
+                }
+            }
+        ).encode("utf-8")
+        http_error = urllib.error.HTTPError(
+            "https://example.invalid",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(raw),
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GEMINI_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.gemini_framework.urllib.request.urlopen",
+            side_effect=http_error,
+        ):
+            output = Path(directory) / "framework"
+            with self.assertRaisesRegex(
+                GeminiFrameworkError,
+                "Invalid structured-output field value",
+            ):
+                generate_framework_bundle(
+                    output,
+                    model="gemini-test",
+                    design_brief="Build a framework.",
+                )
+
+            self.assertEqual(
+                output.joinpath("attempts/attempt_001/response_raw.json").read_bytes(),
+                raw,
+            )
+            result = json.loads(
+                output.joinpath("attempts/attempt_001/result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("Invalid structured-output field value", result["error"])
 
     def test_bundle_validation_rejects_marker_mismatch(self) -> None:
         bundle = _bundle()
