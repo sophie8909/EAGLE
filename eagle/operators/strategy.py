@@ -489,7 +489,11 @@ class StrategyReflectionPipeline:
             match_id=match_id,
             suffix=suffix,
         )
-        trace = {"role": role, "candidate_id": candidate.id, "generation_index": candidate.generation, "request_id": request_id, "model_configuration_identity": self.model_identity, "prompt_version": PROMPT_VERSION, "schema_version": ROLE_SCHEMA_VERSION, **(extra or {})}
+        endpoint = getattr(self.backend, "chat_completions_url", None)
+        if not isinstance(endpoint, str):
+            endpoint = getattr(self.backend, "base_url", None)
+        actual_model = getattr(self.backend, "model", None) or self.model_identity
+        trace = {"role": role, "candidate_id": candidate.id, "generation_index": candidate.generation, "request_id": request_id, "model_configuration_identity": actual_model, "endpoint": endpoint, "prompt_version": PROMPT_VERSION, "schema_version": ROLE_SCHEMA_VERSION, **(extra or {})}
         if match_id is not None:
             trace["match_id"] = match_id
         stage_dir = (
@@ -692,7 +696,7 @@ class StrategyReflectionPipeline:
             request_correlation_id=f"{run_id}:{request_id}:{attempt}",
             stage=role,
             status=status,
-            model=self.model_identity,
+            model=str(trace.get("model_configuration_identity") or self.model_identity or ""),
             candidate_id=str(trace["candidate_id"]),
             generation=int(trace["generation_index"]),
             started_at=started_at,
@@ -700,7 +704,7 @@ class StrategyReflectionPipeline:
             duration_seconds=duration_seconds,
             metadata={
                 "operation_type": "mutation",
-                "endpoint": endpoint,
+                "endpoint": trace.get("endpoint") or endpoint,
                 "sampling_seed": trace["sampling_seed"],
                 "failure_category": failure_category,
             },

@@ -70,7 +70,10 @@ The resolved `model` section selects the GGUF, llama-server executable, host,
 port, per-request context size, batch size, and health/startup timeouts. An
 optional `generation_model` section has the same shape and selects the model for
 final Java generation, deferred Code Reflection revision, and compile-guided
-repair. GPU layers (`999`), model threads (`8`), server parallel slots (`2`),
+repair. Each section may contain `additional_endpoints`, an ordered list with at
+most one unmanaged OpenAI-compatible endpoint expressed as exactly
+`{base_url, model}`. Together with the managed local primary, a phase therefore
+has one or two endpoints. GPU layers (`999`), model threads (`8`), managed-local server parallel slots (`2`),
 independent LLM workers (`2`), and match workers (`10`) are fixed by
 `eagle/execution.py`; they are not config fields. The server allocates
 `context_size × 2`, while each request keeps the configured context size.
@@ -80,10 +83,12 @@ selected model. Missing, stale, malformed, or partial offload evidence shuts dow
 the owned process and fails the run; EAGLE never continues on CPU. These obsolete
 keys are rejected, not migrated: `gpu_layers`, `threads`,
 `parallel`, and `evaluation.match_workers`. The orchestrator validates runtime
-files only outside mock mode, starts a fresh owned process per run, switches
-models only at phase boundaries, waits for `/health` or `/v1/models`, verifies
-a chat completion, runs search and the production final test, and stops its
-owned process in `finally`.
+files only outside mock mode, starts a fresh owned local process per run,
+switches managed models only at phase boundaries, and requires a successful
+bounded chat completion from the primary and every additional endpoint before
+phase work begins. Any endpoint failure is fail-closed. It runs search and the
+production final test, then stops only its owned local process in `finally`;
+external endpoints are never adopted, restarted, signalled, or stopped.
 
 ```yaml
 model:
@@ -91,6 +96,9 @@ model:
   path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
   llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   port: 8080
+  additional_endpoints:       # optional; zero or one entry
+    - base_url: http://192.168.1.136:1234
+      model: ministral3_8b     # exact model id accepted by that service
 generation_model:            # omit to use model for every phase
   name: qwen3.5_9b
   path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
@@ -105,7 +113,16 @@ before search. A changed model or server profile also stops the owned runtime
 before starting the replacement. Within a single dual-model experiment,
 all offspring assignments are first fixed, all reflection/rewrite work runs on
 `model`, and only then does the runtime switch to `generation_model` for final
-materialization. It switches back before the next generation.
+materialization. It switches back before the next generation. Only the managed
+local primary switches; any additional endpoint belongs to its declared phase
+but remains an unmanaged service.
+
+Within a phase, canonical input index selects the ordered endpoint slot modulo
+the endpoint count. With one additional endpoint, the two LLM workers can issue
+one local and one remote request concurrently, while results are still returned
+in input order. The selected route remains fixed for dependent retries. EAGLE
+does not fail over a request to the other endpoint, and the request log/timing
+record stores the actual endpoint and model used.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
@@ -166,7 +183,9 @@ duplicate policy-output retries. `random_seed` is the single EA root seed;
 all LLM roles receive derived request seeds tied to task identity and attempt.
 Controllable execution is always seeded. Concurrent LLM work and match workers
 collect results in input order; stable task seeds do not depend on completion
-order or worker identity. LLM temperatures remain configurable.
+order or worker identity. Endpoint assignment likewise depends on canonical
+input index plus the persisted endpoint order, not worker identity or completion
+order. LLM temperatures remain configurable.
 
 Same inputs and root seed reproduce the EA when task outputs are stable.
 External LLM services may ignore seeds; GPU/backend kernels, batching, private
@@ -250,7 +269,7 @@ generation zero was recorded, that slot is replaced by a new run; old evidence
 remains on disk. An existing `experiment-v2` config named `experiment.yaml`
 remains a config and is never overwritten by the index.
 
-If a config folder is also supplied, it is compatibility-checked against the run. Model identity/path/endpoint, EA parameters, evaluation matrix, and reflection mode/probabilities cannot silently change. Missing persisted model assets fail clearly. Only the latest atomically recorded generation is resumed; incomplete candidate work is recomputed.
+If a config folder is also supplied, it is compatibility-checked against the run. Model identity/path, the complete ordered primary-plus-additional endpoint list, EA parameters, evaluation matrix, and reflection mode/probabilities cannot silently change. Adding, removing, reordering, or retargeting an endpoint fails resume compatibility. Missing persisted model assets fail clearly. Only the latest atomically recorded generation is resumed; incomplete candidate work is recomputed.
 
 For `framework_slots`, resume additionally reloads only the run-owned
 `framework/bundle.json`, verifies its schema and exact SHA-256 against the

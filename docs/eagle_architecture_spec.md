@@ -131,7 +131,18 @@ old parent identities. This mode measures the total effect of parent
 rematerialization plus match resampling; it is not the production protocol.
 
 Within each phase, independent candidate tasks run in a bounded two-worker LLM
-pool. Source Code gates, reflection/rewrite work, corrective Code revision, Java
+pool. A phase always has one managed local primary endpoint and may configure
+at most one ordered `model.additional_endpoints` entry, so the phase has at
+most two endpoints total. Each additional endpoint is an unmanaged
+OpenAI-compatible service described by exactly `{base_url, model}`. The bounded
+map binds canonical input index `i` to endpoint slot `i mod endpoint_count`;
+the two slots may therefore issue one local and one remote request concurrently,
+while returned results remain in canonical input order. Routing never depends
+on thread identity or completion order. A task and all of its dependent retries
+remain on the assigned endpoint; EAGLE does not fail over a request to another
+endpoint.
+
+Source Code gates, reflection/rewrite work, corrective Code revision, Java
 generation/decoding/compilation, and initial policy calls return results in
 candidate order. Initial policy requests use the fixed configured-seed snapshot with distinct task
 seeds. Policy transport is stateless; only Java-generation request context is
@@ -141,7 +152,10 @@ operator selection and reward application remain serial and preserve their
 existing formulas. Match traces stay available until dependent candidate
 construction finishes and are cleaned up at their existing boundary.
 
-Fresh model-server startup requires GPU preflight and positive log evidence of
+Before phase work begins, every configured endpoint must pass a bounded chat
+completion preflight. Failure of the local primary or any additional endpoint
+fails closed before candidate requests are dispatched. Fresh managed local
+model-server startup additionally requires GPU preflight and positive log evidence of
 `offloaded N/N layers to GPU` for the selected model. Missing, stale, malformed,
 or partial evidence shuts down the owned process and fails the run without CPU
 fallback. Parallel phases cancel queued tasks on failure or interruption and wait
@@ -171,9 +185,11 @@ seed from the root seed and immutable candidate/opponent/map/round/side/match
 identity, passes `-Deagle.match.seed`, and records it in artifacts. Vendored
 MicroRTS random sources consume this property. Parallel workers return results
 in canonical matrix order, so seed assignment, fitness aggregation, and seeded
-tie-breaking are independent of scheduling. GPU layers (`999`), model threads
-(`8`), server slots (`2`), LLM workers (`2`), and match workers (`10`) are
-fixed by `eagle/execution.py`. CUDA/GPU preflight is required before server
+tie-breaking are independent of scheduling. LLM endpoint assignment is likewise
+derived from canonical input index and the persisted endpoint order, not thread
+or completion order. GPU layers (`999`), model threads (`8`), managed-local
+server slots (`2`), LLM workers (`2`), and match workers (`10`) are fixed by
+`eagle/execution.py`. CUDA/GPU preflight is required before managed local server
 startup; unavailable GPU support fails instead of falling back to CPU.
 Temperatures remain configurable. New generation checkpoints preserve
 stagnation and bounded EA archive state; independent generation streams allow
@@ -317,15 +333,24 @@ additionally receives the selected inherited Java component as revision
 context; default mode receives no parent Java. A Code Reflection child instead
 enters this boundary with the complete source returned by the operator. It
 never receives game logs. Raw response, extracted source, normalized source,
-attempts, model identity, errors, and timing are persisted.
+attempts, actual endpoint/model identity, errors, and timing are persisted.
 
 The required `model` section owns initialization, reflection, and prompt rewrite.
-An optional `generation_model` section may select a different GGUF/runtime
-profile for final Java generation, deferred Code Reflection revision, and
-compile-guided generation repair. The orchestrator switches the one owned
-llama.cpp runtime only at phase boundaries and restores `model` before the next
-generation's reflection work. When `generation_model` is omitted, `model` owns
-both phases.
+Its ordinary fields define the managed local primary endpoint. It may additionally
+contain an ordered `additional_endpoints` list with zero or one entry of the
+form `{base_url, model}`. The additional endpoint is an unmanaged
+OpenAI-compatible service: it has no local GGUF or llama-server path, is never
+adopted or stopped by EAGLE, and is used only through request dispatch and
+preflight.
+
+An optional `generation_model` section has the same endpoint-pool shape and may
+select a different managed GGUF/runtime plus optional additional endpoint for
+final Java generation, deferred Code Reflection revision, and compile-guided
+generation repair. The orchestrator switches only the one managed local
+llama.cpp runtime at phase boundaries and restores the `model` primary before
+the next generation's reflection work. Unmanaged additional endpoints are not
+process-switched or lifecycle-managed. When `generation_model` is omitted,
+`model` owns both phases.
 
 The extracted response must itself satisfy the complete-file external envelope:
 package/class/superclass, constructors, lifecycle methods, security restrictions,
@@ -536,6 +561,13 @@ artifact references for every population member with a non-empty
 specialized generation, validation, compilation, integration, evaluation,
 mutation, lineage, and timing artifacts beside it.
 
+The fully resolved `config.yaml` preserves every phase's endpoint list in its
+configured order. That ordered list is execution-affecting resume identity and
+cannot be added, removed, reordered, or retargeted during resume. Every LLM call
+index and timing event records the actual endpoint and model selected for that
+request; recording only the phase's primary identity is insufficient when an
+additional endpoint is configured.
+
 Derived analysis uses each generation file's selected population as that
 generation's survivor snapshot. Per-agent, per-opponent, and per-match analysis
 rows therefore use the snapshot generation on plot axes; the candidate's own
@@ -576,10 +608,13 @@ The production entrypoint is:
 ```
 
 It delegates to `python -m eagle experiment`. Python owns sorted config
-discovery, validation of `model` and optional `generation_model`, llama.cpp
-start/health checks, per-run restart, phase-boundary model switching, search,
-resume, final test, and owned-process cleanup. An occupied foreign endpoint is
-never adopted or killed. Mock mode does not construct a runtime manager.
+discovery, validation of `model` and optional `generation_model`, managed-local
+llama.cpp start/health checks, all-endpoint chat preflight, per-run restart,
+phase-boundary primary-model switching, search, resume, final test, and owned-process
+cleanup. `RuntimeManager` owns only the phase's primary local llama.cpp process.
+An additional endpoint is always external and unmanaged; it is never adopted,
+restarted, switched, signalled, or killed. Mock mode does not construct a runtime
+manager.
 
 For a directory batch, the selected config directory owns `experiment.yaml`
 with `schema_version: eagle-experiment-index-v1` and a `runs` mapping from each

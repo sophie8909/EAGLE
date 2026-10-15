@@ -51,6 +51,7 @@ def build_search_runtime(
         temperature=config.llm_temperature,
         max_output_tokens=config.llm_max_tokens,
         seed=config.random_seed,
+        additional_endpoints=config.model.additional_endpoints,
     )
     if not mock and config.needs_llm_runtime:
         preflight_llm_endpoint(client)
@@ -61,6 +62,7 @@ def build_search_runtime(
         temperature=config.llm_temperature,
         max_output_tokens=config.llm_max_tokens,
         seed=config.random_seed,
+        additional_endpoints=generation_model.additional_endpoints,
     )
     logger = LLMCallLogger(
         run_dir / "llm_logs",
@@ -143,31 +145,35 @@ def build_search_runtime(
 
 
 def preflight_llm_endpoint(client: LLMClient) -> None:
-    """Verify the one configured endpoint with one small request."""
+    """Verify every configured endpoint with one small request."""
 
-    api_root = client.base_url.rstrip("/")
-    if not api_root.endswith("/v1"):
-        api_root += "/v1"
-    url = f"{api_root}/chat/completions"
-    request = urllib.request.Request(
-        url,
-        data=json.dumps({
-            "model": client.model,
-            "messages": [{"role": "user", "content": load_prompt("endpoint_preflight")}],
-            "temperature": 0,
-            "max_tokens": 1,
-            "chat_template_kwargs": {"enable_thinking": False},
-            "seed": derive_seed(
-                0 if client.seed is None else client.seed, "llm", "endpoint_preflight"
-            ) & 0x7FFF_FFFF,
-        }).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=min(15.0, client.timeout_seconds)) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        if not isinstance(payload.get("choices"), list):
-            raise RuntimeError("response has no choices array")
-    except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
-        raise LLMServerError(f"Configured llama.cpp endpoint preflight failed at {url}: {exc}") from exc
+    for endpoint in client.endpoints:
+        api_root = endpoint.base_url.rstrip("/")
+        if not api_root.endswith("/v1"):
+            api_root += "/v1"
+        url = f"{api_root}/chat/completions"
+        request = urllib.request.Request(
+            url,
+            data=json.dumps({
+                "model": endpoint.model,
+                "messages": [{"role": "user", "content": load_prompt("endpoint_preflight")}],
+                "temperature": 0,
+                "max_tokens": 1,
+                "chat_template_kwargs": {"enable_thinking": False},
+                "seed": derive_seed(
+                    0 if client.seed is None else client.seed, "llm", "endpoint_preflight"
+                ) & 0x7FFF_FFFF,
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=min(15.0, client.timeout_seconds)) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload.get("choices"), list):
+                raise RuntimeError("response has no choices array")
+        except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
+            raise LLMServerError(
+                f"Configured LLM endpoint preflight failed at {url} "
+                f"for model {endpoint.model}: {exc}"
+            ) from exc

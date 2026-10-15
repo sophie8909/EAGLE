@@ -98,14 +98,24 @@ The shared generation implementation is in `eagle/evolution/generation.py` and `
 ## Bounded execution
 
 `eagle/execution.py` fixes GPU layers to `999`, model threads to `8`, LLM
-workers to `2`, and match workers to `10`; the llama-server uses two slots.
+workers to `2`, and match workers to `10`; the managed local llama-server uses
+two slots. Each phase uses its local primary plus zero or one ordered
+`additional_endpoints` entry. `parallel_map` binds canonical input index to the
+corresponding endpoint slot modulo the endpoint count, allowing the two workers
+to issue local and remote requests concurrently without making routing depend
+on completion order. Results are still consumed in candidate/assignment order.
+Dependent calls and retries for one task stay on their assigned endpoint, and
+transport failure does not trigger cross-endpoint failover.
+
 Independent candidate work runs in the LLM pool within its phase: source Code
 gates, reflection/rewrite, corrective Code revision, and Java generation,
 decoding, and compilation. Each candidate's dependent calls retain their
-required order. On failure or interruption, queued tasks are cancelled and active
-requests finish before the phase returns; results are consumed in
+required order. Every configured endpoint must pass a chat-completion preflight
+before phase work starts. On failure or interruption, queued tasks are cancelled
+and active requests finish before the phase returns; results are consumed in
 candidate/assignment order. The reflection/rewrite phase completes before
-switching to `generation_model`.
+switching to `generation_model`. Only the managed local primary participates in
+that process switch; additional endpoints remain unmanaged.
 AOS selection and reward calculation/application remain serial and keep their
 existing formulas. Match dispatch uses the fixed ten-worker pool. Match traces
 remain available through dependent candidate construction and are retired at

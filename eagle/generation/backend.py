@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 
 from eagle.evaluation.determinism import derive_seed
 from eagle.candidate import Candidate
-from eagle.llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
+from eagle.execution import current_llm_worker_slot
+from eagle.llm import LLMEndpoint, LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
 from eagle.timing import utc_now
 
 
@@ -126,9 +127,11 @@ class _GenerationRequestContext(local):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
+    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = ()) -> None:
+        self._endpoints = (
+            LLMEndpoint(base_url.rstrip("/"), model),
+            *(LLMEndpoint(endpoint.base_url.rstrip("/"), endpoint.model) for endpoint in additional_endpoints),
+        )
         self.operation = operation
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
@@ -137,6 +140,18 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.max_output_tokens = max_output_tokens
         self.seed = 0 if seed is None else int(seed)
         self._request_context = _GenerationRequestContext()
+
+    @property
+    def selected_endpoint(self) -> LLMEndpoint:
+        return self._endpoints[current_llm_worker_slot() % len(self._endpoints)]
+
+    @property
+    def base_url(self) -> str:
+        return self.selected_endpoint.base_url
+
+    @property
+    def model(self) -> str:
+        return self.selected_endpoint.model
 
     def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
         self._request_context.generation_attempt = attempt
@@ -431,11 +446,12 @@ def build_generation_backend(
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
     seed: int | None = None,
+    additional_endpoints: tuple[LLMEndpoint, ...] = (),
 ) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "openai"}:
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed)
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints)
     raise ValueError(f"Unknown generation backend: {name}")

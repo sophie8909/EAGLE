@@ -13,7 +13,7 @@ mutation/AOS covers Strategy/Prompt. Code v6 permits fidelity/correctness repair
 only. Historical policies remain read-only; incompatible resume fails. See the
 [integration plan](dsl_pre_crossover_reflection_plan.md) for verification.
 
-Snapshot: 2026-10-14. Unless explicitly marked, implementation details below describe LLM materialization. Deterministic DSL materialization is implemented; verification evidence is recorded in `../testing/test_contracts.md`.
+Snapshot: 2026-10-15. Unless explicitly marked, implementation details below describe LLM materialization. Deterministic DSL materialization is implemented; verification evidence is recorded in `../testing/test_contracts.md`.
 
 ## Active evolutionary contract
 
@@ -57,7 +57,12 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
   AOS head-to-head, and final-test matrices share the resolved per-map caps.
 - Match execution always uses ten bounded workers; result ordering remains
   canonical by `match_index`. LLM candidate work uses two bounded workers per
-  phase, while AOS selection and reward application remain serial. Compact
+  phase. A phase has one managed local primary endpoint and may add one ordered
+  unmanaged OpenAI-compatible endpoint through `model.additional_endpoints`;
+  therefore there are at most two endpoints total. Canonical input index binds
+  each task to an endpoint slot, local and remote calls may overlap, and results
+  still return in input order. Retries remain on the selected endpoint and no
+  failover occurs. AOS selection and reward application remain serial. Compact
   artifacts skip Java XML replay
   generation, while full artifacts retain replay and round-state evidence.
 - Controllable randomness is always seeded from the EA root `random_seed`.
@@ -86,6 +91,10 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
   responses plus SHA-256 hashes for backend stability checks.
 - Formal experiment runs restart the owned llama-server at every run/replicate
   boundary; model-phase reuse remains limited to the lifetime of that run.
+  `RuntimeManager` manages only this primary local process. Every configured
+  endpoint, including an additional external endpoint, must pass a fail-closed
+  chat-completion preflight before phase requests begin; external endpoints are
+  never adopted, switched, signalled, or stopped.
 - `scripts/test_llm_seed_restarts.py` provides the stronger diagnostic: it
   fully restarts the owned llama-server between seeds and records the server
   lifecycle alongside per-seed raw responses and hashes.
@@ -129,8 +138,9 @@ Snapshot: 2026-10-14. Unless explicitly marked, implementation details below des
   loading, and finalization remain entrypoint-specific.
 - The required `model` owns initialization and reflection/rewrite calls. An
   optional `generation_model` owns final Java materialization and compile repair;
-  the experiment orchestrator switches its single owned llama.cpp process only
-  at those phase boundaries.
+  each phase may include one ordered `{base_url, model}` additional endpoint.
+  The experiment orchestrator switches its single owned local llama.cpp process
+  only at those phase boundaries and never lifecycle-manages additional endpoints.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
   and `aos_head2head`. Strategy/Prompt probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
@@ -500,6 +510,24 @@ proves wrapper completion, one-time marker persistence, and neutral scoring.
 ## Maintainability refactor (2026-10-02)
 
 Operators now have separate owners under `eagle/operators`; fresh/resume share `eagle/evolution/generation.py`, with offspring planning and parent refresh separated. Generation and evaluation are subpackages of `eagle`; evaluation separates records, decoding, opponents, matches and pipeline orchestration. Offspring planning calculates generation-best evidence once per generation. See the [plan and verification](maintainability_refactor_plan.md) and [repository map](repository_map.md). Evolution/artifact protocols are unchanged.
+
+
+## Two-endpoint phase dispatch (2026-10-15)
+
+The accepted runtime contract keeps one managed local primary for each model
+phase and permits at most one ordered unmanaged OpenAI-compatible endpoint in
+`additional_endpoints`. The resolved config retains the list and order, resume
+treats both as immutable execution identity, canonical input index controls
+slot assignment, and request logs/timing identify the endpoint and model that
+actually served each request. All endpoints must pass chat preflight; the pool
+fails closed and never performs request failover. Runtime ownership and GPU
+offload proof apply only to the local primary.
+
+Focused config, routing, concurrent transport, runtime propagation, and
+all-endpoint preflight coverage passes. The configured LAN endpoint also passed
+`/v1/models` and a bounded `/v1/chat/completions` request on 2026-10-15. This
+documentation does not claim a completed live two-host overlap experiment; that
+operational smoke remains before the runtime change is fully verified.
 
 
 ## Deterministic Java materialization (2026-10-14)

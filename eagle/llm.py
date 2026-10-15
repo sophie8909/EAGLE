@@ -1,9 +1,10 @@
 """Shared LLM configuration, transport, progress, errors, and durable logging.
 
-EAGLE owns one endpoint process at a time and may construct separate immutable
-clients for the reflection and final-generation model phases. This module
-contains their shared infrastructure; role-specific prompts and mutation stages
-remain in their respective EA-step modules.
+EAGLE owns one primary endpoint process at a time and may pair it with one
+unmanaged OpenAI-compatible endpoint per model phase. Immutable clients route
+stable candidate-task slots across that pool. This module contains their shared
+infrastructure; role-specific prompts and mutation stages remain in their
+respective EA-step modules.
 """
 
 from __future__ import annotations
@@ -22,12 +23,15 @@ from threading import Lock
 from typing import Any, BinaryIO
 from urllib.parse import urlparse
 
+from eagle.execution import LLM_WORKERS, current_llm_worker_slot
+
 
 __all__ = [
     "DEFAULT_MAX_PROMPT_CHARS",
     "EndpointConfigError",
     "LLMCallLogger",
     "LLMClient",
+    "LLMEndpoint",
     "LLMServerError",
     "llm_request_progress",
     "parse_json_object_response",
@@ -48,8 +52,25 @@ class EndpointConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class LLMEndpoint:
+    """One OpenAI-compatible endpoint and its provider-facing model name."""
+
+    base_url: str
+    model: str
+
+    def __post_init__(self) -> None:
+        parsed = urlparse(self.base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise EndpointConfigError("LLM endpoint must be a valid HTTP(S) URL.")
+        if parsed.username is not None or parsed.password is not None:
+            raise EndpointConfigError("LLM endpoint credentials must not be embedded in the URL.")
+        if not self.model.strip():
+            raise EndpointConfigError("LLM endpoint model must not be empty.")
+
+
+@dataclass(frozen=True)
 class LLMClient:
-    """One immutable OpenAI-compatible client for an EA model phase."""
+    """Immutable OpenAI-compatible endpoint pool for one EA model phase."""
 
     base_url: str
     model: str
@@ -57,11 +78,27 @@ class LLMClient:
     temperature: float = 0.2
     max_output_tokens: int | None = None
     seed: int | None = None
+    additional_endpoints: tuple[LLMEndpoint, ...] = ()
 
     def __post_init__(self) -> None:
-        parsed = urlparse(self.base_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise EndpointConfigError("LLM endpoint must be a valid HTTP(S) URL.")
+        primary = LLMEndpoint(self.base_url, self.model)
+        endpoints = (primary, *self.additional_endpoints)
+        if len(endpoints) > LLM_WORKERS:
+            raise EndpointConfigError(
+                f"At most {LLM_WORKERS} LLM endpoints are supported by the fixed worker pool."
+            )
+        normalized_urls = [endpoint.base_url.rstrip("/") for endpoint in endpoints]
+        if len(set(normalized_urls)) != len(normalized_urls):
+            raise EndpointConfigError("LLM endpoint base URLs must be unique.")
+
+    @property
+    def endpoints(self) -> tuple[LLMEndpoint, ...]:
+        return (LLMEndpoint(self.base_url, self.model), *self.additional_endpoints)
+
+    @property
+    def selected_endpoint(self) -> LLMEndpoint:
+        endpoints = self.endpoints
+        return endpoints[current_llm_worker_slot() % len(endpoints)]
 
     def generation_backend(self, *, logger=None):
         """Build the shared final Java-generation backend lazily."""
@@ -78,6 +115,7 @@ class LLMClient:
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
             seed=self.seed,
+            additional_endpoints=self.additional_endpoints,
         )
 
     def prompt_backend(self, *, operation: str, temperature: float | None = None):
@@ -94,6 +132,7 @@ class LLMClient:
             temperature=self.temperature if temperature is None else temperature,
             max_output_tokens=self.max_output_tokens,
             seed=self.seed,
+            additional_endpoints=self.additional_endpoints,
         )
 
 

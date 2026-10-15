@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.execution import LLM_WORKERS, parallel_map
+from eagle.execution import LLM_WORKERS, current_llm_worker_slot, parallel_map
 from eagle.generation.backend import OpenAICompatibleGenerationBackend
 from eagle.llm import LLMCallLogger
 from eagle.operators.initialization import initialize_population
@@ -146,10 +146,12 @@ class ExecutionConcurrencyTests(unittest.TestCase):
                 })
                 barrier = threading.Barrier(2)
                 requests = []
+                slots = []
 
                 class Backend:
                     def generate(self, prompt):
                         requests.append(prompt)
+                        slots.append(current_llm_worker_slot())
                         duplicate_retry = "earlier parallel population policy" in prompt
                         if not duplicate_retry:
                             barrier.wait(timeout=3)
@@ -167,6 +169,8 @@ class ExecutionConcurrencyTests(unittest.TestCase):
                 summaries = [json.loads(path.read_text()) for path in root.glob("*/initialization/policy_generation/result.json")]
                 self.assertEqual(sorted(item["final_attempt"] for item in summaries), [1, attempts])
                 self.assertEqual(len(requests), 2 if attempts == 1 else 3)
+                if attempts == 2:
+                    self.assertEqual(slots[-1], 1)
                 raw = list(root.glob("*/initialization/policy_generation/attempts/*/response_raw.txt"))
                 self.assertEqual(len(raw), len(requests))
                 rejected = [json.loads(path.read_text()) for path in root.glob("*/initialization/policy_generation/attempts/attempt_001/result.json")]

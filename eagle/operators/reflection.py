@@ -16,7 +16,8 @@ from typing import Any, Protocol
 
 from eagle.timing import utc_now
 from eagle.evaluation.determinism import derive_seed
-from eagle.llm import generate_seeded
+from eagle.execution import current_llm_worker_slot
+from eagle.llm import LLMEndpoint, generate_seeded
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.llm import (
@@ -393,9 +394,11 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = ()) -> None:
+        self._endpoints = (
+            LLMEndpoint(base_url.rstrip("/"), model),
+            *(LLMEndpoint(endpoint.base_url.rstrip("/"), endpoint.model) for endpoint in additional_endpoints),
+        )
         self.operation = operation
         self.timeout_sec = timeout_sec
         self.temperature = temperature
@@ -405,6 +408,18 @@ class OpenAICompatibleReflectionBackend:
             else max_output_tokens
         )
         self.seed = 0 if seed is None else int(seed)
+
+    @property
+    def selected_endpoint(self) -> LLMEndpoint:
+        return self._endpoints[current_llm_worker_slot() % len(self._endpoints)]
+
+    @property
+    def base_url(self) -> str:
+        return self.selected_endpoint.base_url
+
+    @property
+    def model(self) -> str:
+        return self.selected_endpoint.model
 
     @property
     def chat_completions_url(self) -> str:
@@ -465,13 +480,14 @@ def build_reflection_backend(
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
     seed: int | None = None,
+    additional_endpoints: tuple[LLMEndpoint, ...] = (),
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name == "openai":
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed)
+        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 
@@ -585,6 +601,8 @@ class ReflectionStage:
                 if not response_path.exists():
                     _write_text(response_path, response)
             if self.logger is not None:
+                endpoint = getattr(self.backend, "base_url", None)
+                actual_model = getattr(self.backend, "model", None) or self.model or ""
                 artifact_refs = None
                 if artifact_dir is not None:
                     artifact_refs = {
@@ -597,7 +615,7 @@ class ReflectionStage:
                     response_text=response,
                     status=status,
                     backend=self.backend_name,
-                    model=self.model or "",
+                    model=actual_model,
                     candidate_id=candidate.id,
                     generation=candidate.generation,
                     module_name=reflection_type,
@@ -606,6 +624,7 @@ class ReflectionStage:
                     metadata={
                         "operation": self.operation,
                         "operation_type": "mutation",
+                        "endpoint": endpoint,
                         "sampling_seed": request_seed,
                         "token_counts": None,
                         "prompt_metadata": prompt_metadata,
@@ -624,7 +643,7 @@ class ReflectionStage:
                     reflection=response.strip(),
                     status="success",
                     attempts=tuple(attempts),
-                    model=self.model,
+                    model=getattr(self.backend, "model", None) or self.model,
                     backend=self.backend_name,
                     operation=self.operation,
                     parsed_response=parsed,
@@ -644,7 +663,7 @@ class ReflectionStage:
             status="failed",
             attempts=tuple(attempts),
             error=last_error or "Reflection stage failed.",
-            model=self.model,
+            model=getattr(self.backend, "model", None) or self.model,
             backend=self.backend_name,
             operation=self.operation,
             prompt_metadata=prompt_metadata,

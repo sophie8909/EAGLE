@@ -47,9 +47,9 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Self-play | explicit config gating; validated FIFO opponent-library capacity; failed/incomplete phenotype exclusion from the library; empty-valid-pool failure; persisted opponent-library seed/merge at the five-generation boundary; LISS-style exact semantic probe/action-vector deduplication with v1 readback/v2 writes; deterministic library selection and ten `self_play_*` uniform diagnostic slots; scalar Game Performance objective; inclusive `1.0` non-chained tiers; all-failed survivor-pool rejection; semantic second-parent/boundary-survivor diversity; deterministic cycling; immutable context IDs; zero-LLM phenotype-preserving parent refresh; mismatched-context rejection; library/context readback; legacy checkpoint migration; resume parity |
 | Semantic signatures | exactly three maps × early/mid/late states; full compiled agent actions; deterministic canonical hashes and cache hits; dataset-scoped exact equivalence; missing/incompatible fallback; artifact-only offline analysis |
 | Reflection operator selection | Exactly `static`, `aos_opponent`, and `aos_head2head`; config validation and resume identity; fixed static probabilities with no credit matches; comparison parent follows policy/generation-prompt/Java mutation-evidence provenance after crossover; execution-first ten-case rank reward without direct matches; configured head-to-head matrix with `[0,1]` W/D/L reward; shared EMA/floor; common artifacts and mode-labelled analysis |
-| Operations | shell positional mapping; sorted non-recursive directory batch; single YAML; direct-config replicates with incremented seeds or repeated `random_seeds`; ordered multi-replicate folder slots indexed by exact config filename; `eagle-experiment-index-v1` schema and absolute paths; legacy one-path mapping read and atomic upgrade; effective-seed validation; completed-slot skip; interrupted/final-test recovery before missing replicates; pre-generation-zero slot replacement retaining prior evidence; fresh index on fresh launch; `experiment-v2` filename preservation; fresh owned llama-server per run; final-test-only recovery avoids LLM startup; mock port isolation; runtime lifecycle, failure cleanup, foreign-process safety, stale-state reconciliation, experiment-state isolation, skip-final-test; mandatory GPU preflight plus fresh-child positive full `offloaded N/N layers to GPU` evidence; missing, stale, malformed, or partial evidence shuts down owned server and fails without CPU fallback; fixed GPU layers `999`, model threads `8`, server slots `2`, LLM workers `2`, match workers `10`; per-request `context_size` passed as total server context `context_size × 2`; bounded LLM stages return candidate-ordered results, cancel queued work on failure/interruption, and wait for active requests before returning; reflection-to-generation model barrier; serial ordered AOS reward application with unchanged formulas; no trace cleanup before dependent candidate work completes |
+| Operations | shell positional mapping; sorted non-recursive directory batch; single YAML; direct-config replicates with incremented seeds or repeated `random_seeds`; ordered multi-replicate folder slots indexed by exact config filename; `eagle-experiment-index-v1` schema and absolute paths; legacy one-path mapping read and atomic upgrade; effective-seed validation; completed-slot skip; interrupted/final-test recovery before missing replicates; pre-generation-zero slot replacement retaining prior evidence; fresh index on fresh launch; `experiment-v2` filename preservation; fresh owned llama-server per run; final-test-only recovery avoids LLM startup; mock port isolation; runtime lifecycle, failure cleanup, foreign-process safety, stale-state reconciliation, experiment-state isolation, skip-final-test; mandatory GPU preflight plus fresh-child positive full `offloaded N/N layers to GPU` evidence; missing, stale, malformed, or partial evidence shuts down owned server and fails without CPU fallback; one managed local primary plus at most one ordered unmanaged `{base_url, model}` endpoint per phase; all-endpoint fail-closed chat preflight; RuntimeManager ownership limited to primary; fixed GPU layers `999`, model threads `8`, managed-local server slots `2`, LLM workers `2`, match workers `10`; per-request `context_size` passed as total managed-local server context `context_size × 2`; canonical-index endpoint binding, sticky retries, no failover, ordered result collection, queued-work cancellation, and active-request drain; reflection-to-generation model barrier; serial ordered AOS reward application with unchanged formulas; no trace cleanup before dependent candidate work completes |
 | Offline analysis | explicit/latest run resolution is deterministic; only direct canonical children are eligible; only `generation_####.json` survivor snapshots are loaded; self-play sidecars are excluded; partial/failed runs expose derived failure outputs; unsupported or historical schemas fail explicitly; per-agent/win-rate/match plot rows use survivor snapshot generation and retain candidate birth generation; `results.jsonl` is never read |
-| LLM server lifecycle | missing executable/model; bounded readiness; occupied port; configured endpoint identity; durable logs; and stopping only the process created by the experiment orchestrator |
+| LLM server lifecycle | missing executable/model; bounded readiness; occupied local port; primary plus additional endpoint identity/order; chat completion required from every endpoint; durable actual-route logs; no cross-endpoint failover; and stopping only the primary local process created by the experiment orchestrator |
 
 ## Failure fixtures
 
@@ -104,7 +104,11 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
   leaving bulky raw per-match payloads out of the in-memory analysis view.
 - Reproducibility checks compare repeated seeded mock EA trajectories, one versus
   multiple match workers, deterministic tie-breaking under reordered inputs,
-  interruption/resume, root-seed changes, and independent request/retry seeds.
+  interruption/resume, root-seed changes, independent request/retry seeds, and
+  stable canonical-index endpoint assignment under out-of-order completion.
+  Endpoint-pool unit coverage uses slot, backend, and preflight mocks to prove
+  route selection, sticky dependent retries, no rerouting after failure, and
+  input-ordered results without claiming a live two-host concurrency result.
   Java seed-source checks validate repeatability in the actual JVM; seeded
   evaluator tests force out-of-order completion and compare canonical results.
 - A mock search is a smoke test, not proof of real Java/MicroRTS integration.
@@ -114,12 +118,33 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
 ## Documentation completion
 
 When tests reveal a code/spec discrepancy, update [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md). When documented behavior changes by explicit decision, update the authoritative/canonical docs and the Chinese overview according to [`../README.md`](../README.md).
-Focused runtime tests prove that the selected experiment GGUF is passed to
+Focused runtime tests must prove that the selected experiment GGUF is passed to
 llama.cpp, an identical folder-batch runtime is started only once, A/A/B/B/A
 switching is exact, PID reuse cannot satisfy ownership, unrelated processes are
-never stopped, verified stale state is cleaned, and all EA LLM operations use
-the same resolved endpoint/model identity. Actual shell and direct-Python mock
-commands remain required workflow checks in addition to unit tests.
+never stopped, verified stale state is cleaned, only the primary local process
+is lifecycle-managed, and every EA LLM operation records its actual resolved
+endpoint/model identity. Config and resume tests must preserve the endpoint list
+and order exactly. Actual shell and direct-Python mock commands remain required
+workflow checks in addition to unit tests.
+
+The focused multi-endpoint suite and full repository suite pass. On 2026-10-15,
+`http://192.168.1.136:1234/v1/models` and a bounded
+`/v1/chat/completions` request for `qwen/qwen3.5-9b` both returned HTTP 200 with
+valid OpenAI-compatible response structure. Full operational verification still
+requires one bounded experiment smoke demonstrating overlapping local/remote
+requests with both routes visible in artifacts.
+
+```bash
+python3 -m unittest tests.test_multi_endpoint_llm tests.test_llm_client \
+  tests.test_execution_concurrency tests.test_llm_task_seeds \
+  tests.test_offspring_concurrency tests.test_runtime_workflow \
+  tests.test_experiment_launcher tests.test_llm_logging \
+  tests.test_generation_attempts
+# Ran 95 tests ... OK
+
+python3 -m unittest discover -s tests
+# Ran 660 tests ... OK (skipped=4)
+```
 
 
 ## Deterministic Java materialization

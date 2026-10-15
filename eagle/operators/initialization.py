@@ -13,7 +13,7 @@ from typing import Protocol
 from eagle.artifacts import write_candidate_inputs, write_json
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.execution import parallel_map
+from eagle.execution import llm_worker_slot, parallel_map
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
 from eagle.generation.framework_slots import load_framework_bundle, sample_initial_genome
 from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
@@ -218,7 +218,9 @@ def initialize_population(
         selected_prompts=snapshot, timing_logger=timing_logger,
     ), drafts)
     population = list(configured)
-    for draft, strategy_prompt in zip(drafts, generated, strict=True):
+    for task_index, (draft, strategy_prompt) in enumerate(
+        zip(drafts, generated, strict=True)
+    ):
         if strategy_prompt in selected_prompts:
             root = candidates_dir / draft.id / "initialization" / "policy_generation"
             summary = json.loads((root / "result.json").read_text(encoding="utf-8"))
@@ -234,11 +236,12 @@ def initialize_population(
                 ),
             })
             write_json(attempt_dir / "result.json", rejected)
-            strategy_prompt = _generate_initial_policy(
-                draft, config=config, backend=policy_backend, candidates_dir=candidates_dir,
-                selected_prompts=selected_prompts, timing_logger=timing_logger,
-                start_attempt=summary["final_attempt"] + 1, prior_error=reason,
-            )
+            with llm_worker_slot(task_index):
+                strategy_prompt = _generate_initial_policy(
+                    draft, config=config, backend=policy_backend, candidates_dir=candidates_dir,
+                    selected_prompts=selected_prompts, timing_logger=timing_logger,
+                    start_attempt=summary["final_attempt"] + 1, prior_error=reason,
+                )
         candidate = replace(draft, strategy_prompt=strategy_prompt)
         write_candidate_inputs(candidates_dir, candidate)
         population.append(candidate)

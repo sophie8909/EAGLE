@@ -26,9 +26,10 @@ In scope:
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
-- one resolved experiment config and one owned llama.cpp lifecycle; an optional
-  second generation model may share that lifecycle through explicit phase
-  switches.
+- one resolved experiment config and one owned local llama.cpp lifecycle; each
+  model phase may add one ordered unmanaged OpenAI-compatible endpoint, while an
+  optional second generation model may share the owned-local lifecycle through
+  explicit phase switches.
 
 Code quality, compiler output, function coverage, alignment, and match
 telemetry remain diagnostics. They are not additional evolutionary objectives.
@@ -40,8 +41,11 @@ flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
     L --> Z["Generation 0: configured or LLM-generated policies"]
-    L -->|LLM roles enabled| RT["Owned llama.cpp runtime"]
-    RT -.-> Z
+    L -->|LLM roles enabled| RT["Owned local llama.cpp primary"]
+    L -->|optional per phase| EXT["Unmanaged additional endpoint"]
+    RT --> PF["Fail-closed chat preflight for all endpoints"]
+    EXT --> PF
+    PF -.-> Z
     Z --> SW
     P["Evaluated population"] --> S["Mode-specific parent selection"]
     S --> CG{"Java materialization mode"}
@@ -132,6 +136,12 @@ flowchart TD
   Reflection revision, and compile-guided generation repair; when omitted,
   `model` handles both phases. Deterministic DSL mode has no generation-model
   phase.
+- `model.additional_endpoints` and the same field under `generation_model` may
+  contain at most one `{base_url, model}` entry. The primary endpoint remains
+  the managed local llama.cpp process; an additional endpoint is unmanaged.
+  Canonical input index selects the ordered endpoint slot, retries remain sticky,
+  and there is no cross-endpoint failover. Results remain candidate ordered and
+  request evidence records the actual endpoint and model.
 - In inherited candidate mode with `llm` materialization, crossover selects
   policy, generation prompt, and Java parents independently; generated child
   Java becomes the inheritable Java component available to the next generation.

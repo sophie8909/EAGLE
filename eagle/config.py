@@ -11,7 +11,8 @@ from typing import Any
 
 import yaml
 
-from eagle.execution import MATCH_WORKERS
+from eagle.execution import LLM_WORKERS, MATCH_WORKERS
+from eagle.llm import LLMEndpoint
 from eagle.strategy_dsl import VERSION as STRATEGY_POLICY_FORMAT, normalize_strategy_dsl
 
 
@@ -84,6 +85,7 @@ class ModelConfig:
     batch_size: int = 512
     startup_timeout_seconds: float = 180.0
     health_timeout_seconds: float = 5.0
+    additional_endpoints: tuple[LLMEndpoint, ...] = ()
 
     @property
     def base_url(self) -> str:
@@ -102,6 +104,16 @@ class ModelConfig:
                 raise ValueError(f"model.{field_name} must be positive.")
         if self.startup_timeout_seconds <= 0 or self.health_timeout_seconds <= 0:
             raise ValueError("model startup and health timeouts must be positive.")
+        if len(self.additional_endpoints) + 1 > LLM_WORKERS:
+            raise ValueError(
+                f"model supports at most {LLM_WORKERS} total LLM endpoints."
+            )
+        endpoint_urls = [
+            self.base_url.rstrip("/"),
+            *(endpoint.base_url.rstrip("/") for endpoint in self.additional_endpoints),
+        ]
+        if len(set(endpoint_urls)) != len(endpoint_urls):
+            raise ValueError("model endpoint base URLs must be unique.")
         if require_files:
             if self.path is None or not self.path.is_file():
                 raise ValueError(f"model.path does not exist or is not a file: {self.path}")
@@ -828,17 +840,7 @@ class ExperimentConfig:
                 if self.algorithm == GAME_PERFORMANCE_SEMANTIC_SELECTION
                 else {"opponent_cases": "maximize"}
             ),
-            "model": {
-                "name": self.model.name,
-                "path": None if self.model.path is None else str(self.model.path),
-                "llama_server": None if self.model.llama_server is None else str(self.model.llama_server),
-                "host": self.model.host,
-                "port": self.model.port,
-                "context_size": self.model.context_size,
-                "batch_size": self.model.batch_size,
-                "startup_timeout_seconds": self.model.startup_timeout_seconds,
-                "health_timeout_seconds": self.model.health_timeout_seconds,
-            },
+            "model": _model_mapping(self.model),
             "seed_prompt_files": [str(path) for path in self.seed_prompt_files],
             "initial_population_mode": self.initial_population_mode,
             "initial_policy_generation_prompt_file": str(
@@ -1151,6 +1153,33 @@ def _parse_model(
     if obsolete:
         raise ValueError(f"Obsolete {field_name} runtime controls are not supported: " + ", ".join(obsolete))
 
+    raw_additional_endpoints = value.get("additional_endpoints", ())
+    if not isinstance(raw_additional_endpoints, (list, tuple)):
+        raise ValueError(f"{field_name}.additional_endpoints must be a list.")
+    additional_endpoints: list[LLMEndpoint] = []
+    for index, endpoint in enumerate(raw_additional_endpoints):
+        if not isinstance(endpoint, dict):
+            raise ValueError(
+                f"{field_name}.additional_endpoints[{index}] must be a mapping."
+            )
+        unknown = sorted(set(endpoint).difference({"base_url", "model"}))
+        if unknown:
+            raise ValueError(
+                f"Unknown {field_name}.additional_endpoints[{index}] fields: "
+                + ", ".join(unknown)
+            )
+        try:
+            additional_endpoints.append(
+                LLMEndpoint(
+                    base_url=str(endpoint.get("base_url", "")).strip(),
+                    model=str(endpoint.get("model", "")).strip(),
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid {field_name}.additional_endpoints[{index}]: {exc}"
+            ) from exc
+
     def path_value(key: str) -> Path | None:
         raw = value.get(key)
         if raw in (None, ""):
@@ -1169,6 +1198,7 @@ def _parse_model(
             batch_size=int(value.get("batch_size", 512)),
             startup_timeout_seconds=float(value.get("startup_timeout_seconds", 180)),
             health_timeout_seconds=float(value.get("health_timeout_seconds", 5)),
+            additional_endpoints=tuple(additional_endpoints),
         )
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid {field_name} configuration: {exc}") from exc
@@ -1177,7 +1207,7 @@ def _parse_model(
 
 
 def _model_mapping(model: ModelConfig) -> dict[str, object]:
-    return {
+    mapping: dict[str, object] = {
         "name": model.name,
         "path": None if model.path is None else str(model.path),
         "llama_server": None if model.llama_server is None else str(model.llama_server),
@@ -1188,6 +1218,12 @@ def _model_mapping(model: ModelConfig) -> dict[str, object]:
         "startup_timeout_seconds": model.startup_timeout_seconds,
         "health_timeout_seconds": model.health_timeout_seconds,
     }
+    if model.additional_endpoints:
+        mapping["additional_endpoints"] = [
+            {"base_url": endpoint.base_url, "model": endpoint.model}
+            for endpoint in model.additional_endpoints
+        ]
+    return mapping
 
 
 def _parse_evaluation_maps(

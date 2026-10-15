@@ -55,6 +55,15 @@ artifact。完整 schema 與 artifact 契約見
 以下 Candidate、genotype、source gate 與 generation 流程只描述
 `java_materialization_mode: llm`；deterministic 模式見上方說明。
 
+每個模型 phase 都以 `model`（或 `generation_model`）的一組本機欄位定義唯一
+managed primary endpoint，並可在同一區段加入最多一筆有序的
+`additional_endpoints`。Additional endpoint 的格式嚴格為
+`{base_url, model}`，代表 EAGLE 不擁有的 OpenAI-compatible service；整個 phase
+因此最多兩個 endpoint。`RuntimeManager` 只啟停 primary local llama.cpp，絕不
+adopt、restart、signal 或 stop additional endpoint。每個 endpoint 在 phase 工作前
+都必須完成 chat-completion preflight，任何一個失敗都 fail closed，不會開始
+candidate request。
+
 
 Candidate Java state 有兩種明確模式。LLM materialization 下，預設 `generated_phenotype` 的 active genotype 包含兩個
 可演化 prompt：
@@ -87,7 +96,10 @@ Controller state 使用 `eagle-reflection-operator-v6`。
 跳過 crossover／一般 mutation；診斷失敗不等於健康，也不能進入 variation。
 健康來源的獨立 gate、反思／rewrite、Code revision、Java decode／compile，
 以及初始 policy request 都在各自階段使用有界 LLM pool，結果依 candidate
-順序消費。初始 policy request 使用同一 configured-seed snapshot，並依 task 使用不同
+順序消費。`parallel_map` 以 canonical input index 對有序 endpoint slots 取模，
+因此在設定 additional endpoint 時，兩個 worker 可同時發出一個 local request 與
+一個 remote request；route 不受 thread 或完成順序影響。單一 task 的相依呼叫與
+retry 固定留在原 endpoint，transport failure 不會轉送到另一端。初始 policy request 使用同一 configured-seed snapshot，並依 task 使用不同
 seed；policy transport 是 stateless。Java-generation request context 才使用
 thread-local。重複結果依 candidate 順序重試。全部反思完成後才進入
 generation_model
@@ -114,8 +126,9 @@ replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
 reflection sampling、LLM request 與 retry 都依穩定任務身分衍生獨立 seed。
 可控的執行流程永遠採用此規則，不再提供 deterministic/non-deterministic 切換。
 一般評估、父子對戰及 final test 都傳遞並保存每場比賽的 JVM seed；多執行緒依固定
-match 順序彙整，seed 與決策不依完成順序或 thread 身分。GPU layer 固定為 `999`、model thread
-固定為 `8`、server slot 固定為 `2`、LLM worker 固定為 `2`、match worker 固定為 `10`，
+match 順序彙整，seed 與決策不依完成順序或 thread 身分。LLM endpoint assignment
+也只由 canonical input index 與 resolved config 中保存的 endpoint 順序決定。GPU
+layer 固定為 `999`、model thread 固定為 `8`、managed-local server slot 固定為 `2`、LLM worker 固定為 `2`、match worker 固定為 `10`，
 由 `eagle/execution.py` 統一管理。CUDA/GPU preflight 必須成功，無 GPU 時明確失敗，不回退 CPU。
 LLM temperature 仍可設定。相同版本的新 checkpoint 保存 stagnation 狀態，resume 可延續相同軌跡。
 
@@ -164,7 +177,9 @@ correctness 包含真正 compilation、runtime、control-flow 缺陷與 game／A
 `generation_model` 負責最後 Java generation、延後的 Code Reflection revision，
 以及 compile-guided repair；若未設定就仍由 `model` 全部處理。雙模型模式只使用
 一個受控 llama.cpp process，會在 materialization 前切到 generation model，並在
-下一代 reflection 前切回 primary model。
+下一代 reflection 前切回 primary model。兩個 phase 都可各自宣告最多一個
+`additional_endpoints`，但 phase switch 只切換受控的本機 primary；外部 endpoint
+沒有 process lifecycle 操作。
 
 所有會產生或解讀策略的 LLM 階段共用同一份不可變的
 `microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
@@ -300,6 +315,11 @@ conclusion、帶入該 conclusion 的修碼 request/raw response
 與抽取出的 reflected source。Snapshot JSON 不重複內嵌完整 inherited Java，resume
 由 canonical genotype 檔重建。
 
+Run 的 resolved `config.yaml` 會依設定順序保存每個 phase 的 primary 與
+additional endpoint 清單；這個順序屬於 execution identity。Resume 不允許新增、
+刪除、重排或改指 endpoint。每筆 LLM call index 與 `timing.jsonl` request event
+都必須記錄實際處理該 request 的 endpoint 與 model，不能只記 phase primary。
+
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8
 `.txt` 檔。`prompts/manifest.toml` 只保存 metadata 與 placeholder contract。
 Python 與 YAML 不再接受 inline prompt、seed template 或重複 prompt body。
@@ -431,13 +451,14 @@ canonical manifest 與最新 atomic generation snapshot；詳細端點另回傳 
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
 `experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、
-llama.cpp start/reuse/switch、health check、EA、resume、final test 與 owned-process
-cleanup。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
+managed-local llama.cpp start/reuse/switch、全部 endpoint 的 chat preflight、EA、
+resume、final test 與 owned-process cleanup。它只管理 primary local process；
+additional endpoint 永遠是 unmanaged。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 `python -m eagle runtime` 已移除。
 
 以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，格式為 `schema_version: eagle-experiment-index-v1`，以 `runs` 將精確 config 檔名對應至絕對 run folder 的有序清單；清單位置是從零開始的 replicate index。索引在每個 run 建立時立即原子更新。舊版「檔名 → 單一路徑」格式仍會讀取為一項清單，並在下次記錄 run 時原子升級，不會在下次執行時被當成 config。既有的 `experiment-v2` 同名設定檔不會被覆寫，該資料夾也不會產生批次索引。
 
-`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先驗證每個槽位的 effective seed，再優先續跑已索引但 search 或必要 final test 尚未完成的 run，跳過完整完成槽位，之後建立缺少的 replicate；新 run 仍會原子寫回同一索引。若 generation zero 尚未記錄，該槽位會換成新 run，舊 evidence 仍保留。若 search 已完成、只缺 final test，則不會為該步驟啟動 llama.cpp。全新啟動會建立新的索引。
+`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先驗證每個槽位的 effective seed 與完整有序 endpoint 清單，再優先續跑已索引但 search 或必要 final test 尚未完成的 run，跳過完整完成槽位，之後建立缺少的 replicate；新 run 仍會原子寫回同一索引。若 generation zero 尚未記錄，該槽位會換成新 run，舊 evidence 仍保留。若 search 已完成、只缺 final test，則不會為該步驟啟動 llama.cpp。全新啟動會建立新的索引。
 
 ## 驗證
 
@@ -448,6 +469,10 @@ git diff --check
 ```
 
 完整 evolutionary experiment 不是一般 repository migration 的必要驗證。
+雙 endpoint 的 focused config、route、concurrency、runtime propagation 與 preflight
+測試已通過；`192.168.1.136:1234` 的 models 與 bounded chat completion 也已回 HTTP
+200。仍需一次有界的完整實驗 smoke，確認 local/remote request 實際重疊且 artifacts
+同時出現兩個 route；本文不宣稱該完整實機驗證已完成。
 
 ## 2026-10-02 可維護性架構與文件入口
 

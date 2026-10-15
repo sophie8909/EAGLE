@@ -208,6 +208,8 @@ class PromptRewriteStage:
                 if not response_path.exists():
                     _write_text(response_path, response)
             if self.logger is not None:
+                endpoint = getattr(self.backend, "base_url", None)
+                actual_model = getattr(self.backend, "model", None) or self.model or ""
                 artifact_refs = None
                 if artifact_dir is not None:
                     artifact_refs = {
@@ -220,13 +222,13 @@ class PromptRewriteStage:
                     response_text=response,
                     status=status,
                     backend=self.backend_name,
-                    model=self.model or "",
+                    model=actual_model,
                     candidate_id=candidate.id,
                     generation=candidate.generation,
                     module_name=rewrite_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"operation": self.operation, "operation_type": "mutation", "sampling_seed": request_seed, "token_counts": None},
+                    metadata={"operation": self.operation, "operation_type": "mutation", "endpoint": endpoint, "sampling_seed": request_seed, "token_counts": None},
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
@@ -241,7 +243,7 @@ class PromptRewriteStage:
                     rewritten_prompt=rewritten_prompt,
                     status="success",
                     attempts=tuple(attempts),
-                    model=self.model,
+                    model=getattr(self.backend, "model", None) or self.model,
                     backend=self.backend_name,
                     operation=self.operation,
                     artifact_base=artifact_base if artifact_dir is not None else None,
@@ -256,7 +258,7 @@ class PromptRewriteStage:
             status="failed",
             attempts=tuple(attempts),
             error=last_error or "Rewrite stage failed.",
-            model=self.model,
+            model=getattr(self.backend, "model", None) or self.model,
             backend=self.backend_name,
             operation=self.operation,
             artifact_base=artifact_base if artifact_dir is not None else None,
