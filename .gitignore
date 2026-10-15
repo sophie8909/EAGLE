@@ -69,6 +69,7 @@ tournament/traces/*.xml
 /models/
 /vendor/llama.cpp/
 /key/uf_token
+/api_key/
 /experiment_env/model/*
 !/experiment_env/model/README.md
 /experiment_env/models/
