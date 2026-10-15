@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
@@ -16,6 +18,11 @@ DEFAULT_GENERATION_PROMPT = load_prompt("initial_generation")
 
 LINEAGE_SCHEMA_VERSION = "3.0"
 CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v5"
+FRAMEWORK_SLOTS_MATERIALIZATION_VERSION = "eagle-framework-slots-v1"
+FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION = "eagle-candidate-v8"
+FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION = "4.0"
+
+_SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 def has_completed_evaluation(candidate: "Candidate") -> bool:
@@ -44,6 +51,12 @@ class Candidate:
     candidate_java_mode: str = "generated_phenotype"
     java_materialization_mode: str = "llm"
     java_compiler_version: str | None = None
+    # ``framework_slots`` candidates evolve only this structured control
+    # genome. The framework bundle remains immutable run input, while each
+    # slot records independent component provenance.
+    control_genome: dict[str, Any] = field(default_factory=dict)
+    slot_parent_ids: dict[str, str] = field(default_factory=dict)
+    framework_bundle_sha256: str | None = None
     inherited_java: str = ""
     java_parent_id: str | None = None
     generated_java: str = ""
@@ -82,17 +95,85 @@ class Candidate:
                 "id",
                 f"gen_{self.generation:04d}_{uuid4().hex[:12]}",
             )
+        if self.java_materialization_mode == "framework_slots":
+            if self.candidate_java_mode != "generated_phenotype":
+                raise ValueError(
+                    "framework_slots requires candidate_java_mode=generated_phenotype."
+                )
+            if self.java_compiler_version is None:
+                object.__setattr__(
+                    self,
+                    "java_compiler_version",
+                    FRAMEWORK_SLOTS_MATERIALIZATION_VERSION,
+                )
+            elif self.java_compiler_version != FRAMEWORK_SLOTS_MATERIALIZATION_VERSION:
+                raise ValueError(
+                    "Unsupported framework_slots materialization version: "
+                    f"{self.java_compiler_version!r}."
+                )
+            if not isinstance(self.control_genome, dict):
+                raise ValueError("framework_slots control_genome must be a mapping.")
+            if any(not isinstance(slot_id, str) or not slot_id for slot_id in self.control_genome):
+                raise ValueError(
+                    "framework_slots control_genome slot IDs must be non-empty strings."
+                )
+            try:
+                json.dumps(self.control_genome, allow_nan=False)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "framework_slots control_genome must contain finite JSON values."
+                ) from exc
+            if not isinstance(self.slot_parent_ids, dict) or any(
+                not isinstance(slot_id, str)
+                or not slot_id
+                or not isinstance(parent_id, str)
+                or not parent_id
+                for slot_id, parent_id in self.slot_parent_ids.items()
+            ):
+                raise ValueError(
+                    "framework_slots slot_parent_ids must map non-empty slot IDs "
+                    "to non-empty candidate IDs."
+                )
+            unknown_slots = set(self.slot_parent_ids).difference(self.control_genome)
+            if unknown_slots:
+                raise ValueError(
+                    "framework_slots slot_parent_ids reference unknown control_genome "
+                    f"slots: {sorted(unknown_slots)}."
+                )
+            if not isinstance(self.framework_bundle_sha256, str) or not _SHA256_PATTERN.fullmatch(
+                self.framework_bundle_sha256
+            ):
+                raise ValueError(
+                    "framework_slots framework_bundle_sha256 must be a lowercase "
+                    "64-character SHA-256 digest."
+                )
 
     @property
     def active_genotype_components(self) -> tuple[str, ...]:
+        if self.java_materialization_mode == "framework_slots":
+            return ("control_genome",)
         if self.java_materialization_mode == "deterministic_dsl":
             return ("strategy_prompt",)
         return ("strategy_prompt", "generation_prompt", *(("inherited_java",) if self.candidate_java_mode == "inherited_genotype" else ()))
 
     def materialization_to_json_dict(self) -> dict[str, Any]:
-        return {"candidate_java_mode": self.candidate_java_mode, "java_materialization_mode": self.java_materialization_mode,
-                "java_compiler_version": self.java_compiler_version,
-                "active_genotype_components": list(self.active_genotype_components)}
+        payload = {
+            "candidate_java_mode": self.candidate_java_mode,
+            "java_materialization_mode": self.java_materialization_mode,
+            "java_compiler_version": self.java_compiler_version,
+            "active_genotype_components": list(self.active_genotype_components),
+        }
+        if self.java_materialization_mode == "framework_slots":
+            payload["framework_bundle_sha256"] = self.framework_bundle_sha256
+        return payload
+
+    @property
+    def candidate_schema_version(self) -> str:
+        if self.java_materialization_mode == "framework_slots":
+            return FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION
+        if self.java_materialization_mode == "deterministic_dsl":
+            return "eagle-candidate-v7"
+        return CANDIDATE_SNAPSHOT_SCHEMA_VERSION
 
     def objective_vector(self) -> tuple[float, ...]:
         """Return the fixed opponent cases used by lexicase selection."""
@@ -108,8 +189,11 @@ class Candidate:
         agent_template_path: object | None = None,
     ) -> str:
         """Build one request for a complete single-file Java agent."""
-        if self.java_materialization_mode == "deterministic_dsl":
-            raise ValueError("Deterministic candidates do not have a Java generation request.")
+        if self.java_materialization_mode in {"deterministic_dsl", "framework_slots"}:
+            raise ValueError(
+                f"{self.java_materialization_mode} candidates do not have a Java "
+                "generation request."
+            )
         from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
 
         # The default mode starts from the checked-in scaffold without parent
@@ -146,7 +230,7 @@ class Candidate:
         """
 
         payload = {
-            "candidate_schema_version": "eagle-candidate-v7" if self.java_materialization_mode == "deterministic_dsl" else CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "candidate_schema_version": self.candidate_schema_version,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             **self.materialization_to_json_dict(),
             "id": self.id,
@@ -183,6 +267,26 @@ class Candidate:
             # The complete component is stored only at the genotype artifact
             # path. Snapshots retain provenance, not duplicate source bodies.
             payload["java_parent_id"] = self.java_parent_id
+        if self.java_materialization_mode == "framework_slots":
+            for key in (
+                "strategy_policy_format",
+                "strategy_prompt",
+                "generation_prompt",
+                "strategy_parent_id",
+                "generation_prompt_parent_id",
+            ):
+                payload.pop(key, None)
+            payload.update(
+                control_genome={
+                    slot_id: self.control_genome[slot_id]
+                    for slot_id in sorted(self.control_genome)
+                },
+                slot_parent_ids={
+                    slot_id: self.slot_parent_ids[slot_id]
+                    for slot_id in sorted(self.slot_parent_ids)
+                },
+                framework_bundle_sha256=self.framework_bundle_sha256,
+            )
         return payload
 
     def to_individual_dict(self) -> dict[str, Any]:
@@ -197,8 +301,8 @@ class Candidate:
     def to_summary_dict(self) -> dict[str, Any]:
         """Return fitness and timing data for run-level summaries."""
 
-        return {
-            "candidate_schema_version": "eagle-candidate-v7" if self.java_materialization_mode == "deterministic_dsl" else CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+        payload = {
+            "candidate_schema_version": self.candidate_schema_version,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             **self.materialization_to_json_dict(),
             "candidate_id": self.id,
@@ -219,16 +323,25 @@ class Candidate:
             "timing": dict(self.timing),
             "artifacts": dict(self.artifacts),
         }
+        if self.java_materialization_mode == "framework_slots":
+            payload.pop("strategy_policy_format", None)
+        return payload
 
     def resolved_source_candidate_ids(self) -> tuple[str, ...]:
         """Return stable contributing candidate IDs without inspecting component text."""
 
-        ordered = (
-            *self.source_candidate_ids,
-            self.strategy_parent_id,
-            self.generation_prompt_parent_id if "generation_prompt" in self.active_genotype_components else None,
-            self.java_parent_id if self.java_materialization_mode == "llm" else None,
-        )
+        if self.java_materialization_mode == "framework_slots":
+            ordered = tuple(
+                self.slot_parent_ids[slot_id]
+                for slot_id in sorted(self.slot_parent_ids)
+            )
+        else:
+            ordered = (
+                *self.source_candidate_ids,
+                self.strategy_parent_id,
+                self.generation_prompt_parent_id if "generation_prompt" in self.active_genotype_components else None,
+                self.java_parent_id if self.java_materialization_mode == "llm" else None,
+            )
         unique: list[str] = []
         for candidate_id in ordered:
             if candidate_id is not None and candidate_id not in unique:
@@ -239,17 +352,33 @@ class Candidate:
         """Serialize canonical first-class lineage independent of generic metadata."""
 
         payload = {
-            "lineage_schema_version": LINEAGE_SCHEMA_VERSION,
+            "lineage_schema_version": (
+                FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION
+                if self.java_materialization_mode == "framework_slots"
+                else LINEAGE_SCHEMA_VERSION
+            ),
             **self.materialization_to_json_dict(),
             "candidate_id": self.id,
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
             "operator": self.operator,
             "mutation_type": self.mutation_type,
-            "strategy_parent_id": self.strategy_parent_id,
-            "generation_prompt_parent_id": self.generation_prompt_parent_id if "generation_prompt" in self.active_genotype_components else None,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
         }
+        if self.java_materialization_mode == "framework_slots":
+            payload["slot_parent_ids"] = {
+                slot_id: self.slot_parent_ids[slot_id]
+                for slot_id in sorted(self.slot_parent_ids)
+            }
+        else:
+            payload.update(
+                strategy_parent_id=self.strategy_parent_id,
+                generation_prompt_parent_id=(
+                    self.generation_prompt_parent_id
+                    if "generation_prompt" in self.active_genotype_components
+                    else None
+                ),
+            )
         if self.java_materialization_mode == "llm" and (self.inherited_java or self.java_parent_id is not None):
             payload["java_parent_id"] = self.java_parent_id
         return payload

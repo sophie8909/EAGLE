@@ -17,7 +17,8 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/__main__.py` | Dispatches `experiment`, `analyze`, and read-only `monitor` |
+| `eagle/__main__.py` | Dispatches `experiment`, `analyze`, read-only `monitor`, and explicit Gemini framework bootstrap |
+| `eagle/cli/framework.py` | One-time Gemini framework-bootstrap arguments and exit codes |
 | `eagle/cli/monitor.py` | Local experiment monitor arguments and server lifecycle |
 | `eagle/monitoring.py` | Canonical run status collection and read-only HTTP API |
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
@@ -34,6 +35,7 @@ kept as documentation entries.
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/self_play.py` | Managed self-play opponent library, five-generation context selection, context hashes, resume loading, and selection guards |
 | `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
+| `eagle/operators/framework_slots.py` | Seeded per-slot crossover, one-slot mutation, and exact slot provenance |
 | `eagle/evolution/resume.py` | v2 snapshot load/finalization around the shared generation step |
 | `eagle/operators/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/operators/adaptive.py` | Static and adaptive reflection-operator selection |
@@ -60,6 +62,8 @@ kept as documentation entries.
 | Path | Responsibility |
 | --- | --- |
 | `eagle/generation/backend.py` | LLM-mode mock/OpenAI-compatible complete-source generation |
+| `eagle/generation/gemini_framework.py` | Standalone Gemini structured bootstrap, bounded attempt evidence, and normalized bundle publication |
+| `eagle/generation/framework_slots.py` | Strict bundle/genome validation, finite domains, hashing, seeded sampling, and deterministic marker rendering |
 | `eagle/generation/java_agent_generator.py` | LLM-mode complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
 | `eagle/generation/agent_template.py` | Java template and canonical scaffold assembly contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |

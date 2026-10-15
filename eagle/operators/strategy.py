@@ -344,7 +344,11 @@ class StrategyReflectionPipeline:
             contract_rewrite_applied = False
             try:
                 validate_strategy_prompt_contract(proposed_strategy)
-                corrected_strategy = normalize_strategy_dsl(proposed_strategy, max_chars=self.max_policy_chars)
+                corrected_strategy = normalize_strategy_dsl(
+                    proposed_strategy,
+                    max_chars=self.max_policy_chars,
+                    allow_reference=False,
+                )
                 _write_json(artifact_dir, "reflection/strategy_contract_rewrite.json", {
                     "applied": False,
                     "initial_validation_error": None,
@@ -380,7 +384,11 @@ class StrategyReflectionPipeline:
                     "applied": True,
                     "initial_validation_error": initial_validation_error,
                 })
-            corrected_strategy = normalize_strategy_dsl(corrected_strategy, max_chars=self.max_policy_chars)
+            corrected_strategy = normalize_strategy_dsl(
+                corrected_strategy,
+                max_chars=self.max_policy_chars,
+                allow_reference=False,
+            )
             coach = replace(coach, new_strategy_prompt=corrected_strategy)
             child_signature = normalize_strategy_signature(coach.strategy_signature)
             child_niche = build_strategy_niche(child_signature)
@@ -1200,7 +1208,7 @@ def _validate_strategy_contract_rewrite_response(
             field_name="revised_strategy_prompt",
             mode="legacy_object",
         )
-    normalized = normalize_strategy_dsl(prompt)
+    normalized = normalize_strategy_dsl(prompt, allow_reference=False)
     validate_strategy_prompt_contract(normalized)
     extraction = {
         **extraction,

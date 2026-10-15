@@ -363,7 +363,11 @@ class PromptRewriteMutation:
             )
         try:
             rewritten = (
-                normalize_strategy_dsl(rewrite.rewritten_prompt, max_chars=self.config.max_prompt_chars)
+                normalize_strategy_dsl(
+                    rewrite.rewritten_prompt,
+                    max_chars=self.config.max_prompt_chars,
+                    allow_reference=False,
+                )
                 if self.mutation_type == "strategy"
                 else normalize_prompt(rewrite.rewritten_prompt, max_chars=self.config.max_prompt_chars, max_lines=self.config.max_prompt_lines)
             )

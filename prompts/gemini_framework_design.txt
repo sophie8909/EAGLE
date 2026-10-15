@@ -1,0 +1,49 @@
+Gemini Framework Design stage.
+
+Design one complete Java MicroRTS CandidateAgent framework whose evolutionary
+variation is restricted to a small, explicit set of typed slots. The framework
+itself is immutable after this bootstrap call. Later evolutionary code may
+replace only the declared slot markers; it must never ask an LLM to regenerate
+the framework.
+
+User design brief:
+$design_brief
+
+Closed-world MicroRTS gameplay contract:
+$gameplay_contract
+
+CandidateAgent source and API constraints:
+$action_api_guide
+
+Return the response required by the supplied JSON schema. Observe these
+additional semantic requirements:
+
+- schema_version is exactly eagle-framework-bundle-v1.
+- framework_id is a lowercase slug containing only letters, digits,
+  underscores, or hyphens, and starts with a letter.
+- java_template is one complete compilable-shape ai.generated.CandidateAgent
+  source file. It declares `public final class CandidateAgent extends
+  AbstractionLayerAI`, the required constructors, getAction, reset, and clone.
+- java_template contains exactly one ordered
+  `// EAGLE_AGENT_STRATEGY_START` / `// EAGLE_AGENT_STRATEGY_END` pair.
+- Every declared slot appears exactly once inside that strategy region as the
+  exact token `{{EAGLE_SLOT:<slot_id>}}`. Do not emit undeclared slot markers.
+- Slot IDs and choice IDs match `[a-z][a-z0-9_]{0,63}`.
+- Slot kind is `integer`, `number`, or `expression_choice`.
+- Integer and number slots have inclusive minimum/maximum bounds, a positive
+  step, a default aligned to that step, and an empty choices array.
+- Expression-choice slots have null minimum/maximum/step. Their default is one
+  declared choice_id. Every choice is one side-effect-free Java expression,
+  not a statement, method, block, declaration, patch, or complete source file.
+- Prefer a small set of high-leverage, orthogonal controls. Do not expose file,
+  network, reflection, process, class-loading, environment, or runtime-LLM APIs.
+- slot_generation_prompt is a complete reusable prompt that asks another model
+  for only a JSON mapping from every slot_id to a legal value/choice_id. It must
+  restate bounds and choices and forbid Java/framework rewrites.
+- report is structural rather than prose wrapped around the bundle. It records
+  architecture summary, ordered decision flow, invariants, assumptions, and
+  risks. `slot_rationale` is an object whose keys are exactly all declared
+  slot_id values and whose values are non-empty rationale strings.
+
+Do not place Markdown fences around Java or JSON. Do not add keys outside the
+provided response schema.

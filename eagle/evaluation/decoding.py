@@ -80,6 +80,15 @@ def decode_validate_compile_candidate(
     if config.java_materialization_mode == "deterministic_dsl":
         return _materialize_dsl(candidate, config=config, generated_agents_dir=generated_agents_dir,
                                 classes_dir=classes_dir, mock=mock, artifact_dir=candidate_artifact_dir)
+    if config.java_materialization_mode == "framework_slots":
+        return _materialize_framework_slots(
+            candidate,
+            config=config,
+            generated_agents_dir=generated_agents_dir,
+            classes_dir=classes_dir,
+            mock=mock,
+            artifact_dir=candidate_artifact_dir,
+        )
     operation = getattr(backend, "operation", None)
     initial_seed_source = operation == "initial_java_seed"
     source_without_generation = operation in {
@@ -348,6 +357,7 @@ def _materialize_dsl(candidate: Candidate, *, config: ExperimentConfig,
                 "operation": "deterministic_dsl_compile", "materialization_mode": "deterministic_dsl",
                 "compiler_version": config.java_compiler_version, "llm_attempts": [],
                 "policy_sha256": None, "scaffold_sha256": None, "source_sha256": None,
+                "reference_agent": None, "reference_source_sha256": None,
                 "normalized_policy": None, "diagnostics": []}
     source, region, failure, scaffold = "", "", None, ""
     try:
@@ -360,6 +370,8 @@ def _materialize_dsl(candidate: Candidate, *, config: ExperimentConfig,
         source, region = compiled.complete_source, compiled.strategy_region
         evidence.update(normalized_policy=compiled.normalized_policy, policy_sha256=compiled.policy_sha256,
                         scaffold_sha256=compiled.scaffold_sha256, source_sha256=compiled.source_sha256,
+                        reference_agent=compiled.reference_agent,
+                        reference_source_sha256=compiled.reference_source_sha256,
                         diagnostics=compiled.diagnostics)
     except (ValueError, TypeError, RuntimeError, OSError) as exc:
         failure = str(exc)
@@ -416,6 +428,194 @@ def _materialize_dsl(candidate: Candidate, *, config: ExperimentConfig,
                                       request_kind="deterministic_dsl_compile", selected=selected, final=True)
     return BoundedGenerationResult((attempt,), 1 if selected else None, 1, 1, False, True,
                                    materialization_timing=materialization, compiler_evidence=evidence)
+
+
+def _materialize_framework_slots(
+    candidate: Candidate,
+    *,
+    config: ExperimentConfig,
+    generated_agents_dir: Path,
+    classes_dir: Path,
+    mock: bool,
+    artifact_dir: Path | None,
+) -> BoundedGenerationResult:
+    """Render one framework genome and run the ordinary validation/javac gates."""
+
+    from eagle.artifacts import write_json
+    from eagle.generation.framework_slots import load_framework_bundle, render_framework
+
+    evidence_path = None if artifact_dir is None else artifact_dir / "generation" / "framework_evidence.json"
+    if evidence_path is not None and evidence_path.exists():
+        raise RuntimeError("Refusing to overwrite persisted framework materialization evidence.")
+    if config.framework_bundle_path is None or config.framework_bundle_sha256 is None:
+        raise ValueError("framework_slots materialization requires a validated bundle.")
+    if candidate.framework_bundle_sha256 != config.framework_bundle_sha256:
+        raise ValueError(
+            "Candidate framework bundle hash does not match the run bundle exact bytes."
+        )
+
+    started_at, started = utc_now(), time.monotonic()
+    evidence: dict[str, object] = {
+        "schema_version": "eagle-framework-materialization-v1",
+        "operation": "framework_slot_assembly",
+        "materialization_mode": "framework_slots",
+        "materialization_version": config.java_compiler_version,
+        "framework_id": None,
+        "framework_bundle_sha256": config.framework_bundle_sha256,
+        "canonical_bundle_sha256": None,
+        "template_sha256": None,
+        "genome_sha256": None,
+        "source_sha256": None,
+        "control_genome": dict(candidate.control_genome),
+        "slot_parent_ids": dict(candidate.slot_parent_ids),
+    }
+    source = ""
+    region = ""
+    immutable_scaffold_source: str | None = None
+    failure: str | None = None
+    try:
+        bundle = load_framework_bundle(
+            config.framework_bundle_path,
+            expected_sha256=config.framework_bundle_sha256,
+        )
+        immutable_scaffold_source = bundle.java_template
+        rendered = render_framework(bundle, candidate.control_genome)
+        source = rendered.source
+        evidence.update(
+            framework_id=bundle.framework_id,
+            canonical_bundle_sha256=rendered.bundle_sha256,
+            template_sha256=rendered.template_sha256,
+            genome_sha256=rendered.genome_sha256,
+            source_sha256=rendered.source_sha256,
+            control_genome={
+                slot.slot_id: candidate.control_genome[slot.slot_id]
+                for slot in bundle.slots
+            },
+        )
+        region = extract_strategy_region(source)
+    except (ValueError, TypeError, RuntimeError, OSError) as exc:
+        failure = str(exc)
+
+    materialization = {
+        "schema_version": "eagle-java-materialization-v1",
+        "mode": "framework_slots",
+        "compiler_version": config.java_compiler_version,
+        "operation": "framework_slot_assembly",
+        "started_at": started_at,
+        "finished_at": utc_now(),
+        "duration_seconds": max(0.0, time.monotonic() - started),
+        "status": "failed" if failure else "success",
+        "error": failure,
+    }
+    if evidence_path is not None:
+        write_json(evidence_path, evidence)
+        if source:
+            source_path = artifact_dir / "generation" / "rendered_candidate.java"
+            source_path.parent.mkdir(parents=True, exist_ok=True)
+            source_path.write_text(source, encoding="utf-8")
+
+    validation_started_at, validation_started = utc_now(), time.monotonic()
+    validation = (
+        ValidationResult(False, failure, failure_reason=failure)
+        if failure
+        else validate_generated_java_source(
+            source,
+            "CandidateAgent",
+            immutable_scaffold_source=immutable_scaffold_source,
+        )
+    )
+    validation_timing = {
+        "started_at": validation_started_at,
+        "finished_at": utc_now(),
+        "duration_seconds": max(0.0, time.monotonic() - validation_started),
+        "status": "blocked" if failure else "success" if validation.ok else "failed",
+        "error": failure or validation.error or None,
+    }
+    agent = None
+    if validation.ok:
+        source_path = generated_agents_dir / candidate.id / "CandidateAgent.java"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_text(source, encoding="utf-8")
+        agent = GeneratedJavaAgent(
+            "CandidateAgent",
+            "ai.generated",
+            source,
+            source_path,
+            extracted_code=source,
+            strategy_region=region,
+            validation_result=validation,
+        )
+    generation = JavaAgentGenerationResult(
+        assembled_java=source,
+        extracted_code=source,
+        strategy_region=region,
+        strategy_region_score_result=(
+            evaluate_agent_strategy_region(region) if validation.ok else None
+        ),
+        validation_result=validation,
+        validation_timing=validation_timing,
+        agent=agent,
+        failure_stage="materialization" if failure else None if validation.ok else "validation",
+        failure_reason=failure or validation.error or None,
+    )
+    compilation = {
+        "started_at": None,
+        "finished_at": None,
+        "duration_seconds": None,
+        "status": "blocked",
+        "error": generation.failure_reason,
+    }
+    compile_result = None
+    compile_error = None
+    if agent is not None:
+        compilation_started_at, compilation_started = utc_now(), time.monotonic()
+        _safe_remove_candidate_tree(classes_dir / candidate.id, classes_dir)
+        try:
+            compile_result = compile_agent_source(
+                agent,
+                config=config,
+                classes_dir=classes_dir,
+                candidate_id=candidate.id,
+                mock=mock,
+            )
+        except (RuntimeError, OSError, ValueError) as exc:
+            compile_error = str(exc)
+        compilation = {
+            "started_at": compilation_started_at,
+            "finished_at": utc_now(),
+            "duration_seconds": max(0.0, time.monotonic() - compilation_started),
+            "status": (
+                "success" if compile_result is not None and compile_result.ok else "failed"
+            ),
+            "error": compile_error or (
+                compile_error_message(compile_result)
+                if compile_result is not None and not compile_result.ok
+                else None
+            ),
+        }
+    selected = compile_result is not None and compile_result.ok
+    attempt = GenerationAttemptResult(
+        1,
+        "",
+        generation,
+        compile_result,
+        compile_error,
+        {},
+        compilation,
+        request_kind="framework_slot_assembly",
+        selected=selected,
+        final=True,
+    )
+    return BoundedGenerationResult(
+        (attempt,),
+        1 if selected else None,
+        1,
+        1,
+        False,
+        True,
+        materialization_timing=materialization,
+        compiler_evidence=evidence,
+    )
 
 
 def _compile_repair_request(

@@ -25,6 +25,7 @@ from eagle.operators.initialization import generation_zero_uses_fixed_java, init
 from eagle.operators.selection import best_candidate, population_signature
 from eagle.run_artifacts import (
     finalize_run,
+    freeze_framework_bundle,
     initialize_run_manifest,
     mark_run_failed,
     mark_run_interrupted,
@@ -120,6 +121,7 @@ def _run_search_impl(
     candidates_dir.mkdir()
     generated_agents_dir.mkdir()
     classes_dir.mkdir()
+    config = freeze_framework_bundle(run_dir, config)
     initialize_run_manifest(run_dir, config=config)
     try:
         write_run_config(run_dir, config, mock=mock)

@@ -7,7 +7,7 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        print("Usage: python -m eagle {experiment|analyze|monitor} ...")
+        print("Usage: python -m eagle {experiment|analyze|monitor|framework} ...")
         return 2
     command, rest = args[0], args[1:]
     if command == "experiment":
@@ -19,6 +19,9 @@ def main(argv: list[str] | None = None) -> int:
     if command == "monitor":
         from eagle.cli.monitor import main as monitor_main
         return monitor_main(rest)
+    if command == "framework":
+        from eagle.cli.framework import main as framework_main
+        return framework_main(rest)
     print(f"Unknown EAGLE command: {command}")
     return 2
 

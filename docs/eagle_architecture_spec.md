@@ -655,13 +655,23 @@ validation, or javac failure retains stage evidence and uses the canonical
 failure sentinel; no LLM fallback is allowed. Fitness, objective, self-play,
 fixed-roster, and selection formulas are unchanged.
 
+The checked-in generation-zero WorkerRush seed is the only reference policy in
+DSL v1. It has empty `rules` and `reference_agent: "WorkerRush"`. Deterministic
+materialization delegates to the vendored canonical
+`ai.abstraction.WorkerRush`, replays its complete `PlayerAction` through the
+fixed CandidateAgent action boundary, and records the exact vendored source
+hash. LLM initialization and Strategy mutation cannot emit reference policies;
+all evolved policies remain ordinary finite rules.
+
 Candidate artifacts record mode, compiler version, and
 `active_genotype_components`; deterministic values are exactly
 `["strategy_prompt"]`. Compiler evidence uses `generation/compiler_evidence.json`
 (`eagle-dsl-materialization-v1`), `generation/normalized_policy.json`,
 `generation/compiled_candidate.java`, and `generation/scaffold.java`. Evidence readback checks the normalized policy, emitted source, and scaffold hashes; resume checks the configured scaffold hash against persisted evidence. The result records operation
 `deterministic_dsl_compile`, policy/scaffold/source hashes, deterministic
-diagnostics, and an empty `llm_attempts` array. Deterministic candidate snapshots
+diagnostics, and an empty `llm_attempts` array. It also records nullable
+`reference_agent` and `reference_source_sha256`; readback verifies the vendored
+source hash whenever a reference policy is active. Deterministic candidate snapshots
 use `eagle-candidate-v7`, and their generation results use `phase4-v7`;
 shared downstream stage schemas retain their existing versions. The LLM path retains `eagle-candidate-v6`
 and `phase4-v6`. Deterministic configuration requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`; any other values are rejected. Resume rejects unknown compiler versions, protocol mismatches,
@@ -669,3 +679,51 @@ and attempts to cross materialization modes before replay. Historical configs
 without the field remain LLM mode. Focused contracts and bounded real self-play
 validation pass; see `testing/test_contracts.md` for verification and environment
 limitations.
+
+## 16. Gemini framework and finite-slot mode
+
+`framework_slots` is a third Java materialization mode with an explicit
+two-stage boundary. Before a run, `python -m eagle framework` performs one
+bounded Gemini `generateContent` bootstrap using the checked-in gameplay and API
+contracts. It persists every credential-free request and raw response before
+parsing and publishes one strictly validated `eagle-framework-bundle-v1`.
+Bootstrap is never implicit in experiment startup and is the only Gemini/LLM
+work in this mode.
+
+The structured bundle has exactly `schema_version`, `framework_id`,
+`java_template`, `slots`, `slot_generation_prompt`, and `report`. Each slot has
+exactly `slot_id`, `kind`, `marker`, `default`, `minimum`, `maximum`, `step`,
+`choices`, and `purpose`; its canonical marker is
+`{{EAGLE_SLOT:<slot_id>}}`. Kinds are finite-lattice `integer`, finite-lattice
+`number`, or `expression_choice`. Every expression choice has exactly
+`choice_id`, `java_expression`, and `description`; the candidate stores only the
+choice ID, so formulas are selected from bundle-frozen expressions rather than
+generated as source. The report has exactly `architecture_summary`,
+`decision_flow`, `invariants`, `slot_rationale`, `assumptions`, and `risks`, with
+`slot_rationale` mapping exactly all slot IDs to nonempty strings. The complete
+schema and bootstrap prompt contract are canonical in
+[framework slots](architecture/framework_slots.md).
+
+Config resolution validates the exact bundle bytes and records their schema
+version and SHA-256. Run creation freezes a run-owned copy; resume rejects
+version/hash drift and never adopts a changed external file. The only active
+candidate component is `control_genome`. Generation zero samples complete legal
+genomes; seeded local uniform crossover selects each slot independently with
+`slot_parent_ids`, and local mutation changes at most one slot to a different
+legal value. Equal bundle/genome/materializer inputs produce byte-identical
+complete Java and reconstructible hashes.
+
+Framework-slot mode uses `candidate_java_mode: generated_phenotype`,
+`parent_evaluation_mode: reuse_cached`, `reflection_operator_mode: static`, and
+protocol/materializer version `eagle-framework-slots-v1`. It performs no
+candidate-time LLM generation, Strategy/Prompt/Code Reflection, source repair,
+or compile repair. Render failure has no fallback. Successfully rendered source
+continues through the unchanged security validation, one javac, Integration,
+semantic probe, objectives, parent-plus-offspring selection, and ten-opponent x
+three-map x three-round x two-side evaluation.
+
+`GEMINI_API_KEY` is accepted only from the bootstrap process environment and is
+never written to prompt, request, config, bootstrap, run, candidate, or failure
+artifacts. Raw provider output and structured report are untrusted evidence;
+schema validation, Java-envelope checks, ordinary validation, javac, and
+Integration remain mandatory trust boundaries.

@@ -136,6 +136,13 @@ choose/hashed behavior plus a deterministic smoke run with zero Java LLM calls,
 reconstructible source, complete semantic probe, and executable matches. Do not
 run the full evolutionary experiment for this contract.
 
+WorkerRush validation additionally runs the compiled generation-zero reference
+and vendored `ai.abstraction.WorkerRush` in lockstep on all three canonical maps,
+both player sides, and compares every issued unit action across multiple cycles.
+It also verifies Gen 0 selects the reference policy and persists the exact
+vendored source hash. Match W/D/L is supplementary evidence, not the parity
+oracle.
+
 ### Verification recorded on 2026-10-14
 
 Use the existing project virtual environment for repository validation:
@@ -170,3 +177,37 @@ The smoke uses the existing self-play library because this local checkout lacks
 by unit/regression tests; a real fixed-roster smoke requires that existing asset.
 The 1- and 10-tick trial caps were too short for three distinct actionable phases;
 the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.
+
+## Gemini framework and finite slots
+
+Tests must prove the bootstrap uses native Gemini `generateContent` structured
+JSON with the REST enum encoding required by `responseFormat`; persists
+credential-free requests and raw bytes before parsing; retains failed attempts;
+surfaces bounded provider error diagnostics; applies bounded retry
+classification; validates the exact bundle/report/marker schema; normalizes the
+selected bundle; and never persists `GEMINI_API_KEY`. CLI dispatch and
+non-overwrite behavior are contracts.
+
+Core tests must cover exact-key rejection, finite numeric lattices, enumerated
+expression choices, canonical hashes, insertion-order-independent rendering,
+unresolved/duplicate marker rejection, seeded generation-zero sampling,
+deterministic per-slot crossover/provenance, and one-slot mutation to a different
+legal value. Candidate/config tests must prove `control_genome` is the only
+active component and exact bundle bytes/version/hash are fenced.
+
+Pipeline/artifact/resume tests must prove the run-owned
+`framework/bundle.json` is immutable; candidate inputs precede materialization;
+source is reconstructible from bundle plus genome; framework evidence contains
+all hashes; validation/javac/Integration/matches are unchanged; render or compile
+failure has no LLM fallback; all reflection/generation timing streams are empty;
+and drift, unknown versions, incomplete slot provenance, or mismatched hashes
+fail before replay. The focused command is:
+
+```bash
+python3 -m unittest \
+  tests.test_gemini_framework \
+  tests.test_framework_slots \
+  tests.test_framework_slots_candidate_config \
+  tests.test_framework_slots_artifacts \
+  tests.test_framework_slots_integration
+```

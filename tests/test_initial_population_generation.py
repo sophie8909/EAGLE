@@ -37,6 +37,44 @@ class ScriptedPolicyBackend:
 
 
 class InitialPopulationGenerationTests(unittest.TestCase):
+    def test_deterministic_dsl_gen_zero_is_one_reference_and_nine_rule_policies(self) -> None:
+        config = ExperimentConfig.from_mapping({
+            "java_materialization_mode": "deterministic_dsl",
+            "candidate_java_mode": "generated_phenotype",
+            "parent_evaluation_mode": "reuse_cached",
+            "seed_prompt_files": ["seeds/worker_rush_policy.txt"],
+            "initial_population_mode": "llm_generated_policies",
+            "population_size": 10,
+        })
+        backend = ScriptedPolicyBackend([
+            json.dumps({"strategy_prompt": worker_rush_policy(index)})
+            for index in range(1, 10)
+        ])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            population = initialize_population(
+                config,
+                policy_backend=backend,
+                candidates_dir=Path(temp_dir) / "candidates",
+            )
+
+        self.assertEqual(len(population), 10)
+        self.assertEqual(
+            population[0].strategy_prompt,
+            Path("seeds/worker_rush_policy.txt").read_text(encoding="utf-8").strip(),
+        )
+        self.assertEqual(population[0].metadata["initial_policy_source"], "configured_seed")
+        self.assertEqual(
+            [candidate.metadata["initial_policy_source"] for candidate in population[1:]],
+            ["llm_generated"] * 9,
+        )
+        self.assertEqual(len({candidate.strategy_prompt for candidate in population}), 10)
+        self.assertTrue(all(
+            candidate.active_genotype_components == ("strategy_prompt",)
+            and candidate.java_materialization_mode == "deterministic_dsl"
+            for candidate in population
+        ))
+        self.assertEqual(len(backend.requests), 9)
+
     def test_config_generates_nine_policy_prompts_but_keeps_worker_rush_java(self) -> None:
         config = ExperimentConfig.from_file(CONFIG_PATH)
         config.validate()
@@ -309,9 +347,9 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         strategy = path.read_text(encoding="utf-8").split(
             "// EAGLE_AGENT_STRATEGY_START", 1
         )[1].split("// EAGLE_AGENT_STRATEGY_END", 1)[0]
-        self.assertIn("trainWorkers", strategy)
-        self.assertIn("commandHarvest", strategy)
-        self.assertIn("commandAttack", strategy)
+        self.assertIn("new ai.abstraction.WorkerRush(utt)", strategy)
+        self.assertIn("referenceAgent.getAction", strategy)
+        self.assertIn("commandPlannedAction", strategy)
 
     def test_mock_search_generates_java_for_llm_policy_generation_zero(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

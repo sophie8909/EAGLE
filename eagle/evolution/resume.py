@@ -9,10 +9,21 @@ from pathlib import Path
 import yaml
 
 from eagle.artifacts import write_summary
-from eagle.config import ExperimentConfig, EVOLUTION_PROTOCOL, DSL_EVOLUTION_PROTOCOL, JAVA_COMPILER_VERSION, STRATEGY_POLICY_FORMAT
+from eagle.config import (
+    DSL_EVOLUTION_PROTOCOL,
+    EVOLUTION_PROTOCOL,
+    FRAMEWORK_BUNDLE_VERSION,
+    FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL,
+    JAVA_COMPILER_VERSION,
+    STRATEGY_POLICY_FORMAT,
+    ExperimentConfig,
+)
+from eagle.candidate import FRAMEWORK_SLOTS_MATERIALIZATION_VERSION
 from eagle.strategy_dsl import normalize_strategy_dsl
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.run_artifacts import (
+    FRAMEWORK_BUNDLE_ARTIFACT,
+    RUN_SCHEMA_VERSION,
     finalize_run,
     RESUME_ARCHIVE_PATHS,
     load_error_memory,
@@ -73,18 +84,40 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
     if not run_config_path.is_file():
         raise ValueError(f"Resume run has no canonical config.yaml: {run_dir}")
     payload = yaml.safe_load(run_config_path.read_text(encoding="utf-8"))
+    mode = payload.get("java_materialization_mode", "llm") if isinstance(payload, dict) else None
+    expected_protocol = (
+        DSL_EVOLUTION_PROTOCOL
+        if mode == "deterministic_dsl"
+        else FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL
+        if mode == "framework_slots"
+        else EVOLUTION_PROTOCOL
+    )
     if (
         not isinstance(payload, dict)
-        or payload.get("evolution_protocol") != (DSL_EVOLUTION_PROTOCOL if payload.get("java_materialization_mode", "llm") == "deterministic_dsl" else EVOLUTION_PROTOCOL)
-        or payload.get("strategy_policy_format") != STRATEGY_POLICY_FORMAT
+        or payload.get("evolution_protocol") != expected_protocol
+        or (
+            mode != "framework_slots"
+            and payload.get("strategy_policy_format") != STRATEGY_POLICY_FORMAT
+        )
     ):
         raise ValueError("Resume requires the DSL/pre-crossover evolution protocol; start a new run for legacy experiments.")
-    if payload.get("java_materialization_mode", "llm") == "deterministic_dsl" and payload.get("java_compiler_version") != JAVA_COMPILER_VERSION:
+    if mode == "deterministic_dsl" and payload.get("java_compiler_version") != JAVA_COMPILER_VERSION:
         raise ValueError("Resume requires a known explicit Java compiler version.")
+    if mode == "framework_slots":
+        framework = payload.get("framework")
+        frozen_path = (run_dir / FRAMEWORK_BUNDLE_ARTIFACT).resolve()
+        if (
+            payload.get("java_compiler_version") != FRAMEWORK_SLOTS_MATERIALIZATION_VERSION
+            or not isinstance(framework, dict)
+            or framework.get("bundle_version") != FRAMEWORK_BUNDLE_VERSION
+            or Path(str(framework.get("bundle_path") or "")).resolve() != frozen_path
+        ):
+            raise ValueError("Resume requires the frozen framework_slots bundle and protocol.")
     manifest_path = run_dir / "manifest.json"
+    if mode == "framework_slots" and not manifest_path.is_file():
+        raise ValueError("Resume framework_slots run has no canonical manifest.json.")
     if manifest_path.is_file():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        mode = payload.get("java_materialization_mode", "llm")
         manifest_protocol = manifest.get("evolution_protocol")
         protocol_mismatch = (
             manifest_protocol != payload.get("evolution_protocol")
@@ -95,6 +128,21 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
             raise ValueError("Resume config/manifest materialization protocol mismatch.")
         if mode == "deterministic_dsl" and manifest.get("java_compiler_version") != payload.get("java_compiler_version"):
             raise ValueError("Resume config/manifest Java compiler version mismatch.")
+        if mode == "framework_slots":
+            if manifest.get("schema_version") != RUN_SCHEMA_VERSION:
+                raise ValueError("Resume framework_slots run has an unsupported manifest schema.")
+            framework = payload["framework"]
+            framework_fences = (
+                ("java_compiler_version", payload.get("java_compiler_version")),
+                ("framework_bundle_version", framework.get("bundle_version")),
+                ("framework_bundle_sha256", framework.get("bundle_sha256")),
+                ("framework_bundle_artifact", FRAMEWORK_BUNDLE_ARTIFACT),
+            )
+            for key, expected in framework_fences:
+                if manifest.get(key) != expected:
+                    raise ValueError(
+                        f"Resume config/manifest framework bundle mismatch: {key}."
+                    )
     return ExperimentConfig.from_file(run_config_path)
 
 
@@ -115,6 +163,11 @@ def _resume_search_impl(
             raise ValueError("Resume candidate materialization mode does not match the run.")
         if config.java_materialization_mode == "deterministic_dsl" and candidate.java_compiler_version != config.java_compiler_version:
             raise ValueError("Resume candidate compiler version does not match the run.")
+        if config.java_materialization_mode == "framework_slots":
+            if candidate.java_compiler_version != config.java_compiler_version:
+                raise ValueError("Resume candidate framework materialization version does not match the run.")
+            if candidate.framework_bundle_sha256 != config.framework_bundle_sha256:
+                raise ValueError("Resume candidate framework bundle hash does not match the run.")
         if config.java_materialization_mode == "deterministic_dsl":
             import hashlib
             from eagle.generation.agent_template import JavaTemplatePaths, load_java_template
@@ -123,7 +176,8 @@ def _resume_search_impl(
             scaffold_hash = hashlib.sha256(load_java_template(JavaTemplatePaths(config.agent_template_path)).encode("utf-8")).hexdigest()
             if evidence.get("scaffold_sha256") != scaffold_hash:
                 raise ValueError("Resume deterministic scaffold hash differs from recorded compiler evidence.")
-        normalize_strategy_dsl(candidate.strategy_prompt, max_chars=config.max_prompt_chars)
+        if config.java_materialization_mode != "framework_slots":
+            normalize_strategy_dsl(candidate.strategy_prompt, max_chars=config.max_prompt_chars)
     _restore_completed_generation(run_dir, completed_generation)
     ensure_strategy_archive(run_dir)
     # Backfill the archive from the surviving snapshot when resuming a run
@@ -247,6 +301,18 @@ def validate_resume_config(
 ) -> None:
     run_mapping = persisted.to_mapping(mock=False)
     requested_mapping = config.to_mapping(mock=mock)
+    if (
+        persisted.java_materialization_mode == "framework_slots"
+        and config.java_materialization_mode == "framework_slots"
+        and persisted.framework_bundle_sha256 == config.framework_bundle_sha256
+    ):
+        # Fresh runs replace the user-supplied bundle path with the immutable
+        # run-local copy.  Equal exact-byte hashes preserve the same input
+        # identity when the caller validates a resume against its source config.
+        requested_framework = requested_mapping.get("framework")
+        run_framework = run_mapping.get("framework")
+        if isinstance(requested_framework, dict) and isinstance(run_framework, dict):
+            requested_framework["bundle_path"] = run_framework.get("bundle_path")
     if allow_experiment_name_alias:
         # A folder resume is already bound by the exact config-filename-to-run
         # entry in experiment.yaml.  The human-readable experiment name is

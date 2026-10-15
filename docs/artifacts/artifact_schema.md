@@ -48,6 +48,8 @@ runs/<run_id>/
 │   ├── semantic_signature_cache/
 │   └── error_memory.jsonl       # created when failures exist
 ├── llm_logs/
+├── framework/                    # framework_slots only
+│   └── bundle.json
 └── final_test/
 ```
 
@@ -70,6 +72,12 @@ tick_limit}` mapping, even when the source config used a string map path and
 inherited the top-level fallback. New runs do not write `source_config`,
 `resolved_config.json`, or `prompt_snapshot.json`.
 
+For deterministic reference policies, `generation/compiler_evidence.json` and
+the projected generation result include `reference_agent` and
+`reference_source_sha256`. Both are null for ordinary rule policies. Readers
+accept only `WorkerRush` and verify the hash against the vendored canonical
+source before reconstructing a successful candidate.
+
 `manifest.json` stays small: schema/run identity, timestamps, status,
 experiment/reflection identity, `model_name`, `generation_model_name`, and
 `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`;
@@ -82,6 +90,14 @@ null` when every final candidate failed. It does not copy
 candidate snapshots.
 
 `timing.jsonl` is the canonical append-only run timing stream. Archive data lives only below `archives/`.
+
+For `framework_slots`, config resolution validates the selected external bundle
+and records `framework.bundle_version` and the SHA-256 of its exact bytes. Fresh
+run creation atomically copies those same bytes to `framework/bundle.json` before
+search and rewrites the in-memory config path to that run-owned file. The
+manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
+`framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable;
+resume validates its exact bytes and never adopts a changed external bundle.
 
 ## Generation snapshot
 
@@ -182,6 +198,19 @@ candidates/<candidate_id>/
     ├── semantic_signature.json
     └── objectives.json
 ```
+
+In `framework_slots`, the mode-specific candidate subset replaces prompt files
+with `genotype/control_genome.json` and adds
+`generation/framework_evidence.json` plus, when rendering produced source,
+`generation/rendered_candidate.java`. Candidate/lineage schema versions are
+`eagle-candidate-v8` and `4.0`. The candidate index pins
+`framework_bundle_sha256`, references `../../framework/bundle.json`, and records
+all `slot_parent_ids`; it does not serialize policy/prompt/Java-parent fields.
+Framework evidence schema `eagle-framework-materialization-v1` records operation
+`framework_slot_assembly`, materializer version, framework ID, exact-byte and
+canonical bundle hashes, template/genome/source hashes, complete control genome,
+and slot provenance. Successful compilation still promotes the only canonical
+phenotype to `phenotype/CandidateAgent.java`.
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, active-mode fitness, aggregate Game Performance, compact executable semantic summary, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Full canonical probe actions remain in the run-local cache rather than the index. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
@@ -484,3 +513,37 @@ Candidate snapshots identify `active_genotype_components`; this is exactly
 inherited Java is inactive compatibility data and does not determine source.
 Resume rejects mode/protocol mismatch and unsupported compiler versions before
 replay; an absent field in an old config means `llm`.
+
+## Standalone Gemini framework bootstrap
+
+Bootstrap artifacts are preparation evidence and do not live inside a candidate:
+
+```text
+<bootstrap-output>/
+├── prompt.txt
+├── bundle.json
+├── CandidateAgent.template.java
+├── slot_generation_prompt.txt
+├── report.json
+├── bootstrap.json
+└── attempts/attempt_NNN/
+    ├── request.json
+    ├── response_raw.json
+    └── result.json
+```
+
+`response_raw.json` is flushed before provider-envelope or generated-content
+parsing, including failed responses. Attempt schema
+`eagle-gemini-framework-attempt-v1` records status/retryability, redacted error,
+provider/model/endpoint/HTTP status, UTC boundaries, duration, and exact request
+and response hashes. `eagle-gemini-framework-bootstrap-v1` records the selected
+attempt, total duration, attempt summaries, and the SHA-256 of the exact
+published `bundle.json` bytes. The normalized bundle, extracted template,
+slot-generation prompt, and report are separate convenience views; `bundle.json`
+is the sole experiment input.
+
+The API key is never an artifact. It is read only from `GEMINI_API_KEY`, sent in
+the `x-goog-api-key` header, excluded from request JSON/config, and redacted from
+stored errors. A bootstrap target must be new or empty so previous evidence is
+never overwritten. See [framework slots](../architecture/framework_slots.md) for
+the exact structured schema and retry boundary.

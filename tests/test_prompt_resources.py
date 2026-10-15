@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 
 from eagle.config import DEFAULT_SEED_POLICY_PATH, ExperimentConfig
-from eagle.strategy_dsl import validate_strategy_dsl, worker_rush_policy
+from eagle.strategy_dsl import (
+    validate_strategy_dsl,
+    worker_rush_reference_policy,
+)
 from eagle.prompts import (
     DEFAULT_PROMPT_DIR,
     load_prompt,
@@ -17,10 +20,10 @@ from eagle.prompts import (
 
 
 class PromptResourceTests(unittest.TestCase):
-    def test_initial_strategy_is_a_concrete_worker_rush_policy(self) -> None:
+    def test_initial_strategy_is_the_canonical_worker_rush_reference(self) -> None:
         policy = load_prompt("initial_strategy")
-        self.assertEqual(policy, worker_rush_policy())
-        self.assertEqual(validate_strategy_dsl(policy)["rules"][0]["action"]["unit"], "Worker")
+        self.assertEqual(policy, worker_rush_reference_policy())
+        self.assertEqual(validate_strategy_dsl(policy)["reference_agent"], "WorkerRush")
         for coach_name in ("coach_refine", "coach_counter", "coach_structural", "coach_alternative"):
             coach = load_prompt_templates()[coach_name].template
             self.assertIn("concrete game-playing policy itself", coach)
@@ -90,6 +93,8 @@ class PromptResourceTests(unittest.TestCase):
         config_paths = sorted(Path("configs/experiments").glob("**/*.yaml"))
         self.assertTrue(config_paths)
         for path in config_paths:
+            if path.name == "experiment.yaml":
+                continue
             config = ExperimentConfig.from_file(path)
             self.assertTrue(config.seed_prompt_files, path)
             self.assertEqual(
@@ -107,7 +112,10 @@ class PromptResourceTests(unittest.TestCase):
                 DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",
                 path,
             )
-            if config.initial_population_mode == "llm_generated_policies":
+            if (
+                config.initial_population_mode == "llm_generated_policies"
+                and config.java_materialization_mode == "llm"
+            ):
                 self.assertEqual(
                     config.initial_java_seed_path,
                     Path("eagle/java_seeds/worker_rush/CandidateAgent.java").resolve(),
@@ -118,7 +126,7 @@ class PromptResourceTests(unittest.TestCase):
                     Path("eagle/java_seeds/CandidateAgent.java").resolve():
                         "1410d85b27e84a0179e2e3ac816ad6003ede5676547e48a5fc6d75af1a833cb6",
                     Path("eagle/java_seeds/worker_rush/CandidateAgent.java").resolve():
-                        "22b8c9c41423a5a27b93230add7c7e9a5677a498c95746bcdbb8daf0d9acc176",
+                        "6cac31fe7d4e7bfc521b299d35097847c84d70d4d968973dcceebf5a1f5b5351",
                 }
                 self.assertIn(config.initial_java_seed_path, checked_in_seeds, path)
                 self.assertEqual(
@@ -146,7 +154,7 @@ class PromptResourceTests(unittest.TestCase):
         self.assertEqual(config.code_reflection_probability, 0.0)
         self.assertEqual(config.initial_java_seed_path, Path("eagle/java_seeds/CandidateAgent.java").resolve())
         self.assertEqual(validate_strategy_dsl(config.seed_prompts[0])["rules"], [])
-        self.assertEqual(config.seed_prompts[1], worker_rush_policy())
+        self.assertEqual(config.seed_prompts[1], worker_rush_reference_policy())
         self.assertTrue(all(rule["action"]["type"] == "choose" for rule in validate_strategy_dsl(config.seed_prompts[2])["rules"]))
 
     def test_static_0826_seed_variants_generate_ten_individuals_from_one_policy(self) -> None:

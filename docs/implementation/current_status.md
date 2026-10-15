@@ -3,6 +3,10 @@
 ## DSL and pre-crossover source contract (2026-10-11)
 
 Canonical `eagle-strategy-dsl-v1` policies are validated by `eagle/strategy_dsl.py`.
+The checked-in WorkerRush seed is a closed canonical-reference policy. In
+deterministic mode its CandidateAgent delegates to the vendored upstream
+WorkerRush, replays the exact action vector, and persists the reference source
+hash; LLM-generated and mutated policies remain finite-rule-only.
 In LLM materialization mode, every reproduction source is independently gated before actual variation. Defects
 yield corrective one-parent children; failed checks cannot enter variation. Normal
 mutation/AOS covers Strategy/Prompt. Code v6 permits fidelity/correctness repair
@@ -506,3 +510,37 @@ genotype, disables Java-generation and repair LLM roles, and records protocol
 `eagle-dsl-compiler-v1` plus compiler version `eagle-dsl-java-v1`. Compiler goldens, artifact/timing and resume contracts, real integration, and
 the bounded self-play smoke pass. See `../testing/test_contracts.md` for recorded
 commands, evidence, and the fixed-roster asset limitation.
+
+## Gemini framework and finite-slot evolution (2026-10-15)
+
+The explicit two-stage `framework_slots` mode is implemented. The standalone
+`python -m eagle framework` command uses native Gemini structured JSON with
+bounded attempts, raw-before-parse evidence, timing/hashes, normalized bundle
+publication, and environment-only credentials. Its exact schema is
+`eagle-framework-bundle-v1`; the generated report and
+`slot_generation_prompt` remain audit/provenance inputs rather than candidate
+genes.
+
+Config resolution validates and exact-byte-hashes the bundle. Fresh runs freeze
+it at `framework/bundle.json`; manifest/config, candidate schema v8, lineage 4.0,
+materialization evidence, and resume readback enforce version/hash/genome/source
+identity. Generation zero samples finite typed genomes. Offspring use seeded
+per-slot crossover with exact slot provenance and at-most-one-slot local
+mutation. `expression_choice` selects only a bundle-frozen Java expression.
+
+The candidate-time path has no LLM runtime, policy/prompt genes, reflection,
+source gate, or repair. It renders complete Java deterministically and reuses
+the existing validation, javac, Integration, semantic-probe, and evaluation
+pipeline without changing the 180-match fixed-roster matrix or objective and
+selection formulas. The focused framework/bootstrap/config/artifact/validation
+suite passes (64 tests), and the complete repository suite passes (650 tests,
+4 skipped).
+A live Gemini call and bounded real Java/MicroRTS evolutionary smoke were not run
+as part of this repository change; those are operational validation, not a
+fallback or alternate execution path.
+
+A first live bootstrap request subsequently exposed a REST wire-format mismatch:
+`responseFormat.text.mimeType` requires the `APPLICATION_JSON` enum token rather
+than the SDK-facing `application/json` spelling. The request builder and focused
+contract now enforce that encoding, and HTTP failures surface Google's bounded
+provider message while retaining the complete raw response artifact.

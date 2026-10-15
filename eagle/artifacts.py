@@ -17,6 +17,7 @@ from eagle.generation.java_agent_generator import ValidationResult
 
 from eagle.candidate import Candidate, compact_candidate_metadata
 from eagle.config import ExperimentConfig
+from eagle.generation.framework_slots import canonical_json
 
 if TYPE_CHECKING:
     from eagle.evaluation.records import CandidateEvaluation, GenerationAttemptResult
@@ -33,20 +34,26 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     candidate_dir = candidates_dir / candidate.id
     genotype_dir = candidate_dir / "genotype"
     genotype_dir.mkdir(parents=True, exist_ok=True)
-    (genotype_dir / "policy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
-    write_json(
-        genotype_dir / "strategy_signature.json",
-        {
-            "schema_version": "eagle-strategy-diversity-v1",
-            "strategy_signature": dict(candidate.strategy_signature),
-            "strategy_niche": candidate.strategy_niche,
-            "mutation_intent": candidate.mutation_intent,
-            "parent_strategy_niche": candidate.parent_strategy_niche,
-            "niche_changed": candidate.niche_changed,
-        },
-    )
-    if "generation_prompt" in candidate.active_genotype_components:
-        (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    if candidate.java_materialization_mode == "framework_slots":
+        (genotype_dir / "control_genome.json").write_text(
+            canonical_json(candidate.control_genome) + "\n",
+            encoding="utf-8",
+        )
+    else:
+        (genotype_dir / "policy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
+        write_json(
+            genotype_dir / "strategy_signature.json",
+            {
+                "schema_version": "eagle-strategy-diversity-v1",
+                "strategy_signature": dict(candidate.strategy_signature),
+                "strategy_niche": candidate.strategy_niche,
+                "mutation_intent": candidate.mutation_intent,
+                "parent_strategy_niche": candidate.parent_strategy_niche,
+                "niche_changed": candidate.niche_changed,
+            },
+        )
+        if "generation_prompt" in candidate.active_genotype_components:
+            (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
     write_json(genotype_dir / "components.json", {
         "schema_version": "eagle-genotype-components-v1", **candidate.materialization_to_json_dict(),
     })
@@ -66,14 +73,30 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     if candidate.operator in {"crossover", "crossover+mutation"}:
         crossover_dir = candidate_dir / "crossover"
         crossover_dir.mkdir(exist_ok=True)
-        provenance = {
+        if candidate.java_materialization_mode == "framework_slots":
+            provenance = {
+                "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
+                "candidate_id": candidate.id,
+                "slot_parent_ids": {
+                    slot_id: candidate.slot_parent_ids[slot_id]
+                    for slot_id in sorted(candidate.slot_parent_ids)
+                },
+            }
+        else:
+            provenance = {
                 "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
                 "candidate_id": candidate.id,
                 "strategy_parent_id": candidate.strategy_parent_id,
-                "generation_prompt_parent_id": candidate.generation_prompt_parent_id if "generation_prompt" in candidate.active_genotype_components else None,
-        }
-        if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
-            provenance["java_parent_id"] = candidate.java_parent_id
+                "generation_prompt_parent_id": (
+                    candidate.generation_prompt_parent_id
+                    if "generation_prompt" in candidate.active_genotype_components
+                    else None
+                ),
+            }
+            if candidate.java_materialization_mode == "llm" and (
+                candidate.inherited_java or candidate.java_parent_id is not None
+            ):
+                provenance["java_parent_id"] = candidate.java_parent_id
         write_json(crossover_dir / "provenance.json", provenance)
 
 
@@ -100,6 +123,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
         "initial_java_seed",
         "self_play_fitness_refresh",
         "deterministic_dsl_compile",
+        "framework_slot_assembly",
     }
     if not source_without_generation:
         for attempt in evaluation.generation_attempts:
@@ -446,6 +470,7 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "initial_java_seed",
         "self_play_fitness_refresh",
         "deterministic_dsl_compile",
+        "framework_slot_assembly",
     }
     representative_attempt = next(
         (
@@ -464,7 +489,7 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     failed_source = None
     if source_without_generation and not (evaluation.compile_result is not None and evaluation.compile_result.ok):
         failed_source = "generation/failed_candidate.java"
-        if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
+        if evaluation.candidate.java_materialization_mode in {"deterministic_dsl", "framework_slots"}:
             (candidate_dir / failed_source).write_bytes((result.assembled_java or "").encode("utf-8"))
         else:
             (candidate_dir / failed_source).write_text(result.assembled_java or "", encoding="utf-8")
@@ -472,17 +497,74 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         phenotype_dir = candidate_dir / "phenotype"
         phenotype_dir.mkdir(parents=True, exist_ok=True)
         source = result.assembled_java or evaluation.candidate.generated_java or ""
-        if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
+        if evaluation.candidate.java_materialization_mode in {"deterministic_dsl", "framework_slots"}:
             (phenotype_dir / "CandidateAgent.java").write_bytes(source.encode("utf-8"))
         else:
             (phenotype_dir / "CandidateAgent.java").write_text(source, encoding="utf-8")
     compiler_evidence = {}
     if evaluation.candidate.java_materialization_mode == "deterministic_dsl":
         compiler_evidence = {key: generation_timing.get(key) for key in
-            ("materialization_mode", "compiler_version", "policy_sha256", "scaffold_sha256", "source_sha256", "diagnostics", "llm_attempts")}
+            ("materialization_mode", "compiler_version", "policy_sha256", "scaffold_sha256", "source_sha256",
+             "reference_agent", "reference_source_sha256", "diagnostics", "llm_attempts")}
+    framework_evidence = {}
+    if evaluation.candidate.java_materialization_mode == "framework_slots":
+        framework_keys = (
+            "schema_version", "operation", "materialization_mode",
+            "materialization_version", "framework_id",
+            "framework_bundle_sha256", "canonical_bundle_sha256",
+            "template_sha256", "genome_sha256", "source_sha256",
+            "control_genome", "slot_parent_ids",
+        )
+        missing = [key for key in framework_keys if key not in generation_timing]
+        if missing:
+            raise ValueError(
+                "Framework materialization timing lacks required evidence: "
+                + ", ".join(missing)
+            )
+        framework_evidence = {key: generation_timing[key] for key in framework_keys}
+        if framework_evidence["schema_version"] != "eagle-framework-materialization-v1":
+            raise ValueError("Unsupported framework materialization evidence schema.")
+        if framework_evidence["operation"] != "framework_slot_assembly":
+            raise ValueError("Invalid framework materialization evidence operation.")
+        if framework_evidence["materialization_mode"] != "framework_slots":
+            raise ValueError("Invalid framework materialization evidence mode.")
+        if framework_evidence["materialization_version"] != evaluation.candidate.java_compiler_version:
+            raise ValueError("Framework evidence/materialization version mismatch.")
+        if framework_evidence["framework_bundle_sha256"] != evaluation.candidate.framework_bundle_sha256:
+            raise ValueError("Framework evidence/bundle hash mismatch.")
+        if framework_evidence["control_genome"] != evaluation.candidate.control_genome:
+            raise ValueError("Framework evidence/control genome mismatch.")
+        if framework_evidence["slot_parent_ids"] != evaluation.candidate.slot_parent_ids:
+            raise ValueError("Framework evidence/slot provenance mismatch.")
+        if result.assembled_java:
+            invalid = []
+            if not isinstance(framework_evidence["framework_id"], str) or not framework_evidence["framework_id"]:
+                invalid.append("framework_id")
+            for key in (
+                "canonical_bundle_sha256", "template_sha256",
+                "genome_sha256", "source_sha256",
+            ):
+                value = framework_evidence[key]
+                if (
+                    not isinstance(value, str)
+                    or len(value) != 64
+                    or any(character not in "0123456789abcdef" for character in value)
+                ):
+                    invalid.append(key)
+            if invalid:
+                raise ValueError(
+                    "Successful framework materialization lacks derived evidence: "
+                    + ", ".join(invalid)
+                )
+        write_json(generation_dir / "framework_evidence.json", framework_evidence)
     write_json(generation_dir / "result.json", {
         **compiler_evidence,
-        "artifact_schema_version": "phase4-v7" if compiler_evidence else ARTIFACT_SCHEMA_VERSION,
+        **framework_evidence,
+        "artifact_schema_version": (
+            "phase4-v8" if framework_evidence
+            else "phase4-v7" if compiler_evidence
+            else ARTIFACT_SCHEMA_VERSION
+        ),
         "failed_source_artifact": failed_source,
         "status": (
             "success"
@@ -596,6 +678,14 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         artifact_references.update(compiler_evidence="generation/compiler_evidence.json",
                                    normalized_policy="generation/normalized_policy.json",
                                    compiler_scaffold="generation/scaffold.java")
+    elif candidate.java_materialization_mode == "framework_slots":
+        artifact_references.pop("policy_prompt", None)
+        artifact_references.pop("code_generation_prompt", None)
+        artifact_references.update(
+            control_genome="genotype/control_genome.json",
+            framework_evidence="generation/framework_evidence.json",
+            framework_bundle="../../framework/bundle.json",
+        )
     candidate_dir = candidates_dir / candidate.id
     if (candidate_dir / "evaluation" / "semantic_signature.json").is_file():
         artifact_references["semantic_signature"] = "evaluation/semantic_signature.json"
@@ -626,7 +716,13 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "initialization/policy_generation/result.json"
         )
     payload = {
-        "candidate_schema_version": "eagle-candidate-v7" if candidate.java_materialization_mode == "deterministic_dsl" else "eagle-candidate-v6",
+        "candidate_schema_version": (
+            candidate.candidate_schema_version
+            if candidate.java_materialization_mode == "framework_slots"
+            else "eagle-candidate-v7"
+            if candidate.java_materialization_mode == "deterministic_dsl"
+            else "eagle-candidate-v6"
+        ),
         **candidate.materialization_to_json_dict(),
         "strategy_policy_format": "eagle-strategy-dsl-v1",
         "candidate_id": candidate.id,
@@ -656,6 +752,17 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
     }
     if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
         payload["java_parent_id"] = candidate.java_parent_id
+    if candidate.java_materialization_mode == "framework_slots":
+        for key in (
+            "strategy_policy_format", "strategy_parent_id",
+            "generation_prompt_parent_id", "strategy_signature", "strategy_niche",
+            "mutation_intent", "parent_strategy_niche", "niche_changed",
+        ):
+            payload.pop(key, None)
+        payload["slot_parent_ids"] = {
+            slot_id: candidate.slot_parent_ids[slot_id]
+            for slot_id in sorted(candidate.slot_parent_ids)
+        }
     write_json(candidates_dir / candidate.id / "candidate.json", payload)
 
 

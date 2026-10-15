@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import dataclass, field
@@ -18,8 +19,12 @@ from eagle.generation.agent_template import (
     DEFAULT_AGENT_TEMPLATE_PATH,
     DEFAULT_INITIAL_JAVA_SEED_PATH,
 )
+from eagle.generation.framework_slots import validate_framework_bundle
 
-from eagle.candidate import DEFAULT_GENERATION_PROMPT
+from eagle.candidate import (
+    DEFAULT_GENERATION_PROMPT,
+    FRAMEWORK_SLOTS_MATERIALIZATION_VERSION,
+)
 from eagle.operators.adaptive import ReflectionOperatorMode, ReflectionOperatorSettings
 from eagle.opponent_cases import LEXICASE_CASES, SELF_PLAY_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
 from eagle.prompts import DEFAULT_PROMPT_DIR, PromptTemplate
@@ -27,6 +32,8 @@ from eagle.prompts import DEFAULT_PROMPT_DIR, PromptTemplate
 
 EVOLUTION_PROTOCOL = "eagle-dsl-pre-crossover-v1"
 DSL_EVOLUTION_PROTOCOL = "eagle-dsl-compiler-v1"
+FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL = "eagle-framework-slots-v1"
+FRAMEWORK_BUNDLE_VERSION = "eagle-framework-bundle-v1"
 JAVA_COMPILER_VERSION = "eagle-dsl-java-v1"
 
 
@@ -147,6 +154,9 @@ class ExperimentConfig:
     candidate_java_mode: str = "generated_phenotype"
     java_materialization_mode: str = "llm"
     java_compiler_version: str = JAVA_COMPILER_VERSION
+    framework_bundle_path: Path | None = None
+    framework_bundle_version: str | None = None
+    framework_bundle_sha256: str | None = None
     # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
@@ -208,7 +218,7 @@ class ExperimentConfig:
         base_dir: Path | None = None,
     ) -> "ExperimentConfig":
         materialization_mode = str(payload.get("java_materialization_mode", "llm"))
-        deterministic = materialization_mode == "deterministic_dsl"
+        framework_slots = materialization_mode == "framework_slots"
         schema_version = payload.get("schema_version")
         if schema_version not in {None, "experiment-v1", "experiment-v2"}:
             raise ValueError(f"Unsupported experiment schema version: {schema_version!r}")
@@ -221,7 +231,7 @@ class ExperimentConfig:
             )
         if payload.get("application", "microrts") != "microrts":
             raise ValueError("The configured application is not supported.")
-        if schema_version == "experiment-v2" and not deterministic and not isinstance(payload.get("model"), dict):
+        if schema_version == "experiment-v2" and materialization_mode == "llm" and not isinstance(payload.get("model"), dict):
             raise ValueError("experiment-v2 requires a model mapping.")
         forbidden = {
             "llm_base_url", "llm_model", "llm_model_path", "model_path",
@@ -231,6 +241,15 @@ class ExperimentConfig:
         if found:
             raise ValueError("Experiment config cannot define runtime endpoint fields: " + ", ".join(found))
         repository_root = base_dir or Path(__file__).resolve().parents[1]
+        (
+            framework_bundle_path,
+            framework_bundle_version,
+            framework_bundle_sha256,
+        ) = _parse_framework_bundle(
+            payload.get("framework"),
+            repository_root,
+            required=framework_slots,
+        )
         obsolete_fields = {
             "seed_prompts", "seed_prompt_template", "generation_prompt",
             "generation_backend", "alignment_backend", "opponent",
@@ -270,10 +289,14 @@ class ExperimentConfig:
         generation_prompt_file_value = payload.get("generation_prompt_file")
         generation_prompt_file = (
             _parse_prompt_files((generation_prompt_file_value,), repository_root, "generation_prompt_file")[0]
-            if generation_prompt_file_value is not None and not deterministic
+            if generation_prompt_file_value is not None and materialization_mode == "llm"
             else DEFAULT_PROMPT_DIR / "initial_generation.txt"
         )
-        generation_prompt = "" if deterministic else generation_prompt_file.read_text(encoding="utf-8").strip()
+        generation_prompt = (
+            generation_prompt_file.read_text(encoding="utf-8").strip()
+            if materialization_mode == "llm"
+            else ""
+        )
         model = _parse_model(payload.get("model"), repository_root, field_name="model")
         generation_model_payload = payload.get("generation_model")
         generation_model = (
@@ -411,7 +434,17 @@ class ExperimentConfig:
             )
         return cls(
             java_materialization_mode=materialization_mode,
-            java_compiler_version=str(payload.get("java_compiler_version") or JAVA_COMPILER_VERSION),
+            java_compiler_version=str(
+                payload.get("java_compiler_version")
+                or (
+                    FRAMEWORK_SLOTS_MATERIALIZATION_VERSION
+                    if framework_slots
+                    else JAVA_COMPILER_VERSION
+                )
+            ),
+            framework_bundle_path=framework_bundle_path,
+            framework_bundle_version=framework_bundle_version,
+            framework_bundle_sha256=framework_bundle_sha256,
             seed_prompts=seed_prompts,
             seed_prompt_files=seed_prompt_files,
             initial_population_mode=str(
@@ -510,8 +543,11 @@ class ExperimentConfig:
         )
 
     def validate(self) -> None:
-        if self.java_materialization_mode not in {"llm", "deterministic_dsl"}:
-            raise ValueError("java_materialization_mode must be llm or deterministic_dsl.")
+        if self.java_materialization_mode not in {"llm", "deterministic_dsl", "framework_slots"}:
+            raise ValueError(
+                "java_materialization_mode must be llm, deterministic_dsl, or "
+                "framework_slots."
+            )
         if self.java_materialization_mode == "deterministic_dsl":
             if self.java_compiler_version != JAVA_COMPILER_VERSION:
                 raise ValueError(f"Unsupported Java compiler version: {self.java_compiler_version!r}")
@@ -519,6 +555,31 @@ class ExperimentConfig:
                 raise ValueError("deterministic_dsl requires candidate_java_mode=generated_phenotype.")
             if self.parent_evaluation_mode != "reuse_cached":
                 raise ValueError("deterministic_dsl requires parent_evaluation_mode=reuse_cached.")
+        if self.java_materialization_mode == "framework_slots":
+            if self.java_compiler_version != FRAMEWORK_SLOTS_MATERIALIZATION_VERSION:
+                raise ValueError(
+                    "Unsupported framework_slots materialization version: "
+                    f"{self.java_compiler_version!r}."
+                )
+            if self.candidate_java_mode != "generated_phenotype":
+                raise ValueError(
+                    "framework_slots requires candidate_java_mode=generated_phenotype."
+                )
+            if self.parent_evaluation_mode != "reuse_cached":
+                raise ValueError(
+                    "framework_slots requires parent_evaluation_mode=reuse_cached."
+                )
+            if self.reflection_operator_mode is not ReflectionOperatorMode.STATIC:
+                raise ValueError(
+                    "framework_slots requires reflection_operator_mode=static."
+                )
+            if self.framework_bundle_path is None:
+                raise ValueError("framework_slots requires framework.bundle_path.")
+            _validate_framework_bundle(
+                self.framework_bundle_path,
+                expected_version=self.framework_bundle_version,
+                expected_sha256=self.framework_bundle_sha256,
+            )
         for policy in self.seed_prompts:
             normalize_strategy_dsl(policy, max_chars=self.max_prompt_chars)
         if not self.experiment_name.strip():
@@ -702,7 +763,8 @@ class ExperimentConfig:
             raise ValueError("unit_material_values must not be empty.")
         if any(value < 0 for _, value in self.unit_material_values):
             raise ValueError("unit material values must be non-negative.")
-        validate_java_template(JavaTemplatePaths(self.agent_template_path))
+        if self.java_materialization_mode in {"llm", "deterministic_dsl"}:
+            validate_java_template(JavaTemplatePaths(self.agent_template_path))
         if self.java_materialization_mode == "llm":
             validate_java_template(JavaTemplatePaths(self.initial_java_seed_path))
 
@@ -740,8 +802,22 @@ class ExperimentConfig:
             "schema_version": "experiment-v2",
             "evolution_protocol": self.evolution_protocol,
             "java_materialization_mode": self.java_materialization_mode,
-            "java_compiler_version": self.java_compiler_version if self.java_materialization_mode == "deterministic_dsl" else None,
-            "active_genotype_components": ["strategy_prompt"] if self.java_materialization_mode == "deterministic_dsl" else ["strategy_prompt", "generation_prompt", *(("inherited_java",) if self.candidate_java_mode == "inherited_genotype" else ())],
+            "java_compiler_version": (
+                self.java_compiler_version
+                if self.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
+                else None
+            ),
+            "active_genotype_components": (
+                ["control_genome"]
+                if self.java_materialization_mode == "framework_slots"
+                else ["strategy_prompt"]
+                if self.java_materialization_mode == "deterministic_dsl"
+                else [
+                    "strategy_prompt",
+                    "generation_prompt",
+                    *(("inherited_java",) if self.candidate_java_mode == "inherited_genotype" else ()),
+                ]
+            ),
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "experiment_name": self.experiment_name,
             "algorithm": self.algorithm,
@@ -845,6 +921,13 @@ class ExperimentConfig:
         }
         if self.random_seeds:
             mapping["random_seeds"] = list(self.random_seeds)
+        if self.java_materialization_mode == "framework_slots":
+            mapping.pop("strategy_policy_format", None)
+            mapping["framework"] = {
+                "bundle_path": str(self.framework_bundle_path.resolve()),
+                "bundle_version": self.framework_bundle_version,
+                "bundle_sha256": self.framework_bundle_sha256,
+            }
         if self.generation_model is not None:
             mapping["generation_model"] = _model_mapping(self.generation_model)
         return mapping
@@ -880,10 +963,16 @@ class ExperimentConfig:
 
     @property
     def evolution_protocol(self) -> str:
-        return DSL_EVOLUTION_PROTOCOL if self.java_materialization_mode == "deterministic_dsl" else EVOLUTION_PROTOCOL
+        if self.java_materialization_mode == "deterministic_dsl":
+            return DSL_EVOLUTION_PROTOCOL
+        if self.java_materialization_mode == "framework_slots":
+            return FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL
+        return EVOLUTION_PROTOCOL
 
     @property
     def needs_llm_runtime(self) -> bool:
+        if self.java_materialization_mode == "framework_slots":
+            return False
         return self.java_materialization_mode == "llm" or self.mutation_rate > 0 or self.initial_population_mode == "llm_generated_policies"
 
     @property
@@ -964,6 +1053,87 @@ def _parse_prompt_files(
             raise ValueError(f"{field_name} prompt file must not be empty: {path}")
         paths.append(path)
     return tuple(paths)
+
+
+def _parse_framework_bundle(
+    value: object,
+    base_dir: Path,
+    *,
+    required: bool,
+) -> tuple[Path | None, str | None, str | None]:
+    if not required:
+        if value is not None:
+            raise ValueError(
+                "framework is supported only when "
+                "java_materialization_mode=framework_slots."
+            )
+        return None, None, None
+    if not isinstance(value, dict):
+        raise ValueError(
+            "framework_slots requires a framework mapping with bundle_path."
+        )
+    unknown = sorted(
+        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256"})
+    )
+    if unknown:
+        raise ValueError(
+            "Unknown framework configuration fields: " + ", ".join(unknown)
+        )
+    raw_path = value.get("bundle_path")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        raise ValueError("framework.bundle_path is required.")
+    path = Path(raw_path).expanduser()
+    path = path.resolve() if path.is_absolute() else (base_dir / path).resolve()
+    configured_version = value.get("bundle_version")
+    configured_sha256 = value.get("bundle_sha256")
+    version, digest = _validate_framework_bundle(
+        path,
+        expected_version=(
+            None if configured_version is None else str(configured_version)
+        ),
+        expected_sha256=(
+            None if configured_sha256 is None else str(configured_sha256)
+        ),
+    )
+    return path, version, digest
+
+
+def _validate_framework_bundle(
+    path: Path,
+    *,
+    expected_version: str | None,
+    expected_sha256: str | None,
+) -> tuple[str, str]:
+    if not path.is_file():
+        raise ValueError(f"framework.bundle_path does not exist or is not a file: {path}")
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if expected_sha256 is not None and expected_sha256 != digest:
+        raise ValueError(
+            "framework.bundle_sha256 does not match the exact bundle bytes: "
+            f"expected {expected_sha256}, got {digest}."
+        )
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"framework.bundle_path must contain UTF-8 JSON: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("framework bundle must contain a JSON object.")
+    version = payload.get("schema_version")
+    if version != FRAMEWORK_BUNDLE_VERSION:
+        raise ValueError(f"Unsupported framework bundle version: {version!r}.")
+    try:
+        bundle = validate_framework_bundle(payload)
+    except ValueError as exc:
+        raise ValueError(f"Invalid framework bundle {path}: {exc}") from exc
+    if expected_version is not None and expected_version != version:
+        raise ValueError(
+            "framework.bundle_version does not match the bundle schema_version: "
+            f"expected {expected_version!r}, got {version!r}."
+        )
+    if bundle.schema_version != version:
+        raise ValueError("Validated framework bundle version mismatch.")
+    return str(version), digest
 
 
 def _parse_model(

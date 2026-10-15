@@ -3,8 +3,13 @@
 EAGLE evolves one complete Java MicroRTS agent. Candidate state mode and Java
 materialization mode are independent settings. `candidate_java_mode` controls
 whether generated Java is phenotype-only or an inherited genotype component;
-`java_materialization_mode` selects LLM translation or deterministic DSL
-compilation. Deterministic configuration requires `candidate_java_mode: generated_phenotype` and `parent_evaluation_mode: reuse_cached`. The active evolutionary contract is documented in
+`java_materialization_mode` selects LLM translation, deterministic DSL
+compilation, or run-frozen framework-slot rendering. Deterministic DSL and
+framework-slot configurations require `candidate_java_mode: generated_phenotype`
+and `parent_evaluation_mode: reuse_cached`. Framework-slot mode is a two-stage
+protocol: an explicit one-time Gemini bootstrap creates the complete framework
+and finite domains; the experiment performs only local deterministic EA. The
+active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
 
 ## System boundary
@@ -16,6 +21,8 @@ In scope:
 - whole-policy crossover/copy and Strategy Reflection in deterministic DSL
   mode; LLM mode additionally supports Prompt Reflection, Code Reflection, and
   Java generation;
+- per-slot crossover and one-slot mutation over finite `integer`, `number`, or
+  enumerated `expression_choice` domains in framework-slot mode;
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
@@ -43,7 +50,9 @@ flowchart TD
     GATE -->|Defect| CR["One-parent corrective child; preserve genes"]
     GATE -->|Diagnosis failure| FAIL["Failed child; no crossover/mutation"]
     CG -->|deterministic_dsl| XDSL["Whole-policy copy/crossover"]
+    CG -->|framework_slots| XFS["Local per-slot crossover/mutation"]
     XDSL --> M
+    XFS --> SW
     X --> M{"Run mode-allowed reflection work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Prompt (llm only)| PR["Prompt Reflection + prompt rewrite"]
@@ -54,8 +63,10 @@ flowchart TD
     SW --> GM{"Java materialization mode"}
     GM -->|llm| G["LLM generation/revision or fixed generation-zero source"]
     GM -->|deterministic_dsl| D["Compile strategy DSL to Java"]
+    GM -->|framework_slots| FW["Render immutable framework bundle"]
     G --> V["Validation"]
     D --> V
+    FW --> V
     V -->|valid| C["Compile"]
     C -->|success| I["Integration"]
     V -->|invalid, llm| REP["Bounded compile-guided repair"]
@@ -109,6 +120,11 @@ flowchart TD
   policy component: crossover copies a whole policy, Strategy mutation remains
   enabled, and Prompt Reflection, Code Reflection/source repair, and Java LLM
   generation/repair are disabled.
+- Under `framework_slots`, an external one-time Gemini bootstrap is the only LLM
+  boundary. The run freezes the exact `eagle-framework-bundle-v1` bytes and
+  SHA-256; candidates evolve only `control_genome`. Formula-like control is an
+  enumerated choice among bundle-frozen Java expressions. Strategy/Prompt/Code
+  Reflection, source gating, Java Generation, and repair are disabled.
 - LLM-mode Code diagnosis has only strategy fidelity and code correctness; cosmetic
   simplification is forbidden and ambiguous/correct Java needs no revision.
 - `model` handles initialization and mode-allowed reflection/rewrite work. In
@@ -157,4 +173,4 @@ for ownership and artifact details.
 
 ## Python ownership
 
-`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness formulas, phase barriers, configuration, or serialized run contracts.
+`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, framework bootstrap/rendering, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [framework-slot contract](framework_slots.md) and [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness formulas, phase barriers, configuration, or serialized run contracts.

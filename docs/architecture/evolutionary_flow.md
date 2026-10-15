@@ -4,7 +4,9 @@ This document describes the active implementation. Fixed-roster evaluation
 uses ten opponent cases. Self-play uses scalar Game Performance plus exact
 behavior signatures only when scalar fitness is tied.
 
-Unless a step is marked otherwise, the population lifecycle below describes `java_materialization_mode: llm`; deterministic DSL behavior is specified in its own section.
+Unless a step is marked otherwise, the population lifecycle below describes
+`java_materialization_mode: llm`; deterministic DSL and framework-slot behavior
+are specified in their own sections.
 
 ## Population lifecycle
 
@@ -186,3 +188,27 @@ output follows the existing validation, javac, Integration, semantic-probe, and
 evaluation path. A deterministic compiler or javac failure does not fall back to
 LLM. Resolved protocol/compiler versions are `eagle-dsl-compiler-v1` and
 `eagle-dsl-java-v1`.
+
+## Framework-slot evolution
+
+Before the experiment, the operator explicitly creates and reviews one Gemini
+bundle as specified by [framework slots](framework_slots.md). The run copies and
+hash-pins that bundle. Generation zero samples one complete valid
+`control_genome` per population slot with independent derived RNG streams.
+
+From generation one, ordinary selection remains unchanged. Reproduction uses
+local uniform crossover independently for every framework slot, records the
+selected source candidate in `slot_parent_ids`, and may mutate at most one slot
+to a different member of its finite domain. Integer and number controls stay on
+their declared lattices. Formula controls select a declared `choice_id`; their
+Java expressions are immutable bundle data. No policy, prompt, Java body, or
+free-form formula is generated during evolution.
+
+Each child is deterministically rendered from the run-frozen template and
+complete control genome, then enters the existing validation, one `javac`,
+Integration, semantic probe, and 180-match fixed-roster evaluation (or the
+configured unchanged self-play path). Render/validation/compiler failure has no
+LLM fallback. Parent-plus-offspring survivor selection and objective formulas are
+identical to the other modes. Strategy, Prompt, and Code Reflection, source
+gating, Java Generation, and compile repair do not run and receive no timing or
+AOS record.

@@ -98,7 +98,7 @@ def evaluate_population(
             f"{candidate.id} stage=generation status=started",
             flush=True,
         )
-        if config.java_materialization_mode == "deterministic_dsl":
+        if config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}:
             candidate = replace(candidate, candidate_java_mode=config.candidate_java_mode, java_materialization_mode=config.java_materialization_mode,
                                 java_compiler_version=config.java_compiler_version,
                                 generation_prompt="", generation_prompt_parent_id=None,
@@ -225,7 +225,12 @@ def evaluate_candidate(
     receives explicit failure scores and remains available to lexicase.
     """
 
-    if config.java_materialization_mode == "deterministic_dsl":
+    deterministic_materialization = config.java_materialization_mode in {
+        "deterministic_dsl",
+        "framework_slots",
+    }
+    framework_slots = config.java_materialization_mode == "framework_slots"
+    if deterministic_materialization:
         candidate = replace(candidate, candidate_java_mode=config.candidate_java_mode,
                             java_materialization_mode=config.java_materialization_mode,
                             java_compiler_version=config.java_compiler_version,
@@ -233,9 +238,17 @@ def evaluate_candidate(
                             inherited_java="", java_parent_id=None)
 
     genotype_before = (
-        candidate.strategy_prompt,
-        candidate.generation_prompt,
-        candidate.inherited_java,
+        (
+            dict(candidate.control_genome),
+            dict(candidate.slot_parent_ids),
+            candidate.framework_bundle_sha256,
+        )
+        if framework_slots
+        else (
+            candidate.strategy_prompt,
+            candidate.generation_prompt,
+            candidate.inherited_java,
+        )
     )
 
     # Stages 1-2 use the same bounded decoder helper as production smoke
@@ -265,9 +278,14 @@ def evaluate_candidate(
         float(item.compilation_timing.get("duration_seconds") or 0.0)
         for item in generation_attempts
     )
-    deterministic = config.java_materialization_mode == "deterministic_dsl"
+    deterministic = deterministic_materialization
     source_provenance = None
-    if deterministic:
+    if framework_slots:
+        source_provenance = {
+            "kind": "framework_slots",
+            **bounded_generation.compiler_evidence,
+        }
+    elif deterministic:
         source_provenance = {"kind": "deterministic_dsl", **bounded_generation.compiler_evidence}
     elif initial_seed_source:
         source_path = getattr(backend, "source_path", None)
@@ -310,6 +328,7 @@ def evaluate_candidate(
     generation_timing = {
         "stage": "generation",
         "operation": (
+            "framework_slot_assembly" if framework_slots else
             "deterministic_dsl_compile" if deterministic else (
                 "code_reflection_direct" if candidate.mutation_type == "code" and candidate.generated_java
                 else getattr(backend, "operation", None)
@@ -695,6 +714,9 @@ def evaluate_candidate(
         candidate_java_mode=config.candidate_java_mode,
         java_materialization_mode=config.java_materialization_mode,
         java_compiler_version=config.java_compiler_version if deterministic else None,
+        control_genome=dict(candidate.control_genome),
+        slot_parent_ids=dict(candidate.slot_parent_ids),
+        framework_bundle_sha256=candidate.framework_bundle_sha256,
         inherited_java=candidate.inherited_java,
         java_parent_id=candidate.java_parent_id,
         generated_java=generation.assembled_java if compiler.compile_success else "",
@@ -731,11 +753,20 @@ def evaluate_candidate(
             preserve_unpersisted_mutation=True,
         ),
     )
-    assert (
-        evaluated_candidate.strategy_prompt,
-        evaluated_candidate.generation_prompt,
-        evaluated_candidate.inherited_java,
-    ) == genotype_before
+    evaluated_genotype = (
+        (
+            dict(evaluated_candidate.control_genome),
+            dict(evaluated_candidate.slot_parent_ids),
+            evaluated_candidate.framework_bundle_sha256,
+        )
+        if framework_slots
+        else (
+            evaluated_candidate.strategy_prompt,
+            evaluated_candidate.generation_prompt,
+            evaluated_candidate.inherited_java,
+        )
+    )
+    assert evaluated_genotype == genotype_before
     result = CandidateResult(
         candidate_id=candidate.id,
         parent_ids=candidate.parent_ids,

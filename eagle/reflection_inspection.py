@@ -361,7 +361,11 @@ def _evaluate_worker_rush_parent(
             "Reflection inspection requires exactly one configured seed policy."
         )
     source = experiment.initial_java_seed_path.read_text(encoding="utf-8")
-    if "runWorkerRush(" not in source:
+    if (
+        "new ai.abstraction.WorkerRush(utt)" not in source
+        or "referenceAgent.getAction" not in source
+        or "commandPlannedAction" not in source
+    ):
         raise ValueError(
             "Reflection inspection requires the checked-in Worker Rush Java seed."
         )

@@ -9,6 +9,7 @@ from eagle.strategy_dsl import (
     normalize_strategy_dsl,
     validate_strategy_dsl,
     worker_rush_policy,
+    worker_rush_reference_policy,
 )
 from eagle.operators.strategy_compliance import validate_strategy_prompt_contract
 from eagle.operators.strategy import (
@@ -31,6 +32,26 @@ class StrategyDSLTests(unittest.TestCase):
         normalized = normalize_strategy_dsl(json.dumps(data, indent=2))
         self.assertEqual(normalized, worker_rush_policy())
         self.assertEqual(json.loads(normalized)['rules'], data['rules'])
+
+    def test_worker_rush_reference_is_closed_and_canonical(self):
+        reference = validate_strategy_dsl(worker_rush_reference_policy())
+        self.assertEqual(reference, {
+            "version": VERSION,
+            "rules": [],
+            "reference_agent": "WorkerRush",
+        })
+        with self.assertRaisesRegex(ValueError, "reserved"):
+            normalize_strategy_dsl(
+                worker_rush_reference_policy(), allow_reference=False,
+            )
+        for invalid in (
+            {"version": VERSION, "rules": [], "reference_agent": "LightRush"},
+            {"version": VERSION, "rules": [
+                {"actor": "Worker", "when": True, "action": {"type": "idle"}},
+            ], "reference_agent": "WorkerRush"},
+        ):
+            with self.assertRaises(ValueError):
+                validate_strategy_dsl(invalid)
 
     def test_rejects_unknown_fields_versions_legacy_and_duplicate_keys(self):
         for source in ['train workers', '{"version":"eagle-strategy-dsl-v1","version":"eagle-strategy-dsl-v1","rules":[]}', {'version':'future','rules':[]}, {'version':VERSION,'rules':[],'description':'rush'}]:
