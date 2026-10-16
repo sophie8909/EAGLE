@@ -71,7 +71,10 @@ def freeze_framework_bundle(
                 "Mock framework startup requires framework.bundle_path; "
                 "Groq is disabled in mock mode; framework bootstrap is disabled in mock mode."
             )
-        from eagle.generation.groq_framework import generate_framework_bundle
+        from eagle.generation.groq_framework import (
+            DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+            generate_framework_bundle,
+        )
 
         config.validate()
         bootstrap_kwargs = {
@@ -81,12 +84,15 @@ def freeze_framework_bundle(
         if config.framework_bootstrap_backend == "local":
             bootstrap_kwargs.update(
                 api_root=config.llm_base_url.rstrip("/") + "/v1",
-                max_output_tokens=config.llm_max_tokens or 8192,
+                max_output_tokens=max(
+                    config.llm_max_tokens or 0,
+                    DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                ),
                 request_interval_seconds=0.0,
                 provider="local",
                 require_api_key=False,
                 require_https=False,
-                json_object_mode=True,
+                json_object_mode=False,
                 reasoning_effort=None,
                 chat_template_kwargs={"enable_thinking": False},
             )

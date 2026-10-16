@@ -37,6 +37,7 @@ DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
 # Conservative defaults for Groq's free-plan limits.  Framework bootstrap is
 # intentionally serialized: a complete framework response is large enough
 # that a second request inside the same rolling minute can exhaust TPM even

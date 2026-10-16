@@ -88,9 +88,10 @@ class FrameworkStartupTests(unittest.TestCase):
 
             self.assertEqual(generate.call_args.kwargs["provider"], "local")
             self.assertEqual(generate.call_args.kwargs["api_root"], "http://127.0.0.1:8080/v1")
+            self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 12288)
             self.assertFalse(generate.call_args.kwargs["require_api_key"])
             self.assertFalse(generate.call_args.kwargs["require_https"])
-            self.assertTrue(generate.call_args.kwargs["json_object_mode"])
+            self.assertFalse(generate.call_args.kwargs["json_object_mode"])
             self.assertIsNone(generate.call_args.kwargs["reasoning_effort"])
             self.assertEqual(
                 generate.call_args.kwargs["chat_template_kwargs"],

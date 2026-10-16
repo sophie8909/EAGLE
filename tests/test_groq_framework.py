@@ -143,7 +143,7 @@ class GroqFrameworkTests(unittest.TestCase):
                 provider="local",
                 require_api_key=False,
                 require_https=False,
-                json_object_mode=True,
+                json_object_mode=False,
                 reasoning_effort=None,
                 chat_template_kwargs={"enable_thinking": False},
             )
@@ -155,7 +155,7 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertNotIn("authorization", headers)
             payload = json.loads(request.data.decode("utf-8"))
             self.assertEqual(payload["model"], "qwen3_5_9b")
-            self.assertEqual(payload["response_format"], {"type": "json_object"})
+            self.assertEqual(payload["response_format"]["type"], "json_schema")
             self.assertNotIn("reasoning_effort", payload)
             self.assertEqual(payload["chat_template_kwargs"], {"enable_thinking": False})
             bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
