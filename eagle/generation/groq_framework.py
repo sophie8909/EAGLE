@@ -48,7 +48,10 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
             "type": "string",
             "enum": [FRAMEWORK_SCHEMA_VERSION],
         },
-        "framework_id": {"type": "string"},
+        "framework_id": {
+            "type": "string",
+            "pattern": r"^[a-z][a-z0-9_-]{0,127}$",
+        },
         "java_template": {"type": "string"},
         "slots": {
             "type": "array",
@@ -57,12 +60,18 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "slot_id": {"type": "string"},
+                    "slot_id": {
+                        "type": "string",
+                        "pattern": r"^[a-z][a-z0-9_]{0,63}$",
+                    },
                     "kind": {
                         "type": "string",
                         "enum": list(SLOT_KINDS),
                     },
-                    "marker": {"type": "string"},
+                    "marker": {
+                        "type": "string",
+                        "pattern": r"^\{\{EAGLE_SLOT:[a-z][a-z0-9_]{0,63}\}\}$",
+                    },
                     "default": {
                         "anyOf": [
                             {"type": "integer"},
@@ -79,7 +88,10 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
                             "type": "object",
                             "additionalProperties": False,
                             "properties": {
-                                "choice_id": {"type": "string"},
+                                "choice_id": {
+                                    "type": "string",
+                                    "pattern": r"^[a-z][a-z0-9_]{0,63}$",
+                                },
                                 "java_expression": {"type": "string"},
                                 "description": {"type": "string"},
                             },
@@ -209,18 +221,6 @@ def generate_framework_bundle(
         },
     )
     endpoint = api_root.rstrip("/") + "/chat/completions"
-    request_payload = _request_payload(
-        prompt,
-        model=model,
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-    )
-    request_bytes = json.dumps(
-        request_payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    request_sha256 = _sha256(request_bytes)
     (target / "prompt.txt").write_text(prompt, encoding="utf-8")
     attempts_root = target / "attempts"
     attempts_root.mkdir()
@@ -231,9 +231,24 @@ def generate_framework_bundle(
     selected_bundle: dict[str, object] | None = None
     selected_response_sha256: str | None = None
     last_error = "Groq returned no response."
+    last_validation_error: str | None = None
+    request_sha256 = ""
     attempt_summaries: list[dict[str, object]] = []
 
     for attempt in range(1, max_attempts + 1):
+        attempt_prompt = _retry_prompt(prompt, last_validation_error)
+        request_payload = _request_payload(
+            attempt_prompt,
+            model=model,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        request_bytes = json.dumps(
+            request_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        request_sha256 = _sha256(request_bytes)
         attempt_dir = attempts_root / f"attempt_{attempt:03d}"
         attempt_dir.mkdir()
         (attempt_dir / "request.json").write_bytes(request_bytes)
@@ -286,6 +301,7 @@ def generate_framework_bundle(
             error = f"Groq API request failed: {exc}"
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
             error = f"Groq response validation failed: {exc}"
+            last_validation_error = error
         except OSError as exc:
             error = f"Groq framework artifact failure: {exc}"
             retryable = False
@@ -489,6 +505,22 @@ def _request_payload(
             },
         },
     }
+
+
+def _retry_prompt(base_prompt: str, validation_error: str | None) -> str:
+    """Give a bounded retry local validation feedback without weakening checks."""
+
+    if not validation_error:
+        return base_prompt
+    return (
+        f"{base_prompt}\n\n"
+        "A previous complete response was rejected by the local validator. "
+        "Correct the entire response and return the complete JSON object again. "
+        f"The exact validation error was: {validation_error}\n"
+        "Pay special attention to exact lowercase snake_case IDs and literal "
+        "slot markers with two closing braces: "
+        "{{EAGLE_SLOT:example_slot}}."
+    )
 
 
 def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str:

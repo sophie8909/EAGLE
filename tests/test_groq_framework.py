@@ -218,6 +218,40 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertEqual(len(first_result["request_sha256"]), 64)
             self.assertEqual(len(first_result["response_sha256"]), 64)
 
+    def test_validation_retry_receives_error_feedback(self) -> None:
+        invalid = _bundle()
+        invalid["slots"] = [
+            {**invalid["slots"][0], "marker": "{{EAGLE_SLOT:worker_target}"},
+            *invalid["slots"][1:],
+        ]
+        requests = []
+
+        def transport(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            return _Response(
+                _provider_response(invalid if len(requests) == 1 else _bundle())
+            )
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+            )
+
+        self.assertEqual(result.bundle, _bundle())
+        self.assertEqual(len(requests), 2)
+        self.assertNotEqual(
+            requests[0]["messages"][0]["content"],
+            requests[1]["messages"][0]["content"],
+        )
+        self.assertIn("canonical marker", requests[1]["messages"][0]["content"])
+
     def test_exhaustion_keeps_raw_attempts_and_failure_summary(self) -> None:
         raw = b'{"choices":[]}'
         with tempfile.TemporaryDirectory() as directory, patch.dict(
