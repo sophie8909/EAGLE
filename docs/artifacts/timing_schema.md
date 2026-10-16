@@ -256,7 +256,7 @@ attempts in both evolution policies. Under `framework.evolution_mode: local`,
 all reflection streams are null with empty attempts and the run emits no
 candidate-time `llm_request` event.
 
-Groq bootstrap timing is separate from candidate and EA timing. Inline startup
+Framework bootstrap timing is separate from candidate and EA timing. Inline startup
 and the standalone compatibility command retain bootstrap manifests and per-
 attempt `result.json` records with UTC boundaries, monotonic duration,
 success/failure/retryability, HTTP status, and request/response hashes. These

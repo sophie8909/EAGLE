@@ -1,10 +1,11 @@
-# Groq GPT-OSS framework and finite-slot evolution
+# Framework bootstrap and finite-slot evolution
 
-`java_materialization_mode: framework_slots` uses a fresh-run Groq bootstrap when
-no external bundle is configured, then evolves only typed slot values. Startup
+`java_materialization_mode: framework_slots` uses a configurable fresh-run
+bootstrap when no external bundle is configured, then evolves only typed slot
+values. Startup
 validates the generated framework, writes it under the run-owned `framework/`
-directory, and freezes its exact bytes and hash before search. Groq is outside
-the evolutionary loop; bounded retries belong to startup bootstrap.
+directory, and freezes its exact bytes and hash before search. API bootstrap is
+outside the evolutionary loop; bounded retries belong to startup bootstrap.
 This document is the canonical owner of the framework-bundle, slot-domain, and
 bootstrap boundary. The shared downstream Java and MicroRTS stages remain owned
 by [Java generation](java_generation.md) and the
@@ -20,10 +21,12 @@ materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
 Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
-and optionally accepts `framework.model` (default `openai/gpt-oss-120b`). It uses
-the checked-in Groq GPT-OSS flow to design the framework and finite control
-surface. The standalone `python -m eagle framework` command remains available
-to prepare an external bundle for reuse. The bootstrap requests at least 24
+and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
+`framework.bootstrap_backend` selects `groq` (the default API path), `mistral`
+(the Mistral API path), or `local` (the configured local llama-server, without
+an API key). The standalone
+`python -m eagle framework` command remains available to prepare an external
+bundle for reuse. The bootstrap requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
 four distinct choices each, covering economy, production, targeting, combat,
 conditions, and priorities. These are requested design targets, not a guarantee
@@ -79,12 +82,16 @@ environment:
 java_materialization_mode: framework_slots
 reflection_operator_mode: static
 framework:
+  bootstrap_backend: mistral  # groq, mistral, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: openai/gpt-oss-120b
+  model: mistral-small-latest
   evolution_mode: llm_coach
 ```
 
-Set `GROQ_API_KEY` in the environment and start the ordinary experiment with
+For `groq`, set `GROQ_API_KEY` in the environment. For `mistral`, EAGLE reads
+the key from `api_key/mistral`. For `local`, the top-level experiment `model`
+profile supplies the already managed llama-server and no API key is read. Start
+the ordinary experiment with
 `python -m eagle experiment --config-dir configs/experiments/framework.yaml` or
 `./experiment.sh configs/experiments/framework.yaml`. The top-level experiment
 `model` still configures the experiment runtime. Omit `evolution_mode` for the
@@ -93,21 +100,41 @@ mock mode rejects an inline brief without that bundle. An explicit shared bundle
 path also holds the framework constant across replicate seeds. The standalone
 `python -m eagle framework` command remains available to prepare that bundle.
 
+The repository includes a ready-to-run fixed-initialization example at
+`configs/framework_coach_mock.yaml`. It uses the real checked-in
+`configs/framework_bundles/fixed_worker_combat/bundle.json`, which contains a
+complete compilable `CandidateAgent` scaffold and two finite integer slots
+(`worker_target` and `combat_target_limit`). The explicit `bundle_path` skips
+only fresh framework bootstrap; `execution_mode: openai` and
+`framework.evolution_mode: llm_coach` retain normal EA LLM calls through the
+managed local primary plus the configured additional endpoint. Java compilation,
+Integration, semantic probes, and MicroRTS scoring remain enabled.
+
 ## Startup and evolution boundary
 
 1. On a fresh run without `bundle_path`, startup requires `design_brief`, calls
-   the existing bounded Groq bootstrap with `framework.model` (default
+   the backend selected by `framework.bootstrap_backend` (default `groq`) with `framework.model` (default
    `openai/gpt-oss-120b`), and writes bootstrap evidence under run-owned
-   `framework/`. `GROQ_API_KEY` is read from the environment only. Each fresh
+   `framework/`. `GROQ_API_KEY` is read only for `groq`; `api_key/mistral` is
+   read only for `mistral`; the local backend reads no API key. Each fresh
    replicate designs a separate framework unless it uses the same explicit
    `bundle_path` as the other replicates.
-2. The bootstrap sends the checked-in `groq_framework_design` prompt to
+2. The Groq backend sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
-   It retains raw responses before parsing and performs bounded retries. On
-   failure, attempt artifacts and a failed manifest remain with the pending
-   config. The failed run cannot resume until a valid frozen bundle exists; the
-   unsuccessful replicate is not added to the folder-batch index, so a folder
-   rerun can retry the missing slot.
+   The Mistral backend sends the same prompt to
+   `https://api.mistral.ai/v1/chat/completions` with Bearer authorization and
+   uses Mistral JSON Object Mode with `max_tokens`. The local backend sends the
+   same prompt to the configured local
+   `llama-server/v1/chat/completions` endpoint without authorization and starts
+   with the framework JSON Schema plus `chat_template_kwargs.enable_thinking: false` so
+   the Qwen reasoning channel does not consume the framework output budget. The
+   first Groq request uses the `eagle_framework` JSON Schema. If Groq returns
+   `json_validate_failed`, EAGLE retains that raw response and performs a
+   bounded retry in JSON Object Mode; local bundle validation remains
+   authoritative. On failure, attempt artifacts and a failed manifest remain
+   with the pending config. The failed run cannot resume until a valid frozen
+   bundle exists; the unsuccessful replicate is not added to the folder-batch
+   index, so a folder rerun can retry the missing slot.
 3. EAGLE validates and normalizes one `eagle-framework-bundle-v1` bundle. The
    run-owned framework directory retains the exact prompt, request bodies, raw
    responses, timing, hashes, generated template, slot prompt, report, and
@@ -116,7 +143,7 @@ path also holds the framework constant across replicate seeds. The standalone
    file. Otherwise, startup generates the bundle in the run-owned directory.
    Both paths freeze exact bytes and hash before search. Resume reads only that
    frozen bundle, checks its version/hash, compares `design_brief`, bootstrap
-   model, and `evolution_mode`, and never regenerates a framework.
+   backend/model, and `evolution_mode`, and never regenerates a framework.
 5. In `local`, generation zero samples legal values and later seeded EA
    operators cross over values independently by slot and mutate at most one slot.
    In `llm_coach`, the experiment model selects complete initial genomes and
@@ -274,9 +301,9 @@ retryability, HTTP status, model/endpoint, redacted error, and request/response
 SHA-256. `bootstrap.json` identifies the selected attempt and exact published
 bundle bytes. The command refuses a nonempty output directory.
 
-Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. `GROQ_API_KEY` remains environment-only. Credentials are never accepted in YAML or CLI arguments, embedded in request
+Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
 bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
-receives `GROQ_API_KEY`; stored errors redact that value. Bundle content is
+receives the selected provider key; stored errors redact that value. Bundle content is
 untrusted generated input until strict schema, Java-envelope, marker, normal
 validation, `javac`, and Integration checks succeed.
 

@@ -7,12 +7,62 @@ from pathlib import Path
 from typing import Any
 
 from eagle.candidate import Candidate
-from eagle.generation.framework_slots import FrameworkBundle, validate_genome
+from eagle.generation.framework_slots import (
+    FrameworkBundle,
+    slot_value_at,
+    slot_value_count,
+    validate_genome,
+)
 from eagle.llm import LLMCallLogger
 from eagle.prompts import render_prompt
 
 
 FRAMEWORK_SELECTION_SCHEMA_VERSION = "eagle-framework-selection-v1"
+FRAMEWORK_SELECTION_SCHEMA_NAME = "eagle_framework_selection"
+
+
+def framework_selection_response_schema(
+    bundle: FrameworkBundle,
+    framework_bundle_sha256: str,
+) -> dict[str, object]:
+    """Build the exact finite-domain schema for one frozen framework bundle."""
+
+    genome_properties: dict[str, object] = {}
+    for slot in bundle.slots:
+        values = [
+            slot_value_at(slot, index)
+            for index in range(slot_value_count(slot))
+        ]
+        genome_properties[slot.slot_id] = {
+            "type": "string" if slot.kind == "expression_choice" else slot.kind,
+            "enum": values,
+        }
+
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {
+                "type": "string",
+                "enum": [FRAMEWORK_SELECTION_SCHEMA_VERSION],
+            },
+            "framework_bundle_sha256": {
+                "type": "string",
+                "enum": [framework_bundle_sha256],
+            },
+            "control_genome": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": genome_properties,
+                "required": list(bundle.slot_ids),
+            },
+        },
+        "required": [
+            "schema_version",
+            "framework_bundle_sha256",
+            "control_genome",
+        ],
+    }
 
 
 def framework_bundle_evidence(bundle: FrameworkBundle) -> dict[str, Any]:
@@ -186,9 +236,11 @@ class MockFrameworkRoleBackend:
 
 
 __all__ = [
+    "FRAMEWORK_SELECTION_SCHEMA_NAME",
     "FRAMEWORK_SELECTION_SCHEMA_VERSION",
     "MockFrameworkRoleBackend",
     "framework_bundle_evidence",
+    "framework_selection_response_schema",
     "select_initial_framework_genome",
     "validate_framework_selection_response",
 ]

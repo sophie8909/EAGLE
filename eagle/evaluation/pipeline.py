@@ -119,13 +119,20 @@ def evaluate_population(
 
     opponent_pool = None
     if config.evaluation_mode == "self_play":
-        opponent_pool = opponent_setup._build_self_play_opponents(
-            opponent_candidates if opponent_candidates is not None else population,
-            prepared=prepared,
-            config=config,
-            classes_dir=classes_dir,
-            mock=mock,
-        )
+        if generation == 0 and opponent_candidates is None:
+            opponent_pool = opponent_setup._build_initial_self_play_opponents(
+                config=config,
+                classes_dir=classes_dir,
+                mock=mock,
+            )
+        else:
+            opponent_pool = opponent_setup._build_self_play_opponents(
+                opponent_candidates if opponent_candidates is not None else population,
+                prepared=prepared,
+                config=config,
+                classes_dir=classes_dir,
+                mock=mock,
+            )
     evaluated = []
     for index, (candidate, bounded_generation) in enumerate(prepared):
         evaluation = evaluate_candidate(

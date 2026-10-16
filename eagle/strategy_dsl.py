@@ -10,6 +10,41 @@ UNIT_TYPES = {"Worker", "Base", "Barracks", "Light", "Heavy", "Ranged"}
 MOBILE = {"Worker", "Light", "Heavy", "Ranged"}
 MAX_CHARS = 16000
 
+# Transport-level schema for the canonical policy gene. The executable
+# validator below remains authoritative for recursive conditions, action
+# legality, and the complete closed vocabulary, so this is the single schema
+# reused by structured-output request builders.
+STRATEGY_DSL_JSON_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "version": {"type": "string", "enum": [VERSION]},
+        "rules": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+                "type": "object",
+                "required": ["actor", "when", "action"],
+                "properties": {
+                    "actor": {"type": "string", "enum": sorted(UNIT_TYPES)},
+                    # Keep the transport grammar compatible with LM Studio;
+                    # semantic validation below decides which condition
+                    # objects are legal for the strategy DSL.
+                    "when": {
+                        "anyOf": [
+                            {"type": "boolean"},
+                            {"type": "object"},
+                        ]
+                    },
+                    "action": {"type": "object"},
+                },
+            },
+        },
+        "reference_agent": {"type": "string", "enum": sorted(REFERENCE_AGENTS)},
+    },
+    "required": ["version", "rules"],
+}
+
 
 class StrategyJSONLExtractionError(ValueError):
     """A rule stream had no usable policy; ``report`` retains discard evidence."""

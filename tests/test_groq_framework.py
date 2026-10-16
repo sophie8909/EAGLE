@@ -15,8 +15,13 @@ from eagle.generation.groq_framework import (
     ATTEMPT_SCHEMA_VERSION,
     BOOTSTRAP_SCHEMA_VERSION,
     DEFAULT_GROQ_MODEL,
+    DEFAULT_MISTRAL_API_ROOT,
+    DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+    DEFAULT_MISTRAL_MODEL,
+    DEFAULT_MAX_OUTPUT_TOKENS,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
+    GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE,
     GROQ_REASONING_EFFORT,
     GROQ_USER_AGENT,
     GroqFrameworkError,
@@ -102,15 +107,122 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
 
-def _provider_response(bundle: dict[str, object] | None = None) -> bytes:
+def _provider_response(
+    bundle: dict[str, object] | None = None,
+    usage: dict[str, object] | None = None,
+) -> bytes:
     content = json.dumps(_bundle() if bundle is None else bundle, ensure_ascii=False)
-    return json.dumps(
-        {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}]},
-        ensure_ascii=False,
-    ).encode("utf-8")
+    payload = {
+        "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}],
+    }
+    if usage is not None:
+        payload["usage"] = usage
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
 
 class GroqFrameworkTests(unittest.TestCase):
+    def test_local_backend_uses_openai_compatible_json_object_mode_without_api_key(self) -> None:
+        captured_requests = []
+
+        def transport(request, timeout):
+            captured_requests.append((request, timeout))
+            payload = json.loads(_provider_response())
+            payload["choices"][0]["finish_reason"] = "length"
+            return _Response(json.dumps(payload).encode("utf-8"))
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                model="qwen3_5_9b",
+                design_brief="Build a bounded local framework.",
+                max_attempts=1,
+                timeout_seconds=12.0,
+                max_output_tokens=4096,
+                request_interval_seconds=0.0,
+                api_root="http://127.0.0.1:18080/v1",
+                provider="local",
+                require_api_key=False,
+                require_https=False,
+                json_object_mode=False,
+                reasoning_effort=None,
+                chat_template_kwargs={"enable_thinking": False},
+            )
+
+            request, timeout = captured_requests[0]
+            self.assertEqual(timeout, 12.0)
+            self.assertEqual(request.full_url, "http://127.0.0.1:18080/v1/chat/completions")
+            headers = {key.lower(): value for key, value in request.header_items()}
+            self.assertNotIn("authorization", headers)
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(payload["model"], "qwen3_5_9b")
+            self.assertEqual(payload["response_format"]["type"], "json_schema")
+            self.assertNotIn("reasoning_effort", payload)
+            self.assertEqual(payload["chat_template_kwargs"], {"enable_thinking": False})
+            bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
+            self.assertEqual(bootstrap["provider"], "local")
+            attempt = json.loads(
+                (result.output_dir / "attempts/attempt_001/result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(attempt["finish_reason"], "length")
+
+    def test_mistral_reads_repository_key_file_and_uses_mistral_payload(self) -> None:
+        secret = "mistral-test-key-that-must-not-be-persisted"
+        captured_requests = []
+
+        def transport(request, timeout):
+            captured_requests.append((request, timeout))
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_path = Path(directory) / "mistral"
+            key_path.write_text(secret + "\n", encoding="utf-8")
+            with patch.dict(os.environ, {}, clear=True), patch(
+                "eagle.generation.groq_framework.MISTRAL_API_KEY_PATH", key_path
+            ), patch(
+                "eagle.generation.groq_framework.urllib.request.urlopen",
+                side_effect=transport,
+            ):
+                output = Path(directory) / "framework"
+                result = generate_framework_bundle(
+                    output,
+                    model=DEFAULT_MISTRAL_MODEL,
+                    design_brief="Build a bounded economy and combat controller.",
+                    provider="mistral",
+                    api_root=DEFAULT_MISTRAL_API_ROOT,
+                    max_output_tokens=DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                    max_attempts=1,
+                    request_interval_seconds=0.0,
+                    json_object_mode=True,
+                    reasoning_effort=None,
+                )
+
+            self.assertEqual(result.bundle, _bundle())
+            request, timeout = captured_requests[0]
+            self.assertEqual(timeout, 300.0)
+            self.assertEqual(
+                request.full_url,
+                "https://api.mistral.ai/v1/chat/completions",
+            )
+            headers = {key.lower(): value for key, value in request.header_items()}
+            self.assertEqual(headers["authorization"], f"Bearer {secret}")
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(payload["model"], DEFAULT_MISTRAL_MODEL)
+            self.assertEqual(payload["max_tokens"], DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS)
+            self.assertNotIn("max_completion_tokens", payload)
+            self.assertEqual(payload["response_format"], {"type": "json_object"})
+            self.assertNotIn("reasoning_effort", payload)
+            bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
+            self.assertEqual(bootstrap["provider"], "mistral")
+            persisted = b"\n".join(
+                path.read_bytes() for path in output.rglob("*") if path.is_file()
+            )
+            self.assertNotIn(secret.encode("utf-8"), persisted)
+
     def test_bootstrap_persists_schema_artifacts_hashes_and_no_secret(self) -> None:
         secret = "test-api-key-that-must-not-be-persisted"
         captured_requests = []
@@ -203,6 +315,7 @@ class GroqFrameworkTests(unittest.TestCase):
                 model="openai/gpt-oss-120b",
                 design_brief="Build a framework.",
                 max_attempts=2,
+                request_interval_seconds=0,
             )
 
             bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
@@ -217,6 +330,65 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertGreaterEqual(first_result["duration_seconds"], 0.0)
             self.assertEqual(len(first_result["request_sha256"]), 64)
             self.assertEqual(len(first_result["response_sha256"]), 64)
+
+    def test_validation_retry_receives_error_feedback(self) -> None:
+        invalid = _bundle()
+        invalid["slots"] = [
+            {**invalid["slots"][0], "marker": "{{EAGLE_SLOT:worker_target}"},
+            *invalid["slots"][1:],
+        ]
+        requests = []
+
+        def transport(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            return _Response(
+                _provider_response(invalid if len(requests) == 1 else _bundle())
+            )
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+
+        self.assertEqual(result.bundle, _bundle())
+        self.assertEqual(len(requests), 2)
+        self.assertNotEqual(
+            requests[0]["messages"][0]["content"],
+            requests[1]["messages"][0]["content"],
+        )
+        self.assertIn("canonical marker", requests[1]["messages"][0]["content"])
+
+    def test_token_usage_enforces_rolling_window_before_retry(self) -> None:
+        responses = [
+            _Response(
+                b'{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"not json"}}],"usage":{"total_tokens":9000}}'
+            ),
+            _Response(_provider_response()),
+        ]
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=responses,
+        ), patch("eagle.generation.groq_framework.time.sleep") as sleep:
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+
+        self.assertEqual(result.bundle, _bundle())
+        sleep.assert_called_once()
+        self.assertGreaterEqual(sleep.call_args.args[0], 59.0)
 
     def test_exhaustion_keeps_raw_attempts_and_failure_summary(self) -> None:
         raw = b'{"choices":[]}'
@@ -233,6 +405,7 @@ class GroqFrameworkTests(unittest.TestCase):
                     model="openai/gpt-oss-120b",
                     design_brief="Build a framework.",
                     max_attempts=2,
+                    request_interval_seconds=0,
                 )
             self.assertFalse((output / "bundle.json").exists())
             self.assertEqual(
@@ -291,6 +464,151 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertNotIn("secret", str(caught.exception))
             self.assertEqual(len(list(output.joinpath("attempts").iterdir())), 1)
 
+    def test_mistral_top_level_tier_error_surfaces_provider_message(self) -> None:
+        raw = json.dumps(
+            {
+                "object": "error",
+                "message": "This model is not available in your subscription tier",
+                "type": "tier_not_allowed",
+                "code": "1910",
+            }
+        ).encode("utf-8")
+        http_error = urllib.error.HTTPError(
+            "https://api.mistral.ai/v1/chat/completions",
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(raw),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            key_path = Path(directory) / "mistral"
+            key_path.write_text("secret", encoding="utf-8")
+            with patch(
+                "eagle.generation.groq_framework.MISTRAL_API_KEY_PATH", key_path
+            ), patch(
+                "eagle.generation.groq_framework.urllib.request.urlopen",
+                side_effect=http_error,
+            ):
+                output = Path(directory) / "framework"
+                with self.assertRaisesRegex(
+                    GroqFrameworkError,
+                    "This model is not available in your subscription tier",
+                ):
+                    generate_framework_bundle(
+                        output,
+                        model=DEFAULT_MISTRAL_MODEL,
+                        design_brief="Build a framework.",
+                        provider="mistral",
+                        api_root=DEFAULT_MISTRAL_API_ROOT,
+                        max_attempts=1,
+                        request_interval_seconds=0.0,
+                    )
+
+            result = json.loads(
+                output.joinpath("attempts/attempt_001/result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("This model is not available", result["error"])
+            self.assertEqual(result["retryable"], False)
+
+    def test_json_schema_failure_retries_in_json_object_mode(self) -> None:
+        raw = json.dumps(
+            {
+                "error": {
+                    "message": "Failed to generate JSON.",
+                    "code": "json_validate_failed",
+                    "failed_generation": "{\"schema_version\":\"eagle-framework-bundle-v1\"}",
+                }
+            }
+        ).encode("utf-8")
+        schema_failure = urllib.error.HTTPError(
+            "https://example.invalid",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(raw),
+        )
+        requests = []
+
+        def transport(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            if len(requests) == 1:
+                raise schema_failure
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            output = Path(directory) / "framework"
+            result = generate_framework_bundle(
+                output,
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+            first_result = json.loads(
+                (output / "attempts/attempt_001/result.json").read_text()
+            )
+            first_raw = (output / "attempts/attempt_001/response_raw.json").read_bytes()
+
+        self.assertEqual(result.bundle, _bundle())
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0]["response_format"]["type"], "json_schema")
+        self.assertEqual(requests[1]["response_format"], {"type": "json_object"})
+        self.assertIn("JSON Object Mode", requests[1]["messages"][0]["content"])
+        self.assertTrue(first_result["retryable"])
+        self.assertEqual(first_raw, raw)
+
+    def test_local_json_schema_failure_never_falls_back_to_json_object(self) -> None:
+        raw = json.dumps(
+            {
+                "error": {
+                    "message": "Failed to generate JSON.",
+                    "code": "json_validate_failed",
+                }
+            }
+        ).encode("utf-8")
+        schema_failure = urllib.error.HTTPError(
+            "http://127.0.0.1:18080/v1/chat/completions",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(raw),
+        )
+        requests = []
+
+        def transport(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            if len(requests) == 1:
+                raise schema_failure
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                provider="local",
+                api_root="http://127.0.0.1:18080/v1",
+                require_api_key=False,
+                require_https=False,
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(
+            [request["response_format"]["type"] for request in requests],
+            ["json_schema", "json_schema"],
+        )
+        self.assertNotIn("JSON Object Mode", requests[1]["messages"][0]["content"])
+
     def test_parser_rejects_malformed_groq_envelopes(self) -> None:
         valid_message = {"role": "assistant", "content": json.dumps(_bundle())}
         malformed = (
@@ -320,6 +638,11 @@ class GroqFrameworkTests(unittest.TestCase):
             payloads = [json.loads(call.args[0].data) for call in urlopen.call_args_list]
             self.assertEqual(payloads[0]["model"], DEFAULT_GROQ_MODEL)
             self.assertEqual(payloads[1]["model"], "org/model-x")
+            self.assertEqual(payloads[0]["max_completion_tokens"], DEFAULT_MAX_OUTPUT_TOKENS)
+            self.assertLessEqual(
+                payloads[0]["max_completion_tokens"] + GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE,
+                8_000,
+            )
 
     def test_transient_429_retries_then_succeeds(self) -> None:
         rate_limited = urllib.error.HTTPError(
@@ -333,7 +656,12 @@ class GroqFrameworkTests(unittest.TestCase):
             "eagle.generation.groq_framework.urllib.request.urlopen",
             side_effect=[rate_limited, _Response(_provider_response())],
         ):
-            result = generate_framework_bundle(Path(directory) / "framework", design_brief="Build a framework.", max_attempts=2)
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
             self.assertEqual(result.bundle, _bundle())
             first = json.loads((result.bundle_path.parent / "attempts/attempt_001/result.json").read_text())
             self.assertTrue(first["retryable"])
@@ -359,7 +687,8 @@ class GroqFrameworkTests(unittest.TestCase):
             )
 
         self.assertEqual(result.bundle, _bundle())
-        sleep.assert_called_once_with(12.75)
+        sleep.assert_called_once()
+        self.assertGreaterEqual(sleep.call_args.args[0], 59.0)
 
     def test_bundle_validation_rejects_marker_mismatch(self) -> None:
         bundle = _bundle()

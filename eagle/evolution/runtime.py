@@ -17,7 +17,10 @@ from eagle.operators.adaptive import ReflectionOperatorController, build_reflect
 from eagle.operators.code import CodeReflectionMutation
 from eagle.config import ExperimentConfig
 from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, LLMClient, LLMServerError
-from eagle.operators.initialization import MockInitialPolicyBackend
+from eagle.operators.initialization import (
+    INITIAL_POLICY_RESPONSE_SCHEMA,
+    MockInitialPolicyBackend,
+)
 from eagle.operators.reflection import build_reflection_backend
 from eagle.prompts import load_prompt
 from eagle.operators.prompt import PromptRewriteMutation
@@ -72,6 +75,26 @@ def build_search_runtime(
     )
     framework_slots = config.java_materialization_mode == "framework_slots"
     framework_coach = framework_slots and config.framework_evolution_mode == "llm_coach"
+    framework_options = {}
+    framework_selection_schema = None
+    if framework_coach:
+        from eagle.operators.framework_coach import (
+            FRAMEWORK_SELECTION_SCHEMA_NAME,
+            framework_selection_response_schema,
+        )
+
+        bundle = load_framework_bundle(
+            config.framework_bundle_path,
+            expected_sha256=config.framework_bundle_sha256,
+        )
+        framework_options = {
+            "framework_bundle": bundle,
+            "framework_bundle_sha256": config.framework_bundle_sha256,
+        }
+        framework_selection_schema = framework_selection_response_schema(
+            bundle,
+            config.framework_bundle_sha256,
+        )
     generation_backend = (
         MockGenerationBackend(config.agent_template_path)
         if mock or config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
@@ -81,8 +104,22 @@ def build_search_runtime(
         MockInitialPolicyBackend()
         if mock or (framework_slots and not framework_coach)
         else client.prompt_backend(
-            operation="initial_policy_generation",
+            operation=(
+                "framework_initial_selection"
+                if framework_coach
+                else "initial_policy_generation"
+            ),
             temperature=config.initial_policy_temperature,
+            response_schema=(
+                framework_selection_schema
+                if framework_coach
+                else INITIAL_POLICY_RESPONSE_SCHEMA
+            ),
+            response_schema_name=(
+                FRAMEWORK_SELECTION_SCHEMA_NAME
+                if framework_coach
+                else "eagle_initial_policy"
+            ),
         )
     )
     # The mock and production generator must render the same configured
@@ -95,22 +132,22 @@ def build_search_runtime(
     else:
         reflection_backend = client.prompt_backend(operation="reflection")
         rewrite_backend = client.prompt_backend(operation="rewrite")
+        response_schema_selector = None
+        if framework_coach:
+            assert framework_selection_schema is not None
+
+            def response_schema_selector(prompt: str):
+                if "ROLE: framework_coach" in prompt:
+                    return framework_selection_schema, FRAMEWORK_SELECTION_SCHEMA_NAME
+                return None
+
         strategy_role_backend = client.prompt_backend(
             operation="match_commentator",
             temperature=config.match_commentator_temperature,
+            response_schema_selector=response_schema_selector,
         )
-    framework_options = {}
     if framework_coach:
         from eagle.operators.framework_coach import MockFrameworkRoleBackend
-
-        bundle = load_framework_bundle(
-            config.framework_bundle_path,
-            expected_sha256=config.framework_bundle_sha256,
-        )
-        framework_options = {
-            "framework_bundle": bundle,
-            "framework_bundle_sha256": config.framework_bundle_sha256,
-        }
         if mock:
             strategy_role_backend = MockFrameworkRoleBackend(bundle, config.framework_bundle_sha256)
             initial_policy_backend = strategy_role_backend

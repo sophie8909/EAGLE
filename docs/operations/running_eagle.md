@@ -88,14 +88,39 @@ conda run --no-capture-output -n eagle \
   --mock --skip-final-test
 ```
 
-## Groq framework startup
+## Framework startup
 
 Fresh framework-slot runs bootstrap inline from `framework.design_brief` unless
-an external `framework.bundle_path` is provided. Set `GROQ_API_KEY` in the
-process environment; do not put it in YAML, CLI arguments, shell history, or
-artifacts. `framework.model` defaults to `openai/gpt-oss-120b`. The standalone
+an external `framework.bundle_path` is provided. Set
+`framework.bootstrap_backend: local` to use the configured local llama-server
+without an API key, `groq` to use the default Groq API path, or `mistral` to use
+Mistral. For Groq, set `GROQ_API_KEY` in the process environment; for Mistral,
+store the key in `api_key/mistral`. Do not put credentials in YAML, CLI
+arguments, shell history, or artifacts. `framework.model` defaults to
+`openai/gpt-oss-120b`; use `mistral-small-latest` with the Mistral backend. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
+
+The bootstrap uses conservative free-plan protection in code: 30 requests per
+minute, 1,000 requests per day, 8,000 tokens per minute, and 200,000 tokens
+per day. Because Groq's TPM accounting includes the rendered input prompt,
+framework output defaults to 6,400 completion tokens, reserving 1,600 tokens
+for that prompt under the 8,000-token ceiling. The cap can be overridden for a
+higher provider tier. If Groq's best-effort JSON Schema pass returns its
+`json_validate_failed` error, EAGLE retains that raw response and retries once
+using JSON Object Mode; local bundle validation remains authoritative. Retries—
+including schema-validation retries—wait one rolling
+minute before sending another request. HTTP 429 responses additionally honor
+the provider's `Retry-After` value. These limits apply only to Groq framework
+bootstrap calls; the local backend uses the configured Qwen llama-server and is
+not rate-limited by Groq.
+The local backend may report `finish_reason: length` when its output budget is
+exhausted; EAGLE accepts that response only if the JSON and complete framework
+bundle pass local validation. Groq continues to require `finish_reason: stop`.
+Local bootstrap also disables Qwen thinking with
+`chat_template_kwargs.enable_thinking: false`; the framework JSON must be
+returned in the normal `message.content` field. Its bootstrap completion budget
+is at least 12,288 tokens, independently of the candidate-call budget.
 
 Use this inline form in an ordinary experiment config:
 
@@ -106,8 +131,9 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
+  bootstrap_backend: mistral  # groq, mistral, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: openai/gpt-oss-120b
+  model: mistral-small-latest
   evolution_mode: llm_coach
 ```
 
@@ -116,12 +142,42 @@ Set the top-level `model` profile for the experiment runtime as usual. Omit
 `design_brief` and `model` with `bundle_path: path/to/bundle.json`; optional
 `bundle_version` and `bundle_sha256` fences may be used with that external file.
 
+For a fixed-initialization framework run, use the checked-in real bundle and
+config directly:
+
+```bash
+./experiment.sh configs/framework_coach_mock.yaml --skip-final-test
+```
+
+`configs/framework_coach_mock.yaml` points at
+`configs/framework_bundles/fixed_worker_combat/bundle.json`. The bundle is a
+complete compilable MicroRTS `CandidateAgent` framework with finite worker and
+combat controls; because `bundle_path` is explicit, startup skips only the
+framework bootstrap. The config keeps normal `openai`-compatible EA execution:
+the managed local llama-server and the configured unmanaged additional endpoint
+are both used for `llm_coach` initialization/mutation requests. Java rendering,
+validation, `javac`, Integration, semantic probes, and MicroRTS evaluation stay
+local and unchanged.
+
+For a single-machine run using the same fixed initial framework, use:
+
+```bash
+./experiment.sh configs/framework_coach_single_machine.yaml --skip-final-test
+```
+
+This config keeps `execution_mode: openai` so the normal local llama-server is
+started and used for Coach/Commentator calls, but sets
+`model.additional_endpoints: []`. It therefore makes no request to the LAN
+endpoint and does not read any API key. The fixed bundle still skips framework
+bootstrap, while Java rendering, validation, `javac`, Integration, semantic
+probes, and MicroRTS evaluation remain enabled locally.
+
 EAGLE validates an explicit external bundle during config resolution. For inline
 bootstrap, it initializes bootstrap evidence and the manifest first,
 then writes the resolved frozen config on success or requested pending config
 after failure. Successful bootstrap validates and freezes the bundle at
 `runs/<run_id>/framework/bundle.json` before search. Resume reads only the
-frozen bundle and compares the design brief, bootstrap model, and evolution
+frozen bundle and compares the design brief, bootstrap backend/model, and evolution
 mode; it never regenerates the framework. Each fresh replicate bootstraps a
 separate framework unless the same explicit bundle path is shared. Mock mode
 rejects inline bootstrap without an existing bundle, ensuring no Groq request.
@@ -304,13 +360,16 @@ evaluation:
   self_play_opponent_library_capacity: 50
 ```
 
-The library is seeded at generation zero and admits runnable current parents at
-each refresh boundary, retaining only one representative for each exact
-semantic probe/action vector when the evidence is available. It deterministically
-rotates the next active snapshot every five generations. Resume reloads the last
-committed snapshot; older
-self-play checkpoints that lack context metadata are migrated by re-evaluating
-fresh-ID parent replicas against that snapshot before continuing.
+Generation zero is evaluated against `PassiveAI`; its runnable completed
+candidates are recorded in the exact generation-cohort archive. Generations 1
+through the configured interval use the generation-zero cohort, and the first
+delayed refresh at interval + 1 switches to the generation-one cohort. Each
+subsequent window advances to the prior birth-generation cohort. The semantic
+library remains a bounded deduplicated archive for provenance, but it does not
+choose the active delayed context. Resume reloads the latest committed delayed
+snapshot; older self-play checkpoints that lack context metadata are migrated
+by re-evaluating fresh-ID parent replicas against that snapshot before
+continuing.
 
 ## Resume
 

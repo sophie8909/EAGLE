@@ -50,9 +50,21 @@ repair 或 compile repair。Resume 僅讀 run-owned frozen bundle，驗證 hash 
 Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
 bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index，資料夾
 重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有
-`bundle_path` 會拒絕執行，確保不呼叫 Groq。`GROQ_API_KEY` 僅從 process
-environment 讀取，絕不寫入 config 或 artifact。完整契約見
+`bundle_path` 會拒絕執行，確保不呼叫 API。Groq 的 `GROQ_API_KEY` 從
+process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，兩者
+都絕不寫入 config 或 artifact。完整契約見
 [framework slots](architecture/framework_slots.md)。
+
+Repository 另提供固定初始 framework 範例：
+`configs/framework_coach_mock.yaml` 搭配
+`configs/framework_bundles/fixed_worker_combat/bundle.json`。這個 bundle 是可
+實際編譯與執行的完整 `CandidateAgent`，不是假的 placeholder；它只暴露
+`worker_target` 與 `combat_target_limit` 兩個有限整數 slot。該 config 使用
+明確的 `bundle_path`，因此只會跳過 framework bootstrap；後續使用
+`execution_mode: openai` 與 `framework.evolution_mode: llm_coach`，由 managed
+local llama-server 加上設定的 additional endpoint 執行 EA 的 LLM 呼叫。
+Java render、validation、`javac`、Integration、semantic probe 與 MicroRTS
+評估仍照常執行。
 ### LLM materialization lifecycle
 
 以下 Candidate、genotype、source gate 與 generation 流程只描述
@@ -348,16 +360,20 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
 
-明確設定 `evaluation.mode: self_play` 時，系統維護一個 run-local、可持久化的
-opponent library。Generation 0 先把編譯成功、沒有 failure 狀態且完整跑完 match
-的 candidate 放入 library；如果沒有任何合格 candidate，run 會失敗而不建立
-污染的 context；之後只在
-`self_play_refresh_interval` 的刷新邊界更新（最小版本固定為每五代一次），把新
-的可執行 candidate 以 LISS 式完整 probe/action 向量做 exact equivalence 去重後
-合併進 library，再依穩定順序從 library 選出 immutable
-十-slot context，循環填入 `self_play_000` 到 `self_play_009` 十個等權重 case。
-因此五個被選中的 candidate 會各佔兩個 slot，且保留 self-match；非刷新代沿用
-同一 context。每逢刷新，系統先建立 fresh-ID parent replica，完全沿用原 Java
+明確設定 `evaluation.mode: self_play` 時，Generation 0 先對固定的
+`PassiveAI` 評估，讓初始 candidate 之間先產生可比較的分數落差；所有可執行且
+完整完成 match 的 Generation 0 candidate 會保存為精確的 generation cohort。
+Generation 1 到 `self_play_refresh_interval` 使用 Generation 0 cohort 作為
+immutable context；預設 interval 為 5，因此 Generation 6 開始改用 Generation 1
+cohort，之後每個延遲窗口依序推進。每一代的可執行結果都寫入
+`archives/self_play_generation_cohorts.json`，所以即使 candidate 沒有成為
+survivor，後續窗口仍能取得正確 birth-generation opponent。
+
+系統仍維護 run-local、可持久化的 opponent library，並以 LISS 式完整
+probe/action 向量做 exact equivalence 去重，作為 bounded semantic archive 與
+provenance；但 active context 的延遲排程不再由 library 取代。每個 cohort 會循環
+填入 `self_play_000` 到 `self_play_009` 十個等權重 case，保留 self-match。
+每逢 context 切換，系統先建立 fresh-ID parent replica，完全沿用原 Java
 phenotype、不呼叫 LLM，再以新 context 重評；只有相同 context ID 的 parent 與
 offspring 可以一起做 selection。Self-play 以每個 tier 的最高
 `game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。

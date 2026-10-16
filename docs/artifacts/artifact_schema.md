@@ -99,7 +99,7 @@ Both paths publish the validated exact bytes as run-owned
 `framework/bundle.json` before search and point the runtime config at that file.
 The manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
 `framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable.
-Resume validates its exact bytes, compares design brief, bootstrap model, and
+Resume validates its exact bytes, compares design brief, bootstrap backend/model, and
 evolution mode, and never regenerates a framework. Failed bootstrap preserves
 attempts and a failed manifest; pending config cannot resume without a usable
 frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
@@ -307,12 +307,19 @@ Self-play persists a run-local opponent library at
 `archives/self_play_opponents.json`. Its versioned entries contain candidate
 IDs, birth generations, generated-Java SHA-256 references, and the compact
 semantic summary used for LISS-style exact behavior-vector deduplication;
-candidate artifacts remain the sole Java-source owner. Each generation-zero or refresh
-boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`, which
-records the active context ID, refresh interval, selected library sources, a
-pointer to the library, and ten `self_play_*` slot mappings. Resume loads the
-latest committed snapshot and resolves its immutable candidate references; the
-mutable library is consulted only when a later refresh selects the next context.
+candidate artifacts remain the sole Java-source owner. It also persists the
+exact evaluated birth-generation index at
+`archives/self_play_generation_cohorts.json`, whose entries point to runnable
+candidate artifacts for each generation. Generation zero is evaluated against
+`PassiveAI`; generation-one through generation-`interval` snapshots point to
+the generation-zero cohort, and the delayed refresh at generation
+`interval + 1` points to generation one. Each generation-zero or delayed
+refresh boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`,
+which records the active context ID, refresh interval, opponent source
+generation, schedule marker, cohort-index pointer, semantic library pointer,
+and ten `self_play_*` slot mappings. Resume loads the latest delayed snapshot
+and resolves its exact cohort references; the mutable semantic library is not
+used to choose the active delayed context.
 A refresh also writes
 `generation_<nnnn>_self_play_parent_refresh.json`, linking source parents to
 fresh replicas, Java hashes, old/new context IDs, and survivor status. Refresh
@@ -533,7 +540,7 @@ inherited Java is inactive compatibility data and does not determine source.
 Resume rejects mode/protocol mismatch and unsupported compiler versions before
 replay; an absent field in an old config means `llm`.
 
-## Groq framework bootstrap
+## Framework bootstrap
 
 Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standalone command uses its selected output directory. They are run preparation evidence and do not live inside a candidate:
 
@@ -551,11 +558,13 @@ Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standa
     └── result.json
 ```
 
-`response_raw.json` is flushed before provider-envelope or generated-content
+`bootstrap.json` records the selected `groq` or `local` backend. `response_raw.json` is flushed before provider-envelope or generated-content
 parsing, including failed responses. Attempt schema
 `eagle-groq-framework-attempt-v1` records status/retryability, redacted error,
 provider/model/endpoint/HTTP status, UTC boundaries, duration, and exact request
-and response hashes. `eagle-groq-framework-bootstrap-v1` records the selected
+and response hashes, including the provider `finish_reason`. `length` is
+accepted only for the local backend after the complete response passes local
+bundle validation; Groq still requires `stop`. `eagle-groq-framework-bootstrap-v1` records the selected
 attempt, total duration, attempt summaries, and the SHA-256 of the exact
 published `bundle.json` bytes.
 
@@ -563,9 +572,18 @@ The OpenAI-compatible request uses user content in `messages` and
 `response_format` JSON Schema named `eagle_framework` with `strict: false`. The normalized bundle, extracted template,
 slot-generation prompt, and report are separate convenience views;
 `bundle.json` is the sole experiment input.
+Local bootstrap requests additionally set
+`chat_template_kwargs.enable_thinking: false` so the framework JSON is emitted
+in `message.content` instead of consuming the output budget in
+`reasoning_content`.
+Each `request.json` records the actual response mode for that attempt. A
+provider `json_validate_failed` response is retained as a failed attempt before
+the bounded retry switches to JSON Object Mode; the same local bundle parser
+and validator remain authoritative for the fallback response.
 
-The API key is never an artifact. It is read only from `GROQ_API_KEY`, sent in
-the HTTP Bearer authorization header, excluded from request JSON/config, and
-redacted from stored errors. A bootstrap target must be new or empty so previous
-evidence is never overwritten. See [framework slots](../architecture/framework_slots.md) for
+The API key is never an artifact. Groq reads only `GROQ_API_KEY`; Mistral reads
+only `api_key/mistral`. The selected key is sent in the HTTP Bearer
+authorization header, excluded from request JSON/config, and redacted from
+stored errors. A bootstrap target must be new or empty so previous evidence is
+never overwritten. See [framework slots](../architecture/framework_slots.md) for
 the exact structured schema and retry boundary.

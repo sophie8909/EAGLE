@@ -69,15 +69,52 @@ def freeze_framework_bundle(
         if mock:
             raise ValueError(
                 "Mock framework startup requires framework.bundle_path; "
-                "Groq is disabled in mock mode."
+                "Groq is disabled in mock mode; framework bootstrap is disabled in mock mode."
             )
-        from eagle.generation.groq_framework import generate_framework_bundle
+        from eagle.generation.groq_framework import (
+            DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+            DEFAULT_MISTRAL_API_ROOT,
+            DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+            generate_framework_bundle,
+        )
 
         config.validate()
+        bootstrap_kwargs = {
+            "model": config.framework_model,
+            "design_brief": config.framework_design_brief,
+        }
+        if config.framework_bootstrap_backend == "local":
+            bootstrap_kwargs.update(
+                api_root=config.llm_base_url.rstrip("/") + "/v1",
+                max_output_tokens=max(
+                    config.llm_max_tokens or 0,
+                    DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                ),
+                request_interval_seconds=0.0,
+                provider="local",
+                require_api_key=False,
+                require_https=False,
+                json_object_mode=False,
+                reasoning_effort=None,
+                chat_template_kwargs={"enable_thinking": False},
+            )
+        elif config.framework_bootstrap_backend == "mistral":
+            bootstrap_kwargs.update(
+                api_root=DEFAULT_MISTRAL_API_ROOT,
+                max_output_tokens=max(
+                    config.llm_max_tokens or 0,
+                    DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                ),
+                request_interval_seconds=0.0,
+                provider="mistral",
+                require_api_key=True,
+                require_https=True,
+                json_object_mode=True,
+                reasoning_effort=None,
+            )
         result = generate_framework_bundle(
             run_dir / "framework",
-            model=config.framework_model,
-            design_brief=config.framework_design_brief,
+            **bootstrap_kwargs,
         )
         frozen = replace(
             config,
@@ -134,6 +171,7 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "framework_bundle_sha256": config.framework_bundle_sha256 if config.java_materialization_mode == "framework_slots" else None,
             "framework_bundle_artifact": FRAMEWORK_BUNDLE_ARTIFACT if config.java_materialization_mode == "framework_slots" else None,
             "framework_evolution_mode": config.framework_evolution_mode if config.java_materialization_mode == "framework_slots" else None,
+            "framework_bootstrap_backend": config.framework_bootstrap_backend if config.java_materialization_mode == "framework_slots" else None,
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "run_id": run_dir.name,
             "created_at": utc_now(),

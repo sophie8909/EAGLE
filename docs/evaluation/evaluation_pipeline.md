@@ -32,19 +32,21 @@ retry signal.
 ## Match protocol
 
 `evaluation.mode: fixed_roster` is the default protocol below. With
-`evaluation.mode: self_play`, the evaluator materializes the immutable active
-context from the run-local opponent library as ten equally weighted
-`self_play_000`…`self_play_009` slots. Only candidates with a successful compile,
-no failure stage/reason, and a complete match batch may enter the library. If
-generation zero has no such candidate, the run fails before creating a context.
-The library is seeded at generation zero
-and merged/reselected only at `self_play_refresh_interval` (five generations in
-the minimal protocol); a short library selection is cycled deterministically and
-self-matches remain valid. Every match records the context ID plus source
+`evaluation.mode: self_play`, generation zero is evaluated against the fixed
+`PassiveAI` baseline so independently generated candidates receive a meaningful
+score spread before candidate opponents exist. The completed generation-zero
+candidates are persisted as an exact birth-generation cohort. Generations 1
+through `self_play_refresh_interval` use that cohort as the immutable ten-slot
+context; at generation `self_play_refresh_interval + 1`, the context switches
+to the generation-one cohort, and the same delayed schedule continues. Only
+candidates with a successful compile, no failure stage/reason, and a complete
+match batch may enter a cohort. The semantic opponent library remains as a
+bounded deduplicated archive, but it is not used to replace the exact
+generation-cohort schedule. Every match records the context ID plus source
 candidate/generation. Refresh first re-evaluates phenotype-preserving parent
 replicas, so selection never mixes old-context parents with new-context
-offspring. Resume reloads the last committed active-context sidecar; the
-library is consulted only for a subsequent refresh.
+offspring. Resume reloads the latest delayed snapshot and resolves its exact
+cohort references.
 
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three

@@ -1,9 +1,11 @@
-"""One-shot Groq bootstrap for an immutable, slot-controlled Java framework.
+"""One-shot framework bootstrap for an immutable, slot-controlled Java framework.
 
-This module intentionally stops at framework-bundle creation.  Evolutionary
+This module intentionally stops at framework-bundle creation. Evolutionary
 configuration, candidate state, and Java materialization consume the bundle in
-separate layers.  Authentication is read only from ``GROQ_API_KEY`` and is
-never included in persisted request or result artifacts.
+separate layers. The Groq backend reads authentication only from
+``GROQ_API_KEY``; the Mistral backend reads only ``api_key/mistral``; the local
+backend sends no authorization header. Secrets are never included in persisted
+request or result artifacts.
 """
 
 from __future__ import annotations
@@ -34,11 +36,32 @@ BOOTSTRAP_SCHEMA_VERSION = "eagle-groq-framework-bootstrap-v1"
 ATTEMPT_SCHEMA_VERSION = "eagle-groq-framework-attempt-v1"
 DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MISTRAL_API_ROOT = "https://api.mistral.ai/v1"
+DEFAULT_MISTRAL_MODEL = "mistral-small-latest"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
-DEFAULT_MAX_OUTPUT_TOKENS = 32_768
+DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
+DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
+# Conservative defaults for Groq's free-plan limits.  Framework bootstrap is
+# intentionally serialized: a complete framework response is large enough
+# that a second request inside the same rolling minute can exhaust TPM even
+# when the request count is far below RPM.
+GROQ_FREE_REQUESTS_PER_MINUTE = 30
+GROQ_FREE_REQUESTS_PER_DAY = 1_000
+GROQ_FREE_TOKENS_PER_MINUTE = 8_000
+GROQ_FREE_TOKENS_PER_DAY = 200_000
+GROQ_RATE_WINDOW_SECONDS = 60.0
+DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS = GROQ_RATE_WINDOW_SECONDS
+# The provider's TPM accounting includes the rendered input prompt.  The
+# current bootstrap prompt uses about 1,442 tokens, so reserve 1,600 tokens
+# and keep the default request below Groq's 8,000-token entry-tier ceiling.
+GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE = 1_600
+DEFAULT_MAX_OUTPUT_TOKENS = (
+    GROQ_FREE_TOKENS_PER_MINUTE - GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE
+)
 GROQ_USER_AGENT = "EAGLE/1.0"
 GROQ_REASONING_EFFORT = "low"
+MISTRAL_API_KEY_PATH = Path(__file__).resolve().parents[2] / "api_key" / "mistral"
 
 FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -48,7 +71,10 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
             "type": "string",
             "enum": [FRAMEWORK_SCHEMA_VERSION],
         },
-        "framework_id": {"type": "string"},
+        "framework_id": {
+            "type": "string",
+            "pattern": r"^[a-z][a-z0-9_-]{0,127}$",
+        },
         "java_template": {"type": "string"},
         "slots": {
             "type": "array",
@@ -57,12 +83,18 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "slot_id": {"type": "string"},
+                    "slot_id": {
+                        "type": "string",
+                        "pattern": r"^[a-z][a-z0-9_]{0,63}$",
+                    },
                     "kind": {
                         "type": "string",
                         "enum": list(SLOT_KINDS),
                     },
-                    "marker": {"type": "string"},
+                    "marker": {
+                        "type": "string",
+                        "pattern": r"^\{\{EAGLE_SLOT:[a-z][a-z0-9_]{0,63}\}\}$",
+                    },
                     "default": {
                         "anyOf": [
                             {"type": "integer"},
@@ -79,7 +111,10 @@ FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
                             "type": "object",
                             "additionalProperties": False,
                             "properties": {
-                                "choice_id": {"type": "string"},
+                                "choice_id": {
+                                    "type": "string",
+                                    "pattern": r"^[a-z][a-z0-9_]{0,63}$",
+                                },
                                 "java_expression": {"type": "string"},
                                 "description": {"type": "string"},
                             },
@@ -167,6 +202,72 @@ class GroqFrameworkResult:
     bundle: dict[str, object]
 
 
+@dataclass(frozen=True)
+class _GroqRateSample:
+    started_monotonic: float
+    total_tokens: int
+
+
+def _rate_limit_not_before(
+    samples: list[_GroqRateSample],
+    *,
+    now: float,
+    minimum_interval_seconds: float,
+) -> float:
+    """Return the earliest safe time for the next Groq request."""
+
+    minute_samples = [
+        sample
+        for sample in samples
+        if now - sample.started_monotonic < GROQ_RATE_WINDOW_SECONDS
+    ]
+    day_samples = [
+        sample
+        for sample in samples
+        if now - sample.started_monotonic < 86_400.0
+    ]
+    not_before = now + minimum_interval_seconds if samples else now
+    if len(minute_samples) >= GROQ_FREE_REQUESTS_PER_MINUTE:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in minute_samples)
+            + GROQ_RATE_WINDOW_SECONDS,
+        )
+    minute_tokens = sum(sample.total_tokens for sample in minute_samples)
+    if minute_tokens >= GROQ_FREE_TOKENS_PER_MINUTE:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in minute_samples)
+            + GROQ_RATE_WINDOW_SECONDS,
+        )
+    day_tokens = sum(sample.total_tokens for sample in day_samples)
+    if len(day_samples) >= GROQ_FREE_REQUESTS_PER_DAY:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in day_samples) + 86_400.0,
+        )
+    if day_tokens >= GROQ_FREE_TOKENS_PER_DAY:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in day_samples) + 86_400.0,
+        )
+    return not_before
+
+
+def _response_total_tokens(raw_response: bytes) -> int | None:
+    """Read provider usage for local rate accounting without trusting it for validation."""
+
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    usage = payload.get("usage") if isinstance(payload, dict) else None
+    total_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+    if isinstance(total_tokens, int) and not isinstance(total_tokens, bool) and total_tokens >= 0:
+        return total_tokens
+    return None
+
+
 def generate_framework_bundle(
     output_dir: str | Path,
     *,
@@ -176,9 +277,16 @@ def generate_framework_bundle(
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    request_interval_seconds: float = DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS,
     api_root: str = DEFAULT_GROQ_API_ROOT,
+    provider: str = "groq",
+    require_api_key: bool = True,
+    require_https: bool = True,
+    json_object_mode: bool = False,
+    reasoning_effort: str | None = GROQ_REASONING_EFFORT,
+    chat_template_kwargs: dict[str, object] | None = None,
 ) -> GroqFrameworkResult:
-    """Call Groq with a fixed JSON schema and publish one validated bundle.
+    """Call a compatible framework provider and publish one validated bundle.
 
     Every attempt owns its exact credential-free request body, raw HTTP body,
     timing, hashes, and result.  The raw body is flushed to disk before any
@@ -186,6 +294,14 @@ def generate_framework_bundle(
     """
 
     target = Path(output_dir).expanduser().resolve()
+    provider = provider.strip().lower()
+    if provider not in {"groq", "mistral", "local"}:
+        raise ValueError("framework provider must be groq, mistral, or local.")
+    provider_label = {
+        "groq": "Groq",
+        "mistral": "Mistral",
+        "local": "local LLM",
+    }[provider]
     _validate_settings(
         model=model,
         design_brief=design_brief,
@@ -193,11 +309,11 @@ def generate_framework_bundle(
         max_output_tokens=max_output_tokens,
         max_attempts=max_attempts,
         timeout_seconds=timeout_seconds,
+        request_interval_seconds=request_interval_seconds,
         api_root=api_root,
+        require_https=require_https,
     )
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key.strip():
-        raise GroqFrameworkError("GROQ_API_KEY is required for framework generation.")
+    api_key = _load_api_key(provider, require_api_key=require_api_key)
     _prepare_output_directory(target)
 
     prompt = render_prompt(
@@ -209,18 +325,6 @@ def generate_framework_bundle(
         },
     )
     endpoint = api_root.rstrip("/") + "/chat/completions"
-    request_payload = _request_payload(
-        prompt,
-        model=model,
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-    )
-    request_bytes = json.dumps(
-        request_payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    request_sha256 = _sha256(request_bytes)
     (target / "prompt.txt").write_text(prompt, encoding="utf-8")
     attempts_root = target / "attempts"
     attempts_root.mkdir()
@@ -230,10 +334,51 @@ def generate_framework_bundle(
     selected_attempt: int | None = None
     selected_bundle: dict[str, object] | None = None
     selected_response_sha256: str | None = None
-    last_error = "Groq returned no response."
+    last_error = f"{provider_label} returned no response."
+    last_validation_error: str | None = None
+    request_sha256 = ""
     attempt_summaries: list[dict[str, object]] = []
+    next_request_not_before: float | None = None
+    rate_samples: list[_GroqRateSample] = []
+    json_object_fallback = json_object_mode
 
     for attempt in range(1, max_attempts + 1):
+        now = time.monotonic()
+        rate_limit_not_before = (
+            _rate_limit_not_before(
+                rate_samples,
+                now=now,
+                minimum_interval_seconds=request_interval_seconds,
+            )
+            if provider == "groq"
+            else now
+        )
+        if next_request_not_before is not None:
+            rate_limit_not_before = max(rate_limit_not_before, next_request_not_before)
+        wait_seconds = rate_limit_not_before - now
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+        attempt_prompt = _retry_prompt(
+            prompt,
+            last_validation_error,
+            json_object_mode=json_object_fallback,
+        )
+        request_payload = _request_payload(
+            attempt_prompt,
+            model=model,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            provider=provider,
+            json_object_mode=json_object_fallback,
+            reasoning_effort=reasoning_effort,
+            chat_template_kwargs=chat_template_kwargs,
+        )
+        request_bytes = json.dumps(
+            request_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        request_sha256 = _sha256(request_bytes)
         attempt_dir = attempts_root / f"attempt_{attempt:03d}"
         attempt_dir.mkdir()
         (attempt_dir / "request.json").write_bytes(request_bytes)
@@ -241,6 +386,7 @@ def generate_framework_bundle(
         raw_path.write_bytes(b"")
         started_at = _utc_now()
         started = time.monotonic()
+        next_request_not_before = started + request_interval_seconds
         status = "failed"
         error: str | None = None
         http_status: int | None = None
@@ -249,32 +395,48 @@ def generate_framework_bundle(
         retry_delay_seconds = 0.0
         bundle: dict[str, object] | None = None
         try:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": GROQ_USER_AGENT,
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
             request = urllib.request.Request(
                 endpoint,
                 data=request_bytes,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    # Groq's Cloudflare edge rejects urllib's default client
-                    # signature with error 1010 before the API sees the request.
-                    "User-Agent": GROQ_USER_AGENT,
-                },
+                headers=headers,
                 method="POST",
             )
             with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                 http_status = int(getattr(response, "status", 200))
                 raw_response = response.read()
             raw_path.write_bytes(raw_response)
-            bundle = parse_groq_framework_response(raw_response)
+            bundle = parse_framework_response(
+                raw_response,
+                provider_label=provider_label,
+                allow_length_finish=provider == "local",
+            )
             status = "success"
             retryable = False
         except urllib.error.HTTPError as exc:
             http_status = int(exc.code)
             raw_response = exc.read()
             raw_path.write_bytes(raw_response)
-            error = _http_error_summary(exc, raw_response)
-            retryable = exc.code in {408, 409, 429} or 500 <= exc.code <= 599
+            error = _http_error_summary(exc, raw_response, provider_label=provider_label)
+            json_validation_failure = _provider_error_code(raw_response) == "json_validate_failed"
+            retryable = (
+                json_validation_failure
+                or exc.code in {408, 409, 429}
+                or 500 <= exc.code <= 599
+            )
+            if json_validation_failure and provider != "local":
+                # The provider's best-effort JSON Schema mode can reject a valid-looking
+                # partial generation before the response reaches local parsing.
+                # Groq/Mistral retain their explicit provider compatibility path.
+                # Local/LM Studio accepts json_schema but rejects json_object, so
+                # it must remain schema-constrained on every retry.
+                json_object_fallback = True
             if retryable:
                 retry_delay_seconds = _retry_delay_seconds(
                     exc,
@@ -283,15 +445,18 @@ def generate_framework_bundle(
                     maximum=timeout_seconds,
                 )
         except (urllib.error.URLError, TimeoutError) as exc:
-            error = f"Groq API request failed: {exc}"
+            error = f"{provider_label} API request failed: {exc}"
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            error = f"Groq response validation failed: {exc}"
+            error = f"{provider_label} response validation failed: {exc}"
+            last_validation_error = error
         except OSError as exc:
-            error = f"Groq framework artifact failure: {exc}"
+            error = f"{provider_label} framework artifact failure: {exc}"
             retryable = False
 
         finished_at = _utc_now()
         duration_seconds = max(0.0, time.monotonic() - started)
+        total_tokens = _response_total_tokens(raw_response)
+        rate_samples.append(_GroqRateSample(started, total_tokens or 0))
         response_sha256 = _sha256(raw_response)
         safe_error = _redact(error, api_key)
         attempt_record = {
@@ -300,7 +465,7 @@ def generate_framework_bundle(
             "status": status,
             "retryable": retryable,
             "error": safe_error,
-            "provider": "groq",
+            "provider": provider,
             "model": model,
             "endpoint": endpoint,
             "http_status": http_status,
@@ -309,6 +474,7 @@ def generate_framework_bundle(
             "duration_seconds": duration_seconds,
             "request_sha256": request_sha256,
             "response_sha256": response_sha256,
+            "finish_reason": _response_finish_reason(raw_response),
         }
         _write_json(attempt_dir / "result.json", attempt_record)
         attempt_summaries.append(
@@ -320,6 +486,7 @@ def generate_framework_bundle(
                 "duration_seconds": duration_seconds,
                 "request_sha256": request_sha256,
                 "response_sha256": response_sha256,
+                "finish_reason": _response_finish_reason(raw_response),
                 "artifact": f"attempts/attempt_{attempt:03d}",
             }
         )
@@ -332,7 +499,10 @@ def generate_framework_bundle(
         if not retryable:
             break
         if attempt < max_attempts and retry_delay_seconds > 0:
-            time.sleep(retry_delay_seconds)
+            next_request_not_before = max(
+                next_request_not_before,
+                time.monotonic() + retry_delay_seconds,
+            )
 
     finished_at = _utc_now()
     duration_seconds = max(0.0, time.monotonic() - overall_started)
@@ -340,7 +510,7 @@ def generate_framework_bundle(
         failure_record = {
             "schema_version": BOOTSTRAP_SCHEMA_VERSION,
             "status": "failed",
-            "provider": "groq",
+            "provider": provider,
             "model": model,
             "endpoint": endpoint,
             "max_attempts": max_attempts,
@@ -356,7 +526,7 @@ def generate_framework_bundle(
         }
         _write_json(target / "bootstrap.json", failure_record)
         raise GroqFrameworkError(
-            f"Groq framework generation failed after {len(attempt_summaries)} attempt(s): "
+            f"{provider_label} framework generation failed after {len(attempt_summaries)} attempt(s): "
             f"{last_error}"
         )
 
@@ -377,7 +547,7 @@ def generate_framework_bundle(
     bootstrap_record = {
         "schema_version": BOOTSTRAP_SCHEMA_VERSION,
         "status": "success",
-        "provider": "groq",
+        "provider": provider,
         "model": model,
         "endpoint": endpoint,
         "max_attempts": max_attempts,
@@ -405,6 +575,17 @@ def generate_framework_bundle(
 def parse_groq_framework_response(raw_response: bytes | str) -> dict[str, object]:
     """Parse a Groq provider envelope and validate its framework JSON text."""
 
+    return parse_framework_response(raw_response, provider_label="Groq")
+
+
+def parse_framework_response(
+    raw_response: bytes | str,
+    *,
+    provider_label: str = "Groq",
+    allow_length_finish: bool = False,
+) -> dict[str, object]:
+    """Parse an OpenAI-compatible provider envelope and validate its framework JSON."""
+
     source = (
         raw_response.decode("utf-8")
         if isinstance(raw_response, bytes)
@@ -412,31 +593,50 @@ def parse_groq_framework_response(raw_response: bytes | str) -> dict[str, object
     )
     envelope = json.loads(source)
     if not isinstance(envelope, dict):
-        raise ValueError("Groq response envelope must be an object.")
+        raise ValueError(f"{provider_label} response envelope must be an object.")
     choices = envelope.get("choices")
     if not isinstance(choices, list) or len(choices) != 1:
-        raise ValueError("Groq response must contain exactly one choice.")
+        raise ValueError(f"{provider_label} response must contain exactly one choice.")
     choice = choices[0]
-    if not isinstance(choice, dict) or choice.get("finish_reason") != "stop":
-        raise ValueError("Groq response must finish with stop; incomplete output is rejected.")
+    finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+    accepted_finish_reasons = {"stop"}
+    if allow_length_finish:
+        accepted_finish_reasons.add("length")
+    if not isinstance(choice, dict) or finish_reason not in accepted_finish_reasons:
+        raise ValueError(f"{provider_label} response must finish with stop; incomplete output is rejected.")
     message = choice.get("message")
     if not isinstance(message, dict):
-        raise ValueError("Groq choice message must be an object.")
+        raise ValueError(f"{provider_label} choice message must be an object.")
     if message.get("refusal"):
-        raise ValueError("Groq refused framework generation.")
+        raise ValueError(f"{provider_label} refused framework generation.")
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
-        raise ValueError("Groq structured response must contain JSON text.")
+        raise ValueError(f"{provider_label} structured response must contain JSON text.")
     generated = json.loads(content)
     if not isinstance(generated, dict):
-        raise ValueError("Groq framework content must be one JSON object.")
+        raise ValueError(f"{provider_label} framework content must be one JSON object.")
     bundle = validate_framework_bundle(generated)
     _validate_generated_java_template(bundle)
     return bundle.to_json_dict()
 
 
+def _response_finish_reason(raw_response: bytes) -> str | None:
+    """Return the provider finish reason for durable attempt diagnostics."""
+
+    try:
+        envelope = json.loads(raw_response.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    choices = envelope.get("choices") if isinstance(envelope, dict) else None
+    if not isinstance(choices, list) or len(choices) != 1:
+        return None
+    choice = choices[0]
+    reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+    return reason if isinstance(reason, str) else None
+
+
 def _validate_generated_java_template(bundle: FrameworkBundle) -> None:
-    """Apply Groq-bootstrap source-envelope checks beyond the generic bundle schema."""
+    """Apply bootstrap source-envelope checks beyond the generic bundle schema."""
 
     source = bundle.java_template
     if source.count("package ai.generated;") != 1:
@@ -469,17 +669,16 @@ def _request_payload(
     model: str,
     temperature: float,
     max_output_tokens: int,
+    provider: str = "groq",
+    json_object_mode: bool = False,
+    reasoning_effort: str | None = GROQ_REASONING_EFFORT,
+    chat_template_kwargs: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    return {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
-        "max_completion_tokens": max_output_tokens,
-        # Framework construction needs the output budget for the Java/template
-        # payload; low effort prevents hidden reasoning from exhausting Groq's
-        # entry-tier TPM before the structured content is complete.
-        "reasoning_effort": GROQ_REASONING_EFFORT,
-        "response_format": {
+    response_format: dict[str, object]
+    if json_object_mode:
+        response_format = {"type": "json_object"}
+    else:
+        response_format = {
             "type": "json_schema",
             "json_schema": {
                 "name": "eagle_framework",
@@ -487,17 +686,116 @@ def _request_payload(
                 "strict": False,
                 "schema": FRAMEWORK_RESPONSE_SCHEMA,
             },
-        },
+        }
+    payload: dict[str, object] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "response_format": response_format,
     }
+    if provider == "mistral":
+        payload["max_tokens"] = max_output_tokens
+    else:
+        payload["max_completion_tokens"] = max_output_tokens
+    if reasoning_effort is not None:
+        payload["reasoning_effort"] = reasoning_effort
+    if chat_template_kwargs is not None:
+        payload["chat_template_kwargs"] = dict(chat_template_kwargs)
+    return payload
 
 
-def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str:
-    """Return a bounded provider diagnostic without replacing the raw artifact."""
+def _load_api_key(provider: str, *, require_api_key: bool) -> str:
+    """Load provider credentials without placing them in config or artifacts."""
 
-    prefix = f"Groq API HTTP {exc.code}: {exc.reason}"
+    if not require_api_key:
+        return ""
+    if provider == "groq":
+        api_key = os.environ.get("GROQ_API_KEY", "").strip()
+        if not api_key:
+            raise GroqFrameworkError("GROQ_API_KEY is required for framework generation.")
+        return api_key
+    if provider == "mistral":
+        try:
+            api_key = MISTRAL_API_KEY_PATH.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise GroqFrameworkError(
+                "Mistral API key is required in api_key/mistral."
+            ) from exc
+        if not api_key:
+            raise GroqFrameworkError("Mistral API key is required in api_key/mistral.")
+        return api_key
+    return ""
+
+
+def _retry_prompt(
+    base_prompt: str,
+    validation_error: str | None,
+    *,
+    json_object_mode: bool = False,
+) -> str:
+    """Give a bounded retry local validation feedback without weakening checks."""
+
+    if not validation_error and not json_object_mode:
+        return base_prompt
+    retry_instructions = [
+        "Return exactly one syntactically valid JSON object with the complete framework bundle.",
+        "Do not use Markdown fences, prose, or partial output.",
+    ]
+    if validation_error:
+        retry_instructions.extend(
+            [
+                "A previous complete response was rejected by the local validator.",
+                f"The exact validation error was: {validation_error}",
+            ]
+        )
+    if json_object_mode:
+        retry_instructions.append(
+            "This retry uses JSON Object Mode. Local validation will enforce every bundle field and slot constraint."
+        )
+    retry_instructions.append(
+        "Pay special attention to exact lowercase snake_case IDs and literal slot markers with two closing braces: "
+        "{{EAGLE_SLOT:example_slot}}."
+    )
+    return f"{base_prompt}\n\n" + " ".join(retry_instructions)
+
+
+def _provider_error_code(raw_response: bytes) -> str | None:
+    """Return the provider's machine-readable error code, if present."""
+
     try:
         payload = json.loads(raw_response.decode("utf-8"))
-        provider_error = payload.get("error") if isinstance(payload, dict) else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    error = _provider_error_payload(payload)
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, str) else None
+
+
+def _provider_error_payload(payload: object) -> dict[str, object] | None:
+    """Normalize nested OpenAI-style and top-level Mistral error envelopes."""
+
+    if not isinstance(payload, dict):
+        return None
+    nested = payload.get("error")
+    if isinstance(nested, dict):
+        return nested
+    if isinstance(payload.get("message"), str) or isinstance(payload.get("code"), str):
+        return payload
+    return None
+
+
+def _http_error_summary(
+    exc: urllib.error.HTTPError,
+    raw_response: bytes,
+    *,
+    provider_label: str = "Groq",
+) -> str:
+    """Return a bounded provider diagnostic without replacing the raw artifact."""
+
+    prefix = f"{provider_label} API HTTP {exc.code}: {exc.reason}"
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+        provider_error = _provider_error_payload(payload)
         message = provider_error.get("message") if isinstance(provider_error, dict) else None
     except (UnicodeDecodeError, json.JSONDecodeError):
         message = None
@@ -542,10 +840,12 @@ def _validate_settings(
     max_output_tokens: int,
     max_attempts: int,
     timeout_seconds: float,
+    request_interval_seconds: float,
     api_root: str,
+    require_https: bool,
 ) -> None:
     if not re.fullmatch(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?", model):
-        raise ValueError("Groq model must be a non-empty model identifier.")
+        raise ValueError("Framework model must be a non-empty model identifier.")
     if not design_brief.strip():
         raise ValueError("Framework design brief must not be empty.")
     if not math.isfinite(temperature) or temperature < 0:
@@ -556,9 +856,13 @@ def _validate_settings(
         raise ValueError("max_attempts must be at least 1.")
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be finite and positive.")
+    if not math.isfinite(request_interval_seconds) or request_interval_seconds < 0:
+        raise ValueError("request_interval_seconds must be finite and non-negative.")
     parsed = urllib.parse.urlparse(api_root)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("Groq api_root must be a valid HTTPS URL.")
+    allowed_schemes = {"https"} if require_https else {"http", "https"}
+    if parsed.scheme not in allowed_schemes or not parsed.hostname:
+        scheme_label = "HTTPS" if require_https else "HTTP(S)"
+        raise ValueError(f"Framework api_root must be a valid {scheme_label} URL.")
 
 
 def _prepare_output_directory(path: Path) -> None:

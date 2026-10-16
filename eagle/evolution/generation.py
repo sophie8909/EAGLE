@@ -30,9 +30,10 @@ from eagle.run_artifacts import record_error_memory, record_generation
 from eagle.self_play import (
     assert_shared_self_play_context,
     is_self_play_refresh,
+    load_self_play_generation_cohort,
     population_matches_self_play_context,
-    select_self_play_library_candidates,
-    update_self_play_opponent_library,
+    record_self_play_generation_cohort,
+    self_play_opponent_generation,
     write_self_play_snapshot,
 )
 from eagle.strategy_diversity import (
@@ -101,21 +102,20 @@ def run_generation_step(
         )
     )
     if snapshot_refreshed:
-        update_self_play_opponent_library(
-            run_dir,
-            source_parents,
-            capacity=config.self_play_opponent_library_capacity,
+        opponent_generation = self_play_opponent_generation(
+            generation,
+            config.self_play_refresh_interval,
         )
-        self_play_opponent_snapshot = select_self_play_library_candidates(
+        self_play_opponent_snapshot = load_self_play_generation_cohort(
             run_dir,
-            generation=generation,
-            refresh_interval=config.self_play_refresh_interval,
+            opponent_generation,
         )
         write_self_play_snapshot(
             run_dir,
             generation=generation,
             candidates=self_play_opponent_snapshot,
             refresh_interval=config.self_play_refresh_interval,
+            opponent_generation=opponent_generation,
         )
     if snapshot_refreshed or context_migration_required:
         parent_replicas = build_self_play_fitness_refresh_replicas(
@@ -168,6 +168,8 @@ def run_generation_step(
         run_id=run_id,
         opponent_candidates=self_play_opponent_snapshot,
     )
+    if config.evaluation_mode == "self_play":
+        record_self_play_generation_cohort(run_dir, generation, evaluated_offspring)
     evaluated_offspring, rewards = operator_controller.collect_rewards(
         parents_for_generation,
         evaluated_offspring,

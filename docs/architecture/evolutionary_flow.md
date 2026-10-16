@@ -75,22 +75,21 @@ are specified in their own sections.
    per old parent, with the same complete genotype and component provenance,
    then selects from replicas plus offspring only. It never overwrites or
    reuses the old parent as a survivor candidate.
-8. In `self_play` evaluation, maintain a persisted opponent library and one
-   immutable ten-slot active context. Seed and update the library only at each
-   configured refresh generation (five generations in the minimal protocol),
-   merge newly runnable candidates, collapse exact semantic probe/action-vector
-   duplicates, and deterministically select the next active context from the
-   library. Between refreshes, keep the context unchanged. At
-   refresh, phenotype-preserving fresh-ID parent replicas are re-evaluated
-   before reflection; the same migration is also performed if generation-zero
-   semantic deduplication changes the context before the first offspring
-   generation. Only those replicas and offspring evaluated against that same
-   context enter selection. Persist the library, active context, refresh
-   audit sidecar, surviving population, and metrics. The sole objective is
-   aggregate `game_performance`. Scores whose difference from the current tier
-   maximum is at most `1.0` are tied; tiers are never formed by chained
-   pairwise comparisons. Parent B and a cut survivor tier prefer the greatest
-   compatible Hamming distance across the nine action hashes.
+8. In `self_play` evaluation, generation zero uses fixed `PassiveAI`, then its
+   completed candidates are persisted as the generation-zero opponent cohort.
+   Generations 1 through `self_play_refresh_interval` use that cohort as the
+   immutable ten-slot context. The first delayed refresh is generation
+   `self_play_refresh_interval + 1` (generation 6 for the default interval 5),
+   which switches evaluation to the generation-one cohort; later windows
+   advance in the same way. Every completed generation is archived in
+   `archives/self_play_generation_cohorts.json`, so the schedule is independent
+   of survivor retention. The semantic opponent library is retained as a
+   bounded, deduplicated archive, but does not replace the exact
+   generation-cohort schedule. Every match records the context ID plus source
+   candidate/generation. Refresh first re-evaluates phenotype-preserving parent
+   replicas, so selection never mixes old-context parents with new-context
+   offspring. Resume reloads the last committed delayed snapshot and its exact
+   cohort references.
 
 The shared generation implementation is in `eagle/evolution/generation.py` and `eagle/evolution/offspring.py`; selection is in `eagle/operators/selection.py`, with evaluation in
 `eagle/evaluation/pipeline.py`.

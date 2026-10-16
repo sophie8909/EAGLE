@@ -74,6 +74,28 @@ def _build_self_play_opponents(
     return tuple(opponents)
 
 
+def _build_initial_self_play_opponents(
+    *,
+    config: ExperimentConfig,
+    classes_dir: Path,
+    mock: bool,
+) -> tuple[EvaluationOpponent, ...]:
+    """Use the fixed PassiveAI baseline before candidate cohorts exist."""
+
+    passive = tuple(
+        opponent
+        for opponent in _resolved_static_evaluation_opponents(
+            config,
+            mock=mock,
+            classes_dir=classes_dir,
+        )
+        if opponent.opponent_id == "passive"
+    )
+    if not passive:
+        raise RuntimeError("Self-play generation zero requires the PassiveAI opponent.")
+    return passive
+
+
 def _prepare_self_play_class(
     candidate: Candidate,
     *,

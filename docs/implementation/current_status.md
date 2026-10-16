@@ -123,17 +123,17 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
 - Fixed-roster candidate fitness is a ten-field opponent score mapping.
   Self-play candidate fitness contains only `game_performance`. Failed or
   incomplete candidates receive `-1000.0` for the active objective(s).
-- Explicit `evaluation.mode: self_play` uses a persisted opponent library plus
-  immutable snapshot contexts and `self_play_000`…`self_play_009` cases with
-  uniform weights. Only compiled candidates with no failure state and a complete
-  match batch enter the library; an empty valid pool fails the run instead of
-  creating a poisoned context. The library is seeded at generation zero and
-  updated at the five-generation refresh boundary; equivalent runnable phenotypes are collapsed
-  by their complete semantic probe/action vector before selected library entries
-  cycle to fill ten slots. Refresh generations re-evaluate phenotype-preserving fresh-ID
-  parents before reflection and selection; resume reloads the last committed
-  context and migrates pre-context checkpoints by refreshing
-  parents against it. This mode requires static reflection.
+- Explicit `evaluation.mode: self_play` uses a generation-zero `PassiveAI`
+  baseline, exact birth-generation cohorts, immutable snapshot contexts, and
+  `self_play_000`…`self_play_009` cases with uniform weights. Generation 1
+  through the configured refresh interval use the generation-zero cohort; the
+  first delayed refresh is `interval + 1` and switches to the generation-one
+  cohort. Every runnable evaluated generation is archived, while the bounded
+  semantic opponent library remains available for deduplication and provenance.
+  An empty valid pool fails the run instead of creating a poisoned context.
+  Refresh generations re-evaluate phenotype-preserving fresh-ID parents before
+  reflection and selection; resume reloads the latest delayed context and exact
+  cohort references. This mode requires static reflection.
 - Fixed-roster parent/survivor selection is seeded lexicase. Self-play maximizes
   Game Performance, treats scores within `1.0` of a tier maximum as tied, and
   uses nine-probe full-agent behavior distance to preserve different semantics
@@ -563,10 +563,11 @@ commands, evidence, and the fixed-roster asset limitation.
 
 ## Groq framework and finite-slot evolution (2026-10-15)
 
-The explicit two-stage `framework_slots` mode is implemented. The standalone
-`python -m eagle framework` command uses Groq Chat Completions with
-`GROQ_API_KEY`, bounded attempts, raw-before-parse evidence, timing/hashes,
-and normalized bundle publication. Its JSON Schema request uses `strict: false`
+The explicit two-stage `framework_slots` mode is implemented. The shared
+framework bootstrap path supports bounded attempts, raw-before-parse evidence,
+timing/hashes, and normalized bundle publication; Groq uses `GROQ_API_KEY` and
+the Mistral experiment backend reads `api_key/mistral`. The Groq JSON Schema
+request uses `strict: false`
 because `report.slot_rationale` has dynamic keys. Provider enforcement is
 best-effort; local exact validation remains authoritative. Its exact schema is
 `eagle-framework-bundle-v1`; the generated report and

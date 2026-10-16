@@ -28,7 +28,13 @@ additional semantic requirements:
   `// EAGLE_AGENT_STRATEGY_START` / `// EAGLE_AGENT_STRATEGY_END` pair.
 - Every declared slot appears exactly once inside that strategy region as the
   exact token `{{EAGLE_SLOT:<slot_id>}}`. Do not emit undeclared slot markers.
-- Slot IDs and choice IDs match `[a-z][a-z0-9_]{0,63}`.
+- The `marker` JSON field must contain the exact literal token with both closing
+  braces, for example `"{{EAGLE_SLOT:priority_harvest}}"`; never omit either
+  closing brace, add whitespace, or use a different spelling. The marker in
+  `java_template` and the corresponding slot `marker` field must be identical.
+- Slot IDs and choice IDs match `[a-z][a-z0-9_]{0,63}`. Use lowercase
+  snake_case for every ID, for example `mix_balanced`, never camelCase such as
+  `mixBalanced`.
 - Slot kind is `integer`, `number`, or `expression_choice`.
 - Integer and number slots have inclusive minimum/maximum bounds, a positive
   step, a default aligned to that step, and an empty choices array.
@@ -59,6 +65,11 @@ additional semantic requirements:
   architecture summary, ordered decision flow, invariants, assumptions, and
   risks. `slot_rationale` is an object whose keys are exactly all declared
   slot_id values and whose values are non-empty rationale strings.
+
+Before returning, independently check every slot object: its `marker` is
+exactly `{{EAGLE_SLOT:<slot_id>}}` with two closing braces, every `choice_id`
+is lowercase snake_case, and the same exact marker occurs once in the Java
+template. Return the complete corrected JSON object, not a partial repair.
 
 Do not place Markdown fences around Java or JSON. Do not add keys outside the
 provided response schema.

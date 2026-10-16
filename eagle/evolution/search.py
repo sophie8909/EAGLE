@@ -33,7 +33,8 @@ from eagle.run_artifacts import (
     record_generation,
 )
 from eagle.self_play import (
-    select_self_play_library_candidates,
+    load_self_play_generation_cohort,
+    record_self_play_generation_cohort,
     update_self_play_opponent_library,
     write_self_play_snapshot,
 )
@@ -217,21 +218,19 @@ def _run_search_impl(
             "Generation 0 produced no candidate that completed evaluation."
         )
     if config.evaluation_mode == "self_play":
+        record_self_play_generation_cohort(run_dir, 0, evaluated_population)
         update_self_play_opponent_library(
             run_dir,
             evaluated_population,
             capacity=config.self_play_opponent_library_capacity,
         )
-        self_play_opponent_snapshot = select_self_play_library_candidates(
-            run_dir,
-            generation=0,
-            refresh_interval=config.self_play_refresh_interval,
-        )
+        self_play_opponent_snapshot = load_self_play_generation_cohort(run_dir, 0)
         write_self_play_snapshot(
             run_dir,
             generation=0,
             candidates=self_play_opponent_snapshot,
             refresh_interval=config.self_play_refresh_interval,
+            opponent_generation=0,
         )
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
@@ -248,11 +247,7 @@ def _run_search_impl(
         selection_mode=config.algorithm,
     )
     self_play_opponent_snapshot = (
-        select_self_play_library_candidates(
-            run_dir,
-            generation=0,
-            refresh_interval=config.self_play_refresh_interval,
-        )
+        load_self_play_generation_cohort(run_dir, 0)
         if config.evaluation_mode == "self_play"
         else None
     )
