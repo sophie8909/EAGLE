@@ -28,11 +28,13 @@ from eagle.execution import LLM_WORKERS, current_llm_worker_slot
 
 __all__ = [
     "DEFAULT_MAX_PROMPT_CHARS",
+    "GENERIC_JSON_OBJECT_SCHEMA",
     "EndpointConfigError",
     "LLMCallLogger",
     "LLMClient",
     "LLMEndpoint",
     "LLMServerError",
+    "json_schema_response_format",
     "llm_request_progress",
     "parse_json_object_response",
     "read_chat_completion_content",
@@ -118,7 +120,14 @@ class LLMClient:
             additional_endpoints=self.additional_endpoints,
         )
 
-    def prompt_backend(self, *, operation: str, temperature: float | None = None):
+    def prompt_backend(
+        self,
+        *,
+        operation: str,
+        temperature: float | None = None,
+        response_schema: dict[str, object] | None = None,
+        response_schema_name: str = "eagle_response",
+    ):
         """Build a shared Reflection/role backend lazily."""
 
         from eagle.operators.reflection import build_reflection_backend
@@ -133,6 +142,8 @@ class LLMClient:
             max_output_tokens=self.max_output_tokens,
             seed=self.seed,
             additional_endpoints=self.additional_endpoints,
+            response_schema=response_schema,
+            response_schema_name=response_schema_name,
         )
 
 
@@ -151,6 +162,39 @@ def generate_seeded(backend: Any, prompt: str, seed: int) -> str:
 # The current 32K-token runtime has ample room for the observed ~6.5K-token
 # generator responses when requests are bounded at 80K characters.
 DEFAULT_MAX_PROMPT_CHARS = 80_000
+
+# LM Studio accepts structured JSON output through ``json_schema`` but rejects
+# the older OpenAI ``json_object`` response format. Semantic role validators
+# remain authoritative after transport, so roles without a dedicated schema
+# use this intentionally minimal object schema.
+GENERIC_JSON_OBJECT_SCHEMA: dict[str, object] = {"type": "object"}
+
+
+def json_schema_response_format(
+    schema: dict[str, object],
+    *,
+    name: str = "eagle_response",
+    strict: bool = False,
+) -> dict[str, object]:
+    """Build an OpenAI-compatible JSON Schema response-format envelope."""
+
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        raise ValueError("structured response schemas must be JSON object schemas")
+    if not name or any(
+        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+        for character in name
+    ):
+        raise ValueError(
+            "structured response schema names must be alphanumeric, underscore, or hyphen"
+        )
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "strict": bool(strict),
+            "schema": schema,
+        },
+    }
 
 
 def truncate_prompt(prompt: str, *, max_chars: int = DEFAULT_MAX_PROMPT_CHARS) -> str:

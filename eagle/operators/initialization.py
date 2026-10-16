@@ -20,6 +20,7 @@ from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response
 from eagle.prompts import load_prompt
 from eagle.timing import utc_now
 from eagle.strategy_dsl import (
+    STRATEGY_DSL_JSON_SCHEMA,
     normalize_strategy_dsl,
     validate_strategy_dsl,
     worker_rush_policy,
@@ -28,6 +29,12 @@ from eagle.strategy_dsl import (
 
 LLM_GENERATED_POLICIES = "llm_generated_policies"
 INITIAL_POLICY_SCHEMA_VERSION = "eagle-initial-policy-generation-v1"
+INITIAL_POLICY_RESPONSE_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {"strategy_prompt": STRATEGY_DSL_JSON_SCHEMA},
+    "required": ["strategy_prompt"],
+}
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 INITIAL_POLICY_VARIANTS = tuple(
     line.removeprefix("- ").strip()
@@ -320,15 +327,11 @@ def _generate_initial_policy(
             # Raw output is durable before JSON parsing or semantic validation.
             (attempt_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
             parsed = parse_json_object_response(raw)
-            if (
-                not isinstance(parsed, dict)
-                or set(parsed) != {"strategy_prompt"}
-                or not isinstance(parsed.get("strategy_prompt"), str)
-            ):
-                raise ValueError(
-                    "response must contain exactly one string field: strategy_prompt"
-                )
+            if not isinstance(parsed, dict) or set(parsed) != {"strategy_prompt"}:
+                raise ValueError("response must contain exactly one field: strategy_prompt")
             strategy_source = parsed["strategy_prompt"]
+            if not isinstance(strategy_source, (str, dict)):
+                raise ValueError("strategy_prompt must be a JSON object or serialized JSON string")
             if isinstance(strategy_source, str):
                 if len(strategy_source) > config.max_prompt_chars:
                     raise ValueError("strategy DSL exceeds size limit")

@@ -430,11 +430,12 @@ def generate_framework_bundle(
                 or exc.code in {408, 409, 429}
                 or 500 <= exc.code <= 599
             )
-            if json_validation_failure:
+            if json_validation_failure and provider != "local":
                 # The provider's best-effort JSON Schema mode can reject a valid-looking
                 # partial generation before the response reaches local parsing.
-                # Retry in JSON Object Mode; local bundle validation remains
-                # authoritative and the failed constrained request is retained.
+                # Groq/Mistral retain their explicit provider compatibility path.
+                # Local/LM Studio accepts json_schema but rejects json_object, so
+                # it must remain schema-constrained on every retry.
                 json_object_fallback = True
             if retryable:
                 retry_delay_seconds = _retry_delay_seconds(

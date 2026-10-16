@@ -17,7 +17,10 @@ from eagle.operators.adaptive import ReflectionOperatorController, build_reflect
 from eagle.operators.code import CodeReflectionMutation
 from eagle.config import ExperimentConfig
 from eagle.llm import DEFAULT_MAX_PROMPT_CHARS, LLMCallLogger, LLMClient, LLMServerError
-from eagle.operators.initialization import MockInitialPolicyBackend
+from eagle.operators.initialization import (
+    INITIAL_POLICY_RESPONSE_SCHEMA,
+    MockInitialPolicyBackend,
+)
 from eagle.operators.reflection import build_reflection_backend
 from eagle.prompts import load_prompt
 from eagle.operators.prompt import PromptRewriteMutation
@@ -83,6 +86,8 @@ def build_search_runtime(
         else client.prompt_backend(
             operation="initial_policy_generation",
             temperature=config.initial_policy_temperature,
+            response_schema=INITIAL_POLICY_RESPONSE_SCHEMA,
+            response_schema_name="eagle_initial_policy",
         )
     )
     # The mock and production generator must render the same configured

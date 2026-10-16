@@ -563,6 +563,52 @@ class GroqFrameworkTests(unittest.TestCase):
         self.assertTrue(first_result["retryable"])
         self.assertEqual(first_raw, raw)
 
+    def test_local_json_schema_failure_never_falls_back_to_json_object(self) -> None:
+        raw = json.dumps(
+            {
+                "error": {
+                    "message": "Failed to generate JSON.",
+                    "code": "json_validate_failed",
+                }
+            }
+        ).encode("utf-8")
+        schema_failure = urllib.error.HTTPError(
+            "http://127.0.0.1:18080/v1/chat/completions",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(raw),
+        )
+        requests = []
+
+        def transport(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            if len(requests) == 1:
+                raise schema_failure
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                provider="local",
+                api_root="http://127.0.0.1:18080/v1",
+                require_api_key=False,
+                require_https=False,
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(
+            [request["response_format"]["type"] for request in requests],
+            ["json_schema", "json_schema"],
+        )
+        self.assertNotIn("JSON Object Mode", requests[1]["messages"][0]["content"])
+
     def test_parser_rejects_malformed_groq_envelopes(self) -> None:
         valid_message = {"role": "assistant", "content": json.dumps(_bundle())}
         malformed = (

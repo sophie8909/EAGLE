@@ -17,7 +17,12 @@ from typing import Any, Protocol
 from eagle.timing import utc_now
 from eagle.evaluation.determinism import derive_seed
 from eagle.execution import current_llm_worker_slot
-from eagle.llm import LLMEndpoint, generate_seeded
+from eagle.llm import (
+    GENERIC_JSON_OBJECT_SCHEMA,
+    LLMEndpoint,
+    generate_seeded,
+    json_schema_response_format,
+)
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.llm import (
@@ -394,7 +399,7 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = ()) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = (), response_schema: dict[str, object] | None = None, response_schema_name: str = "eagle_response") -> None:
         self._endpoints = (
             LLMEndpoint(base_url.rstrip("/"), model),
             *(LLMEndpoint(endpoint.base_url.rstrip("/"), endpoint.model) for endpoint in additional_endpoints),
@@ -408,6 +413,8 @@ class OpenAICompatibleReflectionBackend:
             else max_output_tokens
         )
         self.seed = 0 if seed is None else int(seed)
+        self.response_schema = response_schema or GENERIC_JSON_OBJECT_SCHEMA
+        self.response_schema_name = response_schema_name
 
     @property
     def selected_endpoint(self) -> LLMEndpoint:
@@ -437,7 +444,10 @@ class OpenAICompatibleReflectionBackend:
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
-            "response_format": {"type": "json_object"},
+            "response_format": json_schema_response_format(
+                self.response_schema,
+                name=self.response_schema_name,
+            ),
             "chat_template_kwargs": {"enable_thinking": False},
             "stream": True,
         }
@@ -481,13 +491,15 @@ def build_reflection_backend(
     max_output_tokens: int | None = None,
     seed: int | None = None,
     additional_endpoints: tuple[LLMEndpoint, ...] = (),
+    response_schema: dict[str, object] | None = None,
+    response_schema_name: str = "eagle_response",
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name == "openai":
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints)
+        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints, response_schema=response_schema, response_schema_name=response_schema_name)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 

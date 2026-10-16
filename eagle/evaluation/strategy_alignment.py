@@ -12,8 +12,25 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from eagle.llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
+from eagle.llm import (
+    LLMServerError,
+    json_schema_response_format,
+    llm_request_progress,
+    read_chat_completion_content,
+    truncate_prompt,
+)
 from eagle.llm import parse_json_object_response
+
+
+STRATEGY_ALIGNMENT_RESPONSE_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "score": {"type": "number"},
+        "reason": {"type": "string"},
+    },
+    "required": ["score", "reason"],
+}
 
 
 @dataclass(frozen=True)
@@ -71,7 +88,10 @@ class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
             "model": self.model,
             "messages": [{"role": "user", "content": request_text}],
             "temperature": self.temperature,
-            "response_format": {"type": "json_object"},
+            "response_format": json_schema_response_format(
+                STRATEGY_ALIGNMENT_RESPONSE_SCHEMA,
+                name="eagle_strategy_alignment",
+            ),
             "chat_template_kwargs": {"enable_thinking": False},
             "stream": True,
         }
