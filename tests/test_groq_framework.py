@@ -322,7 +322,8 @@ class GroqFrameworkTests(unittest.TestCase):
     def test_transient_429_retries_then_succeeds(self) -> None:
         rate_limited = urllib.error.HTTPError(
             "https://api.groq.com/openai/v1/chat/completions", 429,
-            "Too Many Requests", {}, io.BytesIO(b'{"error":{"message":"rate limited"}}'),
+            "Too Many Requests", {"Retry-After": "0"},
+            io.BytesIO(b'{"error":{"message":"rate limited"}}'),
         )
         with tempfile.TemporaryDirectory() as directory, patch.dict(
             os.environ, {"GROQ_API_KEY": "secret"}, clear=True
@@ -334,6 +335,29 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertEqual(result.bundle, _bundle())
             first = json.loads((result.bundle_path.parent / "attempts/attempt_001/result.json").read_text())
             self.assertTrue(first["retryable"])
+
+    def test_429_waits_for_provider_retry_after_before_retry(self) -> None:
+        rate_limited = urllib.error.HTTPError(
+            "https://api.groq.com/openai/v1/chat/completions",
+            429,
+            "Too Many Requests",
+            {"Retry-After": "12.5"},
+            io.BytesIO(b'{"error":{"message":"rate limited"}}'),
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=[rate_limited, _Response(_provider_response())],
+        ), patch("eagle.generation.groq_framework.time.sleep") as sleep:
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+            )
+
+        self.assertEqual(result.bundle, _bundle())
+        sleep.assert_called_once_with(12.75)
 
     def test_bundle_validation_rejects_marker_mismatch(self) -> None:
         bundle = _bundle()

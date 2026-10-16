@@ -245,6 +245,7 @@ def generate_framework_bundle(
         http_status: int | None = None
         raw_response = b""
         retryable = True
+        retry_delay_seconds = 0.0
         bundle: dict[str, object] | None = None
         try:
             request = urllib.request.Request(
@@ -273,6 +274,13 @@ def generate_framework_bundle(
             raw_path.write_bytes(raw_response)
             error = _http_error_summary(exc, raw_response)
             retryable = exc.code in {408, 409, 429} or 500 <= exc.code <= 599
+            if retryable:
+                retry_delay_seconds = _retry_delay_seconds(
+                    exc,
+                    raw_response,
+                    attempt=attempt,
+                    maximum=timeout_seconds,
+                )
         except (urllib.error.URLError, TimeoutError) as exc:
             error = f"Groq API request failed: {exc}"
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
@@ -322,6 +330,8 @@ def generate_framework_bundle(
         last_error = safe_error or last_error
         if not retryable:
             break
+        if attempt < max_attempts and retry_delay_seconds > 0:
+            time.sleep(retry_delay_seconds)
 
     finished_at = _utc_now()
     duration_seconds = max(0.0, time.monotonic() - overall_started)
@@ -490,6 +500,33 @@ def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str
         return prefix
     compact_message = " ".join(message.split())[:1000]
     return f"{prefix}: {compact_message}"
+
+
+def _retry_delay_seconds(
+    exc: urllib.error.HTTPError,
+    raw_response: bytes,
+    *,
+    attempt: int,
+    maximum: float,
+) -> float:
+    """Respect Groq rate-limit guidance, with bounded transport backoff."""
+
+    header_value = exc.headers.get("Retry-After") if exc.headers is not None else None
+    candidates = [header_value]
+    try:
+        body = raw_response.decode("utf-8")
+    except UnicodeDecodeError:
+        body = ""
+    match = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)s", body, re.IGNORECASE)
+    candidates.append(match.group(1) if match is not None else None)
+    for candidate in candidates:
+        try:
+            delay = float(candidate) if candidate is not None else -1.0
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(delay) and delay >= 0:
+            return min(maximum, delay + (0.25 if delay > 0 else 0.0))
+    return min(maximum, float(2 ** min(max(0, attempt - 1), 4)))
 
 
 def _validate_settings(
