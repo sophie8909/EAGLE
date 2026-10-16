@@ -543,10 +543,11 @@ commands, evidence, and the fixed-roster asset limitation.
 
 ## Groq framework and finite-slot evolution (2026-10-15)
 
-The explicit two-stage `framework_slots` mode is implemented. The standalone
-`python -m eagle framework` command uses Groq Chat Completions with
-`GROQ_API_KEY`, bounded attempts, raw-before-parse evidence, timing/hashes,
-and normalized bundle publication. Its JSON Schema request uses `strict: false`
+The explicit two-stage `framework_slots` mode is implemented. The shared
+framework bootstrap path supports bounded attempts, raw-before-parse evidence,
+timing/hashes, and normalized bundle publication; Groq uses `GROQ_API_KEY` and
+the Mistral experiment backend reads `api_key/mistral`. The Groq JSON Schema
+request uses `strict: false`
 because `report.slot_rationale` has dynamic keys. Provider enforcement is
 best-effort; local exact validation remains authoritative. Its exact schema is
 `eagle-framework-bundle-v1`; the generated report and

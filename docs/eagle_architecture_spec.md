@@ -721,12 +721,14 @@ limitations.
 uses an explicit external `framework.bundle_path` if supplied. Otherwise, startup
 requires `framework.design_brief` and accepts optional `framework.model`
 (default `openai/gpt-oss-120b`) to bootstrap the framework inline.
-`framework.bootstrap_backend` selects the default `groq` API path or the
-configured local llama-server path; only the Groq path reads `GROQ_API_KEY`. The standalone
+`framework.bootstrap_backend` selects the default `groq` API path, the `mistral`
+API path, or the configured local llama-server path. Groq reads `GROQ_API_KEY`
+and Mistral reads `api_key/mistral`; the local path reads no API key. The standalone
 `python -m eagle framework` CLI remains available for compatibility. Startup
 persists raw responses before parsing and publishes one strictly validated
 `eagle-framework-bundle-v1`. `GROQ_API_KEY` is read only from the environment
-when the selected backend is `groq`.
+when the selected backend is `groq`; `api_key/mistral` is read only when the
+selected backend is `mistral`.
 Bootstrap is a startup operation, not part of EA;
 `framework.evolution_mode` selects local evolution (the default) or the opt-in
 Coach-assisted selection path described below.
@@ -771,9 +773,10 @@ The bundle, slot domains, template, materializer version, and bundle hash remain
 frozen across both evolution policies; resume also compares the resolved
 `framework.evolution_mode`.
 
-`GROQ_API_KEY` is accepted only from the bootstrap process environment and is
-never written to prompt, request, config, bootstrap, run, candidate, or failure
-artifacts. Raw provider output and structured report are untrusted evidence;
+`GROQ_API_KEY` and the Mistral key are accepted only from their provider-specific
+credential sources and are never written to prompt, request, config, bootstrap,
+run, candidate, or failure artifacts. Raw provider output and structured report
+are untrusted evidence;
 schema validation, Java-envelope checks, ordinary validation, javac, and
 Integration remain mandatory trust boundaries.
 

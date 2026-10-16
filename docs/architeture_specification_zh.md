@@ -50,8 +50,9 @@ repair 或 compile repair。Resume 僅讀 run-owned frozen bundle，驗證 hash 
 Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
 bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index，資料夾
 重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有
-`bundle_path` 會拒絕執行，確保不呼叫 Groq。`GROQ_API_KEY` 僅從 process
-environment 讀取，絕不寫入 config 或 artifact。完整契約見
+`bundle_path` 會拒絕執行，確保不呼叫 API。Groq 的 `GROQ_API_KEY` 從
+process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，兩者
+都絕不寫入 config 或 artifact。完整契約見
 [framework slots](architecture/framework_slots.md)。
 ### LLM materialization lifecycle
 

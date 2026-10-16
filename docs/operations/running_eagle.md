@@ -26,10 +26,11 @@ conda run --no-capture-output -n eagle \
 Fresh framework-slot runs bootstrap inline from `framework.design_brief` unless
 an external `framework.bundle_path` is provided. Set
 `framework.bootstrap_backend: local` to use the configured local llama-server
-without an API key, or `framework.bootstrap_backend: groq` to retain the API
-path (the default). For Groq, set `GROQ_API_KEY` in the process environment; do
-not put it in YAML, CLI arguments, shell history, or artifacts.
-`framework.model` defaults to `openai/gpt-oss-120b`. The standalone
+without an API key, `groq` to use the default Groq API path, or `mistral` to use
+Mistral. For Groq, set `GROQ_API_KEY` in the process environment; for Mistral,
+store the key in `api_key/mistral`. Do not put credentials in YAML, CLI
+arguments, shell history, or artifacts. `framework.model` defaults to
+`openai/gpt-oss-120b`; use `mistral-large-latest` with the Mistral backend. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
 
@@ -63,9 +64,9 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: local  # or groq
+  bootstrap_backend: mistral  # groq, mistral, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: qwen3_5_9b
+  model: mistral-large-latest
   evolution_mode: llm_coach
 ```
 

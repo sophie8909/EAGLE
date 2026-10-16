@@ -3,8 +3,9 @@
 This module intentionally stops at framework-bundle creation. Evolutionary
 configuration, candidate state, and Java materialization consume the bundle in
 separate layers. The Groq backend reads authentication only from
-``GROQ_API_KEY``; the local backend sends no authorization header. Secrets are
-never included in persisted request or result artifacts.
+``GROQ_API_KEY``; the Mistral backend reads only ``api_key/mistral``; the local
+backend sends no authorization header. Secrets are never included in persisted
+request or result artifacts.
 """
 
 from __future__ import annotations
@@ -35,9 +36,12 @@ BOOTSTRAP_SCHEMA_VERSION = "eagle-groq-framework-bootstrap-v1"
 ATTEMPT_SCHEMA_VERSION = "eagle-groq-framework-attempt-v1"
 DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MISTRAL_API_ROOT = "https://api.mistral.ai/v1"
+DEFAULT_MISTRAL_MODEL = "mistral-large-latest"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
+DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
 # Conservative defaults for Groq's free-plan limits.  Framework bootstrap is
 # intentionally serialized: a complete framework response is large enough
 # that a second request inside the same rolling minute can exhaust TPM even
@@ -57,6 +61,7 @@ DEFAULT_MAX_OUTPUT_TOKENS = (
 )
 GROQ_USER_AGENT = "EAGLE/1.0"
 GROQ_REASONING_EFFORT = "low"
+MISTRAL_API_KEY_PATH = Path(__file__).resolve().parents[2] / "api_key" / "mistral"
 
 FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -290,9 +295,13 @@ def generate_framework_bundle(
 
     target = Path(output_dir).expanduser().resolve()
     provider = provider.strip().lower()
-    if provider not in {"groq", "local"}:
-        raise ValueError("framework provider must be groq or local.")
-    provider_label = "Groq" if provider == "groq" else "local LLM"
+    if provider not in {"groq", "mistral", "local"}:
+        raise ValueError("framework provider must be groq, mistral, or local.")
+    provider_label = {
+        "groq": "Groq",
+        "mistral": "Mistral",
+        "local": "local LLM",
+    }[provider]
     _validate_settings(
         model=model,
         design_brief=design_brief,
@@ -304,9 +313,7 @@ def generate_framework_bundle(
         api_root=api_root,
         require_https=require_https,
     )
-    api_key = os.environ.get("GROQ_API_KEY", "") if require_api_key else ""
-    if require_api_key and not api_key.strip():
-        raise GroqFrameworkError("GROQ_API_KEY is required for framework generation.")
+    api_key = _load_api_key(provider, require_api_key=require_api_key)
     _prepare_output_directory(target)
 
     prompt = render_prompt(
@@ -337,10 +344,14 @@ def generate_framework_bundle(
 
     for attempt in range(1, max_attempts + 1):
         now = time.monotonic()
-        rate_limit_not_before = _rate_limit_not_before(
-            rate_samples,
-            now=now,
-            minimum_interval_seconds=request_interval_seconds,
+        rate_limit_not_before = (
+            _rate_limit_not_before(
+                rate_samples,
+                now=now,
+                minimum_interval_seconds=request_interval_seconds,
+            )
+            if provider == "groq"
+            else now
         )
         if next_request_not_before is not None:
             rate_limit_not_before = max(rate_limit_not_before, next_request_not_before)
@@ -357,6 +368,7 @@ def generate_framework_bundle(
             model=model,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            provider=provider,
             json_object_mode=json_object_fallback,
             reasoning_effort=reasoning_effort,
             chat_template_kwargs=chat_template_kwargs,
@@ -656,6 +668,7 @@ def _request_payload(
     model: str,
     temperature: float,
     max_output_tokens: int,
+    provider: str = "groq",
     json_object_mode: bool = False,
     reasoning_effort: str | None = GROQ_REASONING_EFFORT,
     chat_template_kwargs: dict[str, object] | None = None,
@@ -677,14 +690,40 @@ def _request_payload(
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
-        "max_completion_tokens": max_output_tokens,
         "response_format": response_format,
     }
+    if provider == "mistral":
+        payload["max_tokens"] = max_output_tokens
+    else:
+        payload["max_completion_tokens"] = max_output_tokens
     if reasoning_effort is not None:
         payload["reasoning_effort"] = reasoning_effort
     if chat_template_kwargs is not None:
         payload["chat_template_kwargs"] = dict(chat_template_kwargs)
     return payload
+
+
+def _load_api_key(provider: str, *, require_api_key: bool) -> str:
+    """Load provider credentials without placing them in config or artifacts."""
+
+    if not require_api_key:
+        return ""
+    if provider == "groq":
+        api_key = os.environ.get("GROQ_API_KEY", "").strip()
+        if not api_key:
+            raise GroqFrameworkError("GROQ_API_KEY is required for framework generation.")
+        return api_key
+    if provider == "mistral":
+        try:
+            api_key = MISTRAL_API_KEY_PATH.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise GroqFrameworkError(
+                "Mistral API key is required in api_key/mistral."
+            ) from exc
+        if not api_key:
+            raise GroqFrameworkError("Mistral API key is required in api_key/mistral.")
+        return api_key
+    return ""
 
 
 def _retry_prompt(

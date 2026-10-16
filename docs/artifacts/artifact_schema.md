@@ -574,8 +574,9 @@ provider `json_validate_failed` response is retained as a failed attempt before
 the bounded retry switches to JSON Object Mode; the same local bundle parser
 and validator remain authoritative for the fallback response.
 
-The API key is never an artifact. It is read only from `GROQ_API_KEY`, sent in
-the HTTP Bearer authorization header, excluded from request JSON/config, and
-redacted from stored errors. A bootstrap target must be new or empty so previous
-evidence is never overwritten. See [framework slots](../architecture/framework_slots.md) for
+The API key is never an artifact. Groq reads only `GROQ_API_KEY`; Mistral reads
+only `api_key/mistral`. The selected key is sent in the HTTP Bearer
+authorization header, excluded from request JSON/config, and redacted from
+stored errors. A bootstrap target must be new or empty so previous evidence is
+never overwritten. See [framework slots](../architecture/framework_slots.md) for
 the exact structured schema and retry boundary.

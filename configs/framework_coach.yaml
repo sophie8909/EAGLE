@@ -37,8 +37,8 @@ prompt_reflection_probability: 0.0
 code_reflection_probability: 0.0
 
 framework:
-  bootstrap_backend: local
-  model: qwen3_5_9b
+  bootstrap_backend: mistral
+  model: mistral-large-latest
   design_brief: >-
     Design a complete MicroRTS Java agent framework with rich combinable rules
     and finite parameter options for economy, production, targeting, combat,

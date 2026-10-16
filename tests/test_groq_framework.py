@@ -15,6 +15,8 @@ from eagle.generation.groq_framework import (
     ATTEMPT_SCHEMA_VERSION,
     BOOTSTRAP_SCHEMA_VERSION,
     DEFAULT_GROQ_MODEL,
+    DEFAULT_MISTRAL_API_ROOT,
+    DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
     DEFAULT_MAX_OUTPUT_TOKENS,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
@@ -166,6 +168,59 @@ class GroqFrameworkTests(unittest.TestCase):
                 )
             )
             self.assertEqual(attempt["finish_reason"], "length")
+
+    def test_mistral_reads_repository_key_file_and_uses_mistral_payload(self) -> None:
+        secret = "mistral-test-key-that-must-not-be-persisted"
+        captured_requests = []
+
+        def transport(request, timeout):
+            captured_requests.append((request, timeout))
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_path = Path(directory) / "mistral"
+            key_path.write_text(secret + "\n", encoding="utf-8")
+            with patch.dict(os.environ, {}, clear=True), patch(
+                "eagle.generation.groq_framework.MISTRAL_API_KEY_PATH", key_path
+            ), patch(
+                "eagle.generation.groq_framework.urllib.request.urlopen",
+                side_effect=transport,
+            ):
+                output = Path(directory) / "framework"
+                result = generate_framework_bundle(
+                    output,
+                    model="mistral-large-latest",
+                    design_brief="Build a bounded economy and combat controller.",
+                    provider="mistral",
+                    api_root=DEFAULT_MISTRAL_API_ROOT,
+                    max_output_tokens=DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                    max_attempts=1,
+                    request_interval_seconds=0.0,
+                    json_object_mode=True,
+                    reasoning_effort=None,
+                )
+
+            self.assertEqual(result.bundle, _bundle())
+            request, timeout = captured_requests[0]
+            self.assertEqual(timeout, 300.0)
+            self.assertEqual(
+                request.full_url,
+                "https://api.mistral.ai/v1/chat/completions",
+            )
+            headers = {key.lower(): value for key, value in request.header_items()}
+            self.assertEqual(headers["authorization"], f"Bearer {secret}")
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(payload["model"], "mistral-large-latest")
+            self.assertEqual(payload["max_tokens"], DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS)
+            self.assertNotIn("max_completion_tokens", payload)
+            self.assertEqual(payload["response_format"], {"type": "json_object"})
+            self.assertNotIn("reasoning_effort", payload)
+            bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
+            self.assertEqual(bootstrap["provider"], "mistral")
+            persisted = b"\n".join(
+                path.read_bytes() for path in output.rglob("*") if path.is_file()
+            )
+            self.assertNotIn(secret.encode("utf-8"), persisted)
 
     def test_bootstrap_persists_schema_artifacts_hashes_and_no_secret(self) -> None:
         secret = "test-api-key-that-must-not-be-persisted"

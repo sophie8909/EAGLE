@@ -98,6 +98,39 @@ class FrameworkStartupTests(unittest.TestCase):
                 {"enable_thinking": False},
             )
 
+    def test_mistral_bootstrap_backend_routes_to_mistral_api_key_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="mistral",
+                model="mistral-large-latest",
+            )
+
+            with patch("eagle.generation.groq_framework.generate_framework_bundle") as generate, patch(
+                "eagle.evolution.search.preflight_evaluation_opponents"
+            ):
+                generate.side_effect = lambda output_dir, **kwargs: self._generator_result(Path(output_dir))
+                with self.assertRaises(KeyboardInterrupt):
+                    run_search(
+                        config,
+                        mock=False,
+                        run_id="mistral-framework-bootstrap",
+                        on_run_created=lambda on_run_dir: (_ for _ in ()).throw(KeyboardInterrupt),
+                    )
+
+            self.assertEqual(generate.call_args.kwargs["provider"], "mistral")
+            self.assertEqual(
+                generate.call_args.kwargs["api_root"],
+                "https://api.mistral.ai/v1",
+            )
+            self.assertEqual(generate.call_args.kwargs["model"], "mistral-large-latest")
+            self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 12288)
+            self.assertTrue(generate.call_args.kwargs["require_api_key"])
+            self.assertTrue(generate.call_args.kwargs["require_https"])
+            self.assertTrue(generate.call_args.kwargs["json_object_mode"])
+            self.assertIsNone(generate.call_args.kwargs["reasoning_effort"])
+
     def test_resume_validation_accepts_frozen_bundle_and_rejects_changed_source(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

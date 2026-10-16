@@ -4,8 +4,8 @@
 bootstrap when no external bundle is configured, then evolves only typed slot
 values. Startup
 validates the generated framework, writes it under the run-owned `framework/`
-directory, and freezes its exact bytes and hash before search. Groq is outside
-the evolutionary loop; bounded retries belong to startup bootstrap.
+directory, and freezes its exact bytes and hash before search. API bootstrap is
+outside the evolutionary loop; bounded retries belong to startup bootstrap.
 This document is the canonical owner of the framework-bundle, slot-domain, and
 bootstrap boundary. The shared downstream Java and MicroRTS stages remain owned
 by [Java generation](java_generation.md) and the
@@ -22,8 +22,9 @@ part of run identity; resume rejects a mode mismatch.
 
 Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
 and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
-`framework.bootstrap_backend` selects `groq` (the default, API-backed path) or
-`local` (the configured local llama-server, without an API key). The standalone
+`framework.bootstrap_backend` selects `groq` (the default API path), `mistral`
+(the Mistral API path), or `local` (the configured local llama-server, without
+an API key). The standalone
 `python -m eagle framework` command remains available to prepare an external
 bundle for reuse. The bootstrap requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
@@ -81,15 +82,16 @@ environment:
 java_materialization_mode: framework_slots
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: local  # or groq
+  bootstrap_backend: mistral  # groq, mistral, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: qwen3_5_9b
+  model: mistral-large-latest
   evolution_mode: llm_coach
 ```
 
-For `groq`, set `GROQ_API_KEY` in the environment. For `local`, the top-level
-experiment `model` profile supplies the already managed llama-server and no API
-key is read. Start the ordinary experiment with
+For `groq`, set `GROQ_API_KEY` in the environment. For `mistral`, EAGLE reads
+the key from `api_key/mistral`. For `local`, the top-level experiment `model`
+profile supplies the already managed llama-server and no API key is read. Start
+the ordinary experiment with
 `python -m eagle experiment --config-dir configs/experiments/framework.yaml` or
 `./experiment.sh configs/experiments/framework.yaml`. The top-level experiment
 `model` still configures the experiment runtime. Omit `evolution_mode` for the
@@ -103,13 +105,16 @@ path also holds the framework constant across replicate seeds. The standalone
 1. On a fresh run without `bundle_path`, startup requires `design_brief`, calls
    the backend selected by `framework.bootstrap_backend` (default `groq`) with `framework.model` (default
    `openai/gpt-oss-120b`), and writes bootstrap evidence under run-owned
-   `framework/`. `GROQ_API_KEY` is read only when the selected backend is
-   `groq`; the local backend reads no API key. Each fresh
+   `framework/`. `GROQ_API_KEY` is read only for `groq`; `api_key/mistral` is
+   read only for `mistral`; the local backend reads no API key. Each fresh
    replicate designs a separate framework unless it uses the same explicit
    `bundle_path` as the other replicates.
 2. The Groq backend sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
-   The local backend sends the same prompt to the configured local
+   The Mistral backend sends the same prompt to
+   `https://api.mistral.ai/v1/chat/completions` with Bearer authorization and
+   uses Mistral JSON Object Mode with `max_tokens`. The local backend sends the
+   same prompt to the configured local
    `llama-server/v1/chat/completions` endpoint without authorization and starts
    with the framework JSON Schema plus `chat_template_kwargs.enable_thinking: false` so
    the Qwen reasoning channel does not consume the framework output budget. The
@@ -286,9 +291,9 @@ retryability, HTTP status, model/endpoint, redacted error, and request/response
 SHA-256. `bootstrap.json` identifies the selected attempt and exact published
 bundle bytes. The command refuses a nonempty output directory.
 
-Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. `GROQ_API_KEY` remains environment-only. Credentials are never accepted in YAML or CLI arguments, embedded in request
+Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
 bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
-receives `GROQ_API_KEY`; stored errors redact that value. Bundle content is
+receives the selected provider key; stored errors redact that value. Bundle content is
 untrusted generated input until strict schema, Java-envelope, marker, normal
 validation, `javac`, and Integration checks succeed.
 

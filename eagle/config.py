@@ -577,8 +577,8 @@ class ExperimentConfig:
                 raise ValueError("deterministic_dsl requires parent_evaluation_mode=reuse_cached.")
         if self.framework_evolution_mode not in {"local", "llm_coach"}:
             raise ValueError("framework.evolution_mode must be local or llm_coach.")
-        if self.framework_bootstrap_backend not in {"groq", "local"}:
-            raise ValueError("framework.bootstrap_backend must be groq or local.")
+        if self.framework_bootstrap_backend not in {"groq", "mistral", "local"}:
+            raise ValueError("framework.bootstrap_backend must be groq, mistral, or local.")
         if self.framework_evolution_mode != "local" and self.java_materialization_mode != "framework_slots":
             raise ValueError("framework.evolution_mode requires framework_slots materialization.")
         if self.java_materialization_mode == "framework_slots":

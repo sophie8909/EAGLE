@@ -73,6 +73,8 @@ def freeze_framework_bundle(
             )
         from eagle.generation.groq_framework import (
             DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+            DEFAULT_MISTRAL_API_ROOT,
+            DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
             generate_framework_bundle,
         )
 
@@ -95,6 +97,20 @@ def freeze_framework_bundle(
                 json_object_mode=False,
                 reasoning_effort=None,
                 chat_template_kwargs={"enable_thinking": False},
+            )
+        elif config.framework_bootstrap_backend == "mistral":
+            bootstrap_kwargs.update(
+                api_root=DEFAULT_MISTRAL_API_ROOT,
+                max_output_tokens=max(
+                    config.llm_max_tokens or 0,
+                    DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                ),
+                request_interval_seconds=0.0,
+                provider="mistral",
+                require_api_key=True,
+                require_https=True,
+                json_object_mode=True,
+                reasoning_effort=None,
             )
         result = generate_framework_bundle(
             run_dir / "framework",
