@@ -11,6 +11,14 @@ bounded logs, observation command construction without fitness writes, and
 loopback Host/Origin/token guards. Observation can read canonical historical
 runs without applying current resume-only runtime validation. Adapter tests
 cover WorkerRush and SafeAllInBot classpaths and temporary compilation wiring.
+Platform checks cover POSIX session/stop behavior, Windows owned console group
+creation and Ctrl+Break dispatch, UTF-8 child logs, and portable map paths.
+`tests/test_interrupts.py` checks handler restoration and, from a Windows
+console, waking a blocked child and completing cleanup. Native process tests
+in `tests/test_runtime_windows.py` verify command quoting, creation-time
+identity fences, liveness, termination, listener discovery, and exclusive
+port checks. Real Java compile/integration tests exercise explicit UTF-8;
+native GUI smoke verifies a 100-tick window match without changing the Run.
 
 Browser checks cover form/YAML round trips, rejected invalid values,
 run/generation/candidate selection, and desktop/mobile layout. A bounded

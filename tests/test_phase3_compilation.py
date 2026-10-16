@@ -39,7 +39,7 @@ CandidateAgent.java:15:3: error: cannot find symbol
         self.assertEqual(analysis.warning_count, 1)
         self.assertEqual(analysis.warnings, ("old",))
 
-    def test_mock_compile_command_enables_explicit_lint(self):
+    def test_mock_compile_command_enables_explicit_lint_and_utf8(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "CandidateAgent.java"
@@ -53,6 +53,7 @@ CandidateAgent.java:15:3: error: cannot find symbol
                 mock=True,
             )
         self.assertIn("-Xlint:all", result.command)
+        self.assertEqual(result.command[result.command.index("-encoding") + 1], "UTF-8")
         self.assertEqual(result.diagnostics, ())
 
     def test_compilation_artifacts_include_stdout_stderr_and_result(self):

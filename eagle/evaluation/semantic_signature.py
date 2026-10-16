@@ -396,7 +396,7 @@ def _compile_helper(
     output_dir.mkdir(parents=True, exist_ok=True)
     sources = [str(JAVA_SOURCE), *(str(path.resolve()) for path in supplemental_sources)]
     _run(
-        ["javac", "-cp", _classpath(microrts_dir), "-d", str(output_dir), *sources],
+        ["javac", "-encoding", "UTF-8", "-cp", _classpath(microrts_dir), "-d", str(output_dir), *sources],
         cwd=microrts_dir,
         timeout_seconds=timeout_seconds,
     )

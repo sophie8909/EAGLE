@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 import yaml
 
-from eagle.cli.gui import GuiApp, GuiServer, Job, form_options
+from eagle.cli.gui import IS_WINDOWS, GuiApp, GuiServer, Job, form_options
 
 
 class GuiAppTests(unittest.TestCase):
@@ -59,7 +59,11 @@ class GuiAppTests(unittest.TestCase):
         original.write_text("experiment_name: modified", encoding="utf-8")
         self.assertEqual(snapshot.read_text(encoding="utf-8"), text)
         self.assertTrue(result["running"])
-        self.assertTrue(start.call_args.kwargs["start_new_session"])
+        if IS_WINDOWS:
+            self.assertIn("creationflags", start.call_args.kwargs)
+        else:
+            self.assertTrue(start.call_args.kwargs["start_new_session"])
+        self.assertEqual(start.call_args.kwargs["env"]["PYTHONIOENCODING"], "utf-8")
         self.assertEqual(start.call_args.kwargs["cwd"], self.root)
 
     def test_duplicate_experiment_is_rejected_without_launching_second_process(self):
@@ -144,6 +148,7 @@ class GuiAppTests(unittest.TestCase):
             self.app.post("/api/resume", {"run": str(run), "mock": True, "skip_final_test": True})
         self.assertEqual(start.call_args.args[0], [sys.executable, "-u", "-m", "eagle", "experiment", "--resume", str(run), "--mock", "--skip-final-test"])
 
+    @unittest.skipIf(IS_WINDOWS, "POSIX process groups")
     def test_stop_targets_experiment_process_and_match_process_group(self):
         self.app.experiment.process = self.process
         match_process = Mock(pid=54321)
@@ -158,6 +163,22 @@ class GuiAppTests(unittest.TestCase):
         match_process.send_signal.assert_not_called()
         kill_group.assert_called_once_with(54321, signal.SIGTERM)
         self.assertTrue(self.app.experiment.status()["stopping"])
+
+    def test_windows_jobs_use_owned_console_group_and_break_signal(self):
+        with (
+            patch("eagle.cli.gui.IS_WINDOWS", True),
+            patch("eagle.cli.gui.subprocess.CREATE_NEW_PROCESS_GROUP", 512, create=True),
+            patch("eagle.cli.gui.signal.CTRL_BREAK_EVENT", 1, create=True),
+            patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start,
+        ):
+            self.app.experiment.start(["python", "-m", "eagle", "experiment"], self.root / "job")
+            self.app.experiment.stop()
+            self.app.match.process = self.process
+            self.app.match.stop()
+        self.assertEqual(start.call_args.kwargs["creationflags"], 512)
+        self.assertNotIn("start_new_session", start.call_args.kwargs)
+        self.assertEqual(self.process.send_signal.call_count, 2)
+        self.process.send_signal.assert_called_with(1)
 
     def test_job_log_tail_is_bounded_and_reports_failure(self):
         job = Job(self.root, "match")

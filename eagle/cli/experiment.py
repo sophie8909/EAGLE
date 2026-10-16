@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import argparse
-import signal
 import sys
 from pathlib import Path
 
 from eagle.experiment import ExperimentOrchestrator
+from eagle.interrupts import install_interrupt_handlers
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,12 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--skip-final-test", action="store_true")
     args = parser.parse_args(argv)
-    previous_sigterm = signal.getsignal(signal.SIGTERM)
-
-    def interrupt_on_sigterm(_signum, _frame):
-        raise KeyboardInterrupt
-
-    signal.signal(signal.SIGTERM, interrupt_on_sigterm)
+    restore_interrupts = install_interrupt_handlers()
     try:
         if args.config_dir is None and args.resume is None:
             parser.error("--config-dir is required unless --resume is supplied")
@@ -49,4 +44,4 @@ def main(argv: list[str] | None = None) -> int:
         print("\nEAGLE interrupted; completed generations remain resumable.", file=sys.stderr)
         return 130
     finally:
-        signal.signal(signal.SIGTERM, previous_sigterm)
+        restore_interrupts()

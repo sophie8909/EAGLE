@@ -31,8 +31,9 @@ and disable Java Generation and repair calls. See the canonical
 
 ## Canonical workflow
 
-For the local experiment GUI, double-click `gui.cmd` on Windows, or run
-`.venv/bin/python -m eagle gui --open` in WSL/Linux. Open
+For the local experiment GUI, run `./gui.sh` on Ubuntu, or double-click
+`gui.cmd` for native Windows. `gui-wsl.cmd` retains the Windows-to-WSL entry.
+All launchers use the local Python environment and open
 `http://127.0.0.1:8877` to edit a config, start or stop an experiment, and select
 a run, generation, candidate, opponent, map, and side for a visual match. See
 [GUI operation](docs/operations/running_eagle.md#local-experiment-gui).

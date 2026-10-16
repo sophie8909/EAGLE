@@ -277,7 +277,7 @@ def integrate_microrts_agent(
     classpath = os.pathsep.join(
         [str(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
     )
-    compile_command = ["javac", "-cp", classpath, "-d", str(artifact_dir), str(probe_source)]
+    compile_command = ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(artifact_dir), str(probe_source)]
     run_command = ["java", f"-Deagle.match.seed={int(seed)}", "-cp", os.pathsep.join([classpath, str(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
     commands = (tuple(compile_command), tuple(run_command))
 

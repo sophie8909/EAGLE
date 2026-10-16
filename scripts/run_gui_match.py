@@ -24,6 +24,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from eagle.config import ExperimentConfig
+from eagle.interrupts import install_interrupt_handlers
 from eagle.evaluation.compiler import compile_generated_agent
 from eagle.evaluation.microrts_runner import integrate_microrts_agent
 from eagle.evaluation.opponents import (
@@ -386,4 +387,11 @@ def non_negative_int(value: str) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    restore_interrupts = install_interrupt_handlers()
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("Visual match interrupted.", file=sys.stderr)
+        raise SystemExit(130)
+    finally:
+        restore_interrupts()

@@ -240,11 +240,16 @@ class RuntimeWorkflowTests(unittest.TestCase):
                     manager.ensure(runtime)
             popen.assert_not_called()
 
-    def test_missing_model_and_non_executable_binary_are_rejected(self):
+    def test_missing_model_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with self.assertRaisesRegex(ValueError, "model.path"):
                 runtime_config_from_experiment(self.make_config(root, missing_model=True))
+
+    @unittest.skipIf(sys.platform == "win32", "Windows has no POSIX executable permission bit")
+    def test_non_executable_binary_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
             with self.assertRaisesRegex(ValueError, "not executable"):
                 runtime_config_from_experiment(self.make_config(root, executable=False))
 
@@ -405,7 +410,7 @@ class RuntimeWorkflowTests(unittest.TestCase):
 
             with patch.object(manager, "start", side_effect=start), patch.object(
                 manager, "stop_owned", side_effect=stop_owned
-            ), patch.object(manager, "_verify_owned_process"), patch(
+            ), patch.object(manager, "check"), patch.object(manager, "_verify_owned_process"), patch(
                 "eagle.runtime.processes.health_check", return_value=(True, "ok")
             ):
                 self.assertEqual(manager.ensure(runtime_a).action, "started")

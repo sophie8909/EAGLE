@@ -81,7 +81,7 @@ class GuiMatchOpponentTests(unittest.TestCase):
             workspace=Path("/workspace"),
         )
         classpath = command[command.index("-cp") + 1].split(os.pathsep)
-        self.assertEqual(classpath[:3], ["/allibot.jar", "/candidate/classes", "/microrts/bin"])
+        self.assertEqual(classpath[:3], [str(Path("/allibot.jar")), str(Path("/candidate/classes")), str(Path("/microrts/bin"))])
 
     def test_default_opponent_resolves(self):
         args = gui.build_parser().parse_args(["--run-dir", "run", "--candidate-id", "candidate"])

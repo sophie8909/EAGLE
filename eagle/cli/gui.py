@@ -24,12 +24,14 @@ from eagle.config import (
     PARENT_EVALUATION_MODES, ExperimentConfig,
 )
 from eagle.gui_data import config_choices, inspect_run, list_runs, read_config, save_config, validate_config
+from eagle.interrupts import install_interrupt_handlers
 from eagle.operators.adaptive import ReflectionOperatorMode
 from eagle.opponents import EVALUATION_ROSTER, GUI_ONLY_OPPONENTS, rooted_jar_path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 HTML = Path(__file__).with_name("gui.html")
+IS_WINDOWS = sys.platform == "win32"
 
 
 def form_payload(payload: dict, root: Path) -> dict:
@@ -100,10 +102,15 @@ class Job:
                 raise ValueError(f"{self.kind} is already running; wait or stop it first.")
             folder.mkdir(parents=True, exist_ok=True)
             log = folder / f"{self.kind}.log"
+            process_options = (
+                {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+                if IS_WINDOWS else {"start_new_session": True}
+            )
+            environment = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
             with log.open("wb") as stream:
                 process = subprocess.Popen(
                     command, cwd=self.root, stdout=stream, stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL, start_new_session=True,
+                    stdin=subprocess.DEVNULL, env=environment, **process_options,
                 )
             self.process, self.log, self.stopping = process, log, False
             return self.status()
@@ -112,7 +119,10 @@ class Job:
         with self.lock:
             if self.process is not None and self.process.poll() is None and not self.stopping:
                 try:
-                    if self.kind == "experiment":
+                    if IS_WINDOWS:
+                        # Each child owns a console group; Ctrl+Break reaches its cleanup handlers.
+                        self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                    elif self.kind == "experiment":
                         # The CLI handles SIGTERM and releases its owned llama.cpp runtime.
                         self.process.send_signal(signal.SIGTERM)
                     else:
@@ -165,7 +175,7 @@ class GuiApp:
         return {
             "configs": config_choices(self.root), "forms": form_options(),
             "opponents": opponents,
-            "maps": sorted(str(path.relative_to(maps_root)) for path in (maps_root / "maps").rglob("*.xml")),
+            "maps": sorted(path.relative_to(maps_root).as_posix() for path in (maps_root / "maps").rglob("*.xml")),
         }
 
     def get(self, path: str, query: dict) -> dict:
@@ -338,8 +348,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs-root", type=Path, default=ROOT / "runs")
     parser.add_argument("--open", action="store_true", help="Open the local GUI in a browser.")
     args = parser.parse_args(argv)
-    if os.name != "posix":
-        parser.error("Run gui.cmd on Windows, or launch this command inside WSL/Linux.")
     app = GuiApp(ROOT, args.runs_root)
     try:
         server = GuiServer(("127.0.0.1", args.port), app)
@@ -349,18 +357,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"EAGLE GUI: {server.origin}\nCtrl+C stops the server and requests cleanup of its owned jobs.", flush=True)
     if args.open:
         open_browser(server.origin)
-    previous_sigterm = signal.getsignal(signal.SIGTERM)
-
-    def interrupt_on_sigterm(_signum, _frame):
-        raise KeyboardInterrupt
-
-    signal.signal(signal.SIGTERM, interrupt_on_sigterm)
+    restore_interrupts = install_interrupt_handlers()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        signal.signal(signal.SIGTERM, previous_sigterm)
+        restore_interrupts()
         app.experiment.stop()
         app.match.stop()
         server.server_close()

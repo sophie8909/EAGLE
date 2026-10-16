@@ -1,3 +1,9 @@
 @echo off
-rem Run from the checkout's WSL environment, including Java/WSLg.
-wsl.exe --cd "%~dp0." bash -lc "exec .venv/bin/python -m eagle gui --open"
+setlocal
+cd /d "%~dp0"
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -m eagle gui --open %*
+) else (
+    python -m eagle gui --open %*
+)
+if errorlevel 1 pause

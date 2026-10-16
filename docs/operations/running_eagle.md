@@ -2,13 +2,30 @@
 
 ## Local experiment GUI
 
-On Windows, double-click `gui.cmd` in the repository. It uses the checkout's
-WSL `.venv`, preserving the existing Linux model and Java paths. Alternatively:
+On Ubuntu, run the launcher from the checkout:
 
 ```bash
-cd /mnt/d/Project/EAGLE
-.venv/bin/python -m eagle gui --open
+cd /path/to/EAGLE
+./gui.sh
 ```
+
+On native Windows, double-click `gui.cmd` or run it from a terminal. Ubuntu
+prefers `.venv/bin/python`, Windows prefers `.venv\Scripts\python.exe`; otherwise
+they use `python3` or `python` from the current environment. Install the project
+dependencies in that environment first (`python -m pip install -e .`). Each
+launcher accepts GUI arguments, for example `./gui.sh --port 8878` or
+`gui.cmd --port 8878`. The equivalent direct command on either platform is
+`python -m eagle gui --open`.
+
+`gui-wsl.cmd` is the optional Windows-to-WSL launcher. It uses the WSL `.venv`
+and WSLg. Native Ubuntu/Windows observation uses that OS's desktop directly.
+For migration, configure `model.path`, `model.llama_server`, optional
+`generation_model`, and any absolute paths for the destination OS. Windows
+requires a Windows `llama-server.exe` build with the desired GPU backend;
+Linux binaries cannot be reused. Both systems require `java` and `javac` on
+PATH. Keep portable config paths repository-relative where possible. Existing
+resolved Run configs contain absolute paths and are not automatically rewritten
+for cross-OS resume.
 
 Open `http://127.0.0.1:8877`. Use `--port PORT` if occupied and
 `--runs-root PATH` for a different initial run root. The server deliberately
@@ -38,11 +55,13 @@ Config files stay under `configs/`; generated batch indices are excluded.
 5. Select a candidate, opponent, map, tick cap, interval, and side, then open
    the match. `scripts/run_gui_match.py` recompiles and integration-checks the
    persisted source in a temporary directory before launching MicroRTS.
-   Observation never writes evolutionary fitness or run artifacts. Windows
+   Observation never writes evolutionary fitness or run artifacts. WSL
    requires WSLg for the game window. External opponents require their setup
    scripts; AlliBot runtime LLM remains disabled by default.
 
-Stop requests let the experiment CLI clean up its owned model runtime. Closing
+Stop requests use SIGTERM on Ubuntu and an owned console group's Ctrl+Break on
+Windows, letting the experiment CLI clean up its owned model runtime. Keep the
+Windows launcher terminal open while using the GUI. Closing
 the browser leaves jobs running; Ctrl+C in the GUI server terminal requests
 job cleanup and stops the server. The selected Run can resume with its own
 saved config through existing compatibility checks. Historical runtime config

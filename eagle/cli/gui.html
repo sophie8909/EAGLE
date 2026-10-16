@@ -11,7 +11,7 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
 </style>
 </head>
 <body>
-<header><div><h1>EAGLE 實驗控制台</h1><p>設定實驗，挑選個體，觀看 MicroRTS 對戰。</p></div><span>LOCAL · WSL / Linux</span></header>
+<header><div><h1>EAGLE 實驗控制台</h1><p>設定實驗，挑選個體，觀看 MicroRTS 對戰。</p></div><span>LOCAL · Ubuntu / Windows</span></header>
 <div id="message" role="status" hidden></div>
 <main>
 <section class="panel" aria-labelledby="config-title">
@@ -32,7 +32,7 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
 </section>
 <section class="panel" aria-labelledby="watch-title">
  <h2 id="watch-title">02　個體對戰觀察</h2>
- <p class="hint">每 3 秒刷新產物。可在實驗執行時，選擇已具備 Java 原始碼的個體對戰。對戰會開啟獨立 MicroRTS 視窗；WSL 需要 WSLg。</p>
+ <p class="hint">每 3 秒刷新產物。可在實驗執行時，選擇已具備 Java 原始碼的個體對戰。對戰會開啟執行電腦上的 MicroRTS 視窗，需有桌面環境。</p>
  <div class="row"><label>Run<select id="runs"></select></label><button id="refresh-runs">刷新</button></div>
  <div id="run-status" class="status">選擇一個 Run</div>
  <div class="row"><label>世代（存活族群快照）<select id="generations"></select></label><label>個體<select id="candidates"></select></label></div>

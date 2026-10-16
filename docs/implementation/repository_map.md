@@ -2,8 +2,10 @@
 
 The local experiment control surface lives in `eagle/cli/gui.py` and
 `eagle/cli/gui.html`; `eagle/gui_data.py` owns config editing and read-only
-run/generation browsing. `gui.cmd` launches it in the Windows checkout's WSL
-environment. It delegates execution to the existing experiment CLI and visual
+run/generation browsing. `gui.sh` launches on Ubuntu, `gui.cmd` on native
+Windows, and `gui-wsl.cmd` through WSL. `eagle/interrupts.py` shares CLI cleanup
+signals, including waking Windows blocking waits on Ctrl+Break. The GUI
+delegates execution to the existing experiment CLI and visual
 inspection script rather than owning evolution or evaluation behavior.
 
 This map lists active executable owners. Removed compatibility files are not
