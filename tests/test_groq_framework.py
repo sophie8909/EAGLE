@@ -17,6 +17,7 @@ from eagle.generation.groq_framework import (
     DEFAULT_GROQ_MODEL,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
+    GROQ_REASONING_EFFORT,
     GROQ_USER_AGENT,
     GroqFrameworkError,
     generate_framework_bundle,
@@ -168,6 +169,7 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertEqual(payload["model"], "openai/gpt-oss-120b")
             self.assertEqual(payload["temperature"], 0.3)
             self.assertEqual(payload["max_completion_tokens"], 4096)
+            self.assertEqual(payload["reasoning_effort"], GROQ_REASONING_EFFORT)
             self.assertEqual(payload["response_format"]["type"], "json_schema")
             self.assertEqual(bootstrap["provider"], "groq")
             self.assertEqual(payload["messages"][0]["role"], "user")

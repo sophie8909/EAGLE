@@ -38,6 +38,7 @@ DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_MAX_OUTPUT_TOKENS = 32_768
 GROQ_USER_AGENT = "EAGLE/1.0"
+GROQ_REASONING_EFFORT = "low"
 
 FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -474,6 +475,10 @@ def _request_payload(
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
         "max_completion_tokens": max_output_tokens,
+        # Framework construction needs the output budget for the Java/template
+        # payload; low effort prevents hidden reasoning from exhausting Groq's
+        # entry-tier TPM before the structured content is complete.
+        "reasoning_effort": GROQ_REASONING_EFFORT,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
