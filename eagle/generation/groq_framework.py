@@ -278,6 +278,7 @@ def generate_framework_bundle(
     require_https: bool = True,
     json_object_mode: bool = False,
     reasoning_effort: str | None = GROQ_REASONING_EFFORT,
+    chat_template_kwargs: dict[str, object] | None = None,
 ) -> GroqFrameworkResult:
     """Call a compatible framework provider and publish one validated bundle.
 
@@ -357,6 +358,7 @@ def generate_framework_bundle(
             max_output_tokens=max_output_tokens,
             json_object_mode=json_object_fallback,
             reasoning_effort=reasoning_effort,
+            chat_template_kwargs=chat_template_kwargs,
         )
         request_bytes = json.dumps(
             request_payload,
@@ -655,6 +657,7 @@ def _request_payload(
     max_output_tokens: int,
     json_object_mode: bool = False,
     reasoning_effort: str | None = GROQ_REASONING_EFFORT,
+    chat_template_kwargs: dict[str, object] | None = None,
 ) -> dict[str, object]:
     response_format: dict[str, object]
     if json_object_mode:
@@ -678,6 +681,8 @@ def _request_payload(
     }
     if reasoning_effort is not None:
         payload["reasoning_effort"] = reasoning_effort
+    if chat_template_kwargs is not None:
+        payload["chat_template_kwargs"] = dict(chat_template_kwargs)
     return payload
 
 

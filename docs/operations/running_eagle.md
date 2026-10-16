@@ -49,6 +49,9 @@ not rate-limited by Groq.
 The local backend may report `finish_reason: length` when its output budget is
 exhausted; EAGLE accepts that response only if the JSON and complete framework
 bundle pass local validation. Groq continues to require `finish_reason: stop`.
+Local bootstrap also disables Qwen thinking with
+`chat_template_kwargs.enable_thinking: false`; the framework JSON must be
+returned in the normal `message.content` field.
 
 Use this inline form in an ordinary experiment config:
 

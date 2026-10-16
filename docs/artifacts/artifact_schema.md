@@ -565,6 +565,10 @@ The OpenAI-compatible request uses user content in `messages` and
 `response_format` JSON Schema named `eagle_framework` with `strict: false`. The normalized bundle, extracted template,
 slot-generation prompt, and report are separate convenience views;
 `bundle.json` is the sole experiment input.
+Local bootstrap requests additionally set
+`chat_template_kwargs.enable_thinking: false` so the framework JSON is emitted
+in `message.content` instead of consuming the output budget in
+`reasoning_content`.
 Each `request.json` records the actual response mode for that attempt. A
 provider `json_validate_failed` response is retained as a failed attempt before
 the bounded retry switches to JSON Object Mode; the same local bundle parser

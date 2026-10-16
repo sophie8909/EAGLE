@@ -145,6 +145,7 @@ class GroqFrameworkTests(unittest.TestCase):
                 require_https=False,
                 json_object_mode=True,
                 reasoning_effort=None,
+                chat_template_kwargs={"enable_thinking": False},
             )
 
             request, timeout = captured_requests[0]
@@ -156,6 +157,7 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertEqual(payload["model"], "qwen3_5_9b")
             self.assertEqual(payload["response_format"], {"type": "json_object"})
             self.assertNotIn("reasoning_effort", payload)
+            self.assertEqual(payload["chat_template_kwargs"], {"enable_thinking": False})
             bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
             self.assertEqual(bootstrap["provider"], "local")
             attempt = json.loads(

@@ -92,6 +92,10 @@ class FrameworkStartupTests(unittest.TestCase):
             self.assertFalse(generate.call_args.kwargs["require_https"])
             self.assertTrue(generate.call_args.kwargs["json_object_mode"])
             self.assertIsNone(generate.call_args.kwargs["reasoning_effort"])
+            self.assertEqual(
+                generate.call_args.kwargs["chat_template_kwargs"],
+                {"enable_thinking": False},
+            )
 
     def test_resume_validation_accepts_frozen_bundle_and_rejects_changed_source(self):
         with tempfile.TemporaryDirectory() as directory:

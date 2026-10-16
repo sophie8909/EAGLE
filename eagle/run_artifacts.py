@@ -88,6 +88,7 @@ def freeze_framework_bundle(
                 require_https=False,
                 json_object_mode=True,
                 reasoning_effort=None,
+                chat_template_kwargs={"enable_thinking": False},
             )
         result = generate_framework_bundle(
             run_dir / "framework",

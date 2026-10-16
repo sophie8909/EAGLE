@@ -111,7 +111,9 @@ path also holds the framework constant across replicate seeds. The standalone
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
    The local backend sends the same prompt to the configured local
    `llama-server/v1/chat/completions` endpoint without authorization and starts
-   in JSON Object Mode. The first Groq request uses the `eagle_framework` JSON Schema. If Groq returns
+   in JSON Object Mode with `chat_template_kwargs.enable_thinking: false` so
+   the Qwen reasoning channel does not consume the framework output budget. The
+   first Groq request uses the `eagle_framework` JSON Schema. If Groq returns
    `json_validate_failed`, EAGLE retains that raw response and performs a
    bounded retry in JSON Object Mode; local bundle validation remains
    authoritative. On failure, attempt artifacts and a failed manifest remain
