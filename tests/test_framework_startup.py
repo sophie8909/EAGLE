@@ -104,7 +104,7 @@ class FrameworkStartupTests(unittest.TestCase):
             config = self._source_config(
                 root,
                 bootstrap_backend="mistral",
-                model="mistral-large-latest",
+                model="mistral-small-latest",
             )
 
             with patch("eagle.generation.groq_framework.generate_framework_bundle") as generate, patch(
@@ -124,7 +124,7 @@ class FrameworkStartupTests(unittest.TestCase):
                 generate.call_args.kwargs["api_root"],
                 "https://api.mistral.ai/v1",
             )
-            self.assertEqual(generate.call_args.kwargs["model"], "mistral-large-latest")
+            self.assertEqual(generate.call_args.kwargs["model"], "mistral-small-latest")
             self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 12288)
             self.assertTrue(generate.call_args.kwargs["require_api_key"])
             self.assertTrue(generate.call_args.kwargs["require_https"])

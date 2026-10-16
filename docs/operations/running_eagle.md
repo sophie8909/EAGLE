@@ -30,7 +30,7 @@ without an API key, `groq` to use the default Groq API path, or `mistral` to use
 Mistral. For Groq, set `GROQ_API_KEY` in the process environment; for Mistral,
 store the key in `api_key/mistral`. Do not put credentials in YAML, CLI
 arguments, shell history, or artifacts. `framework.model` defaults to
-`openai/gpt-oss-120b`; use `mistral-large-latest` with the Mistral backend. The standalone
+`openai/gpt-oss-120b`; use `mistral-small-latest` with the Mistral backend. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
 
@@ -66,7 +66,7 @@ reflection_operator_mode: static
 framework:
   bootstrap_backend: mistral  # groq, mistral, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: mistral-large-latest
+  model: mistral-small-latest
   evolution_mode: llm_coach
 ```
 

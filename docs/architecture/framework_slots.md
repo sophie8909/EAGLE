@@ -84,7 +84,7 @@ reflection_operator_mode: static
 framework:
   bootstrap_backend: mistral  # groq, mistral, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: mistral-large-latest
+  model: mistral-small-latest
   evolution_mode: llm_coach
 ```
 

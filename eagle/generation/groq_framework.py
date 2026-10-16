@@ -37,7 +37,7 @@ ATTEMPT_SCHEMA_VERSION = "eagle-groq-framework-attempt-v1"
 DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_MISTRAL_API_ROOT = "https://api.mistral.ai/v1"
-DEFAULT_MISTRAL_MODEL = "mistral-large-latest"
+DEFAULT_MISTRAL_MODEL = "mistral-small-latest"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
@@ -765,9 +765,22 @@ def _provider_error_code(raw_response: bytes) -> str | None:
         payload = json.loads(raw_response.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None
-    error = payload.get("error") if isinstance(payload, dict) else None
+    error = _provider_error_payload(payload)
     code = error.get("code") if isinstance(error, dict) else None
     return code if isinstance(code, str) else None
+
+
+def _provider_error_payload(payload: object) -> dict[str, object] | None:
+    """Normalize nested OpenAI-style and top-level Mistral error envelopes."""
+
+    if not isinstance(payload, dict):
+        return None
+    nested = payload.get("error")
+    if isinstance(nested, dict):
+        return nested
+    if isinstance(payload.get("message"), str) or isinstance(payload.get("code"), str):
+        return payload
+    return None
 
 
 def _http_error_summary(
@@ -781,7 +794,7 @@ def _http_error_summary(
     prefix = f"{provider_label} API HTTP {exc.code}: {exc.reason}"
     try:
         payload = json.loads(raw_response.decode("utf-8"))
-        provider_error = payload.get("error") if isinstance(payload, dict) else None
+        provider_error = _provider_error_payload(payload)
         message = provider_error.get("message") if isinstance(provider_error, dict) else None
     except (UnicodeDecodeError, json.JSONDecodeError):
         message = None

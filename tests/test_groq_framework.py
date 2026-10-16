@@ -17,6 +17,7 @@ from eagle.generation.groq_framework import (
     DEFAULT_GROQ_MODEL,
     DEFAULT_MISTRAL_API_ROOT,
     DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
+    DEFAULT_MISTRAL_MODEL,
     DEFAULT_MAX_OUTPUT_TOKENS,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
@@ -189,7 +190,7 @@ class GroqFrameworkTests(unittest.TestCase):
                 output = Path(directory) / "framework"
                 result = generate_framework_bundle(
                     output,
-                    model="mistral-large-latest",
+                    model=DEFAULT_MISTRAL_MODEL,
                     design_brief="Build a bounded economy and combat controller.",
                     provider="mistral",
                     api_root=DEFAULT_MISTRAL_API_ROOT,
@@ -210,7 +211,7 @@ class GroqFrameworkTests(unittest.TestCase):
             headers = {key.lower(): value for key, value in request.header_items()}
             self.assertEqual(headers["authorization"], f"Bearer {secret}")
             payload = json.loads(request.data.decode("utf-8"))
-            self.assertEqual(payload["model"], "mistral-large-latest")
+            self.assertEqual(payload["model"], DEFAULT_MISTRAL_MODEL)
             self.assertEqual(payload["max_tokens"], DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS)
             self.assertNotIn("max_completion_tokens", payload)
             self.assertEqual(payload["response_format"], {"type": "json_object"})
@@ -462,6 +463,54 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertNotIn("secret", result["error"])
             self.assertNotIn("secret", str(caught.exception))
             self.assertEqual(len(list(output.joinpath("attempts").iterdir())), 1)
+
+    def test_mistral_top_level_tier_error_surfaces_provider_message(self) -> None:
+        raw = json.dumps(
+            {
+                "object": "error",
+                "message": "This model is not available in your subscription tier",
+                "type": "tier_not_allowed",
+                "code": "1910",
+            }
+        ).encode("utf-8")
+        http_error = urllib.error.HTTPError(
+            "https://api.mistral.ai/v1/chat/completions",
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(raw),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            key_path = Path(directory) / "mistral"
+            key_path.write_text("secret", encoding="utf-8")
+            with patch(
+                "eagle.generation.groq_framework.MISTRAL_API_KEY_PATH", key_path
+            ), patch(
+                "eagle.generation.groq_framework.urllib.request.urlopen",
+                side_effect=http_error,
+            ):
+                output = Path(directory) / "framework"
+                with self.assertRaisesRegex(
+                    GroqFrameworkError,
+                    "This model is not available in your subscription tier",
+                ):
+                    generate_framework_bundle(
+                        output,
+                        model=DEFAULT_MISTRAL_MODEL,
+                        design_brief="Build a framework.",
+                        provider="mistral",
+                        api_root=DEFAULT_MISTRAL_API_ROOT,
+                        max_attempts=1,
+                        request_interval_seconds=0.0,
+                    )
+
+            result = json.loads(
+                output.joinpath("attempts/attempt_001/result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("This model is not available", result["error"])
+            self.assertEqual(result["retryable"], False)
 
     def test_json_schema_failure_retries_in_json_object_mode(self) -> None:
         raw = json.dumps(
