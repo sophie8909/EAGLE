@@ -563,6 +563,10 @@ The OpenAI-compatible request uses user content in `messages` and
 `response_format` JSON Schema named `eagle_framework` with `strict: false`. The normalized bundle, extracted template,
 slot-generation prompt, and report are separate convenience views;
 `bundle.json` is the sole experiment input.
+Each `request.json` records the actual response mode for that attempt. A
+provider `json_validate_failed` response is retained as a failed attempt before
+the bounded retry switches to JSON Object Mode; the same local bundle parser
+and validator remain authoritative for the fallback response.
 
 The API key is never an artifact. It is read only from `GROQ_API_KEY`, sent in
 the HTTP Bearer authorization header, excluded from request JSON/config, and

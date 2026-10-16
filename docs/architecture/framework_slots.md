@@ -103,11 +103,13 @@ path also holds the framework constant across replicate seeds. The standalone
    `bundle_path` as the other replicates.
 2. The bootstrap sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
-   It retains raw responses before parsing and performs bounded retries. On
-   failure, attempt artifacts and a failed manifest remain with the pending
-   config. The failed run cannot resume until a valid frozen bundle exists; the
-   unsuccessful replicate is not added to the folder-batch index, so a folder
-   rerun can retry the missing slot.
+   The first request uses the `eagle_framework` JSON Schema. If Groq returns
+   `json_validate_failed`, EAGLE retains that raw response and performs a
+   bounded retry in JSON Object Mode; local bundle validation remains
+   authoritative. On failure, attempt artifacts and a failed manifest remain
+   with the pending config. The failed run cannot resume until a valid frozen
+   bundle exists; the unsuccessful replicate is not added to the folder-batch
+   index, so a folder rerun can retry the missing slot.
 3. EAGLE validates and normalizes one `eagle-framework-bundle-v1` bundle. The
    run-owned framework directory retains the exact prompt, request bodies, raw
    responses, timing, hashes, generated template, slot prompt, report, and

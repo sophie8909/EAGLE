@@ -359,6 +359,57 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertNotIn("secret", str(caught.exception))
             self.assertEqual(len(list(output.joinpath("attempts").iterdir())), 1)
 
+    def test_json_schema_failure_retries_in_json_object_mode(self) -> None:
+        raw = json.dumps(
+            {
+                "error": {
+                    "message": "Failed to generate JSON.",
+                    "code": "json_validate_failed",
+                    "failed_generation": "{\"schema_version\":\"eagle-framework-bundle-v1\"}",
+                }
+            }
+        ).encode("utf-8")
+        schema_failure = urllib.error.HTTPError(
+            "https://example.invalid",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(raw),
+        )
+        requests = []
+
+        def transport(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            if len(requests) == 1:
+                raise schema_failure
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            output = Path(directory) / "framework"
+            result = generate_framework_bundle(
+                output,
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+            first_result = json.loads(
+                (output / "attempts/attempt_001/result.json").read_text()
+            )
+            first_raw = (output / "attempts/attempt_001/response_raw.json").read_bytes()
+
+        self.assertEqual(result.bundle, _bundle())
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0]["response_format"]["type"], "json_schema")
+        self.assertEqual(requests[1]["response_format"], {"type": "json_object"})
+        self.assertIn("JSON Object Mode", requests[1]["messages"][0]["content"])
+        self.assertTrue(first_result["retryable"])
+        self.assertEqual(first_raw, raw)
+
     def test_parser_rejects_malformed_groq_envelopes(self) -> None:
         valid_message = {"role": "assistant", "content": json.dumps(_bundle())}
         malformed = (

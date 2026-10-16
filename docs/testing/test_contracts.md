@@ -222,11 +222,14 @@ failed mutation, and absence of Java Generation/repair requests.
 Tests must prove the bootstrap sends user-message content, model, temperature,
 and `max_completion_tokens` to the Groq Chat Completions endpoint; requests
 `response_format` JSON Schema named `eagle_framework` with `strict: false`; and
-persists credential-free requests and raw bytes before parsing. They also cover
-failed attempts, bounded provider diagnostics and retry classification, exact
-bundle/report/marker validation, normalized bundle selection, and that
-`GROQ_API_KEY` is never persisted. Provider schema enforcement is best-effort;
-local exact validation, CLI dispatch, and non-overwrite behavior are contracts.
+persists credential-free requests and raw bytes before parsing. A provider
+`json_validate_failed` response is a retryable bootstrap attempt; the next
+request uses JSON Object Mode and still passes local exact validation. Tests
+also cover failed attempts, bounded provider diagnostics and retry
+classification, exact bundle/report/marker validation, normalized bundle
+selection, and that `GROQ_API_KEY` is never persisted. Provider schema
+enforcement is best-effort; local exact validation, CLI dispatch, and
+non-overwrite behavior are contracts.
 
 Core tests must cover exact-key rejection, finite numeric lattices, enumerated
 expression choices, canonical hashes, insertion-order-independent rendering,

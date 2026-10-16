@@ -320,6 +320,7 @@ def generate_framework_bundle(
     attempt_summaries: list[dict[str, object]] = []
     next_request_not_before: float | None = None
     rate_samples: list[_GroqRateSample] = []
+    json_object_fallback = False
 
     for attempt in range(1, max_attempts + 1):
         now = time.monotonic()
@@ -333,12 +334,17 @@ def generate_framework_bundle(
         wait_seconds = rate_limit_not_before - now
         if wait_seconds > 0:
             time.sleep(wait_seconds)
-        attempt_prompt = _retry_prompt(prompt, last_validation_error)
+        attempt_prompt = _retry_prompt(
+            prompt,
+            last_validation_error,
+            json_object_mode=json_object_fallback,
+        )
         request_payload = _request_payload(
             attempt_prompt,
             model=model,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            json_object_mode=json_object_fallback,
         )
         request_bytes = json.dumps(
             request_payload,
@@ -387,7 +393,18 @@ def generate_framework_bundle(
             raw_response = exc.read()
             raw_path.write_bytes(raw_response)
             error = _http_error_summary(exc, raw_response)
-            retryable = exc.code in {408, 409, 429} or 500 <= exc.code <= 599
+            json_validation_failure = _provider_error_code(raw_response) == "json_validate_failed"
+            retryable = (
+                json_validation_failure
+                or exc.code in {408, 409, 429}
+                or 500 <= exc.code <= 599
+            )
+            if json_validation_failure:
+                # Groq's best-effort JSON Schema mode can reject a valid-looking
+                # partial generation before the response reaches local parsing.
+                # Retry in JSON Object Mode; local bundle validation remains
+                # authoritative and the failed constrained request is retained.
+                json_object_fallback = True
             if retryable:
                 retry_delay_seconds = _retry_delay_seconds(
                     exc,
@@ -588,7 +605,21 @@ def _request_payload(
     model: str,
     temperature: float,
     max_output_tokens: int,
+    json_object_mode: bool = False,
 ) -> dict[str, object]:
+    response_format: dict[str, object]
+    if json_object_mode:
+        response_format = {"type": "json_object"}
+    else:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "eagle_framework",
+                # Dynamic slot_rationale keys require best-effort schema mode.
+                "strict": False,
+                "schema": FRAMEWORK_RESPONSE_SCHEMA,
+            },
+        }
     return {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -598,32 +629,53 @@ def _request_payload(
         # payload; low effort prevents hidden reasoning from exhausting Groq's
         # entry-tier TPM before the structured content is complete.
         "reasoning_effort": GROQ_REASONING_EFFORT,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "eagle_framework",
-                # Dynamic slot_rationale keys require best-effort schema mode.
-                "strict": False,
-                "schema": FRAMEWORK_RESPONSE_SCHEMA,
-            },
-        },
+        "response_format": response_format,
     }
 
 
-def _retry_prompt(base_prompt: str, validation_error: str | None) -> str:
+def _retry_prompt(
+    base_prompt: str,
+    validation_error: str | None,
+    *,
+    json_object_mode: bool = False,
+) -> str:
     """Give a bounded retry local validation feedback without weakening checks."""
 
-    if not validation_error:
+    if not validation_error and not json_object_mode:
         return base_prompt
-    return (
-        f"{base_prompt}\n\n"
-        "A previous complete response was rejected by the local validator. "
-        "Correct the entire response and return the complete JSON object again. "
-        f"The exact validation error was: {validation_error}\n"
-        "Pay special attention to exact lowercase snake_case IDs and literal "
-        "slot markers with two closing braces: "
+    retry_instructions = [
+        "Return exactly one syntactically valid JSON object with the complete framework bundle.",
+        "Do not use Markdown fences, prose, or partial output.",
+    ]
+    if validation_error:
+        retry_instructions.extend(
+            [
+                "A previous complete response was rejected by the local validator.",
+                f"The exact validation error was: {validation_error}",
+            ]
+        )
+    if json_object_mode:
+        retry_instructions.append(
+            "The provider's constrained JSON Schema attempt failed; this retry uses JSON Object Mode. "
+            "Local validation will enforce every bundle field and slot constraint."
+        )
+    retry_instructions.append(
+        "Pay special attention to exact lowercase snake_case IDs and literal slot markers with two closing braces: "
         "{{EAGLE_SLOT:example_slot}}."
     )
+    return f"{base_prompt}\n\n" + " ".join(retry_instructions)
+
+
+def _provider_error_code(raw_response: bytes) -> str | None:
+    """Return the provider's machine-readable error code, if present."""
+
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    error = payload.get("error") if isinstance(payload, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, str) else None
 
 
 def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str:
