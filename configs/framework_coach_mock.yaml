@@ -1,5 +1,5 @@
 schema_version: experiment-v2
-experiment_name: fixed_worker_combat_framework_offline_mock_20x10_seed8_1run
+experiment_name: fixed_worker_combat_framework_fixed_init_coach_20x10_seed8_1run
 
 java_materialization_mode: framework_slots
 java_compiler_version: eagle-framework-slots-v1
@@ -26,7 +26,7 @@ random_seeds: [8]
 generations: 20
 population_size: 10
 
-execution_mode: mock
+execution_mode: openai
 mutation_max_attempts: 3
 crossover_rate: 0.75
 mutation_rate: 1.0
@@ -39,7 +39,7 @@ code_reflection_probability: 0.0
 framework:
   bootstrap_backend: local
   bundle_path: configs/framework_bundles/fixed_worker_combat/bundle.json
-  evolution_mode: local
+  evolution_mode: llm_coach
 
 llm:
   temperature: 0.0

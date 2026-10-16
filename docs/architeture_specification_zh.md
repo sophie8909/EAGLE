@@ -55,14 +55,16 @@ process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，兩�
 都絕不寫入 config 或 artifact。完整契約見
 [framework slots](architecture/framework_slots.md)。
 
-Repository 另提供完全離線的固定 framework 範例：
+Repository 另提供固定初始 framework 範例：
 `configs/framework_coach_mock.yaml` 搭配
 `configs/framework_bundles/fixed_worker_combat/bundle.json`。這個 bundle 是可
 實際編譯與執行的完整 `CandidateAgent`，不是假的 placeholder；它只暴露
 `worker_target` 與 `combat_target_limit` 兩個有限整數 slot。該 config 使用
-`execution_mode: mock`、明確的 `bundle_path` 與 local slot evolution，因此
-啟動時會跳過 framework bootstrap、本地 LLM 與 API，仍保留 Java render、
-validation、`javac`、Integration、semantic probe 與 MicroRTS 評估。
+明確的 `bundle_path`，因此只會跳過 framework bootstrap；後續使用
+`execution_mode: openai` 與 `framework.evolution_mode: llm_coach`，由 managed
+local llama-server 加上設定的 additional endpoint 執行 EA 的 LLM 呼叫。
+Java render、validation、`javac`、Integration、semantic probe 與 MicroRTS
+評估仍照常執行。
 ### LLM materialization lifecycle
 
 以下 Candidate、genotype、source gate 與 generation 流程只描述

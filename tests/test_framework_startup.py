@@ -19,6 +19,16 @@ from tests.test_framework_slots_artifacts import bundle_payload
 
 
 class FrameworkStartupTests(unittest.TestCase):
+    def test_fixed_bundle_config_skips_bootstrap_but_keeps_coach_runtime(self):
+        config = ExperimentConfig.from_file(Path("configs/framework_coach_mock.yaml"))
+
+        self.assertEqual(config.execution_mode, "openai")
+        self.assertEqual(config.framework_evolution_mode, "llm_coach")
+        self.assertIsNotNone(config.framework_bundle_path)
+        self.assertIsNone(config.framework_design_brief)
+        self.assertTrue(config.needs_llm_runtime)
+        self.assertEqual(len(config.model.additional_endpoints), 1)
+
     def _source_config(self, root: Path, **framework_overrides) -> ExperimentConfig:
         framework = {
             "design_brief": "Build a bounded MicroRTS strategy framework.",
