@@ -100,6 +100,15 @@ mock mode rejects an inline brief without that bundle. An explicit shared bundle
 path also holds the framework constant across replicate seeds. The standalone
 `python -m eagle framework` command remains available to prepare that bundle.
 
+The repository includes a ready-to-run offline example at
+`configs/framework_coach_mock.yaml`. It uses the real checked-in
+`configs/framework_bundles/fixed_worker_combat/bundle.json`, which contains a
+complete compilable `CandidateAgent` scaffold and two finite integer slots
+(`worker_target` and `combat_target_limit`). With `execution_mode: mock` and an
+explicit `bundle_path`, the run skips both bootstrap providers and evolves only
+the fixed bundle's local control genome; downstream Java compilation,
+Integration, semantic probes, and MicroRTS scoring remain enabled.
+
 ## Startup and evolution boundary
 
 1. On a fresh run without `bundle_path`, startup requires `design_brief`, calls

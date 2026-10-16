@@ -15,6 +15,7 @@ from eagle.config import ExperimentConfig
 from eagle.evolution.resume import validate_resume_config
 from eagle.evolution.parent_refresh import (
     build_parent_evaluation_replicas,
+    build_self_play_fitness_refresh_replicas,
     write_parent_evaluation_sidecar,
 )
 from eagle.evolution.search import run_search
@@ -88,6 +89,28 @@ class ParentEvaluationModeTests(unittest.TestCase):
         self.assertEqual(replica.metadata["experimental_parent_evaluation"], {
             "source_parent_id": "old-parent", "source_birth_generation": 3,
         })
+
+    def test_framework_slot_replicas_preserve_bundle_identity(self) -> None:
+        source = Candidate(
+            id="framework-parent",
+            java_materialization_mode="framework_slots",
+            control_genome={"worker_target": 4},
+            slot_parent_ids={"worker_target": "framework-parent"},
+            framework_bundle_sha256="a" * 64,
+            generated_java="complete Java",
+            status="evaluated",
+        )
+
+        for builder in (build_parent_evaluation_replicas,):
+            replica = builder([source], generation=4)[0]
+            self.assertEqual(replica.control_genome, source.control_genome)
+            self.assertEqual(replica.slot_parent_ids, source.slot_parent_ids)
+            self.assertEqual(replica.framework_bundle_sha256, source.framework_bundle_sha256)
+
+        replica = build_self_play_fitness_refresh_replicas([source], generation=4)[0]
+        self.assertEqual(replica.control_genome, source.control_genome)
+        self.assertEqual(replica.slot_parent_ids, source.slot_parent_ids)
+        self.assertEqual(replica.framework_bundle_sha256, source.framework_bundle_sha256)
 
     def test_selection_pool_can_only_select_replicas_and_offspring(self) -> None:
         source = Candidate(id="old-parent", fitness_objectives={"passive": 100.0})

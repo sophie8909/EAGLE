@@ -75,6 +75,21 @@ Set the top-level `model` profile for the experiment runtime as usual. Omit
 `design_brief` and `model` with `bundle_path: path/to/bundle.json`; optional
 `bundle_version` and `bundle_sha256` fences may be used with that external file.
 
+For a completely offline fixed-framework run, use the checked-in real bundle
+and config directly:
+
+```bash
+./experiment.sh configs/framework_coach_mock.yaml --skip-final-test
+```
+
+`configs/framework_coach_mock.yaml` sets `execution_mode: mock`, points at
+`configs/framework_bundles/fixed_worker_combat/bundle.json`, and uses local EA
+slot evolution. The bundle is a complete compilable MicroRTS `CandidateAgent`
+framework with finite worker and combat controls; because `bundle_path` is
+explicit, startup skips both framework bootstrap and the local/API generation
+backends. The experiment still runs the normal local rendering, validation,
+`javac`, Integration, semantic probes, and MicroRTS evaluation stages.
+
 EAGLE validates an explicit external bundle during config resolution. For inline
 bootstrap, it initializes bootstrap evidence and the manifest first,
 then writes the resolved frozen config on success or requested pending config
