@@ -397,7 +397,11 @@ def generate_framework_bundle(
                 http_status = int(getattr(response, "status", 200))
                 raw_response = response.read()
             raw_path.write_bytes(raw_response)
-            bundle = parse_framework_response(raw_response, provider_label=provider_label)
+            bundle = parse_framework_response(
+                raw_response,
+                provider_label=provider_label,
+                allow_length_finish=provider == "local",
+            )
             status = "success"
             retryable = False
         except urllib.error.HTTPError as exc:
@@ -454,6 +458,7 @@ def generate_framework_bundle(
             "duration_seconds": duration_seconds,
             "request_sha256": request_sha256,
             "response_sha256": response_sha256,
+            "finish_reason": _response_finish_reason(raw_response),
         }
         _write_json(attempt_dir / "result.json", attempt_record)
         attempt_summaries.append(
@@ -465,6 +470,7 @@ def generate_framework_bundle(
                 "duration_seconds": duration_seconds,
                 "request_sha256": request_sha256,
                 "response_sha256": response_sha256,
+                "finish_reason": _response_finish_reason(raw_response),
                 "artifact": f"attempts/attempt_{attempt:03d}",
             }
         )
@@ -560,6 +566,7 @@ def parse_framework_response(
     raw_response: bytes | str,
     *,
     provider_label: str = "Groq",
+    allow_length_finish: bool = False,
 ) -> dict[str, object]:
     """Parse an OpenAI-compatible provider envelope and validate its framework JSON."""
 
@@ -575,7 +582,11 @@ def parse_framework_response(
     if not isinstance(choices, list) or len(choices) != 1:
         raise ValueError(f"{provider_label} response must contain exactly one choice.")
     choice = choices[0]
-    if not isinstance(choice, dict) or choice.get("finish_reason") != "stop":
+    finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+    accepted_finish_reasons = {"stop"}
+    if allow_length_finish:
+        accepted_finish_reasons.add("length")
+    if not isinstance(choice, dict) or finish_reason not in accepted_finish_reasons:
         raise ValueError(f"{provider_label} response must finish with stop; incomplete output is rejected.")
     message = choice.get("message")
     if not isinstance(message, dict):
@@ -591,6 +602,21 @@ def parse_framework_response(
     bundle = validate_framework_bundle(generated)
     _validate_generated_java_template(bundle)
     return bundle.to_json_dict()
+
+
+def _response_finish_reason(raw_response: bytes) -> str | None:
+    """Return the provider finish reason for durable attempt diagnostics."""
+
+    try:
+        envelope = json.loads(raw_response.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    choices = envelope.get("choices") if isinstance(envelope, dict) else None
+    if not isinstance(choices, list) or len(choices) != 1:
+        return None
+    choice = choices[0]
+    reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+    return reason if isinstance(reason, str) else None
 
 
 def _validate_generated_java_template(bundle: FrameworkBundle) -> None:

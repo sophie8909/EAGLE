@@ -46,6 +46,9 @@ minute before sending another request. HTTP 429 responses additionally honor
 the provider's `Retry-After` value. These limits apply only to Groq framework
 bootstrap calls; the local backend uses the configured Qwen llama-server and is
 not rate-limited by Groq.
+The local backend may report `finish_reason: length` when its output budget is
+exhausted; EAGLE accepts that response only if the JSON and complete framework
+bundle pass local validation. Groq continues to require `finish_reason: stop`.
 
 Use this inline form in an ordinary experiment config:
 

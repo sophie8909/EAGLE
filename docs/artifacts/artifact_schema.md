@@ -555,7 +555,9 @@ Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standa
 parsing, including failed responses. Attempt schema
 `eagle-groq-framework-attempt-v1` records status/retryability, redacted error,
 provider/model/endpoint/HTTP status, UTC boundaries, duration, and exact request
-and response hashes. `eagle-groq-framework-bootstrap-v1` records the selected
+and response hashes, including the provider `finish_reason`. `length` is
+accepted only for the local backend after the complete response passes local
+bundle validation; Groq still requires `stop`. `eagle-groq-framework-bootstrap-v1` records the selected
 attempt, total duration, attempt summaries, and the SHA-256 of the exact
 published `bundle.json` bytes.
 

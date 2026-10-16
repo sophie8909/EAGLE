@@ -123,7 +123,9 @@ class GroqFrameworkTests(unittest.TestCase):
 
         def transport(request, timeout):
             captured_requests.append((request, timeout))
-            return _Response(_provider_response())
+            payload = json.loads(_provider_response())
+            payload["choices"][0]["finish_reason"] = "length"
+            return _Response(json.dumps(payload).encode("utf-8"))
 
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True), patch(
             "eagle.generation.groq_framework.urllib.request.urlopen",
@@ -156,6 +158,12 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertNotIn("reasoning_effort", payload)
             bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
             self.assertEqual(bootstrap["provider"], "local")
+            attempt = json.loads(
+                (result.output_dir / "attempts/attempt_001/result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(attempt["finish_reason"], "length")
 
     def test_bootstrap_persists_schema_artifacts_hashes_and_no_secret(self) -> None:
         secret = "test-api-key-that-must-not-be-persisted"
