@@ -15,8 +15,10 @@ from eagle.operators.context import (
     ReflectionContext,
 )
 from eagle.operators.framework_coach import (
+    FRAMEWORK_SELECTION_SCHEMA_NAME,
     FRAMEWORK_SELECTION_SCHEMA_VERSION,
     MockFrameworkRoleBackend,
+    framework_selection_response_schema,
     validate_framework_selection_response,
 )
 from eagle.operators.strategy import MockRoleBackend, StrategyReflectionPipeline
@@ -156,6 +158,26 @@ class FrameworkCoachTests(unittest.TestCase):
                     bundle=self.bundle,
                     framework_bundle_sha256=EXACT_HASH,
                 )
+
+    def test_selection_response_schema_freezes_bundle_hash_and_finite_domains(self) -> None:
+        schema = framework_selection_response_schema(self.bundle, EXACT_HASH)
+        self.assertEqual(schema["additionalProperties"], False)
+        self.assertEqual(
+            schema["properties"]["schema_version"]["enum"],
+            [FRAMEWORK_SELECTION_SCHEMA_VERSION],
+        )
+        self.assertEqual(
+            schema["properties"]["framework_bundle_sha256"]["enum"],
+            [EXACT_HASH],
+        )
+        genome = schema["properties"]["control_genome"]
+        self.assertEqual(genome["required"], ["horizon", "policy"])
+        self.assertEqual(genome["properties"]["horizon"]["enum"], [1, 2, 3])
+        self.assertEqual(
+            genome["properties"]["policy"]["enum"],
+            ["balanced", "aggressive"],
+        )
+        self.assertEqual(FRAMEWORK_SELECTION_SCHEMA_NAME, "eagle_framework_selection")
 
     def test_selection_rejects_duplicate_keys_and_non_json_wrappers(self) -> None:
         for raw in (

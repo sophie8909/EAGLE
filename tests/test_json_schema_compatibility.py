@@ -2,21 +2,24 @@ from __future__ import annotations
 
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from eagle.evaluation.strategy_alignment import (
     OpenAICompatibleStrategyAlignmentBackend,
     STRATEGY_ALIGNMENT_RESPONSE_SCHEMA,
 )
+from eagle.generation.framework_slots import validate_framework_bundle
 from eagle.llm import (
     GENERIC_JSON_OBJECT_SCHEMA,
     LLMClient,
     json_schema_response_format,
     parse_json_object_response,
 )
+from eagle.operators.framework_coach import framework_selection_response_schema
 from eagle.operators.initialization import INITIAL_POLICY_RESPONSE_SCHEMA
 from eagle.operators.reflection import OpenAICompatibleReflectionBackend
 from eagle.strategy_dsl import STRATEGY_DSL_JSON_SCHEMA
+from tests.test_framework_coach_integration import bundle_payload
 
 
 class _Response:
@@ -112,6 +115,44 @@ class JsonSchemaCompatibilityTests(unittest.TestCase):
         self.assertEqual(
             payload["response_format"]["json_schema"]["schema"],
             STRATEGY_ALIGNMENT_RESPONSE_SCHEMA,
+        )
+
+    def test_framework_coach_selector_uses_bundle_schema_only_for_coach_role(self):
+        bundle = validate_framework_bundle(bundle_payload())
+        bundle_hash = "a" * 64
+        framework_schema = framework_selection_response_schema(bundle, bundle_hash)
+        backend = OpenAICompatibleReflectionBackend(
+            "http://192.168.1.136:1234/v1",
+            "qwen/qwen3.5-9b",
+            response_schema_selector=lambda prompt: (
+                framework_schema,
+                "eagle_framework_selection",
+            )
+            if "ROLE: framework_coach" in prompt
+            else None,
+        )
+        with patch(
+            "eagle.operators.reflection.urllib.request.urlopen",
+            return_value=_Response("{}"),
+        ) as transport:
+            backend.generate("ROLE: framework_coach")
+            backend.generate("ROLE: match_commentator")
+
+        payloads = [
+            json.loads(call.args[0].data.decode("utf-8"))
+            for call in transport.call_args_list
+        ]
+        self.assertEqual(
+            payloads[0]["response_format"]["json_schema"]["name"],
+            "eagle_framework_selection",
+        )
+        self.assertEqual(
+            payloads[0]["response_format"]["json_schema"]["schema"],
+            framework_schema,
+        )
+        self.assertEqual(
+            payloads[1]["response_format"]["json_schema"]["schema"],
+            GENERIC_JSON_OBJECT_SCHEMA,
         )
 
     def test_json_schema_response_content_keeps_existing_json_parser_behavior(self):

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Callable
 from urllib.parse import urlparse
 
 from eagle.execution import LLM_WORKERS, current_llm_worker_slot
@@ -127,6 +127,9 @@ class LLMClient:
         temperature: float | None = None,
         response_schema: dict[str, object] | None = None,
         response_schema_name: str = "eagle_response",
+        response_schema_selector: Callable[
+            [str], tuple[dict[str, object], str] | None
+        ] | None = None,
     ):
         """Build a shared Reflection/role backend lazily."""
 
@@ -144,6 +147,7 @@ class LLMClient:
             additional_endpoints=self.additional_endpoints,
             response_schema=response_schema,
             response_schema_name=response_schema_name,
+            response_schema_selector=response_schema_selector,
         )
 
 

@@ -10,6 +10,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -40,6 +41,9 @@ from eagle.operators.context import ReflectionContext
 # intentionally kept in eagle.operators.strategy.
 REFLECTION_SCHEMA_VERSION = "reflection-v3"
 DEFAULT_STRUCTURED_OUTPUT_TOKENS = 4096
+ResponseSchemaSelector = Callable[
+    [str], tuple[dict[str, object], str] | None
+]
 
 
 @dataclass(frozen=True)
@@ -399,7 +403,7 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = (), response_schema: dict[str, object] | None = None, response_schema_name: str = "eagle_response") -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = (), response_schema: dict[str, object] | None = None, response_schema_name: str = "eagle_response", response_schema_selector: ResponseSchemaSelector | None = None) -> None:
         self._endpoints = (
             LLMEndpoint(base_url.rstrip("/"), model),
             *(LLMEndpoint(endpoint.base_url.rstrip("/"), endpoint.model) for endpoint in additional_endpoints),
@@ -415,6 +419,7 @@ class OpenAICompatibleReflectionBackend:
         self.seed = 0 if seed is None else int(seed)
         self.response_schema = response_schema or GENERIC_JSON_OBJECT_SCHEMA
         self.response_schema_name = response_schema_name
+        self.response_schema_selector = response_schema_selector
 
     @property
     def selected_endpoint(self) -> LLMEndpoint:
@@ -440,13 +445,19 @@ class OpenAICompatibleReflectionBackend:
 
     def generate_seeded(self, prompt: str, seed: int) -> str:
         prompt = truncate_prompt(prompt)
+        response_schema = self.response_schema
+        response_schema_name = self.response_schema_name
+        if self.response_schema_selector is not None:
+            selected = self.response_schema_selector(prompt)
+            if selected is not None:
+                response_schema, response_schema_name = selected
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
             "response_format": json_schema_response_format(
-                self.response_schema,
-                name=self.response_schema_name,
+                response_schema,
+                name=response_schema_name,
             ),
             "chat_template_kwargs": {"enable_thinking": False},
             "stream": True,
@@ -493,13 +504,14 @@ def build_reflection_backend(
     additional_endpoints: tuple[LLMEndpoint, ...] = (),
     response_schema: dict[str, object] | None = None,
     response_schema_name: str = "eagle_response",
+    response_schema_selector: ResponseSchemaSelector | None = None,
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name == "openai":
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints, response_schema=response_schema, response_schema_name=response_schema_name)
+        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints, response_schema=response_schema, response_schema_name=response_schema_name, response_schema_selector=response_schema_selector)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 
