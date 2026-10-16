@@ -102,12 +102,17 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
 
-def _provider_response(bundle: dict[str, object] | None = None) -> bytes:
+def _provider_response(
+    bundle: dict[str, object] | None = None,
+    usage: dict[str, object] | None = None,
+) -> bytes:
     content = json.dumps(_bundle() if bundle is None else bundle, ensure_ascii=False)
-    return json.dumps(
-        {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}]},
-        ensure_ascii=False,
-    ).encode("utf-8")
+    payload = {
+        "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}],
+    }
+    if usage is not None:
+        payload["usage"] = usage
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
 
 class GroqFrameworkTests(unittest.TestCase):
@@ -203,6 +208,7 @@ class GroqFrameworkTests(unittest.TestCase):
                 model="openai/gpt-oss-120b",
                 design_brief="Build a framework.",
                 max_attempts=2,
+                request_interval_seconds=0,
             )
 
             bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
@@ -242,6 +248,7 @@ class GroqFrameworkTests(unittest.TestCase):
                 Path(directory) / "framework",
                 design_brief="Build a framework.",
                 max_attempts=2,
+                request_interval_seconds=0,
             )
 
         self.assertEqual(result.bundle, _bundle())
@@ -251,6 +258,30 @@ class GroqFrameworkTests(unittest.TestCase):
             requests[1]["messages"][0]["content"],
         )
         self.assertIn("canonical marker", requests[1]["messages"][0]["content"])
+
+    def test_token_usage_enforces_rolling_window_before_retry(self) -> None:
+        responses = [
+            _Response(
+                b'{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"not json"}}],"usage":{"total_tokens":9000}}'
+            ),
+            _Response(_provider_response()),
+        ]
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=responses,
+        ), patch("eagle.generation.groq_framework.time.sleep") as sleep:
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+
+        self.assertEqual(result.bundle, _bundle())
+        sleep.assert_called_once()
+        self.assertGreaterEqual(sleep.call_args.args[0], 59.0)
 
     def test_exhaustion_keeps_raw_attempts_and_failure_summary(self) -> None:
         raw = b'{"choices":[]}'
@@ -267,6 +298,7 @@ class GroqFrameworkTests(unittest.TestCase):
                     model="openai/gpt-oss-120b",
                     design_brief="Build a framework.",
                     max_attempts=2,
+                    request_interval_seconds=0,
                 )
             self.assertFalse((output / "bundle.json").exists())
             self.assertEqual(
@@ -367,7 +399,12 @@ class GroqFrameworkTests(unittest.TestCase):
             "eagle.generation.groq_framework.urllib.request.urlopen",
             side_effect=[rate_limited, _Response(_provider_response())],
         ):
-            result = generate_framework_bundle(Path(directory) / "framework", design_brief="Build a framework.", max_attempts=2)
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
             self.assertEqual(result.bundle, _bundle())
             first = json.loads((result.bundle_path.parent / "attempts/attempt_001/result.json").read_text())
             self.assertTrue(first["retryable"])
@@ -393,7 +430,8 @@ class GroqFrameworkTests(unittest.TestCase):
             )
 
         self.assertEqual(result.bundle, _bundle())
-        sleep.assert_called_once_with(12.75)
+        sleep.assert_called_once()
+        self.assertGreaterEqual(sleep.call_args.args[0], 59.0)
 
     def test_bundle_validation_rejects_marker_mismatch(self) -> None:
         bundle = _bundle()

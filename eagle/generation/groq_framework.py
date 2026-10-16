@@ -36,7 +36,17 @@ DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
-DEFAULT_MAX_OUTPUT_TOKENS = 32_768
+# Conservative defaults for Groq's free-plan limits.  Framework bootstrap is
+# intentionally serialized: a complete framework response is large enough
+# that a second request inside the same rolling minute can exhaust TPM even
+# when the request count is far below RPM.
+GROQ_FREE_REQUESTS_PER_MINUTE = 30
+GROQ_FREE_REQUESTS_PER_DAY = 1_000
+GROQ_FREE_TOKENS_PER_MINUTE = 8_000
+GROQ_FREE_TOKENS_PER_DAY = 200_000
+GROQ_RATE_WINDOW_SECONDS = 60.0
+DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS = GROQ_RATE_WINDOW_SECONDS
+DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 GROQ_USER_AGENT = "EAGLE/1.0"
 GROQ_REASONING_EFFORT = "low"
 
@@ -179,6 +189,72 @@ class GroqFrameworkResult:
     bundle: dict[str, object]
 
 
+@dataclass(frozen=True)
+class _GroqRateSample:
+    started_monotonic: float
+    total_tokens: int
+
+
+def _rate_limit_not_before(
+    samples: list[_GroqRateSample],
+    *,
+    now: float,
+    minimum_interval_seconds: float,
+) -> float:
+    """Return the earliest safe time for the next Groq request."""
+
+    minute_samples = [
+        sample
+        for sample in samples
+        if now - sample.started_monotonic < GROQ_RATE_WINDOW_SECONDS
+    ]
+    day_samples = [
+        sample
+        for sample in samples
+        if now - sample.started_monotonic < 86_400.0
+    ]
+    not_before = now + minimum_interval_seconds if samples else now
+    if len(minute_samples) >= GROQ_FREE_REQUESTS_PER_MINUTE:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in minute_samples)
+            + GROQ_RATE_WINDOW_SECONDS,
+        )
+    minute_tokens = sum(sample.total_tokens for sample in minute_samples)
+    if minute_tokens >= GROQ_FREE_TOKENS_PER_MINUTE:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in minute_samples)
+            + GROQ_RATE_WINDOW_SECONDS,
+        )
+    day_tokens = sum(sample.total_tokens for sample in day_samples)
+    if len(day_samples) >= GROQ_FREE_REQUESTS_PER_DAY:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in day_samples) + 86_400.0,
+        )
+    if day_tokens >= GROQ_FREE_TOKENS_PER_DAY:
+        not_before = max(
+            not_before,
+            min(sample.started_monotonic for sample in day_samples) + 86_400.0,
+        )
+    return not_before
+
+
+def _response_total_tokens(raw_response: bytes) -> int | None:
+    """Read provider usage for local rate accounting without trusting it for validation."""
+
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    usage = payload.get("usage") if isinstance(payload, dict) else None
+    total_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+    if isinstance(total_tokens, int) and not isinstance(total_tokens, bool) and total_tokens >= 0:
+        return total_tokens
+    return None
+
+
 def generate_framework_bundle(
     output_dir: str | Path,
     *,
@@ -188,6 +264,7 @@ def generate_framework_bundle(
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    request_interval_seconds: float = DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS,
     api_root: str = DEFAULT_GROQ_API_ROOT,
 ) -> GroqFrameworkResult:
     """Call Groq with a fixed JSON schema and publish one validated bundle.
@@ -205,6 +282,7 @@ def generate_framework_bundle(
         max_output_tokens=max_output_tokens,
         max_attempts=max_attempts,
         timeout_seconds=timeout_seconds,
+        request_interval_seconds=request_interval_seconds,
         api_root=api_root,
     )
     api_key = os.environ.get("GROQ_API_KEY", "")
@@ -234,8 +312,21 @@ def generate_framework_bundle(
     last_validation_error: str | None = None
     request_sha256 = ""
     attempt_summaries: list[dict[str, object]] = []
+    next_request_not_before: float | None = None
+    rate_samples: list[_GroqRateSample] = []
 
     for attempt in range(1, max_attempts + 1):
+        now = time.monotonic()
+        rate_limit_not_before = _rate_limit_not_before(
+            rate_samples,
+            now=now,
+            minimum_interval_seconds=request_interval_seconds,
+        )
+        if next_request_not_before is not None:
+            rate_limit_not_before = max(rate_limit_not_before, next_request_not_before)
+        wait_seconds = rate_limit_not_before - now
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
         attempt_prompt = _retry_prompt(prompt, last_validation_error)
         request_payload = _request_payload(
             attempt_prompt,
@@ -256,6 +347,7 @@ def generate_framework_bundle(
         raw_path.write_bytes(b"")
         started_at = _utc_now()
         started = time.monotonic()
+        next_request_not_before = started + request_interval_seconds
         status = "failed"
         error: str | None = None
         http_status: int | None = None
@@ -308,6 +400,8 @@ def generate_framework_bundle(
 
         finished_at = _utc_now()
         duration_seconds = max(0.0, time.monotonic() - started)
+        total_tokens = _response_total_tokens(raw_response)
+        rate_samples.append(_GroqRateSample(started, total_tokens or 0))
         response_sha256 = _sha256(raw_response)
         safe_error = _redact(error, api_key)
         attempt_record = {
@@ -348,7 +442,10 @@ def generate_framework_bundle(
         if not retryable:
             break
         if attempt < max_attempts and retry_delay_seconds > 0:
-            time.sleep(retry_delay_seconds)
+            next_request_not_before = max(
+                next_request_not_before,
+                time.monotonic() + retry_delay_seconds,
+            )
 
     finished_at = _utc_now()
     duration_seconds = max(0.0, time.monotonic() - overall_started)
@@ -574,6 +671,7 @@ def _validate_settings(
     max_output_tokens: int,
     max_attempts: int,
     timeout_seconds: float,
+    request_interval_seconds: float,
     api_root: str,
 ) -> None:
     if not re.fullmatch(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?", model):
@@ -588,6 +686,8 @@ def _validate_settings(
         raise ValueError("max_attempts must be at least 1.")
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be finite and positive.")
+    if not math.isfinite(request_interval_seconds) or request_interval_seconds < 0:
+        raise ValueError("request_interval_seconds must be finite and non-negative.")
     parsed = urllib.parse.urlparse(api_root)
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("Groq api_root must be a valid HTTPS URL.")

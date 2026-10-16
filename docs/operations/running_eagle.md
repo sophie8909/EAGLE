@@ -30,6 +30,14 @@ artifacts. `framework.model` defaults to `openai/gpt-oss-120b`. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
 
+The bootstrap uses conservative free-plan protection in code: 30 requests per
+minute, 1,000 requests per day, 8,000 tokens per minute, and 200,000 tokens
+per day. Framework output is capped at 8,192 completion tokens, and
+retries—including retries caused by schema validation failures—wait one rolling
+minute before sending another request. HTTP 429 responses additionally honor
+the provider's `Retry-After` value. These limits apply to Groq framework
+bootstrap calls; the local Qwen runtime is not rate-limited by Groq.
+
 Use this inline form in an ordinary experiment config:
 
 ```yaml
