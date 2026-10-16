@@ -92,6 +92,19 @@ are both used for `llm_coach` initialization/mutation requests. Java rendering,
 validation, `javac`, Integration, semantic probes, and MicroRTS evaluation stay
 local and unchanged.
 
+For a single-machine run using the same fixed initial framework, use:
+
+```bash
+./experiment.sh configs/framework_coach_single_machine.yaml --skip-final-test
+```
+
+This config keeps `execution_mode: openai` so the normal local llama-server is
+started and used for Coach/Commentator calls, but sets
+`model.additional_endpoints: []`. It therefore makes no request to the LAN
+endpoint and does not read any API key. The fixed bundle still skips framework
+bootstrap, while Java rendering, validation, `javac`, Integration, semantic
+probes, and MicroRTS evaluation remain enabled locally.
+
 EAGLE validates an explicit external bundle during config resolution. For inline
 bootstrap, it initializes bootstrap evidence and the manifest first,
 then writes the resolved frozen config on success or requested pending config
