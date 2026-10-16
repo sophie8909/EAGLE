@@ -1,5 +1,10 @@
 # Architecture traceability matrix
 
+Local GUI operation (`python -m eagle gui`) is an additive control surface over
+the existing experiment and observation commands; `tests/test_gui*.py` cover
+editing, launch isolation, browsing, request guards, and temporary opponent
+adapter preparation. It changes no evolutionary or artifact contracts.
+
 ## DSL and pre-crossover source contract (2026-10-11)
 
 The [integration plan](dsl_pre_crossover_reflection_plan.md) tracks the LLM-mode canonical

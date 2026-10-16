@@ -1,5 +1,53 @@
 # Running EAGLE
 
+## Local experiment GUI
+
+On Windows, double-click `gui.cmd` in the repository. It uses the checkout's
+WSL `.venv`, preserving the existing Linux model and Java paths. Alternatively:
+
+```bash
+cd /mnt/d/Project/EAGLE
+.venv/bin/python -m eagle gui --open
+```
+
+Open `http://127.0.0.1:8877`. Use `--port PORT` if occupied and
+`--runs-root PATH` for a different initial run root. The server deliberately
+binds only to loopback and accepts control requests only from its own page.
+Config files stay under `configs/`; generated batch indices are excluded.
+
+1. Select and load a YAML config. Edit scalar fields in the form; fixed enums
+   and booleans use dropdowns, arrays use JSON, and the complete YAML editor
+   exposes every setting. Unspecified fields remain inherited instead of
+   claiming context-independent defaults. Supported legacy reflection
+   probabilities are displayed with their equivalent current meanings.
+   Unknown fields are retained. Form edits reserialize YAML, so use the YAML
+   editor to preserve comments and formatting.
+2. Validate, save, or save as a new config path. Validation uses the existing
+   `ExperimentConfig` rules; runtime files, GPU availability, and opponent
+   dependencies are checked by the normal experiment startup.
+3. Start the current editor contents. The GUI writes an independent input
+   snapshot and log under `logs/gui/<id>/`, then invokes the experiment CLI.
+   Further editor changes cannot alter the active experiment. Mock and
+   skip-final-test controls use existing CLI flags. One experiment job and
+   one observation job may run concurrently.
+4. Choose a Run and completed generation to inspect its exact survivor
+   population. The separate other-candidates entry includes candidates not
+   referenced by a survivor snapshot, including eliminated individuals; it
+   does not claim they survived. Lists refresh every three seconds, so a
+   materialized candidate may be observed during an active run.
+5. Select a candidate, opponent, map, tick cap, interval, and side, then open
+   the match. `scripts/run_gui_match.py` recompiles and integration-checks the
+   persisted source in a temporary directory before launching MicroRTS.
+   Observation never writes evolutionary fitness or run artifacts. Windows
+   requires WSLg for the game window. External opponents require their setup
+   scripts; AlliBot runtime LLM remains disabled by default.
+
+Stop requests let the experiment CLI clean up its owned model runtime. Closing
+the browser leaves jobs running; Ctrl+C in the GUI server terminal requests
+job cleanup and stops the server. The selected Run can resume with its own
+saved config through existing compatibility checks. Historical runtime config
+fields do not prevent observation; they can still prevent resume.
+
 The shell interface is `./experiment.sh CONFIG_TARGET [OPTIONS...]`. The normal batch command is:
 
 ```bash

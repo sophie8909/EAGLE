@@ -23,12 +23,18 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from eagle.config import ExperimentConfig
 from eagle.evaluation.compiler import compile_generated_agent
 from eagle.evaluation.microrts_runner import integrate_microrts_agent
+from eagle.evaluation.opponents import (
+    _prepare_safe_allinbot_opponent,
+    _prepare_worker_rush_opponent,
+)
 from eagle.opponents import (
     EVALUATION_ROSTER,
     EXTERNAL_OPPONENTS,
     GUI_ONLY_OPPONENTS,
+    OpponentSetupError,
     gui_opponent_by_id,
     rooted_jar_path,
 )
@@ -100,6 +106,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"- {check.name}: {check.status}{detail}", file=sys.stderr)
             return 1
 
+        try:
+            config = ExperimentConfig(seed_prompts=(), microrts_dir=microrts_dir)
+            if args.opponent == "allinbot":
+                adapter = _prepare_safe_allinbot_opponent(
+                    config, classes_dir=classes_dir, repository_root=REPOSITORY_ROOT,
+                )
+                opponent.classpath_after_runtime = (adapter, *opponent.classpath_after_runtime)
+            elif args.opponent == "workerrush":
+                adapter = _prepare_worker_rush_opponent(config, classes_dir=classes_dir)
+                opponent.classpath_after_runtime = (adapter, *opponent.classpath_after_runtime)
+        except (OSError, OpponentSetupError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
         command = build_command(
             classes_dir=classes_dir,
             microrts_dir=microrts_dir,
@@ -132,9 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidate-id", required=True, help="candidate directory/ID within the run")
     parser.add_argument(
         "--opponent",
-        default="light_rush",
+        default="lightrush",
         help=(
-            "EAGLE opponent ID (default: light_rush) or a fully qualified Java class. "
+            "EAGLE opponent ID (default: lightrush) or a fully qualified Java class. "
             "Known IDs: "
             f"{', '.join(item.opponent_id for item in EVALUATION_ROSTER + EXTERNAL_OPPONENTS + GUI_ONLY_OPPONENTS)}"
         ),
@@ -222,6 +242,19 @@ def resolve_opponent(
                 "--opponent must be a known EAGLE opponent ID or a fully qualified Java class name."
             )
         return ResolvedOpponent(value)
+
+    if spec.opponent_id == "allinbot":
+        upstream = resolve_allibot(
+            GUI_ONLY_OPPONENTS[0],
+            enable_runtime_llm=enable_allibot_runtime_llm,
+            llama_cpp_url=allibot_llama_cpp_url,
+            llama_cpp_model=allibot_llama_cpp_model,
+        )
+        return ResolvedOpponent(
+            spec.class_name,
+            classpath_after_runtime=upstream.classpath_before_runtime,
+            environment=upstream.environment,
+        )
 
     classpath: tuple[Path, ...] = ()
     if spec in EXTERNAL_OPPONENTS:

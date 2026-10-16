@@ -1,5 +1,16 @@
 # Current implementation status
 
+## Local experiment GUI (2026-10-16)
+
+`python -m eagle gui` provides config selection, enum/boolean form controls,
+full YAML editing, validated atomic save, immutable launch snapshots, bounded
+live logs, stop/resume controls, and automatically refreshed canonical
+run/generation/candidate lists. Visual observation invokes the retained
+temporary compile/integration/MicroRTS launcher and does not change fitness.
+`gui.cmd` uses the checkout's WSL `.venv`; WSLg supplies the game window.
+The visual launcher now prepares the existing WorkerRush and SafeAllInBot
+adapters and uses the canonical `lightrush` default.
+
 ## DSL and pre-crossover source contract (2026-10-11)
 
 Canonical `eagle-strategy-dsl-v1` policies are validated by `eagle/strategy_dsl.py`.

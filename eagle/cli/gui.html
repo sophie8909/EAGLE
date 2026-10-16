@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EAGLE 實驗控制台</title>
+<style>
+[hidden]{display:none!important}
+:root{font-family:system-ui,"Microsoft JhengHei",sans-serif;color:#203340;background:#f2f5f6;font-size:14px}
+*{box-sizing:border-box}body{margin:0}header{background:#173b46;color:white;padding:22px 4vw;display:flex;align-items:center;justify-content:space-between;gap:16px}h1{font-size:23px;margin:0 0 5px}header p{margin:0;color:#c5d8dc}header span{font-size:12px;border:1px solid #73959c;border-radius:20px;padding:6px 12px}
+main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}.panel{background:white;border:1px solid #d9e2e5;border-radius:12px;padding:22px;min-width:0}h2{font-size:18px;margin:0 0 15px}h3{font-size:14px;margin:16px 0 10px;color:#38636e}p{line-height:1.6}.hint{font-size:12px;color:#607984;margin:8px 0 14px}.row{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.row>label{flex:1;min-width:130px}label{display:block;font-size:12px;color:#47606b}input,select,textarea,button{font:inherit}input,select,textarea{display:block;width:100%;border:1px solid #bdcdd2;border-radius:5px;background:#fff;color:#203340;padding:8px;margin-top:5px;min-width:0}input[type=checkbox]{display:inline;width:auto;margin:0 6px 0 0;vertical-align:middle}button{border:1px solid #b2c8ce;background:#eef4f5;color:#214957;border-radius:5px;padding:9px 13px;cursor:pointer;white-space:nowrap}button.primary{background:#176879;border-color:#176879;color:white}button.danger{color:#aa3c30;background:#fff5f3;border-color:#dfb5b0}button:disabled{opacity:.45;cursor:default}button:hover:enabled{filter:brightness(.96)}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #1f98b1;outline-offset:2px}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.toolbar label{font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{min-width:0}.field small{display:block;color:#7b8d95;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.wide{grid-column:1/-1}details{border-top:1px solid #e2e9eb;margin-top:16px;padding-top:13px}summary{cursor:pointer;color:#38636e;font-weight:600}textarea{font-family:Consolas,monospace;font-size:12px;line-height:1.6;resize:vertical}#yaml{min-height:430px}#form{max-height:610px;overflow:auto;padding:0 8px 4px 0}#message{position:sticky;top:0;z-index:2;max-width:1506px;margin:12px auto 0;padding:12px 18px;background:#e3f3ed;border:1px solid #b6d9cd;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}#message.error{background:#fff0ed;border-color:#e0b5ad;color:#973d31}#message[hidden]{display:none}.status{padding:8px 12px;border-radius:6px;background:#edf4f5;margin:12px 0;white-space:pre-wrap;font-size:12px;line-height:1.7}pre{background:#172a34;color:#d7e4e9;white-space:pre-wrap;overflow:auto;height:240px;padding:14px;border-radius:7px;font:12px/1.6 Consolas,monospace;margin:10px 0 0;overflow-wrap:anywhere}.logfile{font-size:11px;color:#70828c;overflow-wrap:anywhere}.tabs{margin:14px 0}.tabs button[aria-pressed=true]{background:#dcecf0;border-color:#77a7b3}.watch-controls{margin-top:14px}.pill{display:inline-block;background:#e8f1f2;color:#3e6470;border-radius:5px;padding:3px 7px;font-size:11px}footer{padding:0 24px 22px;color:#70828c;font-size:12px;text-align:center}@media(max-width:1000px){main{grid-template-columns:1fr}#form{max-height:520px}}@media(max-width:520px){main{padding:12px}.panel{padding:15px}.grid{grid-template-columns:1fr}header{padding:18px}header span{display:none}}
+</style>
+</head>
+<body>
+<header><div><h1>EAGLE 實驗控制台</h1><p>設定實驗，挑選個體，觀看 MicroRTS 對戰。</p></div><span>LOCAL · WSL / Linux</span></header>
+<div id="message" role="status" hidden></div>
+<main>
+<section class="panel" aria-labelledby="config-title">
+ <h2 id="config-title">01　實驗設定</h2>
+ <div class="row"><label>選擇 Config<select id="configs"></select></label><button id="load">載入</button><button id="reload">刷新清單</button></div>
+ <div class="tabs"><button id="form-tab" aria-pressed="true">表單</button> <button id="yaml-tab" aria-pressed="false">完整 YAML</button> <span id="dirty" class="pill">尚未載入</span></div>
+ <p class="hint">固定選項使用下拉選單；陣列與複合值以 JSON 編輯。未修改的欄位沿用原設定，完整 YAML 可編輯所有參數。</p>
+ <div id="form"></div><textarea id="yaml" aria-label="完整 config YAML" spellcheck="false" hidden></textarea>
+ <div class="row"><label>儲存路徑（可另存新檔，限 configs/ 下）<input id="save-path" placeholder="configs/experiments/my_experiment.yaml"></label></div>
+ <div class="toolbar"><button id="validate">驗證設定</button><button id="save">儲存 Config</button></div>
+ <details open><summary>啟動實驗</summary>
+  <p class="hint">以目前編輯內容建立獨立快照後啟動，日後編輯不會改到執行中的實驗。一次執行一個實驗，可包含多個 runs。</p>
+  <div class="toolbar"><label><input type="checkbox" id="mock">Mock（不呼叫模型）</label><label><input type="checkbox" id="skip-final">略過 Final Test</label></div>
+  <div class="toolbar"><button id="start" class="primary">啟動目前設定</button><button id="stop-experiment" class="danger" disabled>停止實驗</button></div>
+  <div id="experiment-status" class="status">尚未啟動實驗</div>
+  <pre id="experiment-log" aria-label="實驗輸出"></pre><p id="experiment-file" class="logfile"></p>
+ </details>
+</section>
+<section class="panel" aria-labelledby="watch-title">
+ <h2 id="watch-title">02　個體對戰觀察</h2>
+ <p class="hint">每 3 秒刷新產物。可在實驗執行時，選擇已具備 Java 原始碼的個體對戰。對戰會開啟獨立 MicroRTS 視窗；WSL 需要 WSLg。</p>
+ <div class="row"><label>Run<select id="runs"></select></label><button id="refresh-runs">刷新</button></div>
+ <div id="run-status" class="status">選擇一個 Run</div>
+ <div class="row"><label>世代（存活族群快照）<select id="generations"></select></label><label>個體<select id="candidates"></select></label></div>
+ <p id="candidate-status" class="hint"></p>
+ <div class="grid watch-controls">
+  <label>Opponent<select id="opponent"></select></label>
+  <label>地圖<select id="map"></select></label>
+  <label>最多遊戲 ticks<input id="cycles" type="number" min="1" value="5000"></label>
+  <label>畫面間隔（毫秒）<input id="interval" type="number" min="0" value="20"></label>
+  <label>個體陣營<select id="side"><option value="0">Player 0</option><option value="1">Player 1</option></select></label>
+ </div>
+ <div class="toolbar"><button id="watch" class="primary" disabled>開啟對戰視窗</button><button id="stop-match" class="danger" disabled>停止觀戰</button></div>
+ <p class="hint">觀戰先在臨時目錄編譯並做 Integration 檢查，再開啟對戰；結果不計入演化 fitness。外部對手需先完成相應 setup。AlliBot 預設關閉 runtime LLM。</p>
+ <div id="match-status" class="status">尚未開啟對戰</div>
+ <pre id="match-log" aria-label="對戰輸出"></pre><p id="match-file" class="logfile"></p>
+ <details><summary>繼續選定的 Run</summary><p class="hint">使用該 Run 已保存的 config 繼續執行，遵循原有 resume 相容性檢查。Mock 與略過 Final Test 使用左側勾選值。</p><button id="resume">繼續此 Run</button></details>
+</section>
+</main>
+<footer>原始實驗產物保留於各 Run。GUI 日誌與啟動快照位於 logs/gui/。</footer>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const csrf='__CSRF_TOKEN__';
+let meta, payload={}, originalText='', editing='form', dirty=false, loaded=false, runData={generations:[],pending:[]}, jobRunning=false, matchRunning=false, refreshing=false;
+async function api(path,body){
+ const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Eagle-Token':csrf},body:JSON.stringify(body)});
+ const data=await response.json();if(!response.ok)throw new Error(data.error||response.statusText);return data;
+}
+function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';$('message').hidden=false;}
+function action(id,fn){$(id).addEventListener('click',async()=>{const button=$(id);button.disabled=true;try{await fn();}catch(error){message(error.message,true);}finally{button.disabled=false;updateButtons();}});}
+function markDirty(){dirty=true;$('dirty').textContent='有未儲存變更';}
+function setOptions(select,items,placeholder){
+ const value=select.value;select.replaceChildren();
+ if(!items.length)select.add(new Option(placeholder||'尚無資料',''));
+ for(const item of items){const option=new Option(item.label,item.value);option.disabled=!!item.disabled;select.add(option);}
+ if([...select.options].some(option=>option.value===value))select.value=value;
+}
+function valueAt(path){let value=payload;for(const key of path.split('.')){if(value===null||typeof value!=='object'||!Object.hasOwn(value,key))return undefined;value=value[key];}return value;}
+function setAt(path,value){const keys=path.split('.');let parent=payload;for(const key of keys.slice(0,-1)){if(parent[key]===null||typeof parent[key]!=='object'||Array.isArray(parent[key]))parent[key]={};parent=parent[key];}parent[keys.at(-1)]=value;}
+function deleteAt(path){const keys=path.split('.');let parent=payload;for(const key of keys.slice(0,-1)){parent=parent?.[key];if(!parent||typeof parent!=='object')return;}delete parent[keys.at(-1)];}
+const labels={experiment_name:'實驗名稱',generations:'演化代數（另含第 0 代）',population_size:'族群大小',runs:'每個 seed 的重複次數',random_seed:'隨機種子',crossover_rate:'交配機率',mutation_rate:'突變機率',stagnation_generations:'停滯代數上限',java_materialization_mode:'Java 產生方式',candidate_java_mode:'Java 繼承方式',initial_population_mode:'初始族群方式',parent_evaluation_mode:'父代評估方式',reflection_operator_mode:'Reflection 選擇方式',execution_mode:'執行模式',tick_limit:'預設 ticks 上限',match_timeout_seconds:'每場逾時（秒）',match_artifact_mode:'對戰證據保存方式','evaluation.mode':'評估方式','evaluation.rounds_per_map':'每張地圖回合數','evaluation.swap_player_sides':'交換陣營','llm.match_commentator.enabled':'啟用 Match Commentator',runs_dir:'實驗輸出根目錄',microrts_dir:'MicroRTS 目錄'};
+function renderForm(){
+ const form=$('form');form.replaceChildren();const groups=new Map();
+ const paths=new Set(Object.keys(meta.forms.defaults));
+ function walk(value,prefix=''){for(const [key,item]of Object.entries(value)){const path=prefix?prefix+'.'+key:key;if(item!==null&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).length)walk(item,path);else paths.add(path);}}
+ walk(payload);
+ for(const path of paths){
+  const group=path.includes('.')?path.split('.')[0]:'實驗與演化';
+  if(!groups.has(group)){const title=document.createElement('h3');title.textContent=group;const grid=document.createElement('div');grid.className='grid';form.append(title,grid);groups.set(group,grid);}
+  const explicit=valueAt(path)!==undefined;const value=explicit?valueAt(path):meta.forms.defaults[path];
+  const field=document.createElement('label');field.className='field';field.append(document.createTextNode(labels[path]||path.split('.').at(-1)));
+  let input;const choices=meta.forms.choices[path];
+  if(choices||typeof value==='boolean'){
+   input=document.createElement('select');const values=choices||[true,false];input.add(new Option('未指定（沿用 config 預設）',''));
+   for(const item of values)input.add(new Option(typeof item==='boolean'?(item?'啟用':'停用'):item,String(item)));
+   if(!values.map(String).includes(String(value)))input.add(new Option(String(value),String(value)));
+   input.value=explicit?String(value):'';input.onchange=()=>{if(input.value==='')deleteAt(path);else setAt(path,typeof value==='boolean'?input.value==='true':input.value);markDirty();};
+  }else if(value===null||typeof value==='object'){
+   field.classList.add('wide');input=document.createElement('textarea');input.rows=3;input.value=JSON.stringify(value,null,2);
+   input.oninput=()=>{try{setAt(path,JSON.parse(input.value));input.setCustomValidity('');}catch{input.setCustomValidity('請填入有效的 JSON，或切換完整 YAML。');}markDirty();};
+  }else{
+   input=document.createElement('input');input.type=typeof value==='number'?'number':'text';if(input.type==='number')input.step='any';input.value=explicit?String(value??''):'';input.placeholder='未指定（沿用 config 預設）';
+   input.oninput=()=>{if(input.value===''){deleteAt(path);input.setCustomValidity('');}else if(input.type==='number'){input.setCustomValidity(Number.isFinite(Number(input.value))?'':'請輸入數字');if(input.checkValidity())setAt(path,Number(input.value));}else setAt(path,input.value);markDirty();};
+  }
+  input.setAttribute('aria-label',path);field.append(input);const hint=document.createElement('small');hint.textContent=path;field.append(hint);groups.get(group).append(field);
+ }
+}
+async function bodyConfig(){
+ if(!loaded)throw new Error('請先載入 Config。');
+ if(editing==='yaml')return {text:$('yaml').value};
+ for(const input of $('form').querySelectorAll('input,select,textarea'))if(!input.reportValidity())throw new Error('請修正表單中的欄位。');
+ return dirty?{payload}:{text:originalText};
+}
+async function switchEditor(mode){
+ if(mode===editing||!loaded)return;
+ if(mode==='yaml'){await bodyConfig();$('yaml').value=dirty?(await api('/api/render',{payload})).text:originalText;}
+ else{payload=(await api('/api/parse',{text:$('yaml').value})).payload;renderForm();}
+ editing=mode;$('form').hidden=mode!=='form';$('yaml').hidden=mode!=='yaml';$('form-tab').setAttribute('aria-pressed',String(mode==='form'));$('yaml-tab').setAttribute('aria-pressed',String(mode==='yaml'));
+}
+async function loadConfig(){
+ if(dirty&&!confirm('載入其他設定會放棄尚未儲存的變更，繼續？'))return;
+ const data=await api('/api/config?path='+encodeURIComponent($('configs').value));
+ payload=data.payload;originalText=data.text;$('yaml').value=data.text;$('save-path').value=data.path;loaded=true;dirty=false;$('dirty').textContent='已載入';renderForm();await refresh();
+}
+function flags(){return {mock:$('mock').checked,skip_final_test:$('skip-final').checked};}
+function candidates(){return $('generations').value==='pending'?runData.pending:(runData.generations.find(item=>String(item.generation)===$('generations').value)?.population||[]);}
+function renderCandidates(){
+ setOptions($('candidates'),candidates().map(item=>({value:item.candidate_id,label:item.candidate_id+' · '+item.status})), '尚無個體');updateButtons();
+}
+function updateButtons(){
+ const selected=candidates().find(item=>item.candidate_id===$('candidates').value);
+ $('watch').disabled=matchRunning||!selected?.watchable||!$('opponent').value||!$('map').value;
+ $('candidate-status').textContent=selected?(selected.watchable?'Java 原始碼已備妥，可編譯觀戰。':'此個體尚無完整 Java 原始碼，或來源不一致，暫時無法觀戰。'):'';
+ $('start').disabled=jobRunning||!loaded;$('resume').disabled=jobRunning||!$('runs').value;
+ $('stop-experiment').disabled=!jobRunning;$('stop-match').disabled=!matchRunning;
+}
+async function refreshRun(){
+ if(!$('runs').value){runData={generations:[],pending:[]};$('run-status').textContent='選擇一個 Run';}
+ else{runData=await api('/api/run?path='+encodeURIComponent($('runs').value));}
+ setOptions($('generations'),[...runData.generations.map(item=>({value:String(item.generation),label:'第 '+item.generation+' 代 · '+item.population.length+' 個存活個體'})),...(runData.pending.length?[{value:'pending',label:'其他個體／尚未完成（含淘汰）'}]:[])],'等待個體產生');renderCandidates();
+}
+function renderJob(kind,job){
+ const name=kind==='experiment'?'實驗':'對戰';
+ $(kind+'-status').textContent=job.pid===null?'尚未啟動'+name:job.running?(job.stopping?'正在停止，等待清理…':name+'執行中 · PID '+job.pid):name+(job.returncode===0?'已完成':'已結束 · exit '+job.returncode);
+ const log=$(kind+'-log');const follow=log.scrollTop+log.clientHeight>=log.scrollHeight-30;log.textContent=job.output;if(follow)log.scrollTop=log.scrollHeight;$(kind+'-file').textContent=job.log||'';
+}
+async function refresh(){
+ if(refreshing)return;refreshing=true;
+ try{const data=await api('/api/status');jobRunning=data.experiment.running;matchRunning=data.match.running;renderJob('experiment',data.experiment);renderJob('match',data.match);
+ setOptions($('runs'),data.runs.map(run=>({value:run.path,label:run.name+' · '+run.status})),'尚無 Run');
+ const selected=data.runs.find(run=>run.path===$('runs').value);if(selected)$('run-status').textContent=selected.status+' · 最新完成世代 '+(selected.latest_generation??'尚無')+'\n'+selected.path;
+ await refreshRun();updateButtons();}finally{refreshing=false;}
+}
+action('load',loadConfig);
+action('reload',async()=>{meta=await api('/api/meta');setOptions($('configs'),meta.configs.map(path=>({value:path,label:path})));message('Config 清單已刷新。');});
+action('form-tab',()=>switchEditor('form'));action('yaml-tab',()=>switchEditor('yaml'));$('yaml').oninput=markDirty;
+action('validate',async()=>{message((await api('/api/validate',await bodyConfig())).message);});
+action('save',async()=>{const data=await api('/api/save',{...await bodyConfig(),path:$('save-path').value});originalText=data.text;payload=data.payload;$('yaml').value=data.text;dirty=false;$('dirty').textContent='已儲存';message('已儲存：'+data.path);});
+action('start',async()=>{await api('/api/start',{...await bodyConfig(),...flags()});message('實驗已啟動。');await refresh();});
+action('stop-experiment',async()=>{await api('/api/stop-experiment',{});await refresh();});
+action('stop-match',async()=>{await api('/api/stop-match',{});await refresh();});
+action('resume',async()=>{await api('/api/resume',{run:$('runs').value,...flags()});message('已繼續選定 Run。');await refresh();});
+action('watch',async()=>{await api('/api/watch',{run:$('runs').value,candidate:$('candidates').value,opponent:$('opponent').value,map:$('map').value,cycles:$('cycles').value,interval_ms:$('interval').value,side:$('side').value});message('已開始編譯與 Integration 檢查，完成後開啟 MicroRTS 視窗。');await refresh();});
+action('refresh-runs',refresh);
+$('runs').onchange=()=>refresh().catch(error=>message(error.message,true));$('generations').onchange=renderCandidates;$('candidates').onchange=updateButtons;$('opponent').onchange=updateButtons;
+window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+async function init(){
+ meta=await api('/api/meta');setOptions($('configs'),meta.configs.map(path=>({value:path,label:path})),'尚無設定');
+ const preferred=meta.configs.find(path=>path.includes('qwen3_5_9b/'));if(preferred)$('configs').value=preferred;
+ setOptions($('opponent'),meta.opponents.map(item=>({value:item.id,label:item.name+(item.available?'':'（缺少依賴）'),disabled:!item.available})));$('opponent').value='lightrush';
+ setOptions($('map'),meta.maps.map(path=>({value:path,label:path})));if(meta.maps.includes('maps/8x8/basesWorkers8x8.xml'))$('map').value='maps/8x8/basesWorkers8x8.xml';
+ if(meta.configs.length)await loadConfig();else await refresh();setInterval(()=>refresh().catch(error=>message(error.message,true)),3000);
+}
+init().catch(error=>message(error.message,true));
+</script>
+</body>
+</html>

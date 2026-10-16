@@ -19,6 +19,7 @@ include = ["eagle*"]
 
 [tool.setuptools.package-data]
 eagle = [
+    "cli/*.html",
     "java_templates/*.java",
     "java_seeds/*.java",
     "java_seeds/*/*.java",
