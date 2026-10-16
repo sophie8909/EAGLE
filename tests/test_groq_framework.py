@@ -15,8 +15,10 @@ from eagle.generation.groq_framework import (
     ATTEMPT_SCHEMA_VERSION,
     BOOTSTRAP_SCHEMA_VERSION,
     DEFAULT_GROQ_MODEL,
+    DEFAULT_MAX_OUTPUT_TOKENS,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
+    GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE,
     GROQ_REASONING_EFFORT,
     GROQ_USER_AGENT,
     GroqFrameworkError,
@@ -386,6 +388,11 @@ class GroqFrameworkTests(unittest.TestCase):
             payloads = [json.loads(call.args[0].data) for call in urlopen.call_args_list]
             self.assertEqual(payloads[0]["model"], DEFAULT_GROQ_MODEL)
             self.assertEqual(payloads[1]["model"], "org/model-x")
+            self.assertEqual(payloads[0]["max_completion_tokens"], DEFAULT_MAX_OUTPUT_TOKENS)
+            self.assertLessEqual(
+                payloads[0]["max_completion_tokens"] + GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE,
+                8_000,
+            )
 
     def test_transient_429_retries_then_succeeds(self) -> None:
         rate_limited = urllib.error.HTTPError(

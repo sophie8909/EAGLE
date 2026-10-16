@@ -32,7 +32,10 @@ reuse across runs or replicate seeds.
 
 The bootstrap uses conservative free-plan protection in code: 30 requests per
 minute, 1,000 requests per day, 8,000 tokens per minute, and 200,000 tokens
-per day. Framework output is capped at 8,192 completion tokens, and
+per day. Because Groq's TPM accounting includes the rendered input prompt,
+framework output defaults to 6,400 completion tokens, reserving 1,600 tokens
+for that prompt under the 8,000-token ceiling. The cap can be overridden for a
+higher provider tier, and
 retries—including retries caused by schema validation failures—wait one rolling
 minute before sending another request. HTTP 429 responses additionally honor
 the provider's `Retry-After` value. These limits apply to Groq framework

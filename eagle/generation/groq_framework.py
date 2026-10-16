@@ -46,7 +46,13 @@ GROQ_FREE_TOKENS_PER_MINUTE = 8_000
 GROQ_FREE_TOKENS_PER_DAY = 200_000
 GROQ_RATE_WINDOW_SECONDS = 60.0
 DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS = GROQ_RATE_WINDOW_SECONDS
-DEFAULT_MAX_OUTPUT_TOKENS = 8_192
+# The provider's TPM accounting includes the rendered input prompt.  The
+# current bootstrap prompt uses about 1,442 tokens, so reserve 1,600 tokens
+# and keep the default request below Groq's 8,000-token entry-tier ceiling.
+GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE = 1_600
+DEFAULT_MAX_OUTPUT_TOKENS = (
+    GROQ_FREE_TOKENS_PER_MINUTE - GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE
+)
 GROQ_USER_AGENT = "EAGLE/1.0"
 GROQ_REASONING_EFFORT = "low"
 
