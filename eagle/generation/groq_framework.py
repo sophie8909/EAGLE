@@ -37,6 +37,7 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_MAX_OUTPUT_TOKENS = 32_768
+GROQ_USER_AGENT = "EAGLE/1.0"
 
 FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -251,7 +252,11 @@ def generate_framework_bundle(
                 data=request_bytes,
                 headers={
                     "Content-Type": "application/json",
+                    "Accept": "application/json",
                     "Authorization": f"Bearer {api_key}",
+                    # Groq's Cloudflare edge rejects urllib's default client
+                    # signature with error 1010 before the API sees the request.
+                    "User-Agent": GROQ_USER_AGENT,
                 },
                 method="POST",
             )

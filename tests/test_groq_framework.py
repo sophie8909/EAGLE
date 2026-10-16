@@ -17,6 +17,7 @@ from eagle.generation.groq_framework import (
     DEFAULT_GROQ_MODEL,
     FRAMEWORK_RESPONSE_SCHEMA,
     FRAMEWORK_SCHEMA_VERSION,
+    GROQ_USER_AGENT,
     GroqFrameworkError,
     generate_framework_bundle,
     parse_groq_framework_response,
@@ -160,6 +161,8 @@ class GroqFrameworkTests(unittest.TestCase):
             )
             headers = {key.lower(): value for key, value in request.header_items()}
             self.assertEqual(headers["authorization"], f"Bearer {secret}")
+            self.assertEqual(headers["accept"], "application/json")
+            self.assertEqual(headers["user-agent"], GROQ_USER_AGENT)
             payload = json.loads(request.data.decode("utf-8"))
             self.assertEqual(bootstrap["schema_version"], BOOTSTRAP_SCHEMA_VERSION)
             self.assertEqual(payload["model"], "openai/gpt-oss-120b")
