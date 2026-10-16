@@ -1,8 +1,9 @@
-"""One-shot Groq bootstrap for an immutable, slot-controlled Java framework.
+"""One-shot framework bootstrap for an immutable, slot-controlled Java framework.
 
-This module intentionally stops at framework-bundle creation.  Evolutionary
+This module intentionally stops at framework-bundle creation. Evolutionary
 configuration, candidate state, and Java materialization consume the bundle in
-separate layers.  Authentication is read only from ``GROQ_API_KEY`` and is
+separate layers. The Groq backend reads authentication only from
+``GROQ_API_KEY``; the local backend sends no authorization header. Secrets are
 never included in persisted request or result artifacts.
 """
 
@@ -272,8 +273,13 @@ def generate_framework_bundle(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     request_interval_seconds: float = DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS,
     api_root: str = DEFAULT_GROQ_API_ROOT,
+    provider: str = "groq",
+    require_api_key: bool = True,
+    require_https: bool = True,
+    json_object_mode: bool = False,
+    reasoning_effort: str | None = GROQ_REASONING_EFFORT,
 ) -> GroqFrameworkResult:
-    """Call Groq with a fixed JSON schema and publish one validated bundle.
+    """Call a compatible framework provider and publish one validated bundle.
 
     Every attempt owns its exact credential-free request body, raw HTTP body,
     timing, hashes, and result.  The raw body is flushed to disk before any
@@ -281,6 +287,10 @@ def generate_framework_bundle(
     """
 
     target = Path(output_dir).expanduser().resolve()
+    provider = provider.strip().lower()
+    if provider not in {"groq", "local"}:
+        raise ValueError("framework provider must be groq or local.")
+    provider_label = "Groq" if provider == "groq" else "local LLM"
     _validate_settings(
         model=model,
         design_brief=design_brief,
@@ -290,9 +300,10 @@ def generate_framework_bundle(
         timeout_seconds=timeout_seconds,
         request_interval_seconds=request_interval_seconds,
         api_root=api_root,
+        require_https=require_https,
     )
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key.strip():
+    api_key = os.environ.get("GROQ_API_KEY", "") if require_api_key else ""
+    if require_api_key and not api_key.strip():
         raise GroqFrameworkError("GROQ_API_KEY is required for framework generation.")
     _prepare_output_directory(target)
 
@@ -314,13 +325,13 @@ def generate_framework_bundle(
     selected_attempt: int | None = None
     selected_bundle: dict[str, object] | None = None
     selected_response_sha256: str | None = None
-    last_error = "Groq returned no response."
+    last_error = f"{provider_label} returned no response."
     last_validation_error: str | None = None
     request_sha256 = ""
     attempt_summaries: list[dict[str, object]] = []
     next_request_not_before: float | None = None
     rate_samples: list[_GroqRateSample] = []
-    json_object_fallback = False
+    json_object_fallback = json_object_mode
 
     for attempt in range(1, max_attempts + 1):
         now = time.monotonic()
@@ -345,6 +356,7 @@ def generate_framework_bundle(
             temperature=temperature,
             max_output_tokens=max_output_tokens,
             json_object_mode=json_object_fallback,
+            reasoning_effort=reasoning_effort,
         )
         request_bytes = json.dumps(
             request_payload,
@@ -368,31 +380,31 @@ def generate_framework_bundle(
         retry_delay_seconds = 0.0
         bundle: dict[str, object] | None = None
         try:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": GROQ_USER_AGENT,
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
             request = urllib.request.Request(
                 endpoint,
                 data=request_bytes,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    # Groq's Cloudflare edge rejects urllib's default client
-                    # signature with error 1010 before the API sees the request.
-                    "User-Agent": GROQ_USER_AGENT,
-                },
+                headers=headers,
                 method="POST",
             )
             with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                 http_status = int(getattr(response, "status", 200))
                 raw_response = response.read()
             raw_path.write_bytes(raw_response)
-            bundle = parse_groq_framework_response(raw_response)
+            bundle = parse_framework_response(raw_response, provider_label=provider_label)
             status = "success"
             retryable = False
         except urllib.error.HTTPError as exc:
             http_status = int(exc.code)
             raw_response = exc.read()
             raw_path.write_bytes(raw_response)
-            error = _http_error_summary(exc, raw_response)
+            error = _http_error_summary(exc, raw_response, provider_label=provider_label)
             json_validation_failure = _provider_error_code(raw_response) == "json_validate_failed"
             retryable = (
                 json_validation_failure
@@ -400,7 +412,7 @@ def generate_framework_bundle(
                 or 500 <= exc.code <= 599
             )
             if json_validation_failure:
-                # Groq's best-effort JSON Schema mode can reject a valid-looking
+                # The provider's best-effort JSON Schema mode can reject a valid-looking
                 # partial generation before the response reaches local parsing.
                 # Retry in JSON Object Mode; local bundle validation remains
                 # authoritative and the failed constrained request is retained.
@@ -413,12 +425,12 @@ def generate_framework_bundle(
                     maximum=timeout_seconds,
                 )
         except (urllib.error.URLError, TimeoutError) as exc:
-            error = f"Groq API request failed: {exc}"
+            error = f"{provider_label} API request failed: {exc}"
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            error = f"Groq response validation failed: {exc}"
+            error = f"{provider_label} response validation failed: {exc}"
             last_validation_error = error
         except OSError as exc:
-            error = f"Groq framework artifact failure: {exc}"
+            error = f"{provider_label} framework artifact failure: {exc}"
             retryable = False
 
         finished_at = _utc_now()
@@ -433,7 +445,7 @@ def generate_framework_bundle(
             "status": status,
             "retryable": retryable,
             "error": safe_error,
-            "provider": "groq",
+            "provider": provider,
             "model": model,
             "endpoint": endpoint,
             "http_status": http_status,
@@ -476,7 +488,7 @@ def generate_framework_bundle(
         failure_record = {
             "schema_version": BOOTSTRAP_SCHEMA_VERSION,
             "status": "failed",
-            "provider": "groq",
+            "provider": provider,
             "model": model,
             "endpoint": endpoint,
             "max_attempts": max_attempts,
@@ -492,7 +504,7 @@ def generate_framework_bundle(
         }
         _write_json(target / "bootstrap.json", failure_record)
         raise GroqFrameworkError(
-            f"Groq framework generation failed after {len(attempt_summaries)} attempt(s): "
+            f"{provider_label} framework generation failed after {len(attempt_summaries)} attempt(s): "
             f"{last_error}"
         )
 
@@ -513,7 +525,7 @@ def generate_framework_bundle(
     bootstrap_record = {
         "schema_version": BOOTSTRAP_SCHEMA_VERSION,
         "status": "success",
-        "provider": "groq",
+        "provider": provider,
         "model": model,
         "endpoint": endpoint,
         "max_attempts": max_attempts,
@@ -541,6 +553,16 @@ def generate_framework_bundle(
 def parse_groq_framework_response(raw_response: bytes | str) -> dict[str, object]:
     """Parse a Groq provider envelope and validate its framework JSON text."""
 
+    return parse_framework_response(raw_response, provider_label="Groq")
+
+
+def parse_framework_response(
+    raw_response: bytes | str,
+    *,
+    provider_label: str = "Groq",
+) -> dict[str, object]:
+    """Parse an OpenAI-compatible provider envelope and validate its framework JSON."""
+
     source = (
         raw_response.decode("utf-8")
         if isinstance(raw_response, bytes)
@@ -548,31 +570,31 @@ def parse_groq_framework_response(raw_response: bytes | str) -> dict[str, object
     )
     envelope = json.loads(source)
     if not isinstance(envelope, dict):
-        raise ValueError("Groq response envelope must be an object.")
+        raise ValueError(f"{provider_label} response envelope must be an object.")
     choices = envelope.get("choices")
     if not isinstance(choices, list) or len(choices) != 1:
-        raise ValueError("Groq response must contain exactly one choice.")
+        raise ValueError(f"{provider_label} response must contain exactly one choice.")
     choice = choices[0]
     if not isinstance(choice, dict) or choice.get("finish_reason") != "stop":
-        raise ValueError("Groq response must finish with stop; incomplete output is rejected.")
+        raise ValueError(f"{provider_label} response must finish with stop; incomplete output is rejected.")
     message = choice.get("message")
     if not isinstance(message, dict):
-        raise ValueError("Groq choice message must be an object.")
+        raise ValueError(f"{provider_label} choice message must be an object.")
     if message.get("refusal"):
-        raise ValueError("Groq refused framework generation.")
+        raise ValueError(f"{provider_label} refused framework generation.")
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
-        raise ValueError("Groq structured response must contain JSON text.")
+        raise ValueError(f"{provider_label} structured response must contain JSON text.")
     generated = json.loads(content)
     if not isinstance(generated, dict):
-        raise ValueError("Groq framework content must be one JSON object.")
+        raise ValueError(f"{provider_label} framework content must be one JSON object.")
     bundle = validate_framework_bundle(generated)
     _validate_generated_java_template(bundle)
     return bundle.to_json_dict()
 
 
 def _validate_generated_java_template(bundle: FrameworkBundle) -> None:
-    """Apply Groq-bootstrap source-envelope checks beyond the generic bundle schema."""
+    """Apply bootstrap source-envelope checks beyond the generic bundle schema."""
 
     source = bundle.java_template
     if source.count("package ai.generated;") != 1:
@@ -606,6 +628,7 @@ def _request_payload(
     temperature: float,
     max_output_tokens: int,
     json_object_mode: bool = False,
+    reasoning_effort: str | None = GROQ_REASONING_EFFORT,
 ) -> dict[str, object]:
     response_format: dict[str, object]
     if json_object_mode:
@@ -620,17 +643,16 @@ def _request_payload(
                 "schema": FRAMEWORK_RESPONSE_SCHEMA,
             },
         }
-    return {
+    payload: dict[str, object] = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
         "max_completion_tokens": max_output_tokens,
-        # Framework construction needs the output budget for the Java/template
-        # payload; low effort prevents hidden reasoning from exhausting Groq's
-        # entry-tier TPM before the structured content is complete.
-        "reasoning_effort": GROQ_REASONING_EFFORT,
         "response_format": response_format,
     }
+    if reasoning_effort is not None:
+        payload["reasoning_effort"] = reasoning_effort
+    return payload
 
 
 def _retry_prompt(
@@ -656,8 +678,7 @@ def _retry_prompt(
         )
     if json_object_mode:
         retry_instructions.append(
-            "The provider's constrained JSON Schema attempt failed; this retry uses JSON Object Mode. "
-            "Local validation will enforce every bundle field and slot constraint."
+            "This retry uses JSON Object Mode. Local validation will enforce every bundle field and slot constraint."
         )
     retry_instructions.append(
         "Pay special attention to exact lowercase snake_case IDs and literal slot markers with two closing braces: "
@@ -678,10 +699,15 @@ def _provider_error_code(raw_response: bytes) -> str | None:
     return code if isinstance(code, str) else None
 
 
-def _http_error_summary(exc: urllib.error.HTTPError, raw_response: bytes) -> str:
+def _http_error_summary(
+    exc: urllib.error.HTTPError,
+    raw_response: bytes,
+    *,
+    provider_label: str = "Groq",
+) -> str:
     """Return a bounded provider diagnostic without replacing the raw artifact."""
 
-    prefix = f"Groq API HTTP {exc.code}: {exc.reason}"
+    prefix = f"{provider_label} API HTTP {exc.code}: {exc.reason}"
     try:
         payload = json.loads(raw_response.decode("utf-8"))
         provider_error = payload.get("error") if isinstance(payload, dict) else None
@@ -731,9 +757,10 @@ def _validate_settings(
     timeout_seconds: float,
     request_interval_seconds: float,
     api_root: str,
+    require_https: bool,
 ) -> None:
     if not re.fullmatch(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?", model):
-        raise ValueError("Groq model must be a non-empty model identifier.")
+        raise ValueError("Framework model must be a non-empty model identifier.")
     if not design_brief.strip():
         raise ValueError("Framework design brief must not be empty.")
     if not math.isfinite(temperature) or temperature < 0:
@@ -747,8 +774,10 @@ def _validate_settings(
     if not math.isfinite(request_interval_seconds) or request_interval_seconds < 0:
         raise ValueError("request_interval_seconds must be finite and non-negative.")
     parsed = urllib.parse.urlparse(api_root)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("Groq api_root must be a valid HTTPS URL.")
+    allowed_schemes = {"https"} if require_https else {"http", "https"}
+    if parsed.scheme not in allowed_schemes or not parsed.hostname:
+        scheme_label = "HTTPS" if require_https else "HTTP(S)"
+        raise ValueError(f"Framework api_root must be a valid {scheme_label} URL.")
 
 
 def _prepare_output_directory(path: Path) -> None:

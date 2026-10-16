@@ -1,7 +1,8 @@
-# Groq GPT-OSS framework and finite-slot evolution
+# Framework bootstrap and finite-slot evolution
 
-`java_materialization_mode: framework_slots` uses a fresh-run Groq bootstrap when
-no external bundle is configured, then evolves only typed slot values. Startup
+`java_materialization_mode: framework_slots` uses a configurable fresh-run
+bootstrap when no external bundle is configured, then evolves only typed slot
+values. Startup
 validates the generated framework, writes it under the run-owned `framework/`
 directory, and freezes its exact bytes and hash before search. Groq is outside
 the evolutionary loop; bounded retries belong to startup bootstrap.
@@ -20,10 +21,11 @@ materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
 Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
-and optionally accepts `framework.model` (default `openai/gpt-oss-120b`). It uses
-the checked-in Groq GPT-OSS flow to design the framework and finite control
-surface. The standalone `python -m eagle framework` command remains available
-to prepare an external bundle for reuse. The bootstrap requests at least 24
+and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
+`framework.bootstrap_backend` selects `groq` (the default, API-backed path) or
+`local` (the configured local llama-server, without an API key). The standalone
+`python -m eagle framework` command remains available to prepare an external
+bundle for reuse. The bootstrap requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
 four distinct choices each, covering economy, production, targeting, combat,
 conditions, and priorities. These are requested design targets, not a guarantee
@@ -79,12 +81,15 @@ environment:
 java_materialization_mode: framework_slots
 reflection_operator_mode: static
 framework:
+  bootstrap_backend: local  # or groq
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: openai/gpt-oss-120b
+  model: qwen3_5_9b
   evolution_mode: llm_coach
 ```
 
-Set `GROQ_API_KEY` in the environment and start the ordinary experiment with
+For `groq`, set `GROQ_API_KEY` in the environment. For `local`, the top-level
+experiment `model` profile supplies the already managed llama-server and no API
+key is read. Start the ordinary experiment with
 `python -m eagle experiment --config-dir configs/experiments/framework.yaml` or
 `./experiment.sh configs/experiments/framework.yaml`. The top-level experiment
 `model` still configures the experiment runtime. Omit `evolution_mode` for the
@@ -96,14 +101,17 @@ path also holds the framework constant across replicate seeds. The standalone
 ## Startup and evolution boundary
 
 1. On a fresh run without `bundle_path`, startup requires `design_brief`, calls
-   the existing bounded Groq bootstrap with `framework.model` (default
+   the backend selected by `framework.bootstrap_backend` (default `groq`) with `framework.model` (default
    `openai/gpt-oss-120b`), and writes bootstrap evidence under run-owned
-   `framework/`. `GROQ_API_KEY` is read from the environment only. Each fresh
+   `framework/`. `GROQ_API_KEY` is read only when the selected backend is
+   `groq`; the local backend reads no API key. Each fresh
    replicate designs a separate framework unless it uses the same explicit
    `bundle_path` as the other replicates.
-2. The bootstrap sends the checked-in `groq_framework_design` prompt to
+2. The Groq backend sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
-   The first request uses the `eagle_framework` JSON Schema. If Groq returns
+   The local backend sends the same prompt to the configured local
+   `llama-server/v1/chat/completions` endpoint without authorization and starts
+   in JSON Object Mode. The first Groq request uses the `eagle_framework` JSON Schema. If Groq returns
    `json_validate_failed`, EAGLE retains that raw response and performs a
    bounded retry in JSON Object Mode; local bundle validation remains
    authoritative. On failure, attempt artifacts and a failed manifest remain
@@ -118,7 +126,7 @@ path also holds the framework constant across replicate seeds. The standalone
    file. Otherwise, startup generates the bundle in the run-owned directory.
    Both paths freeze exact bytes and hash before search. Resume reads only that
    frozen bundle, checks its version/hash, compares `design_brief`, bootstrap
-   model, and `evolution_mode`, and never regenerates a framework.
+   backend/model, and `evolution_mode`, and never regenerates a framework.
 5. In `local`, generation zero samples legal values and later seeded EA
    operators cross over values independently by slot and mutate at most one slot.
    In `llm_coach`, the experiment model selects complete initial genomes and

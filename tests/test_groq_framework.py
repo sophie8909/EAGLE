@@ -118,6 +118,45 @@ def _provider_response(
 
 
 class GroqFrameworkTests(unittest.TestCase):
+    def test_local_backend_uses_openai_compatible_json_object_mode_without_api_key(self) -> None:
+        captured_requests = []
+
+        def transport(request, timeout):
+            captured_requests.append((request, timeout))
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=transport,
+        ):
+            result = generate_framework_bundle(
+                Path(directory) / "framework",
+                model="qwen3_5_9b",
+                design_brief="Build a bounded local framework.",
+                max_attempts=1,
+                timeout_seconds=12.0,
+                max_output_tokens=4096,
+                request_interval_seconds=0.0,
+                api_root="http://127.0.0.1:18080/v1",
+                provider="local",
+                require_api_key=False,
+                require_https=False,
+                json_object_mode=True,
+                reasoning_effort=None,
+            )
+
+            request, timeout = captured_requests[0]
+            self.assertEqual(timeout, 12.0)
+            self.assertEqual(request.full_url, "http://127.0.0.1:18080/v1/chat/completions")
+            headers = {key.lower(): value for key, value in request.header_items()}
+            self.assertNotIn("authorization", headers)
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(payload["model"], "qwen3_5_9b")
+            self.assertEqual(payload["response_format"], {"type": "json_object"})
+            self.assertNotIn("reasoning_effort", payload)
+            bootstrap = json.loads(result.bootstrap_path.read_text(encoding="utf-8"))
+            self.assertEqual(bootstrap["provider"], "local")
+
     def test_bootstrap_persists_schema_artifacts_hashes_and_no_secret(self) -> None:
         secret = "test-api-key-that-must-not-be-persisted"
         captured_requests = []

@@ -99,7 +99,7 @@ Both paths publish the validated exact bytes as run-owned
 `framework/bundle.json` before search and point the runtime config at that file.
 The manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
 `framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable.
-Resume validates its exact bytes, compares design brief, bootstrap model, and
+Resume validates its exact bytes, compares design brief, bootstrap backend/model, and
 evolution mode, and never regenerates a framework. Failed bootstrap preserves
 attempts and a failed manifest; pending config cannot resume without a usable
 frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
@@ -533,7 +533,7 @@ inherited Java is inactive compatibility data and does not determine source.
 Resume rejects mode/protocol mismatch and unsupported compiler versions before
 replay; an absent field in an old config means `llm`.
 
-## Groq framework bootstrap
+## Framework bootstrap
 
 Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standalone command uses its selected output directory. They are run preparation evidence and do not live inside a candidate:
 
@@ -551,7 +551,7 @@ Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standa
     └── result.json
 ```
 
-`response_raw.json` is flushed before provider-envelope or generated-content
+`bootstrap.json` records the selected `groq` or `local` backend. `response_raw.json` is flushed before provider-envelope or generated-content
 parsing, including failed responses. Attempt schema
 `eagle-groq-framework-attempt-v1` records status/retryability, redacted error,
 provider/model/endpoint/HTTP status, UTC boundaries, duration, and exact request

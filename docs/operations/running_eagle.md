@@ -21,12 +21,15 @@ conda run --no-capture-output -n eagle \
   --mock --skip-final-test
 ```
 
-## Groq framework startup
+## Framework startup
 
 Fresh framework-slot runs bootstrap inline from `framework.design_brief` unless
-an external `framework.bundle_path` is provided. Set `GROQ_API_KEY` in the
-process environment; do not put it in YAML, CLI arguments, shell history, or
-artifacts. `framework.model` defaults to `openai/gpt-oss-120b`. The standalone
+an external `framework.bundle_path` is provided. Set
+`framework.bootstrap_backend: local` to use the configured local llama-server
+without an API key, or `framework.bootstrap_backend: groq` to retain the API
+path (the default). For Groq, set `GROQ_API_KEY` in the process environment; do
+not put it in YAML, CLI arguments, shell history, or artifacts.
+`framework.model` defaults to `openai/gpt-oss-120b`. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
 
@@ -40,8 +43,9 @@ higher provider tier. If Groq's best-effort JSON Schema pass returns its
 using JSON Object Mode; local bundle validation remains authoritative. Retries—
 including schema-validation retries—wait one rolling
 minute before sending another request. HTTP 429 responses additionally honor
-the provider's `Retry-After` value. These limits apply to Groq framework
-bootstrap calls; the local Qwen runtime is not rate-limited by Groq.
+the provider's `Retry-After` value. These limits apply only to Groq framework
+bootstrap calls; the local backend uses the configured Qwen llama-server and is
+not rate-limited by Groq.
 
 Use this inline form in an ordinary experiment config:
 
@@ -52,8 +56,9 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
+  bootstrap_backend: local  # or groq
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: openai/gpt-oss-120b
+  model: qwen3_5_9b
   evolution_mode: llm_coach
 ```
 
@@ -67,7 +72,7 @@ bootstrap, it initializes bootstrap evidence and the manifest first,
 then writes the resolved frozen config on success or requested pending config
 after failure. Successful bootstrap validates and freezes the bundle at
 `runs/<run_id>/framework/bundle.json` before search. Resume reads only the
-frozen bundle and compares the design brief, bootstrap model, and evolution
+frozen bundle and compares the design brief, bootstrap backend/model, and evolution
 mode; it never regenerates the framework. Each fresh replicate bootstraps a
 separate framework unless the same explicit bundle path is shared. Mock mode
 rejects inline bootstrap without an existing bundle, ensuring no Groq request.

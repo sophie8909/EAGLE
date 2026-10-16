@@ -55,6 +55,7 @@ class FrameworkStartupTests(unittest.TestCase):
             self.assertEqual(mapping["framework"]["design_brief"], config.framework_design_brief)
             self.assertEqual(mapping["framework"]["model"], config.framework_model)
             self.assertEqual(mapping["framework"]["evolution_mode"], "local")
+            self.assertEqual(config.framework_bootstrap_backend, "groq")
             self.assertNotIn("bundle_path", mapping["framework"])
             self.assertNotIn("bundle_sha256", mapping["framework"])
             path = root / "experiment.yaml"
@@ -63,6 +64,34 @@ class FrameworkStartupTests(unittest.TestCase):
             self.assertEqual(restored.framework_design_brief, config.framework_design_brief)
             self.assertEqual(restored.framework_model, config.framework_model)
             self.assertIsNone(restored.framework_bundle_path)
+
+    def test_local_bootstrap_backend_routes_to_local_endpoint_without_api_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="local",
+                model="qwen3_5_9b",
+            )
+
+            with patch("eagle.generation.groq_framework.generate_framework_bundle") as generate, patch(
+                "eagle.evolution.search.preflight_evaluation_opponents"
+            ):
+                generate.side_effect = lambda output_dir, **kwargs: self._generator_result(Path(output_dir))
+                with self.assertRaises(KeyboardInterrupt):
+                    run_search(
+                        config,
+                        mock=False,
+                        run_id="local-framework-bootstrap",
+                        on_run_created=lambda run_dir: (_ for _ in ()).throw(KeyboardInterrupt),
+                    )
+
+            self.assertEqual(generate.call_args.kwargs["provider"], "local")
+            self.assertEqual(generate.call_args.kwargs["api_root"], "http://127.0.0.1:8080/v1")
+            self.assertFalse(generate.call_args.kwargs["require_api_key"])
+            self.assertFalse(generate.call_args.kwargs["require_https"])
+            self.assertTrue(generate.call_args.kwargs["json_object_mode"])
+            self.assertIsNone(generate.call_args.kwargs["reasoning_effort"])
 
     def test_resume_validation_accepts_frozen_bundle_and_rejects_changed_source(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -83,6 +112,7 @@ class FrameworkStartupTests(unittest.TestCase):
             for overrides in (
                 {"framework_design_brief": "Changed brief."},
                 {"framework_model": "another/model"},
+                {"framework_bootstrap_backend": "local"},
                 {"framework_evolution_mode": "llm_coach"},
                 {"framework_design_brief": "Changed brief.", "framework_model": "another/model"},
             ):

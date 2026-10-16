@@ -715,15 +715,18 @@ without the field remain LLM mode. Focused contracts and bounded real self-play
 validation pass; see `testing/test_contracts.md` for verification and environment
 limitations.
 
-## 16. Groq framework and finite-slot mode
+## 16. Framework bootstrap and finite-slot mode
 
 `framework_slots` is a third Java materialization mode. On fresh startup, EAGLE
 uses an explicit external `framework.bundle_path` if supplied. Otherwise, startup
 requires `framework.design_brief` and accepts optional `framework.model`
-(default `openai/gpt-oss-120b`) to bootstrap the framework inline. The standalone
+(default `openai/gpt-oss-120b`) to bootstrap the framework inline.
+`framework.bootstrap_backend` selects the default `groq` API path or the
+configured local llama-server path; only the Groq path reads `GROQ_API_KEY`. The standalone
 `python -m eagle framework` CLI remains available for compatibility. Startup
 persists raw responses before parsing and publishes one strictly validated
-`eagle-framework-bundle-v1`. `GROQ_API_KEY` is read only from the environment.
+`eagle-framework-bundle-v1`. `GROQ_API_KEY` is read only from the environment
+when the selected backend is `groq`.
 Bootstrap is a startup operation, not part of EA;
 `framework.evolution_mode` selects local evolution (the default) or the opt-in
 Coach-assisted selection path described below.
@@ -742,7 +745,7 @@ schema and bootstrap prompt contract are canonical in
 [framework slots](architecture/framework_slots.md).
 
 External bundles are validated during config resolution; inline bundles are validated during startup. Both paths freeze exact bytes and record their schema
-version and SHA-256. Run creation freezes a run-owned copy; each replicate bootstraps its own framework unless all use the same explicit bundle path. Resume compares design brief, bootstrap model, and evolution mode, rejects
+version and SHA-256. Run creation freezes a run-owned copy; each replicate bootstraps its own framework unless all use the same explicit bundle path. Resume compares design brief, bootstrap backend/model, and evolution mode, rejects
 version/hash drift and never adopts a changed external file. The only active
 candidate component is `control_genome`. In the default `local` evolution policy,
 generation zero samples complete legal genomes; seeded uniform crossover selects
