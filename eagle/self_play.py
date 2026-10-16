@@ -13,18 +13,32 @@ from eagle.run_artifacts import atomic_json
 from eagle.evaluation.semantic_signature import SemanticLibrary
 
 
-SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v2"
+SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v3"
 LEGACY_SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v1"
+PREVIOUS_SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v2"
 LEGACY_OPPONENT_LIBRARY_SCHEMA_VERSION = "eagle-self-play-opponent-library-v1"
 OPPONENT_LIBRARY_SCHEMA_VERSION = "eagle-self-play-opponent-library-v2"
 OPPONENT_LIBRARY_PATH = Path("archives/self_play_opponents.json")
+GENERATION_COHORT_SCHEMA_VERSION = "eagle-self-play-generation-cohorts-v1"
+GENERATION_COHORT_PATH = Path("archives/self_play_generation_cohorts.json")
 
 
 def is_self_play_refresh(config: ExperimentConfig, generation: int) -> bool:
     return (
         config.evaluation_mode == "self_play"
-        and generation % config.self_play_refresh_interval == 0
+        and generation > config.self_play_refresh_interval
+        and (generation - 1) % config.self_play_refresh_interval == 0
     )
+
+
+def self_play_opponent_generation(generation: int, refresh_interval: int) -> int:
+    """Return the delayed opponent cohort used for one evaluation generation."""
+
+    if generation < 0:
+        raise ValueError("Self-play generation must be non-negative.")
+    if refresh_interval < 1:
+        raise ValueError("Self-play refresh interval must be at least one.")
+    return max(0, (generation - 1) // refresh_interval)
 
 
 def expand_self_play_slots(candidates: list[Candidate]) -> list[Candidate]:
@@ -177,18 +191,86 @@ def update_self_play_opponent_library(
     atomic_json(path, payload)
 
 
+def record_self_play_generation_cohort(
+    run_dir: Path,
+    generation: int,
+    candidates: list[Candidate],
+) -> None:
+    """Persist runnable candidates by birth generation for delayed opponents."""
+
+    if generation < 0:
+        raise ValueError("Self-play cohort generation must be non-negative.")
+    path = run_dir / GENERATION_COHORT_PATH
+    if path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Self-play generation cohorts are missing or invalid: {path}") from exc
+        if payload.get("schema_version") != GENERATION_COHORT_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported self-play generation cohort schema: {path}")
+        cohorts = payload.get("cohorts")
+        if not isinstance(cohorts, dict):
+            raise ValueError(f"Self-play generation cohorts have invalid cohorts: {path}")
+    else:
+        payload = {
+            "schema_version": GENERATION_COHORT_SCHEMA_VERSION,
+            "cohorts": {},
+        }
+        cohorts = payload["cohorts"]
+
+    runnable = runnable_self_play_candidates(candidates)
+    cohorts[str(generation)] = {
+        "generation": generation,
+        "candidate_ids": [candidate.id for candidate in runnable],
+    }
+    atomic_json(path, payload)
+
+
+def load_self_play_generation_cohort(
+    run_dir: Path,
+    generation: int,
+) -> list[Candidate]:
+    """Load one exact runnable birth-generation cohort from the run archive."""
+
+    path = run_dir / GENERATION_COHORT_PATH
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Self-play generation cohorts are missing or invalid: {path}") from exc
+    if payload.get("schema_version") != GENERATION_COHORT_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported self-play generation cohort schema: {path}")
+    cohorts = payload.get("cohorts")
+    record = cohorts.get(str(generation)) if isinstance(cohorts, dict) else None
+    if not isinstance(record, dict) or int(record.get("generation", -1)) != generation:
+        raise ValueError(
+            f"Self-play opponent cohort for generation {generation} is unavailable: {path}"
+        )
+    candidate_ids = record.get("candidate_ids")
+    if not isinstance(candidate_ids, list) or not candidate_ids:
+        raise ValueError(
+            f"Self-play opponent cohort for generation {generation} has no runnable candidates: {path}"
+        )
+    from eagle.run_artifacts import load_candidate
+
+    candidates = [load_candidate(run_dir, str(candidate_id)) for candidate_id in candidate_ids]
+    if any(candidate.generation != generation for candidate in candidates):
+        raise ValueError(
+            f"Self-play opponent cohort generation mismatch for generation {generation}: {path}"
+        )
+    return runnable_self_play_candidates(candidates)
+
+
 def select_self_play_library_candidates(
     run_dir: Path,
     *,
     generation: int,
     refresh_interval: int,
 ) -> list[Candidate]:
-    """Choose one deterministic active context from the managed library.
+    """Choose one deterministic context from the semantic archive.
 
-    The first implementation intentionally preserves the existing refresh
-    cadence: it rotates up to ten stored phenotypes once per refresh epoch.
-    This is a library replacement, not a per-generation helpful-opponent
-    scheduler.
+    This compatibility helper remains available for library-contract tests and
+    older tooling. The active evolutionary scheduler uses exact delayed
+    birth-generation cohorts instead.
     """
 
     path = run_dir / OPPONENT_LIBRARY_PATH
@@ -235,6 +317,7 @@ def write_self_play_snapshot(
     generation: int,
     candidates: list[Candidate],
     refresh_interval: int,
+    opponent_generation: int | None = None,
 ) -> None:
     candidates = runnable_self_play_candidates(candidates)
     slots = expand_self_play_slots(candidates)
@@ -244,10 +327,18 @@ def write_self_play_snapshot(
             "schema_version": SNAPSHOT_SCHEMA_VERSION,
             "generation": generation,
             "refresh_interval": refresh_interval,
+            "opponent_generation": (
+                generation if opponent_generation is None else opponent_generation
+            ),
+            "opponent_schedule": "passive_gen0_then_delayed_generation_cohorts",
             "context_id": self_play_context_id(candidates),
             "opponent_library": {
                 "schema_version": OPPONENT_LIBRARY_SCHEMA_VERSION,
                 "path": str(OPPONENT_LIBRARY_PATH),
+            },
+            "generation_cohorts": {
+                "schema_version": GENERATION_COHORT_SCHEMA_VERSION,
+                "path": str(GENERATION_COHORT_PATH),
             },
             "source_candidate_ids": [candidate.id for candidate in candidates],
             "slots": [
@@ -268,14 +359,24 @@ def load_self_play_snapshot(
     completed_generation: int,
     refresh_interval: int,
 ) -> list[Candidate]:
-    snapshot_generation = completed_generation - completed_generation % refresh_interval
+    snapshot_generation = (
+        0
+        if completed_generation <= refresh_interval
+        else completed_generation - (completed_generation - 1) % refresh_interval
+    )
     path = run_dir / "generations" / f"generation_{snapshot_generation:04d}_self_play_snapshot.json"
+    if not path.is_file():
+        # Preserve resumability for pre-delay v2 runs that wrote snapshots at
+        # generations 5, 10, ... rather than at the delayed switch boundary.
+        legacy_generation = completed_generation - completed_generation % refresh_interval
+        path = run_dir / "generations" / f"generation_{legacy_generation:04d}_self_play_snapshot.json"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"Self-play resume snapshot is missing or invalid: {path}") from exc
     if payload.get("schema_version") not in {
         LEGACY_SNAPSHOT_SCHEMA_VERSION,
+        PREVIOUS_SNAPSHOT_SCHEMA_VERSION,
         SNAPSHOT_SCHEMA_VERSION,
     }:
         raise ValueError(f"Unsupported self-play snapshot schema: {path}")

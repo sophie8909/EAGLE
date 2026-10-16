@@ -307,12 +307,19 @@ Self-play persists a run-local opponent library at
 `archives/self_play_opponents.json`. Its versioned entries contain candidate
 IDs, birth generations, generated-Java SHA-256 references, and the compact
 semantic summary used for LISS-style exact behavior-vector deduplication;
-candidate artifacts remain the sole Java-source owner. Each generation-zero or refresh
-boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`, which
-records the active context ID, refresh interval, selected library sources, a
-pointer to the library, and ten `self_play_*` slot mappings. Resume loads the
-latest committed snapshot and resolves its immutable candidate references; the
-mutable library is consulted only when a later refresh selects the next context.
+candidate artifacts remain the sole Java-source owner. It also persists the
+exact evaluated birth-generation index at
+`archives/self_play_generation_cohorts.json`, whose entries point to runnable
+candidate artifacts for each generation. Generation zero is evaluated against
+`PassiveAI`; generation-one through generation-`interval` snapshots point to
+the generation-zero cohort, and the delayed refresh at generation
+`interval + 1` points to generation one. Each generation-zero or delayed
+refresh boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`,
+which records the active context ID, refresh interval, opponent source
+generation, schedule marker, cohort-index pointer, semantic library pointer,
+and ten `self_play_*` slot mappings. Resume loads the latest delayed snapshot
+and resolves its exact cohort references; the mutable semantic library is not
+used to choose the active delayed context.
 A refresh also writes
 `generation_<nnnn>_self_play_parent_refresh.json`, linking source parents to
 fresh replicas, Java hashes, old/new context IDs, and survivor status. Refresh

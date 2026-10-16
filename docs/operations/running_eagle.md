@@ -280,13 +280,16 @@ evaluation:
   self_play_opponent_library_capacity: 50
 ```
 
-The library is seeded at generation zero and admits runnable current parents at
-each refresh boundary, retaining only one representative for each exact
-semantic probe/action vector when the evidence is available. It deterministically
-rotates the next active snapshot every five generations. Resume reloads the last
-committed snapshot; older
-self-play checkpoints that lack context metadata are migrated by re-evaluating
-fresh-ID parent replicas against that snapshot before continuing.
+Generation zero is evaluated against `PassiveAI`; its runnable completed
+candidates are recorded in the exact generation-cohort archive. Generations 1
+through the configured interval use the generation-zero cohort, and the first
+delayed refresh at interval + 1 switches to the generation-one cohort. Each
+subsequent window advances to the prior birth-generation cohort. The semantic
+library remains a bounded deduplicated archive for provenance, but it does not
+choose the active delayed context. Resume reloads the latest committed delayed
+snapshot; older self-play checkpoints that lack context metadata are migrated
+by re-evaluating fresh-ID parent replicas against that snapshot before
+continuing.
 
 ## Resume
 

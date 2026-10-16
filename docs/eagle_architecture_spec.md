@@ -463,30 +463,26 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-In `self_play`, the run owns a persisted opponent library. The library is
-seeded from the current population's compiled candidates that have no failure
-state and completed the configured match batch at generation zero and is updated
-only at each `evaluation.self_play_refresh_interval` generation (the supported
-minimal protocol uses five generations). At an update, newly eligible
-candidates are merged into the library after LISS-style exact behavior-vector
-deduplication: candidates with the same ordered probe/action vector share one
-retained representative. A deterministic stable-order selection from the
-library then materializes the immutable ten-slot context. The
-library, rather than the current population alone, is therefore the source of
-the next opponent snapshot. Between refreshes the active context is unchanged.
-Its selected candidates are cycled in stable order into `self_play_000` through
-`self_play_009`; a five-candidate context therefore gives each source two slots.
-Self-matches are retained and all self-play slots have weight `1.0`. At refresh,
-fresh-ID parent replicas preserve the existing Java phenotype without an LLM
-call and are evaluated against the new context before reflection and offspring
-generation. If semantic deduplication changes the generation-zero context after
-its initial evaluation, the same phenotype-preserving migration runs before
-the first offspring generation. Only refreshed/migrated parents and offspring
-with the same context ID may enter survivor selection. Library, context, and
-refresh sidecars make this transition resumable.
-`evaluation.self_play_opponent_library_capacity` bounds retained entries; when
-the library exceeds that capacity, the oldest entries are removed before active
-context selection.
+In `self_play`, generation zero is evaluated against the fixed `PassiveAI`
+baseline. Persist all runnable generation-zero results as an exact
+birth-generation cohort, then use that cohort as the immutable ten-slot context
+for generations 1 through `evaluation.self_play_refresh_interval`. The first
+delayed refresh is generation `evaluation.self_play_refresh_interval + 1`; it
+switches to the exact generation-one cohort, and subsequent windows advance one
+birth generation at a time. Persist every runnable evaluated generation in
+`archives/self_play_generation_cohorts.json`, independent of survivor
+retention. Retain the bounded opponent library for semantic deduplication and
+offline provenance, but do not use it to replace the exact delayed cohort
+schedule. At a context refresh, phenotype-preserving fresh-ID parent replicas
+are re-evaluated before reflection; the same migration is also performed when
+the initial candidate context differs from the baseline context. Only those
+replicas and offspring evaluated against that same context enter selection.
+Persist the cohort index, library, active context, refresh audit sidecar,
+surviving population, and metrics.
+`evaluation.self_play_opponent_library_capacity` bounds the retained semantic
+archive; FIFO eviction removes references only and never deletes candidate
+artifacts.
+
 Self-play currently requires `reflection_operator_mode: static` and
 `parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
 updated by self-play runs.

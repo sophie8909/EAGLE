@@ -18,15 +18,76 @@ from eagle.opponent_cases import SELF_PLAY_CASES
 from eagle.evolution.parent_refresh import build_self_play_fitness_refresh_replicas
 from eagle.evolution.search import run_search
 from eagle.evolution.resume import resume_search
+from eagle.run_artifacts import load_candidate
 from eagle.self_play import (
     assert_shared_self_play_context,
+    is_self_play_refresh,
+    load_self_play_generation_cohort,
     select_self_play_library_candidates,
+    self_play_opponent_generation,
     update_self_play_opponent_library,
     write_self_play_snapshot,
 )
 
 
 class SelfPlayTests(unittest.TestCase):
+    def test_delayed_opponent_schedule_boundaries(self) -> None:
+        config = ExperimentConfig.from_mapping({
+            "reflection_operator_mode": "static",
+            "evaluation": {
+                "mode": "self_play",
+                "self_play_refresh_interval": 5,
+            },
+        })
+        self.assertEqual(
+            [
+                self_play_opponent_generation(generation, 5)
+                for generation in (0, 1, 5, 6, 10, 11)
+            ],
+            [0, 0, 0, 1, 1, 2],
+        )
+        self.assertFalse(is_self_play_refresh(config, 0))
+        self.assertFalse(is_self_play_refresh(config, 5))
+        self.assertTrue(is_self_play_refresh(config, 6))
+        self.assertTrue(is_self_play_refresh(config, 11))
+
+    def test_delayed_schedule_starts_with_passive_then_uses_generation_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = replace(
+                ExperimentConfig.from_mapping({
+                    "generations": 1,
+                    "population_size": 1,
+                    "execution_mode": "mock",
+                    "mutation_rate": 0.0,
+                    "crossover_rate": 0.0,
+                    "reflection_operator_mode": "static",
+                    "evaluation": {
+                        "mode": "self_play",
+                        "self_play_refresh_interval": 5,
+                    },
+                }),
+                runs_dir=Path(directory) / "runs",
+            )
+            result = run_search(config, mock=True, run_id="self-play-delayed-baseline")
+            gen0 = json.loads((result.run_dir / "generations" / "generation_0000.json").read_text())
+            gen1 = json.loads((result.run_dir / "generations" / "generation_0001.json").read_text())
+            gen0_candidate = load_candidate(result.run_dir, gen0["population"][0]["candidate_id"])
+            gen1_candidate = load_candidate(result.run_dir, gen1["population"][0]["candidate_id"])
+            match_events = [
+                json.loads(line)
+                for line in (result.run_dir / "timing.jsonl").read_text().splitlines()
+                if line
+            ]
+
+        self.assertEqual(set(gen0_candidate.game_eval_result["opponent_scores"]), {"passive"})
+        self.assertEqual(set(gen1_candidate.game_eval_result["opponent_scores"]), set(SELF_PLAY_CASES))
+        gen1_matches = [
+            event for event in match_events
+            if event.get("event") == "match" and event.get("generation") == 1
+        ]
+        self.assertTrue(gen1_matches)
+        self.assertTrue(all(event["opponent_source_generation"] == 0 for event in gen1_matches))
+
     def test_default_is_fixed_roster_and_self_play_round_trips(self) -> None:
         self.assertEqual(ExperimentConfig.from_mapping({}).evaluation_mode, "fixed_roster")
         config = ExperimentConfig.from_mapping({
@@ -92,9 +153,9 @@ class SelfPlayTests(unittest.TestCase):
                 generation=5,
                 refresh_interval=5,
             )
-            # At the first five-generation refresh, round-robin selects from
-            # the persisted library rather than replacing the context from a
-            # current parent population.
+            # The compatibility helper still selects deterministically from
+            # the persisted semantic library; the active scheduler uses exact
+            # delayed birth-generation cohorts instead.
             self.assertEqual(
                 [candidate.id for candidate in selected],
                 [f"candidate-{index}" for index in range(2, 12)],
@@ -349,11 +410,11 @@ class SelfPlayTests(unittest.TestCase):
         ]
         self.assertTrue(all(item["attempts"] == [] for item in fixed_sources))
 
-    def test_five_generation_refresh_selects_persisted_library_context(self) -> None:
+    def test_delayed_refresh_selects_exact_prior_generation_cohort(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = replace(
                 ExperimentConfig.from_mapping({
-                    "generations": 5,
+                    "generations": 6,
                     "population_size": 1,
                     "execution_mode": "mock",
                     "mutation_rate": 0.0,
@@ -371,22 +432,24 @@ class SelfPlayTests(unittest.TestCase):
                 (result.run_dir / "archives" / "self_play_opponents.json").read_text()
             )
             snapshot = json.loads(
-                (result.run_dir / "generations" / "generation_0005_self_play_snapshot.json").read_text()
+                (result.run_dir / "generations" / "generation_0006_self_play_snapshot.json").read_text()
+            )
+            cohorts = json.loads(
+                (result.run_dir / "archives" / "self_play_generation_cohorts.json").read_text()
             )
             previous_population = json.loads(
                 (result.run_dir / "generations" / "generation_0004.json").read_text()
             )
-            expected = select_self_play_library_candidates(
-                result.run_dir,
-                generation=5,
-                refresh_interval=5,
-            )
+            expected = load_self_play_generation_cohort(result.run_dir, 1)
 
         library_ids = {entry["candidate_id"] for entry in library["opponents"]}
         active_ids = snapshot["source_candidate_ids"]
-        self.assertTrue(set(active_ids).issubset(library_ids))
+        self.assertTrue(library_ids)
         self.assertEqual(active_ids, [candidate.id for candidate in expected])
-        self.assertEqual(snapshot["schema_version"], "eagle-self-play-snapshot-v2")
+        self.assertEqual(snapshot["schema_version"], "eagle-self-play-snapshot-v3")
+        self.assertEqual(snapshot["opponent_generation"], 1)
+        self.assertEqual(snapshot["opponent_schedule"], "passive_gen0_then_delayed_generation_cohorts")
+        self.assertEqual(sorted(cohorts["cohorts"]), [str(index) for index in range(7)])
         self.assertTrue(previous_population["population"])
 
     def test_resume_migrates_legacy_parent_fitness_to_active_snapshot(self) -> None:
