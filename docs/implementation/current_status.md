@@ -584,3 +584,22 @@ before the concurrent multi-endpoint update was integrated. After resolving that
 update's two overlapping conflicts, 142 focused endpoint, concurrency, LLM,
 runtime, prompt, framework, Coach, and legacy Strategy tests passed, together
 with compileall. Full discovery was not repeated after that integration.
+
+## Inline framework startup (2026-10-16)
+
+Fresh framework-slot runs accept `framework.design_brief` and optional bootstrap
+`model`, then generate and freeze the framework inside run startup before EA.
+Operators no longer need to create a separate bundle or execute the standalone
+bootstrap command. Existing external bundles remain supported for controlled
+reuse across seeds. Resume uses the frozen run bundle and checks brief, model,
+and evolution-mode identity without another Groq request.
+
+Failed startup retains bootstrap evidence, requested config, and a failed or
+interrupted manifest without binding a folder-batch index slot. Mock mode
+requires an existing bundle. Seven startup tests pass, including the complete
+startup-to-EA handoff with the provider, runtime, and evaluation mocked.
+The focused framework/Groq/Coach/batch regression suite passes all 90 tests.
+Another 86 direct search/resume, reproducibility, initial-population, parent-
+evaluation, and candidate-foundation tests pass. Compileall and diff checks pass. Full discovery was stopped after a prolonged
+run without completion, so it is not reported as globally passing.
+No live Groq framework generation was performed for this change.

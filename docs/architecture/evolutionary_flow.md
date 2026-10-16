@@ -201,11 +201,12 @@ LLM. Resolved protocol/compiler versions are `eagle-dsl-compiler-v1` and
 
 ## Framework-slot evolution
 
-Before the experiment, the operator explicitly creates and reviews one Groq
-bundle as specified by [framework slots](framework_slots.md). The run copies and
-hash-pins that bundle. Generation zero samples one complete valid
-`control_genome` per population slot with independent derived RNG streams.
-
+On fresh startup, EAGLE validates an explicit external bundle or bootstraps one
+from `framework.design_brief` into the run-owned `framework/` directory. It
+freezes the bundle before search. Resume uses only the frozen bundle and never
+runs bootstrap again. See the [framework-slot contract](framework_slots.md).
+Generation zero samples one complete valid `control_genome` per population slot
+with independent derived RNG streams.
 From generation one, ordinary selection remains unchanged. Reproduction uses
 local uniform crossover independently for every framework slot, records the
 selected source candidate in `slot_parent_ids`, and may mutate at most one slot

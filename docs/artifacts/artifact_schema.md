@@ -91,17 +91,20 @@ candidate snapshots.
 
 `timing.jsonl` is the canonical append-only run timing stream. Archive data lives only below `archives/`.
 
-For `framework_slots`, config resolution validates the selected external bundle
-and records `framework.bundle_version` and the SHA-256 of its exact bytes. Fresh
-run creation atomically copies those same bytes to `framework/bundle.json` before
-search and rewrites the in-memory config path to that run-owned file. The
-manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
-`framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable;
-resume validates its exact bytes and never adopts a changed external bundle.
-The resolved `framework.evolution_mode` is persisted as run configuration,
-defaults to `local`, and must match on resume; it does not alter the bundle or
-materializer version.
-
+For `framework_slots`, an explicit `framework.bundle_path` is validated during
+config resolution and its bundle version and exact-byte SHA-256 are recorded.
+Without that path, fresh startup requires `framework.design_brief` and uses
+optional `framework.model` (default `openai/gpt-oss-120b`) to create the bundle.
+Both paths publish the validated exact bytes as run-owned
+`framework/bundle.json` before search and point the runtime config at that file.
+The manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
+`framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable.
+Resume validates its exact bytes, compares design brief, bootstrap model, and
+evolution mode, and never regenerates a framework. Failed bootstrap preserves
+attempts and a failed manifest; pending config cannot resume without a usable
+frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
+The resolved `framework.evolution_mode` defaults to `local` and must match on
+resume; it does not alter the bundle or materializer version.
 ## Generation snapshot
 
 `generations/generation_<nnnn>.json` contains:
@@ -530,9 +533,9 @@ inherited Java is inactive compatibility data and does not determine source.
 Resume rejects mode/protocol mismatch and unsupported compiler versions before
 replay; an absent field in an old config means `llm`.
 
-## Standalone Groq framework bootstrap
+## Groq framework bootstrap
 
-Bootstrap artifacts are preparation evidence and do not live inside a candidate:
+Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standalone command uses its selected output directory. They are run preparation evidence and do not live inside a candidate:
 
 ```text
 <bootstrap-output>/

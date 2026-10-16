@@ -170,6 +170,8 @@ class ExperimentConfig:
     framework_bundle_version: str | None = None
     framework_bundle_sha256: str | None = None
     framework_evolution_mode: str = "local"
+    framework_design_brief: str | None = None
+    framework_model: str = "openai/gpt-oss-120b"
     # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
@@ -459,6 +461,8 @@ class ExperimentConfig:
             framework_bundle_version=framework_bundle_version,
             framework_bundle_sha256=framework_bundle_sha256,
             framework_evolution_mode=str((payload.get("framework") or {}).get("evolution_mode", "local")),
+            framework_design_brief=(payload.get("framework") or {}).get("design_brief"),
+            framework_model=(payload.get("framework") or {}).get("model", "openai/gpt-oss-120b"),
             seed_prompts=seed_prompts,
             seed_prompt_files=seed_prompt_files,
             initial_population_mode=str(
@@ -591,13 +595,24 @@ class ExperimentConfig:
                 raise ValueError(
                     "framework_slots requires reflection_operator_mode=static."
                 )
+            if self.framework_design_brief is not None and (
+                not isinstance(self.framework_design_brief, str)
+                or not self.framework_design_brief.strip()
+            ):
+                raise ValueError("framework.design_brief must be a non-empty string.")
+            if not isinstance(self.framework_model, str) or not self.framework_model.strip():
+                raise ValueError("framework.model must be a non-empty string.")
             if self.framework_bundle_path is None:
-                raise ValueError("framework_slots requires framework.bundle_path.")
-            _validate_framework_bundle(
-                self.framework_bundle_path,
-                expected_version=self.framework_bundle_version,
-                expected_sha256=self.framework_bundle_sha256,
-            )
+                if self.framework_design_brief is None:
+                    raise ValueError("framework_slots requires framework.design_brief or framework.bundle_path.")
+                if self.framework_bundle_version is not None or self.framework_bundle_sha256 is not None:
+                    raise ValueError("framework bundle identity requires framework.bundle_path.")
+            else:
+                _validate_framework_bundle(
+                    self.framework_bundle_path,
+                    expected_version=self.framework_bundle_version,
+                    expected_sha256=self.framework_bundle_sha256,
+                )
         for policy in self.seed_prompts:
             normalize_strategy_dsl(policy, max_chars=self.max_prompt_chars)
         if not self.experiment_name.strip():
@@ -931,12 +946,18 @@ class ExperimentConfig:
             mapping["random_seeds"] = list(self.random_seeds)
         if self.java_materialization_mode == "framework_slots":
             mapping.pop("strategy_policy_format", None)
-            mapping["framework"] = {
-                "bundle_path": str(self.framework_bundle_path.resolve()),
-                "bundle_version": self.framework_bundle_version,
-                "bundle_sha256": self.framework_bundle_sha256,
-                "evolution_mode": self.framework_evolution_mode,
-            }
+            mapping["framework"] = {"evolution_mode": self.framework_evolution_mode}
+            if self.framework_design_brief is not None:
+                mapping["framework"].update(
+                    design_brief=self.framework_design_brief,
+                    model=self.framework_model,
+                )
+            if self.framework_bundle_path is not None:
+                mapping["framework"].update(
+                    bundle_path=str(self.framework_bundle_path.resolve()),
+                    bundle_version=self.framework_bundle_version,
+                    bundle_sha256=self.framework_bundle_sha256,
+                )
         if self.generation_model is not None:
             mapping["generation_model"] = _model_mapping(self.generation_model)
         return mapping
@@ -1079,16 +1100,20 @@ def _parse_framework_bundle(
         return None, None, None
     if not isinstance(value, dict):
         raise ValueError(
-            "framework_slots requires a framework mapping with bundle_path."
+            "framework_slots requires a framework mapping with design_brief or bundle_path."
         )
     unknown = sorted(
-        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256", "evolution_mode"})
+        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256", "evolution_mode", "design_brief", "model"})
     )
     if unknown:
         raise ValueError(
             "Unknown framework configuration fields: " + ", ".join(unknown)
         )
     raw_path = value.get("bundle_path")
+    if raw_path is None and "design_brief" in value:
+        if value.get("bundle_version") is not None or value.get("bundle_sha256") is not None:
+            raise ValueError("framework bundle identity requires framework.bundle_path.")
+        return None, None, None
     if not isinstance(raw_path, str) or not raw_path.strip():
         raise ValueError("framework.bundle_path is required.")
     path = Path(raw_path).expanduser()

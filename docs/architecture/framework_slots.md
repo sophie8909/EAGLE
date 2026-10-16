@@ -1,11 +1,10 @@
 # Groq GPT-OSS framework and finite-slot evolution
 
-`java_materialization_mode: framework_slots` is a two-stage execution mode. An
-explicit bounded bootstrap operation asks Groq GPT-OSS to design a complete
-Java agent framework and a finite control surface. A later EAGLE run freezes the
-validated bundle and evolves only typed slot values. Groq is outside the
-evolutionary loop; transport retries belong to the explicit bootstrap operation.
-
+`java_materialization_mode: framework_slots` uses a fresh-run Groq bootstrap when
+no external bundle is configured, then evolves only typed slot values. Startup
+validates the generated framework, writes it under the run-owned `framework/`
+directory, and freezes its exact bytes and hash before search. Groq is outside
+the evolutionary loop; bounded retries belong to startup bootstrap.
 This document is the canonical owner of the framework-bundle, slot-domain, and
 bootstrap boundary. The shared downstream Java and MicroRTS stages remain owned
 by [Java generation](java_generation.md) and the
@@ -20,17 +19,16 @@ same bundle schema, exact-byte run freeze, active genotype, renderer, and
 materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
-Bootstrap remains an explicit preparation step: `python -m eagle framework`
-uses the existing Groq GPT-OSS flow to design the Java framework and its rich
-finite control surface. Bootstrap is never run by an experiment. The bootstrap
-request targets at least 24 nonconstant slots, including at least six
-`expression_choice` slots with at least four distinct choices each, covering
-economy, production, targeting, combat, conditions, and priorities. These are
-requested design targets; slot counts do not prove that evolved agents achieve
-strategic diversity. Numeric domains remain finite lattices and formula domains
-remain enumerated expressions. Once the run starts, the bundle bytes, Java
-template, slot IDs, domains, and expressions are frozen.
-
+Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
+and optionally accepts `framework.model` (default `openai/gpt-oss-120b`). It uses
+the checked-in Groq GPT-OSS flow to design the framework and finite control
+surface. The standalone `python -m eagle framework` command remains available
+to prepare an external bundle for reuse. The bootstrap requests at least 24
+nonconstant slots, including at least six `expression_choice` slots with at least
+four distinct choices each, covering economy, production, targeting, combat,
+conditions, and priorities. These are requested design targets, not a guarantee
+of strategic diversity. Once the run starts, bundle bytes, template, slot IDs,
+domains, and expressions are frozen.
 With `llm_coach`, the configured experiment model selects one complete initial
 genome for each generation-zero population slot and, when Strategy mutation is
 assigned, proposes one complete replacement genome for that child. Strategy
@@ -73,63 +71,64 @@ and Java validation remain local and deterministic.
 
 ## Minimal use
 
-Create and review the framework explicitly; the default model is the existing
-Groq GPT-OSS bootstrap model:
-
-```bash
-python -m eagle framework --output runs/framework_bootstrap/my_framework --brief "Design a complete CandidateAgent framework with a rich finite control surface."
-```
-
-Start from an ordinary experiment config that already contains the desired
-`model` profile and add this fragment:
+Put the design brief and bootstrap model in the experiment config. The model is
+optional and defaults to `openai/gpt-oss-120b`; the API key stays in the process
+environment:
 
 ```yaml
 java_materialization_mode: framework_slots
+reflection_operator_mode: static
 framework:
-  bundle_path: runs/framework_bootstrap/my_framework/bundle.json
+  design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
+  model: openai/gpt-oss-120b
   evolution_mode: llm_coach
 ```
 
-Then run that config through the usual `python -m eagle experiment` or
-`./experiment.sh` entrypoint. Omitting `evolution_mode` keeps the local EA
-behavior. The experiment never invokes the bootstrap command.
+Set `GROQ_API_KEY` in the environment and start the ordinary experiment with
+`python -m eagle experiment --config-dir configs/experiments/framework.yaml` or
+`./experiment.sh configs/experiments/framework.yaml`. The top-level experiment
+`model` still configures the experiment runtime. Omit `evolution_mode` for the
+local EA. For mock/offline runs, provide an existing `framework.bundle_path`;
+mock mode rejects an inline brief without that bundle. An explicit shared bundle
+path also holds the framework constant across replicate seeds. The standalone
+`python -m eagle framework` command remains available to prepare that bundle.
 
-## Two-stage boundary
+## Startup and evolution boundary
 
-1. An operator runs `python -m eagle framework` with a design brief and new
-   output directory. The command defaults to `openai/gpt-oss-120b`; `--model`
-   selects an override. `GROQ_API_KEY` is read from the environment only.
+1. On a fresh run without `bundle_path`, startup requires `design_brief`, calls
+   the existing bounded Groq bootstrap with `framework.model` (default
+   `openai/gpt-oss-120b`), and writes bootstrap evidence under run-owned
+   `framework/`. `GROQ_API_KEY` is read from the environment only. Each fresh
+   replicate designs a separate framework unless it uses the same explicit
+   `bundle_path` as the other replicates.
 2. The bootstrap sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
-   The request includes user-message content, model, temperature,
-   `max_completion_tokens`, and `response_format` JSON Schema named
-   `eagle_framework` with `strict: false`. Strict mode cannot express dynamic
-   keys in the preserved `report.slot_rationale` map. Provider schema enforcement
-   is best-effort; local exact validation remains authoritative. Retries are
-   bounded, and raw responses are persisted before parsing.
-3. EAGLE validates and normalizes the response into one
-   `eagle-framework-bundle-v1` `bundle.json`. The output also retains the exact
-   rendered bootstrap prompt, request bodies, raw responses, timing, hashes,
-   generated template, slot-generation prompt, and structured report.
-4. An experiment config selects that file through `framework.bundle_path`.
-   Config resolution records its exact byte SHA-256 and schema version. Run
-   creation copies the validated bundle into run-owned evidence and freezes the
-   same hash. Resume must use the run-frozen bytes and reject a version or hash
-   mismatch.
+   It retains raw responses before parsing and performs bounded retries. On
+   failure, attempt artifacts and a failed manifest remain with the pending
+   config. The failed run cannot resume until a valid frozen bundle exists; the
+   unsuccessful replicate is not added to the folder-batch index, so a folder
+   rerun can retry the missing slot.
+3. EAGLE validates and normalizes one `eagle-framework-bundle-v1` bundle. The
+   run-owned framework directory retains the exact prompt, request bodies, raw
+   responses, timing, hashes, generated template, slot prompt, report, and
+   manifest.
+4. With an explicit `bundle_path`, config resolution validates that external
+   file. Otherwise, startup generates the bundle in the run-owned directory.
+   Both paths freeze exact bytes and hash before search. Resume reads only that
+   frozen bundle, checks its version/hash, compares `design_brief`, bootstrap
+   model, and `evolution_mode`, and never regenerates a framework.
 5. In `local`, generation zero samples legal values and later seeded EA
-   operators cross over values independently by slot and mutate at most one slot
-   to another legal value. In `llm_coach`, the experiment model selects complete
-   generation-zero genomes and returns a complete genome for each assigned
-   Strategy mutation. Rendering replaces every declared marker exactly once.
-6. The complete rendered Java follows the existing validation, one-attempt
-   `javac`, Integration, semantic-probe, and evaluation pipeline. Fixed-roster
-   evaluation is still ten opponents x three maps x three rounds x two sides,
-   or 180 matches per successfully evaluated candidate.
+   operators cross over values independently by slot and mutate at most one slot.
+   In `llm_coach`, the experiment model selects complete initial genomes and
+   returns a complete genome for each assigned Strategy mutation.
+6. Rendered Java follows the existing validation, one-attempt `javac`,
+   Integration, semantic-probe, and evaluation pipeline. Fixed-roster evaluation
+   remains ten opponents x three maps x three rounds x two sides (180 matches
+   per successfully evaluated candidate).
 
-The bootstrap is an explicit preparation action, never an implicit experiment
-startup action. Reusing a bundle for multiple runs makes the framework constant
-across their EA seeds; generating a new bundle is a new experimental condition.
-
+The standalone bootstrap command remains a compatibility path for preparing a
+bundle to use through `framework.bundle_path`. Both inline and external bundles
+use the same frozen run artifact contract.
 ## Exact bundle schema
 
 The top-level object has exactly these keys:
@@ -252,7 +251,7 @@ its actual stage with hashes and diagnostics; it never falls back to an LLM.
 
 ## Bootstrap artifacts and security
 
-The standalone bootstrap output is:
+Standalone bootstrap outputs use this layout; inline run bootstrap stores the same evidence under the run-owned `framework/` directory:
 
 ```text
 <output>/
@@ -275,7 +274,7 @@ retryability, HTTP status, model/endpoint, redacted error, and request/response
 SHA-256. `bootstrap.json` identifies the selected attempt and exact published
 bundle bytes. The command refuses a nonempty output directory.
 
-Credentials are never accepted in YAML or CLI arguments, embedded in request
+Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. `GROQ_API_KEY` remains environment-only. Credentials are never accepted in YAML or CLI arguments, embedded in request
 bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
 receives `GROQ_API_KEY`; stored errors redact that value. Bundle content is
 untrusted generated input until strict schema, Java-envelope, marker, normal

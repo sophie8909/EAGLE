@@ -121,10 +121,14 @@ def _run_search_impl(
     candidates_dir.mkdir()
     generated_agents_dir.mkdir()
     classes_dir.mkdir()
-    config = freeze_framework_bundle(run_dir, config)
     initialize_run_manifest(run_dir, config=config)
     try:
-        write_run_config(run_dir, config, mock=mock)
+        try:
+            config = freeze_framework_bundle(run_dir, config, mock=mock)
+        finally:
+            # On failure retain the requested input; on success freeze the resolved config.
+            write_run_config(run_dir, config, mock=mock)
+        initialize_run_manifest(run_dir, config=config)
     except KeyboardInterrupt:
         mark_run_interrupted(run_dir)
         raise

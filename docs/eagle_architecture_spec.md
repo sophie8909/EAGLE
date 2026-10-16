@@ -717,15 +717,16 @@ limitations.
 
 ## 16. Groq framework and finite-slot mode
 
-`framework_slots` is a third Java materialization mode with an explicit
-two-stage boundary. Before a run, `python -m eagle framework` performs one
-bounded Groq `chat-completions` bootstrap using the checked-in gameplay and API
-contracts. It persists every credential-free request and raw response before
-parsing and publishes one strictly validated `eagle-framework-bundle-v1`.
-Bootstrap is never implicit in experiment startup. It is the only Groq call;
-`framework.evolution_mode` separately selects local evolution (the default) or
-the opt-in Coach-assisted selection path described below.
-
+`framework_slots` is a third Java materialization mode. On fresh startup, EAGLE
+uses an explicit external `framework.bundle_path` if supplied. Otherwise, startup
+requires `framework.design_brief` and accepts optional `framework.model`
+(default `openai/gpt-oss-120b`) to bootstrap the framework inline. The standalone
+`python -m eagle framework` CLI remains available for compatibility. Startup
+persists raw responses before parsing and publishes one strictly validated
+`eagle-framework-bundle-v1`. `GROQ_API_KEY` is read only from the environment.
+Bootstrap is a startup operation, not part of EA;
+`framework.evolution_mode` selects local evolution (the default) or the opt-in
+Coach-assisted selection path described below.
 The structured bundle has exactly `schema_version`, `framework_id`,
 `java_template`, `slots`, `slot_generation_prompt`, and `report`. Each slot has
 exactly `slot_id`, `kind`, `marker`, `default`, `minimum`, `maximum`, `step`,
@@ -740,8 +741,8 @@ generated as source. The report has exactly `architecture_summary`,
 schema and bootstrap prompt contract are canonical in
 [framework slots](architecture/framework_slots.md).
 
-Config resolution validates the exact bundle bytes and records their schema
-version and SHA-256. Run creation freezes a run-owned copy; resume rejects
+External bundles are validated during config resolution; inline bundles are validated during startup. Both paths freeze exact bytes and record their schema
+version and SHA-256. Run creation freezes a run-owned copy; each replicate bootstraps its own framework unless all use the same explicit bundle path. Resume compares design brief, bootstrap model, and evolution mode, rejects
 version/hash drift and never adopts a changed external file. The only active
 candidate component is `control_genome`. In the default `local` evolution policy,
 generation zero samples complete legal genomes; seeded uniform crossover selects

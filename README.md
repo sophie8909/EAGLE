@@ -17,14 +17,17 @@ New policies use canonical `eagle-strategy-dsl-v1` JSON. Historical natural-lang
 artifacts remain read-only; incompatible old runs cannot resume through silent conversion.
 See the [implementation plan](docs/implementation/dsl_pre_crossover_reflection_plan.md).
 
-EAGLE also provides an explicit two-stage `framework_slots` mode. Run
-`python -m eagle framework` to ask the existing Groq GPT-OSS bootstrap for a
-complete Java framework and rich finite control surface; experiments freeze the
-exact bundle bytes. `framework.evolution_mode` defaults to `local` seeded slot
-evolution. Opt-in `llm_coach` uses the experiment model for complete initial
-genome selection and the existing worst-match Commentator/Coach Strategy path.
-Both policies render Java locally and disable Java Generation and repair calls.
-See the canonical [framework-slot contract](docs/architecture/framework_slots.md).
+EAGLE also provides `framework_slots` mode. Fresh experiments bootstrap a
+complete Java framework inline from `framework.design_brief` when no external
+bundle path is supplied. Set `GROQ_API_KEY` in the environment; the default
+bootstrap model is `openai/gpt-oss-120b`. An explicit `framework.bundle_path`
+reuses a prepared framework across replicates, and the standalone
+`python -m eagle framework` command remains available for compatibility.
+`framework.evolution_mode` defaults to `local`; opt-in `llm_coach` uses the
+experiment model for complete initial genome selection and the existing
+worst-match Commentator/Coach Strategy path. Both policies render Java locally
+and disable Java Generation and repair calls. See the canonical
+[framework-slot contract](docs/architecture/framework_slots.md).
 
 ## Canonical workflow
 

@@ -52,8 +52,10 @@ FRAMEWORK_BUNDLE_ARTIFACT = "framework/bundle.json"
 def freeze_framework_bundle(
     run_dir: Path,
     config: ExperimentConfig,
+    *,
+    mock: bool = False,
 ) -> ExperimentConfig:
-    """Copy the exact configured bundle bytes into a fresh run.
+    """Generate or copy the exact framework bundle bytes into a fresh run.
 
     The exact-byte digest is the run identity fence.  The normalized bundle
     digest is deliberately not substituted here because JSON whitespace and
@@ -63,8 +65,30 @@ def freeze_framework_bundle(
     if config.java_materialization_mode != "framework_slots":
         return config
     source = config.framework_bundle_path
+    if source is None:
+        if mock:
+            raise ValueError(
+                "Mock framework startup requires framework.bundle_path; "
+                "Groq is disabled in mock mode."
+            )
+        from eagle.generation.groq_framework import generate_framework_bundle
+
+        config.validate()
+        result = generate_framework_bundle(
+            run_dir / "framework",
+            model=config.framework_model,
+            design_brief=config.framework_design_brief,
+        )
+        frozen = replace(
+            config,
+            framework_bundle_path=result.bundle_path.resolve(),
+            framework_bundle_version=FRAMEWORK_BUNDLE_SCHEMA_VERSION,
+            framework_bundle_sha256=hashlib.sha256(result.bundle_path.read_bytes()).hexdigest(),
+        )
+        frozen.validate()
+        return frozen
     expected_digest = config.framework_bundle_sha256
-    if source is None or expected_digest is None:
+    if expected_digest is None:
         raise ValueError("framework_slots requires a configured framework bundle.")
     data = source.read_bytes()
     actual_digest = hashlib.sha256(data).hexdigest()

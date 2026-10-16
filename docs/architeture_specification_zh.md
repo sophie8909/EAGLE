@@ -5,7 +5,7 @@
 
 ## 系統定位
 
-在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 先由明確的一次性 Groq GPT-OSS bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA 或 Coach 輔助的完整 genome 選擇。實際比賽執行時
+在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 在 fresh startup inline 呼叫 Groq GPT-OSS bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA 或 Coach 輔助的完整 genome 選擇。實際比賽執行時
 不會呼叫 LLM。每個 phenotype 都是一份完整的
 `ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
 runtime LLM policy。
@@ -31,31 +31,28 @@ Deterministic 設定必須使用 `candidate_java_mode: generated_phenotype` 與 
 
 ### Groq framework 與有限 slots
 
-`framework_slots` 是明確的兩階段流程。使用者先執行
-`python -m eagle framework --model openai/gpt-oss-120b`；Groq GPT-OSS 只在此一次性的 bounded bootstrap 階段被呼叫（可做有限 transport retry），並以
-structured JSON 回傳完整 `CandidateAgent` template、有限 slots、產生 slots 的
-prompt 與結構化 report。Bundle 版本為 `eagle-framework-bundle-v1`；每個 slot
-只能是 finite-lattice `integer`／`number` 或列舉 `expression_choice`。Formula
-不是自由 Java 字串，而是從 bundle 內已凍結的 `choice_id`／`java_expression`
-選項中選擇。
+`framework_slots` 會在 fresh experiment startup inline 執行 bounded Groq GPT-OSS
+bootstrap。未設定 `framework.bundle_path` 時，必須提供
+`framework.design_brief`；`framework.model` 可省略，預設為
+`openai/gpt-oss-120b`。每個 replicate 會建立獨立 framework；若要跨 seeds
+固定 framework，請明確共用同一 `bundle_path`。Standalone
+`python -m eagle framework` 仍支援預先建立 bundle 的相容流程。
 
-Experiment 啟動時會把 bundle exact bytes 複製到 run 的
+Experiment 啟動時會將 bundle exact bytes 寫入 run 的
 `framework/bundle.json` 並記錄 SHA-256。Candidate 的唯一 active genotype 是
-`control_genome`。`framework.evolution_mode` 預設 `local`，以 seeded local
-sampling、逐 slot crossover 與最多一個 slot mutation 演化；`llm_coach` 是 opt-in，
-由 experiment model 為每個 Gen 0 slot 選一份完整 genome，Strategy Mutation 則沿用
-最差 completed match → Commentator → Coach，讓 Coach 回傳完整 genome JSON。
-該 schema 固定為 `eagle-framework-selection-v1`，每次回應必須帶 run-frozen
-bundle SHA-256 和所有合法 slot 值。原始回應先落盤再解析，attempt 有界且有 timing；
-失敗 mutation 保留 Coach 呼叫前 child 的完整 genome 並讓 candidate 失敗，不採用隨機 fallback。
-兩種 evolution policy 都使用相同凍結 bundle、`eagle-framework-slots-v1`
-materializer 與完整的本地 Java render、validation、javac、Integration、semantic
-probe 和 evaluation；不呼叫 Java Generator、source repair 或 compile repair。Resume
-會驗證 bundle hash 並比較 evolution mode。Bootstrap 仍是明確執行的
-`python -m eagle framework`，不會由 experiment 自動啟動。`GROQ_API_KEY` 僅從
-bootstrap process environment 讀取，絕不寫入 config 或 artifact。完整 schema 與
-artifact 契約見 [framework slots](architecture/framework_slots.md)。
-
+`control_genome`。`framework.evolution_mode` 預設 `local`，使用 seeded local
+sampling、逐 slot crossover 與最多一個 slot mutation；`llm_coach` 是 opt-in，
+由 experiment model 為每個 Gen 0 slot 選完整 genome，Strategy Mutation 則沿用
+最差 completed match → Commentator → Coach。兩種 policy 都使用相同凍結 bundle
+和 `eagle-framework-slots-v1` materializer，不呼叫 Java Generator、source
+repair 或 compile repair。Resume 僅讀 run-owned frozen bundle，驗證 hash 並比較
+`design_brief`、bootstrap model、evolution mode，不會重新 bootstrap。
+Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
+bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index，資料夾
+重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有
+`bundle_path` 會拒絕執行，確保不呼叫 Groq。`GROQ_API_KEY` 僅從 process
+environment 讀取，絕不寫入 config 或 artifact。完整契約見
+[framework slots](architecture/framework_slots.md)。
 ### LLM materialization lifecycle
 
 以下 Candidate、genotype、source gate 與 generation 流程只描述

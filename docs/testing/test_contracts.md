@@ -205,6 +205,11 @@ the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.
 
 ## Groq framework and finite slots
 
+Inline startup tests cover design-brief/model config round trips, generation before
+population initialization, failure evidence without binding a batch-index slot,
+mock-mode rejection without network calls, and frozen-bundle resume with source
+identity checks. Stubbed evaluation covers the complete startup-to-EA handoff.
+
 For `framework.evolution_mode`, test that omission resolves to `local`,
 `llm_coach` is opt-in, and resume rejects a mode mismatch while keeping the
 materializer version unchanged. Local mode retains seeded sampling/per-slot
@@ -243,6 +248,7 @@ python3 -m unittest \
   tests.test_groq_framework \
   tests.test_framework_slots \
   tests.test_framework_slots_candidate_config \
+  tests.test_framework_startup \
   tests.test_framework_slots_artifacts \
   tests.test_framework_slots_integration \
   tests.test_framework_coach \

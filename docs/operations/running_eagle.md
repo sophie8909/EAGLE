@@ -21,31 +21,16 @@ conda run --no-capture-output -n eagle \
   --mock --skip-final-test
 ```
 
-## One-time Groq framework bootstrap
+## Groq framework startup
 
-Framework-slot runs use two explicit commands. First create a new bootstrap
-directory; the API key is environment-only and must not be placed in YAML,
-shell history as a CLI option, or tracked artifacts:
+Fresh framework-slot runs bootstrap inline from `framework.design_brief` unless
+an external `framework.bundle_path` is provided. Set `GROQ_API_KEY` in the
+process environment; do not put it in YAML, CLI arguments, shell history, or
+artifacts. `framework.model` defaults to `openai/gpt-oss-120b`. The standalone
+`python -m eagle framework` command remains available for preparing a bundle to
+reuse across runs or replicate seeds.
 
-```bash
-export GROQ_API_KEY='...'
-python -m eagle framework \
-  --model openai/gpt-oss-120b \
-  --brief-file framework_design.txt \
-  --output runs/framework_bootstrap/my_framework
-```
-
-`--brief` may replace `--brief-file`. Omitting `--model` selects
-`openai/gpt-oss-120b`. Optional bounds are `--temperature`,
-`--max-output-tokens`, `--max-attempts`, and `--timeout-seconds`. The command
-uses the OpenAI-compatible Groq Chat Completions endpoint with `response_format`
-JSON Schema (`strict: false`). Local exact bundle validation remains
-authoritative. It refuses a nonempty output directory, retains every raw response
-before parsing, and exits `2` if its
-bounded attempts do not publish a valid bundle. Review `bundle.json`,
-`CandidateAgent.template.java`, `report.json`, and `bootstrap.json` before use.
-
-Then select those exact bundle bytes in an ordinary experiment config:
+Use this inline form in an ordinary experiment config:
 
 ```yaml
 schema_version: experiment-v2
@@ -54,26 +39,35 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
-  bundle_path: runs/framework_bootstrap/my_framework/bundle.json
-  # Optional input fences; config resolution always fills both in config.yaml.
-  bundle_version: eagle-framework-bundle-v1
-  bundle_sha256: <sha256-of-exact-bundle.json-bytes>
-  # Optional; defaults to local. Use llm_coach for Coach-selected full genomes.
+  design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
+  model: openai/gpt-oss-120b
   evolution_mode: llm_coach
 ```
 
-Keep the normal population, generation, evaluation-map, opponent, and runtime
-settings, including the model profile used by the experiment. EAGLE validates
-the bundle at config load, copies it to `runs/<run_id>/framework/bundle.json`,
-records the exact byte hash, and compares `evolution_mode` on resume. The
-`local` default samples finite slot values and uses seeded per-slot crossover
-and one-slot mutation without candidate-time LLM requests. `llm_coach` asks the
-experiment model for initial complete genomes and uses the existing one-worst-
-match Commentator/Coach path for Strategy mutation. Neither mode calls a Java
-Generator or repair model; rendering, validation, javac, Integration, semantic
-probing, and the configured 180-match fixed-roster matrix remain unchanged. See
-[framework slots](../architecture/framework_slots.md).
+Set the top-level `model` profile for the experiment runtime as usual. Omit
+`evolution_mode` for the local EA. To reuse a prepared bundle instead, replace
+`design_brief` and `model` with `bundle_path: path/to/bundle.json`; optional
+`bundle_version` and `bundle_sha256` fences may be used with that external file.
 
+EAGLE validates an explicit external bundle during config resolution. For inline
+bootstrap, it initializes bootstrap evidence and the manifest first,
+then writes the resolved frozen config on success or requested pending config
+after failure. Successful bootstrap validates and freezes the bundle at
+`runs/<run_id>/framework/bundle.json` before search. Resume reads only the
+frozen bundle and compares the design brief, bootstrap model, and evolution
+mode; it never regenerates the framework. Each fresh replicate bootstraps a
+separate framework unless the same explicit bundle path is shared. Mock mode
+rejects inline bootstrap without an existing bundle, ensuring no Groq request.
+Failed attempts and a failed manifest remain; the pending config cannot resume
+until a valid frozen bundle exists.
+
+The `local` default samples finite slot values and uses seeded per-slot
+crossover and one-slot mutation without candidate-time LLM requests.
+`llm_coach` asks the experiment model for initial complete genomes and uses the
+existing one-worst-match Commentator/Coach path for Strategy mutation. Neither
+mode calls a Java Generator or repair model; rendering, validation, javac,
+Integration, semantic probing, and the configured fixed-roster matrix remain
+unchanged. See [framework slots](../architecture/framework_slots.md).
 The resolved `model` section selects the GGUF, llama-server executable, host,
 port, per-request context size, batch size, and health/startup timeouts. An
 optional `generation_model` section has the same shape and selects the model for

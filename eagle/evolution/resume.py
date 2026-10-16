@@ -306,15 +306,23 @@ def validate_resume_config(
     if (
         persisted.java_materialization_mode == "framework_slots"
         and config.java_materialization_mode == "framework_slots"
-        and persisted.framework_bundle_sha256 == config.framework_bundle_sha256
+        and (
+            persisted.framework_bundle_sha256 == config.framework_bundle_sha256
+            or (
+                config.framework_bundle_path is None
+                and config.framework_design_brief is not None
+                and config.framework_design_brief == persisted.framework_design_brief
+                and config.framework_model == persisted.framework_model
+            )
+        )
     ):
-        # Fresh runs replace the user-supplied bundle path with the immutable
-        # run-local copy.  Equal exact-byte hashes preserve the same input
-        # identity when the caller validates a resume against its source config.
+        # Bind the original input to its run-owned bundle without regenerating it.
+        # Explicit bundles require equal hashes; startup designs require equal brief/model.
         requested_framework = requested_mapping.get("framework")
         run_framework = run_mapping.get("framework")
         if isinstance(requested_framework, dict) and isinstance(run_framework, dict):
-            requested_framework["bundle_path"] = run_framework.get("bundle_path")
+            for key in ("bundle_path", "bundle_version", "bundle_sha256"):
+                requested_framework[key] = run_framework.get(key)
     if allow_experiment_name_alias:
         # A folder resume is already bound by the exact config-filename-to-run
         # entry in experiment.yaml.  The human-readable experiment name is
