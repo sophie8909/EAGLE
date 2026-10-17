@@ -60,47 +60,10 @@ def main(argv: list[str] | None = None) -> int:
                 f"Final test requires a complete evolutionary run: {run_dir}"
             )
         candidate = _select_candidate(run_dir, args.candidate_id)
-        classes_dir = run_dir / "classes" / candidate["candidate_id"]
-        _validate_candidate_artifacts(classes_dir, candidate)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        source_path = _candidate_source_path(classes_dir, candidate["candidate_id"])
-        classes_dir = output_dir / "classes" / candidate["candidate_id"]
-        compilation = compile_generated_agent(
-            source_path, microrts_dir=config.microrts_dir, output_dir=classes_dir,
-        )
-        if not compilation.ok:
-            raise RuntimeError(f"Final-test seeded runtime compilation failed: {compilation.stderr}")
-
         preflight_evaluation_opponents(config, mock=False, repository_root=repository_root)
-        integration = integrate_microrts_agent(
-            microrts_dir=config.microrts_dir,
-            classes_dir=classes_dir,
-            agent_class=AGENT_CLASS,
-            integration_artifacts_dir=output_dir / "integration",
-            mock=False,
-            seed=derive_seed(config.random_seed, "integration", candidate["candidate_id"]),
-        )
-        if not integration.ok:
-            raise RuntimeError(
-                "Final-test integration checks failed: "
-                f"{integration.failure_reason or 'unknown integration failure'}"
-            )
-
-        results = _run_final_matrix(
-            config=config,
-            repository_root=repository_root,
-            candidate=candidate,
-            classes_dir=classes_dir,
-            output_dir=output_dir,
-            source_path=source_path,
-        )
-        summary = _build_summary(
-            config=config,
-            run_dir=run_dir,
-            output_dir=output_dir,
-            candidate=candidate,
-            integration=integration,
-            results=results,
+        summary = _evaluate_candidate(
+            config=config, repository_root=repository_root, run_dir=run_dir,
+            candidate=candidate, output_dir=output_dir,
         )
         _write_outputs(output_dir, summary)
         print(_markdown_table(summary))
@@ -110,6 +73,51 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, RuntimeError, KeyError, json.JSONDecodeError) as exc:
         print(f"ERROR: final test failed: {exc}", file=sys.stderr)
         return 2
+
+
+def _evaluate_candidate(
+    *,
+    config: ExperimentConfig,
+    repository_root: Path,
+    run_dir: Path,
+    candidate: dict[str, Any],
+    output_dir: Path,
+    seed_identity: str | None = None,
+) -> dict[str, Any]:
+    candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
+    original_classes = run_dir / "classes" / candidate_id
+    _validate_candidate_artifacts(original_classes, candidate)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    source_path = _candidate_source_path(original_classes, candidate_id)
+    classes_dir = output_dir / "classes" / candidate_id
+    compilation = compile_generated_agent(
+        source_path, microrts_dir=config.microrts_dir, output_dir=classes_dir,
+    )
+    _atomic_json(output_dir / "compilation.json", compilation.to_json_dict())
+    if not compilation.ok:
+        raise RuntimeError(f"Final-test seeded runtime compilation failed: {compilation.stderr}")
+    integration = integrate_microrts_agent(
+        microrts_dir=config.microrts_dir,
+        classes_dir=classes_dir,
+        agent_class=AGENT_CLASS,
+        integration_artifacts_dir=output_dir / "integration",
+        mock=False,
+        seed=derive_seed(config.random_seed, "integration", candidate_id if seed_identity is None else seed_identity),
+    )
+    if not integration.ok:
+        raise RuntimeError(
+            "Final-test integration checks failed: "
+            f"{integration.failure_reason or 'unknown integration failure'}"
+        )
+    results = _run_final_matrix(
+        config=config, repository_root=repository_root, candidate=candidate,
+        classes_dir=classes_dir, output_dir=output_dir, source_path=source_path,
+        seed_identity=seed_identity,
+    )
+    return _build_summary(
+        config=config, run_dir=run_dir, output_dir=output_dir, candidate=candidate,
+        integration=integration, results=results,
+    )
 
 
 def _load_config(config_path: Path, repository_root: Path) -> ExperimentConfig:
@@ -254,6 +262,7 @@ def _run_final_matrix(
     classes_dir: Path,
     output_dir: Path,
     source_path: Path | None = None,
+    seed_identity: str | None = None,
 ) -> list[dict[str, Any]]:
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
     candidate_generation = int(candidate.get("generation") or 0)
@@ -310,7 +319,7 @@ def _run_final_matrix(
         opponent, evaluation_map, game_index, candidate_player, match_index, match_dir = item
         match_seed = derive_match_seed(
             config.random_seed,
-            candidate_id=candidate_id,
+            candidate_id=candidate_id if seed_identity is None else seed_identity,
             opponent_id=opponent.opponent_id,
             map_id=evaluation_map.map_id,
             round_index=game_index,

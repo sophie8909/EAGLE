@@ -18,7 +18,7 @@ from unittest.mock import Mock, patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation.compiler import SEEDED_RUNTIME_SOURCES, compile_generated_agent
+from eagle.evaluation.compiler import CompileResult, SEEDED_RUNTIME_SOURCES, compile_generated_agent
 from eagle.evaluation.determinism import derive_seed
 from eagle.evaluation.game_metrics import compute_game_metrics
 from eagle.evaluation.matches import evaluate_matches
@@ -115,7 +115,7 @@ class EvaluationReproducibilityTests(unittest.TestCase):
             config = replace(ExperimentConfig.from_mapping({}), random_seed=37)
             with patch("eagle.final_test._load_config", return_value=config), \
                  patch("eagle.final_test._select_candidate", return_value={"candidate_id": "a"}), \
-                 patch("eagle.final_test.compile_generated_agent", return_value=Mock(ok=True)) as compile_agent, \
+                 patch("eagle.final_test.compile_generated_agent", return_value=CompileResult(ok=True, command=[])) as compile_agent, \
                  patch("eagle.final_test.preflight_evaluation_opponents"), \
                  patch("eagle.final_test.integrate_microrts_agent", return_value=Mock(ok=True)) as integrate, \
                  patch("eagle.final_test._run_final_matrix", return_value=[]) as run_matrix, \

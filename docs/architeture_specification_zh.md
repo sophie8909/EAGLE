@@ -449,6 +449,14 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 ./analyze.sh RUN_DIR
 ```
 
+跨世代固定評估使用獨立命令與輸出，不改變一般 `eagle.final_test`：
+
+```bash
+python -m eagle.fixed_evaluation --run-dir runs/<run> [--generations 0 5 10 15 20] [--seed <int>] [--output-dir <dir>]
+```
+
+預設世代為 0、5、10、15、20；未指定 seed 時讀取 run config。run 必須完成，每個指定 snapshot 都必須存在，不會替換世代。每代從 runnable survivors 選擇 generation-local、有限且最高的 Game Performance，同分以 candidate ID 穩定排序。所有代表共用凍結 protocol 與同一 seed stream，分別重新編譯及 Integration，並各跑 600 場；不呼叫 LLM，也不修改 search artifacts。protocol、逐代證據、彙總與部分進度寫入獨立 `fixed_evaluation/`。指定的 output directory 必須是新建或空目錄；重跑請使用另一個目錄以保留舊證據。彙總檔名為 `fixed_evaluation_summary.json`、`fixed_evaluation_results.csv`、`fixed_evaluation_results.md`。`mean_match_score` 是 benchmark 的未加權平均，與 canonical search fitness 分開；矩陣不完整或含錯誤時 aggregate score 和 win rate 為 null，命令以非零狀態結束。
+
 實驗主機也提供常駐、唯讀的本地監控入口；它會自動發現 `runs/` 下現在與之後
 由 `experiment` 建立的 canonical run：
 

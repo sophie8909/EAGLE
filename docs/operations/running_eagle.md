@@ -424,6 +424,15 @@ python -m eagle experiment --config-dir configs/experiments/qwen3_5_9b/ --skip-f
 
 Mock mode does not adapt or start llama.cpp, inspect the configured port, validate the GGUF for llama.cpp, or health-check an endpoint. It skips the production final test. Mock matches retain their canonical match artifacts but synthesize only the initial and final round snapshots. `--skip-final-test` is also available for focused production diagnostics and does not skip EA or analysis artifacts.
 
+## Fixed cross-generation evaluation
+
+```bash
+python -m eagle.fixed_evaluation --run-dir runs/<run>
+python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 0 5 10 15 20 --seed 42
+```
+
+The defaults are generations `0 5 10 15 20` and the run-config seed. The run must be complete and every requested snapshot must exist; missing generations fail without substitution. Frozen protocol and results go to a separate `fixed_evaluation/` directory by default. An explicit output directory must be new or empty; use another directory for each rerun to preserve prior evidence. Combined outputs are `fixed_evaluation_summary.json`, `fixed_evaluation_results.csv`, and `fixed_evaluation_results.md`. `mean_match_score` is the unweighted benchmark mean, separate from canonical search fitness. If a matrix is incomplete or has errors, its aggregate score and win rate are null and the command exits nonzero. This command leaves ordinary `eagle.final_test` behavior and search artifacts unchanged; see the evaluation and artifact contracts for selection and output details.
+
 ## Reflection modes
 
 ```yaml

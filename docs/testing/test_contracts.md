@@ -51,6 +51,17 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 
 ## Contract matrix
 
+Fixed evaluation focused validation (2026-10-17):
+
+```bash
+.venv/bin/python -m unittest tests.test_fixed_evaluation tests.test_final_test tests.test_evaluation_reproducibility tests.test_experiment_launcher
+```
+
+All 52 tests pass in WSL, including two real Java compilations, seven Integration
+checks per representative, and 12 paired-seed MicroRTS matches against PassiveAI.
+External-opponent setup is stubbed in that smoke. This does not establish full
+ten-opponent or historical-run benchmark results; full discovery was not run.
+
 | Area | Required proof |
 | --- | --- |
 | Candidate | in `llm` mode, default two-prompt and opt-in prompt/prompt/Java modes; in deterministic mode, active policy-only genotype; generation-qualified automatic IDs and explicit-ID preservation; inherited Java versus generated phenotype separation; terminal failure retains state |
@@ -64,6 +75,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |
 | Matches | one promoted source/class tree; complete configured matrix with resolved per-map tick caps in normal, AOS head-to-head, and final-test execution; a real distinct WorkerRush; pinned AllInBot original JAR/class plus separately compiled reflection adapter; a contained upstream fault remains `ok` but is a machine-readable neutral draw, never a candidate win/failure; population-summed generation counts; distinct directories and round indices; both sides; no fake match-seed property; no regeneration after Integration starts |
+| Fixed cross-generation evaluation | completed-run and exact-snapshot requirements; default/explicit generations and config-derived seed; highest finite generation-local Game Performance among runnable survivors with deterministic ID ties; no summary-best or generation fallback; one frozen protocol and candidate-independent seed stream; separate compile/Integration; 600 matches per representative; explicit errors and retained partial evidence; exact combined filenames; new/empty output directory; unweighted benchmark mean distinct from search fitness; null aggregate score/win rate and nonzero exit for incomplete/error matrices; no LLM or search-artifact mutation |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | run-v2/generation-v3, with LLM phase4-v6/candidate-v6 and deterministic phase4-v7/candidate-v7 contracts; v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |

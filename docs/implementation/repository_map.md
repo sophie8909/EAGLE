@@ -106,6 +106,7 @@ kept as documentation entries.
 | `eagle/analysis/loader.py` | v2-only run discovery and bounded materialization |
 | `eagle/analysis/report.py` | Survivor-snapshot-aligned CSV/JSON/Markdown/PNG reports |
 | `eagle/final_test.py` | Post-search final evaluation; never fitness |
+| `eagle/fixed_evaluation.py` | Separate fixed-protocol evaluation of exact cross-generation snapshots; no search mutation |
 
 ## Configuration and assets
 

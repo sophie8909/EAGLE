@@ -517,6 +517,8 @@ than a candidate win. Incomplete indexed entries are
 resumed before unindexed configs; completed entries are skipped. Index paths
 written by new batches and accepted by folder resume are absolute.
 
+Fixed cross-generation evaluation writes derived analysis to `fixed_evaluation/` (or explicit `--output-dir`). Its frozen `protocol.json` records the root seed and seed scheme, roster, map hashes and tick caps, scoring, and runtime opponent source identities. Each `generation_<nnnn>/` has `compilation.json`, Integration and match evidence, and normal final-test JSON/CSV/Markdown outputs; the shared final-test evaluator also retains `compilation.json` for ordinary final tests. Combined files are `fixed_evaluation_summary.json`, `fixed_evaluation_results.csv`, and `fixed_evaluation_results.md`. Partial progress and failed-match evidence are retained. Asset/source drift leaves `fixed_evaluation_valid: false` in the affected generation's raw summary and excludes that matrix from comparison rows. An explicit output directory must be new or empty; reruns require another directory to preserve prior evidence. These outputs do not alter `final_test/` or search artifacts.
+
 
 ## Deterministic Java materialization artifacts
 
