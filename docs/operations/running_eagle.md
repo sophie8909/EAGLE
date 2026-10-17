@@ -358,18 +358,21 @@ evaluation:
   mode: self_play
   self_play_refresh_interval: 5
   self_play_opponent_library_capacity: 50
+  self_play_pool_policy: tournament-v1
 ```
 
-Generation zero is evaluated against `PassiveAI`; its runnable completed
-candidates are recorded in the exact generation-cohort archive. Generations 1
-through the configured interval use the generation-zero cohort, and the first
-delayed refresh at interval + 1 switches to the generation-one cohort. Each
-subsequent window advances to the prior birth-generation cohort. The semantic
-library remains a bounded deduplicated archive for provenance, but it does not
-choose the active delayed context. Resume reloads the latest committed delayed
-snapshot; older self-play checkpoints that lack context metadata are migrated
-by re-evaluating fresh-ID parent replicas against that snapshot before
-continuing.
+The capacity includes four permanent protected built-ins and must be at least
+10. Generation zero evaluates all ten built-in sources using the fixed slots:
+the protected four keep their actual case IDs and the other six use
+`self_play_000`…`self_play_005`. Generation one and each refresh boundary keep
+the protected case IDs and use those six slots for sampled nonprotected pool
+members. Context rows identify built-ins by `source_opponent_id`.
+Novel eligible agents challenge a seeded sampled incumbent when the pool is
+full. Only a complete 18-match duel with strictly more wins than losses can
+replace an incumbent. Self-play requires the exact policy marker shown above;
+older resolved configs without it are inspectable but cannot resume under the
+new policy. See the [canonical evaluation contract](../eagle_architecture_spec.md#9-evolution-evaluation)
+for artifacts and failure handling.
 
 ## Resume
 

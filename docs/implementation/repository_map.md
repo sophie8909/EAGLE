@@ -41,7 +41,8 @@ kept as documentation entries.
 | `eagle/evolution/generation.py` | Shared fresh/resume generation ordering, evaluation, credit, selection, and persistence |
 | `eagle/evolution/offspring.py` | LLM-mode selected-source Code gate and corrective Java path; mode-aware variation and evidence-parent lookup |
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
-| `eagle/self_play.py` | Managed self-play PassiveAI baseline, delayed birth-generation cohorts, semantic opponent archive, context hashes, resume loading, and selection guards |
+| `eagle/opponent_pool.py` | Tournament-v1 pool admission, deduplication, seeded promotion, and pool persistence |
+| `eagle/self_play.py` | Immutable self-play context construction, snapshot/resume, and selection guards; legacy cohort helpers remain only for historical inspection (see the [architecture spec](../eagle_architecture_spec.md#9-evolution-evaluation)) |
 | `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction, framework genome initialization, and candidate-owned evidence |
 | `eagle/operators/framework_slots.py` | Seeded per-slot crossover, one-slot mutation, and exact slot provenance |
 | `eagle/operators/framework_coach.py` | Framework initial-genome and Coach selection schemas, prompts, and strict validation |

@@ -27,13 +27,11 @@ from eagle.operators.adaptive import ReflectionOperatorController
 from eagle.operators.selection import population_signature, select_next_generation
 from eagle.operators.strategy import cleanup_retired_match_traces
 from eagle.run_artifacts import record_error_memory, record_generation
+from eagle.opponent_pool import PoolMember, select_pool_opponents, update_pool
 from eagle.self_play import (
     assert_shared_self_play_context,
     is_self_play_refresh,
-    load_self_play_generation_cohort,
     population_matches_self_play_context,
-    record_self_play_generation_cohort,
-    self_play_opponent_generation,
     write_self_play_snapshot,
 )
 from eagle.strategy_diversity import (
@@ -50,7 +48,7 @@ class GenerationStepResult:
     """Persisted state produced by one shared evolutionary generation step."""
 
     population: list[Candidate]
-    self_play_opponent_snapshot: list[Candidate] | None
+    self_play_opponent_snapshot: list[PoolMember] | None
     population_state_signature: Any
     stagnation_count: int
     error_memory: tuple[dict[str, object], ...]
@@ -74,7 +72,7 @@ def run_generation_step(
     population_state_signature: Any,
     stagnation_count: int,
     error_memory: tuple[dict[str, object], ...],
-    self_play_opponent_snapshot: list[Candidate] | None,
+    self_play_opponent_snapshot: list[PoolMember] | None,
     generation_backend: Any,
     shared_client: Any,
     generation_client: Any,
@@ -102,20 +100,12 @@ def run_generation_step(
         )
     )
     if snapshot_refreshed:
-        opponent_generation = self_play_opponent_generation(
-            generation,
-            config.self_play_refresh_interval,
-        )
-        self_play_opponent_snapshot = load_self_play_generation_cohort(
-            run_dir,
-            opponent_generation,
-        )
+        self_play_opponent_snapshot = select_pool_opponents(run_dir, generation=generation, config=config)
         write_self_play_snapshot(
             run_dir,
             generation=generation,
             candidates=self_play_opponent_snapshot,
-            refresh_interval=config.self_play_refresh_interval,
-            opponent_generation=opponent_generation,
+            config=config,
         )
     if snapshot_refreshed or context_migration_required:
         parent_replicas = build_self_play_fitness_refresh_replicas(
@@ -168,8 +158,6 @@ def run_generation_step(
         run_id=run_id,
         opponent_candidates=self_play_opponent_snapshot,
     )
-    if config.evaluation_mode == "self_play":
-        record_self_play_generation_cohort(run_dir, generation, evaluated_offspring)
     evaluated_offspring, rewards = operator_controller.collect_rewards(
         parents_for_generation,
         evaluated_offspring,
@@ -214,15 +202,6 @@ def run_generation_step(
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, selection_candidates)
     error_memory = record_error_memory(run_dir, selection_candidates)
-    append_event(
-        run_dir / "timing.jsonl",
-        build_generation_event(
-            run_id=run_id,
-            generation=generation,
-            candidates=selection_candidates,
-            span=generation_span.finish(),
-        ),
-    )
     next_population = select_next_generation(
         parent_replicas if parent_replicas else population,
         evaluated_offspring,
@@ -261,6 +240,15 @@ def run_generation_step(
                 replicas=parent_replicas,
                 selected_ids={candidate.id for candidate in next_population},
             )
+    if config.evaluation_mode == "self_play":
+        update_pool(run_dir, evaluated_offspring, generation=generation, config=config, mock=mock)
+    append_event(
+        run_dir / "timing.jsonl",
+        build_generation_event(
+            run_id=run_id, generation=generation, candidates=selection_candidates,
+            span=generation_span.finish(),
+        ),
+    )
     record_generation(
         run_dir,
         generation,

@@ -179,6 +179,7 @@ class ExperimentConfig:
     evaluation_mode: str = "fixed_roster"
     self_play_refresh_interval: int = 5
     self_play_opponent_library_capacity: int = 50
+    self_play_pool_policy: str = "tournament-v1"
     fitness_tie_tolerance: float = FITNESS_TIE_TOLERANCE
     semantic_probes_enabled: bool = False
     semantic_state_root: Path = DEFAULT_SEMANTIC_STATE_ROOT
@@ -348,6 +349,9 @@ class ExperimentConfig:
         if "match_workers" in evaluation_settings:
             raise ValueError("Obsolete evaluation.match_workers is not supported; match parallelism is mandatory.")
         evaluation_mode = str(evaluation_settings.get("mode", "fixed_roster"))
+        self_play_pool_policy = str(
+            evaluation_settings.get("self_play_pool_policy", "tournament-v1")
+        )
         configured_algorithm = str(payload.get("algorithm", LEXICASE_SELECTION))
         configured_objectives = payload.get("objectives")
         if evaluation_mode == "self_play":
@@ -512,6 +516,7 @@ class ExperimentConfig:
             self_play_opponent_library_capacity=int(
                 evaluation_settings.get("self_play_opponent_library_capacity", 50)
             ),
+            self_play_pool_policy=self_play_pool_policy,
             fitness_tie_tolerance=float(
                 semantic_settings.get(
                     "fitness_tie_tolerance",
@@ -693,6 +698,18 @@ class ExperimentConfig:
         if self.self_play_opponent_library_capacity < 1:
             raise ValueError(
                 "evaluation.self_play_opponent_library_capacity must be at least 1."
+            )
+        if self.self_play_pool_policy != "tournament-v1":
+            raise ValueError(
+                "evaluation.self_play_pool_policy must be tournament-v1."
+            )
+        if (
+            self.evaluation_mode == "self_play"
+            and self.self_play_opponent_library_capacity < 10
+        ):
+            raise ValueError(
+                "evaluation.self_play_opponent_library_capacity must be at least 10 "
+                "for self-play (4 protected opponents plus at least 6 tournament slots)."
             )
         if not math.isfinite(self.fitness_tie_tolerance) or self.fitness_tie_tolerance < 0:
             raise ValueError("fitness_tie_tolerance must be finite and non-negative.")
@@ -909,6 +926,7 @@ class ExperimentConfig:
                 "mode": self.evaluation_mode,
                 "self_play_refresh_interval": self.self_play_refresh_interval,
                 "self_play_opponent_library_capacity": self.self_play_opponent_library_capacity,
+                "self_play_pool_policy": self.self_play_pool_policy,
                 "semantic_probes": {
                     "enabled": self.semantic_probes_enabled,
                     "state_root": str(self.semantic_state_root.resolve()),
@@ -1047,7 +1065,11 @@ class ExperimentConfig:
 
     @property
     def lexicase_case_ids(self) -> tuple[str, ...]:
-        return SELF_PLAY_CASES if self.evaluation_mode == "self_play" else LEXICASE_CASES
+        return (
+            ("allinbot", "mayari", "coac", "tma", *SELF_PLAY_CASES[:6])
+            if self.evaluation_mode == "self_play"
+            else LEXICASE_CASES
+        )
 
 
 def _parse_evaluation_opponents(value: object) -> tuple[tuple[str, float], ...]:

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 from eagle.candidate import Candidate
@@ -17,28 +18,31 @@ from eagle.opponents import (
     OpponentSetupError,
     SEARCH_OPPONENT_REGISTRY,
     SAFE_ALLINBOT_CLASS_NAME,
+    OpponentSpec,
     rooted_jar_path,
 )
 from eagle.self_play import expand_self_play_slots
+from eagle.opponent_pool import PoolMember, initial_pool
 
 from .records import BoundedGenerationResult, EvaluationOpponent
 
 
 def _build_self_play_opponents(
-    opponent_candidates: list[Candidate],
+    opponent_candidates: list[PoolMember],
     *,
     prepared: list[tuple[Candidate, BoundedGenerationResult]],
     config: ExperimentConfig,
     classes_dir: Path,
     mock: bool,
 ) -> tuple[EvaluationOpponent, ...]:
-    """Build a stable ten-slot opponent pool from one population snapshot."""
+    """Resolve four permanent opponents and six tournament-pool slots."""
 
     prepared_by_id = {candidate.id: result for candidate, result in prepared}
     available = [
         candidate
         for candidate in opponent_candidates
-        if (candidate.generated_java and candidate.compile_status == "success")
+        if isinstance(candidate, OpponentSpec)
+        or (candidate.generated_java and candidate.compile_status == "success")
         or (
             candidate.id in prepared_by_id
             and prepared_by_id[candidate.id].compile_result is not None
@@ -46,8 +50,19 @@ def _build_self_play_opponents(
         )
     ]
     slots = expand_self_play_slots(available)
+    static = {
+        opponent.opponent_id: opponent
+        for opponent in _resolved_static_evaluation_opponents(config, mock=mock, classes_dir=classes_dir)
+    }
     opponents: list[EvaluationOpponent] = []
     for index, candidate in enumerate(slots):
+        if isinstance(candidate, OpponentSpec):
+            opponents.append(replace(
+                static[candidate.opponent_id], opponent_id=config.lexicase_case_ids[index],
+                weight=1.0, display_name=candidate.display_name,
+                source_opponent_id=candidate.opponent_id,
+            ))
+            continue
         bounded = prepared_by_id.get(candidate.id)
         source = candidate.generated_java
         if bounded is not None and bounded.generation.assembled_java:
@@ -80,20 +95,10 @@ def _build_initial_self_play_opponents(
     classes_dir: Path,
     mock: bool,
 ) -> tuple[EvaluationOpponent, ...]:
-    """Use the fixed PassiveAI baseline before candidate cohorts exist."""
-
-    passive = tuple(
-        opponent
-        for opponent in _resolved_static_evaluation_opponents(
-            config,
-            mock=mock,
-            classes_dir=classes_dir,
-        )
-        if opponent.opponent_id == "passive"
+    """Start with all ten built-in baselines before admitting generated agents."""
+    return _build_self_play_opponents(
+        initial_pool(), prepared=[], config=config, classes_dir=classes_dir, mock=mock,
     )
-    if not passive:
-        raise RuntimeError("Self-play generation zero requires the PassiveAI opponent.")
-    return passive
 
 
 def _prepare_self_play_class(
@@ -177,14 +182,16 @@ def _resolved_static_evaluation_opponents(
     mock: bool,
     classes_dir: Path | None = None,
     repository_root: Path | None = None,
+    opponent_ids: tuple[str, ...] | None = None,
 ) -> tuple[EvaluationOpponent, ...]:
     repository_root = (repository_root or _repository_root()).resolve()
     opponents: list[EvaluationOpponent] = []
     configured_weights = dict(config.evaluation_opponents)
+    requested_ids = config.evaluation_opponent_ids if opponent_ids is None else opponent_ids
     registry = {item.opponent_id: item for item in SEARCH_OPPONENT_REGISTRY}
     worker_rush_classes = (
         _prepare_worker_rush_opponent(config, classes_dir=classes_dir)
-        if not mock and classes_dir is not None
+        if not mock and classes_dir is not None and "workerrush" in requested_ids
         else None
     )
     safe_allinbot_classes = (
@@ -193,10 +200,10 @@ def _resolved_static_evaluation_opponents(
             classes_dir=classes_dir,
             repository_root=repository_root,
         )
-        if not mock and classes_dir is not None
+        if not mock and classes_dir is not None and "allinbot" in requested_ids
         else None
     )
-    for opponent_id in config.evaluation_opponent_ids:
+    for opponent_id in requested_ids:
         item = registry.get(opponent_id)
         if item is None:
             raise OpponentSetupError(f"Configured search opponent is unavailable: {opponent_id}")

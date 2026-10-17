@@ -85,6 +85,16 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
         raise ValueError(f"Resume run has no canonical config.yaml: {run_dir}")
     payload = yaml.safe_load(run_config_path.read_text(encoding="utf-8"))
     mode = payload.get("java_materialization_mode", "llm") if isinstance(payload, dict) else None
+    evaluation = payload.get("evaluation") if isinstance(payload, dict) else None
+    evaluation = evaluation if isinstance(evaluation, dict) else {}
+    if evaluation.get("mode", "fixed_roster") == "self_play" and (
+        evaluation.get("self_play_pool_policy") != "tournament-v1"
+    ):
+        raise ValueError(
+            "Cannot resume this self-play run without the explicit "
+            "evaluation.self_play_pool_policy: tournament-v1 marker; its opponent "
+            "pool policy is historical or unsupported. Start a new run."
+        )
     expected_protocol = (
         DSL_EVOLUTION_PROTOCOL
         if mode == "deterministic_dsl"
@@ -226,7 +236,7 @@ def _resume_search_impl(
         load_self_play_snapshot(
             run_dir,
             completed_generation=completed_generation,
-            refresh_interval=config.self_play_refresh_interval,
+            config=config,
         )
         if config.evaluation_mode == "self_play"
         else None
@@ -362,6 +372,10 @@ def _restore_completed_generation(run_dir: Path, generation: int) -> None:
                 pending.append(path)
     for path in sorted((run_root / "generations").glob("generation_*")):
         match = re.match(r"generation_(\d+)", path.name)
+        if match and int(match.group(1)) > generation:
+            pending.append(path)
+    for path in sorted((run_root / "archives/opponent_pool_tournaments").glob("generation_*")):
+        match = re.fullmatch(r"generation_(\d+)", path.name)
         if match and int(match.group(1)) > generation:
             pending.append(path)
     archived_logs: dict[Path, dict] = {}

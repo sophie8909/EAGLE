@@ -75,21 +75,22 @@ are specified in their own sections.
    per old parent, with the same complete genotype and component provenance,
    then selects from replicas plus offspring only. It never overwrites or
    reuses the old parent as a survivor candidate.
-8. In `self_play` evaluation, generation zero uses fixed `PassiveAI`, then its
-   completed candidates are persisted as the generation-zero opponent cohort.
-   Generations 1 through `self_play_refresh_interval` use that cohort as the
-   immutable ten-slot context. The first delayed refresh is generation
-   `self_play_refresh_interval + 1` (generation 6 for the default interval 5),
-   which switches evaluation to the generation-one cohort; later windows
-   advance in the same way. Every completed generation is archived in
-   `archives/self_play_generation_cohorts.json`, so the schedule is independent
-   of survivor retention. The semantic opponent library is retained as a
-   bounded, deduplicated archive, but does not replace the exact
-   generation-cohort schedule. Every match records the context ID plus source
-   candidate/generation. Refresh first re-evaluates phenotype-preserving parent
-   replicas, so selection never mixes old-context parents with new-context
-   offspring. Resume reloads the last committed delayed snapshot and its exact
-   cohort references.
+8. In `self_play`, the maintained pool is updated after generation zero and
+    every completed offspring evaluation. New eligible entries join while
+    capacity remains; once full, each entrant challenges one seeded sampled
+    nonprotected incumbent in an 18-match duel and replaces it only with
+    strictly more wins than losses. The four protected top-tier baselines never
+    enter these tournaments. Generation zero evaluates all ten built-in
+    sources in fixed slots: the protected four use their actual case IDs and
+    the other six use `self_play_000`…`self_play_005`. Generation one and each
+    configured refresh boundary keep the protected case IDs and sample six
+    nonprotected members into those diagnostic slots. Context rows identify
+    built-ins with `source_opponent_id` and null candidate/generation fields.
+    Context changes trigger
+    phenotype-preserving parent refresh before selection. Pool state is
+    checkpointed and restored before resume replay. See the
+    [canonical self-play contract](../eagle_architecture_spec.md#9-evolution-evaluation)
+    for capacity, artifact, compatibility, and failure details.
 
 The shared generation implementation is in `eagle/evolution/generation.py` and `eagle/evolution/offspring.py`; selection is in `eagle/operators/selection.py`, with evaluation in
 `eagle/evaluation/pipeline.py`.

@@ -14,6 +14,12 @@
 | --- | --- | --- | --- | --- |
 | FWSLOT-02 | Add model-guided genome choice without changing frozen framework materialization | Keep `framework.evolution_mode: local` as the default. Opt-in `llm_coach` uses the experiment model for complete initial genomes and the existing worst-match Commentator→Coach Strategy path. Both return the exact bundle-hash-pinned `eagle-framework-selection-v1` genome; Java materialization stays `eagle-framework-slots-v1`. Raw responses precede parsing; attempts are bounded and timed; failed mutation preserves the pre-Coach child genome and fails the child without random fallback. | Framework config, selection, Coach, artifact, timing, failure, and resume contracts; one-generation mock search/resume; bounded real javac and seven-check Integration | Resolved and implemented |
 
+## Opponent-pool self-play decision (2026-10-17)
+
+| ID | Question | Decision | Verification | Status |
+| --- | --- | --- | --- | --- |
+| SELFPLAY-POOL-01 | Replace active delayed birth-generation cohort scheduling and FIFO library eviction | Maintain a capacity-bounded pool with four permanent protected built-ins; admit novel eligible entries into free slots, then use seeded 18-match head-to-head duels to decide replacement. Generation zero uses all ten built-in sources in the stable slot schema; refresh contexts retain protected case IDs and sample six nonprotected members. Fence changed self-play resume behavior with `self_play_pool_policy: tournament-v1`. | 28 focused tests passed; broader regression: 105 tests, one skip; separate 36-match real runtime smoke. Full real evolutionary run not exercised. See the canonical [evaluation contract](../eagle_architecture_spec.md#9-evolution-evaluation). | Implemented; bounded validation passed |
+
 ## DSL and pre-crossover source contract (2026-10-11)
 
 The [integration plan](dsl_pre_crossover_reflection_plan.md) tracks DSL/source-gate
@@ -36,13 +42,13 @@ Reflection persists a structured diagnosis, revises parent Java from that
 conclusion only in the final materialization phase, and bypasses ordinary final
 generation while preserving both prompt genes. Whole-generation assignment and
 optional primary/generation-model phase switching are also implemented and
-covered by contract tests. Explicit immutable-snapshot self-play, same-context
-parent refresh, legacy-checkpoint resume migration, and per-policy
-generation-zero Java decoding are implemented and covered as active contracts.
-Self-play scalar fitness, inclusive non-chained tolerance tiers, versioned
-map×phase behavior probes, exact semantic caching/equivalence, and offline
-semantic analysis are also implemented and covered.
-These are active contracts rather than open gaps.
+covered by contract tests. The historical immutable-cohort self-play schedule,
+same-context parent refresh, and legacy-checkpoint migration were implemented
+and covered at this baseline; the approved tournament-v1 replacement is tracked
+above, implemented, and validated within the stated test scope. Self-play scalar
+fitness, inclusive non-chained tolerance tiers, versioned map×phase behavior
+probes, exact semantic caching/equivalence, and offline semantic analysis are
+implemented and covered.
 Historical gap rows remain available in Git history.
 
 ## Gap update rule

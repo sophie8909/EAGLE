@@ -204,7 +204,10 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     """Persist canonical post-Integration evaluation evidence and objective values."""
 
     evaluation_dir = candidate_dir / "evaluation"
-    game_payload = evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {}
+    game_payload = {
+        **(evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {}),
+        **evaluation.candidate.game_eval_result,
+    }
     code_quality_payload = evaluation.code_quality_breakdown.to_json_dict()
     objectives_payload = {
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,

@@ -20,21 +20,21 @@ using the canonical IDs `passive`, `random`, and `randombias`.
 
 ## Self-play cases
 
-`evaluation.mode: self_play` uses a bounded cross-generation opponent library.
-Generation zero seeds the library; every configured refresh boundary appends
-runnable current parents, FIFO-evicts entries beyond
-`self_play_opponent_library_capacity`, and deterministically rotates up to ten
-stored phenotypes into the next immutable context. The selected candidates are
-cycled in stable order into `self_play_000` through `self_play_009`, all with
-weight `1.0`; self-matches remain valid. The refresh interval defaults to five
-generations.
+`evaluation.mode: self_play` uses the tournament-managed opponent pool. Four
+top-tier built-ins are permanently protected; the other six built-ins and
+generated agents are eligible. Novel entries fill available capacity, then
+challenge one seeded sampled nonprotected incumbent in a complete 18-match
+duel; replacement requires strictly more wins than losses. Incomplete/error
+duels cannot promote an entrant. Generation zero evaluates all built-in sources
+using protected actual case IDs and six `self_play_000`…`self_play_005` slots.
+At generation one and each configured interval boundary, those six slots use
+deterministically sampled nonprotected pool members. Context rows identify
+built-ins by `source_opponent_id`. For capacity, resume, artifact, and failure
+contracts, see the [canonical self-play contract](eagle_architecture_spec.md#9-evolution-evaluation).
 
-At refresh, parents receive fresh identities but preserve their Java phenotype
-and make no LLM call. They are evaluated against the new context before
-reflection and offspring planning. If generation-zero semantic deduplication
-changes the seeded context after its initial evaluation, the same migration is
-performed before the first offspring generation. Selection rejects a pool
-unless every candidate has the same context ID. Self-play requires static
+At context refresh, parents receive fresh identities while preserving their
+Java phenotype; they are reevaluated before selection without an LLM call.
+Selection requires a single shared context ID. Self-play requires static
 reflection and does not update the fixed-opponent archive.
 
 ## Fitness and reporting

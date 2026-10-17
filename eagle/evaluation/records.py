@@ -107,6 +107,7 @@ class EvaluationOpponent:
     display_name: str | None = None
     source_generation: int | None = None
     source_candidate_id: str | None = None
+    source_opponent_id: str | None = None
 
 
 @dataclass(frozen=True)

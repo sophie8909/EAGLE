@@ -303,32 +303,40 @@ policy then owns ordinary bounded Java-generation attempts; its
 WorkerRush `genotype/inherited_java.java` is prompt context rather than the
 phenotype.
 
-Self-play persists a run-local opponent library at
-`archives/self_play_opponents.json`. Its versioned entries contain candidate
-IDs, birth generations, generated-Java SHA-256 references, and the compact
-semantic summary used for LISS-style exact behavior-vector deduplication;
-candidate artifacts remain the sole Java-source owner. It also persists the
-exact evaluated birth-generation index at
-`archives/self_play_generation_cohorts.json`, whose entries point to runnable
-candidate artifacts for each generation. Generation zero is evaluated against
-`PassiveAI`; generation-one through generation-`interval` snapshots point to
-the generation-zero cohort, and the delayed refresh at generation
-`interval + 1` points to generation one. Each generation-zero or delayed
-refresh boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`,
-which records the active context ID, refresh interval, opponent source
-generation, schedule marker, cohort-index pointer, semantic library pointer,
-and ten `self_play_*` slot mappings. Resume loads the latest delayed snapshot
-and resolves its exact cohort references; the mutable semantic library is not
-used to choose the active delayed context.
-A refresh also writes
-`generation_<nnnn>_self_play_parent_refresh.json`, linking source parents to
-fresh replicas, Java hashes, old/new context IDs, and survivor status. Refresh
-replicas record generation operation `self_play_fitness_refresh`,
-existing-phenotype provenance, and no LLM attempts.
+Self-play persists its maintained pool at `archives/self_play_opponents.json`
+with schema `eagle-opponent-pool-v1`. The archive records configured capacity,
+protected opponent IDs, member references, and phenotype hashes; candidate
+artifacts remain the Java-source owner. Pool tournaments are archived at
+`archives/opponent_pool_tournaments/generation_NNNN/<entrant_id>/result.json`
+with each match result. Pool state is checkpointed in the existing
+`resume_archives` and restored before replay.
 
-The resolved `evaluation.self_play_opponent_library_capacity` bounds this
-archive; FIFO eviction removes only the oldest library references and never a
-candidate artifact.
+Each immutable context is written to
+`generations/generation_<nnnn>_self_play_snapshot.json` using
+`eagle-self-play-snapshot-v4`, member references, and a context hash. Generation
+zero evaluates all ten built-in sources under the fixed slots: the protected
+four use their actual case IDs, and the other six map to
+`self_play_000`…`self_play_005`. Refresh contexts keep the protected case IDs
+and use those six diagnostic slots for sampled pool members. Context rows record
+`source_opponent_id`; built-ins have null `source_candidate_id` and
+`source_generation`. Parent refresh sidecars continue to link source parents
+to fresh replicas, Java hashes, old/new context hashes, and survivor status;
+replicas reuse the phenotype and make no LLM attempts. Resume restores the pool
+checkpoint before replay and validates the exact policy marker. Old
+self-play resolved configs without `evaluation.self_play_pool_policy:
+tournament-v1` are inspection-only and cannot resume under this contract.
+Historical cohort artifacts and readers may remain for inspection but do not
+drive active scheduling. See the [architecture spec](../eagle_architecture_spec.md#9-evolution-evaluation)
+for admission, tournament, capacity, and context rules.
+
+The v4 snapshot's `runtime_identity` hashes the actual configured MicroRTS
+`src`/`bin`/`lib`, builtin opponent JARs, opponent adapters/support libraries,
+and configured map file bytes. Snapshot loading verifies these hashes before
+reusing cached fitness; changed runtime or map assets require a new run.
+`evaluation/game_performance.json` persists `evaluation_configuration`,
+`evaluation_context_id`, and `fitness_case_ids` alongside scores. Tournament
+results retain a hash for the candidate defender's prepared/renamed runtime
+class tree and, when available, builtin source and resolved-class hashes.
 
 Normal evaluation does not call Function Capability or Strategy Alignment and
 does not write their diagnostic files or timing. The standalone helper modules
@@ -465,7 +473,10 @@ and `resume_archives` (exact text or null for the strategy, error-memory, and
 self-play-opponent archives) so resumes preserve stopping and selection context.
 Uncommitted generation artifacts and associated LLM logs move to
 `archives/interrupted_work/attempt_<nnnn>` before replay; archived log references
-point to that preserved evidence. Timing events retain the chronological history.
+point to that preserved evidence. Unfinished opponent-pool tournament generation
+directories are also preserved under the interrupted attempt before replay; the
+authoritative pool rollback continues to use the existing checkpoint mechanism.
+Timing events retain the chronological history.
 
 ## Failure and timing rules
 

@@ -109,6 +109,12 @@ Self-play fitness refresh has null Java-generation timing and an empty attempt
 list because it reuses the source parent's phenotype. Its Integration, matches,
 objectives, semantic cache lookup, and per-match timing are newly recorded.
 
+Each opponent-pool duel attempt emits one run timing event with
+`event: opponent_pool_tournament`, entrant/defender identities, W/D/L/error
+counts, status, and retention decision.
+The event duration covers the three-map, three-round, two-side duel; individual
+match durations remain in the tournament's per-match result artifacts.
+
 For bounded Java decoding, `generation_llm.attempts` is the ordered outer
 `generation_attempt` list and includes `generation_attempt_id`, request hash,
 `request_kind`, optional `repair_of_attempt`/previous-source hash,

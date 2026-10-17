@@ -37,6 +37,7 @@ from eagle.evaluation.semantic_signature import (
 from eagle.generation.backend import GenerationBackend
 from eagle.generation.java_agent_generator import GeneratedJavaAgent
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
+from eagle.opponent_pool import PoolMember, initial_pool
 from eagle.timing import utc_now
 
 from . import decoding, matches as match_module, opponents as opponent_setup
@@ -61,7 +62,7 @@ def evaluate_population(
     llm_client: object | None = None,
     run_timing_path: Path | None = None,
     run_id: str | None = None,
-    opponent_candidates: list[Candidate] | None = None,
+    opponent_candidates: list[PoolMember] | None = None,
 ) -> list[Candidate]:
     semantic_dataset: SemanticDataset | None = None
     semantic_dataset_error: str | None = None
@@ -127,7 +128,7 @@ def evaluate_population(
             )
         else:
             opponent_pool = opponent_setup._build_self_play_opponents(
-                opponent_candidates if opponent_candidates is not None else population,
+                opponent_candidates if opponent_candidates is not None else initial_pool(),
                 prepared=prepared,
                 config=config,
                 classes_dir=classes_dir,
@@ -579,6 +580,7 @@ def evaluate_candidate(
                 "slot_id": opponent.opponent_id,
                 "source_candidate_id": opponent.source_candidate_id,
                 "source_generation": opponent.source_generation,
+                "source_opponent_id": opponent.source_opponent_id,
             }
             for opponent in opponent_pool
         ]

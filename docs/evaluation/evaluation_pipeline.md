@@ -31,22 +31,26 @@ retry signal.
 
 ## Match protocol
 
-`evaluation.mode: fixed_roster` is the default protocol below. With
-`evaluation.mode: self_play`, generation zero is evaluated against the fixed
-`PassiveAI` baseline so independently generated candidates receive a meaningful
-score spread before candidate opponents exist. The completed generation-zero
-candidates are persisted as an exact birth-generation cohort. Generations 1
-through `self_play_refresh_interval` use that cohort as the immutable ten-slot
-context; at generation `self_play_refresh_interval + 1`, the context switches
-to the generation-one cohort, and the same delayed schedule continues. Only
-candidates with a successful compile, no failure stage/reason, and a complete
-match batch may enter a cohort. The semantic opponent library remains as a
-bounded deduplicated archive, but it is not used to replace the exact
-generation-cohort schedule. Every match records the context ID plus source
-candidate/generation. Refresh first re-evaluates phenotype-preserving parent
-replicas, so selection never mixes old-context parents with new-context
-offspring. Resume reloads the latest delayed snapshot and resolves its exact
-cohort references.
+`evaluation.mode: fixed_roster` is the default protocol below. Self-play uses a
+maintained bounded opponent pool: its four protected members are permanent,
+and novel eligible entries either join free capacity or challenge one seeded
+sampled eligible incumbent in an 18-match duel. A promotion requires strictly
+more wins than losses; incomplete/error duels cannot promote. Generation zero
+evaluates all ten built-in sources using the protected actual case IDs plus
+`self_play_000`…`self_play_005` for the other six. Generation one and each
+configured refresh boundary retain the protected case IDs and put six
+deterministically sampled nonprotected members in those diagnostic slots.
+Context rows use `source_opponent_id` for built-ins and null candidate/generation
+references.
+Context changes re-evaluate phenotype-preserving parent replicas before
+selection. The exact pool, tournament, snapshot, resume, and policy-marker
+contracts are specified in the
+[architecture spec](../eagle_architecture_spec.md#9-evolution-evaluation).
+Snapshot loading verifies hashes for the actual configured MicroRTS assets,
+builtin JARs, adapters/support libraries, and map bytes before cached fitness
+reuse; asset changes require a new run. `evaluation/game_performance.json`
+persists the evaluation configuration, context ID, and fitness case IDs with
+the scores so resume can verify the cached context.
 
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three

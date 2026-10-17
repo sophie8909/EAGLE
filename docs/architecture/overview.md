@@ -174,13 +174,14 @@ flowchart TD
 - `static` uses fixed probabilities; `aos_opponent` reuses ten-opponent rank
   changes; `aos_head2head` uses a separate direct matrix. Neither reward path
   creates another objective or changes normal selection.
-- Self-play is explicit (`evaluation.mode: self_play`), starts with a fixed
-  `PassiveAI` baseline at generation zero, and then uses delayed birth-generation
-  cohorts as equally weighted immutable contexts under static reflection.
-  With the default interval of five, generations 1–5 use the generation-zero
-  cohort and generation 6 switches to generation one. The bounded semantic
-  opponent library remains an archive, while each changed context creates
-  phenotype-preserving parent replicas before offspring planning and selection.
+- Self-play is explicit (`evaluation.mode: self_play`) and uses the canonical
+  tournament-managed pool. Four top-tier opponents are permanently protected;
+  once pool capacity is full, each novel eligible entrant challenges one seeded
+  sampled incumbent in an 18-match duel. Generation zero evaluates all ten
+  built-in sources under the fixed slot schema; later refresh contexts keep the
+  protected case IDs and sample six pool members. Changed contexts trigger
+  phenotype-preserving parent refresh before selection. See the
+  [canonical self-play contract](../eagle_architecture_spec.md#9-evolution-evaluation).
   Every executable candidate is also measured on nine immutable semantic
   probes (three configured maps × early/mid/late); this evidence is a
   tie-break/diagnostic and never changes Game Performance.

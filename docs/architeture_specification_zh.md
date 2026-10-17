@@ -360,33 +360,49 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
 
-明確設定 `evaluation.mode: self_play` 時，Generation 0 先對固定的
-`PassiveAI` 評估，讓初始 candidate 之間先產生可比較的分數落差；所有可執行且
-完整完成 match 的 Generation 0 candidate 會保存為精確的 generation cohort。
-Generation 1 到 `self_play_refresh_interval` 使用 Generation 0 cohort 作為
-immutable context；預設 interval 為 5，因此 Generation 6 開始改用 Generation 1
-cohort，之後每個延遲窗口依序推進。每一代的可執行結果都寫入
-`archives/self_play_generation_cohorts.json`，所以即使 candidate 沒有成為
-survivor，後續窗口仍能取得正確 birth-generation opponent。
+明確設定 `evaluation.mode: self_play` 時，opponent pool 容量由
+`evaluation.self_play_opponent_library_capacity` 控制，預設為 50，包含固定
+protected 成員且不得小於 10。初始 pool 是 `SEARCH_OPPONENT_REGISTRY` 的全部十個
+opponent。`allinbot`、`mayari`、`coac`、`tma` 永久 protected，不參與淘汰賽；其餘六個
+builtin baseline 與 generated agent 可參與。pool 未滿時收錄新穎且符合資格的 agent；滿額後，
+每個新 entrant 以 seeded 抽樣挑戰一個非 protected incumbent，進行三張 map × 三輪 ×
+雙方各一次，共 18 場 head-to-head。勝、和、敗分別計 1、0.5、0；只有勝場嚴格多於敗場
+才能取代 incumbent。比賽不完整或發生錯誤時不得晉級，且保留失敗證據。Tournament 不呼叫
+LLM，重用 entrant source/classes，並以既有 adapter 準備 defender。
 
-系統仍維護 run-local、可持久化的 opponent library，並以 LISS 式完整
-probe/action 向量做 exact equivalence 去重，作為 bounded semantic archive 與
-provenance；但 active context 的延遲排程不再由 library 取代。每個 cohort 會循環
-填入 `self_play_000` 到 `self_play_009` 十個等權重 case，保留 self-match。
-每逢 context 切換，系統先建立 fresh-ID parent replica，完全沿用原 Java
-phenotype、不呼叫 LLM，再以新 context 重評；只有相同 context ID 的 parent 與
-offspring 可以一起做 selection。Self-play 以每個 tier 的最高
+Generation 0 評估全部十個 builtin source，並使用與後續 context 相同的固定 slot schema：四個
+protected opponent 使用實際 case ID，其餘六個 source 放入 `self_play_000`…`self_play_005`。
+Generation 1 與每個後續 `self_play_refresh_interval` 邊界（預設 Generation 1、6、11…）保留四個
+protected case ID，並將從 pool 確定性抽樣的六個 non-protected opponent 放入這六個 diagnostic
+slot。Context row 以 `source_opponent_id` 記錄 builtin source；builtin 的
+`source_candidate_id` 與 `source_generation` 為 null。所有 slot 等權重，每位 candidate 仍執行
+180 場。Context 變更時，先用相同 phenotype 建立 fresh-ID parent replica 並重評，只有同一
+context 的 parent 與 offspring 可以一起 selection。
+
+Pool 存於 `archives/self_play_opponents.json`，schema 為
+`eagle-opponent-pool-v1`，含 capacity、protected IDs、member references 與 phenotype hashes。
+每場 duel 存於 `archives/opponent_pool_tournaments/generation_NNNN/<entrant_id>/result.json`
+及各 match 證據，並寫入 `opponent_pool_tournament` timing event。Pool state 存入既有
+`resume_archives`，replay 前先還原。Self-play resolved config 必須含
+`evaluation.self_play_pool_policy: tournament-v1`；缺少此 marker 的舊 resolved config 只能
+檢視，不能依新政策 resume。Snapshot 使用 `eagle-self-play-snapshot-v4`、member references
+與 context hash。舊 cohort helper 可保留供歷史讀取，但不再控制 active schedule。完整規範見
+[英文架構規格](eagle_architecture_spec.md#9-evolution-evaluation)。
+
+V4 snapshot 的 `runtime_identity` 會雜湊實際設定的 MicroRTS `src`、`bin`、`lib`、builtin
+opponent JAR、adapter/support libraries 與 map 檔案 bytes。載入 snapshot 時，會先驗證這些
+identity 才重用 cached fitness；runtime 或 map 資產變更時必須建立新 run。
+`evaluation/game_performance.json` 同時保存 `evaluation_configuration`、
+`evaluation_context_id`、`fitness_case_ids` 與分數，供 resume 驗證 context。Tournament 證據
+保存 candidate defender 準備/改名後 runtime class tree hash；可取得時也保存 builtin source
+與 resolved-class hash。
+
+Self-play 以每個 tier 的最高
 `game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
 同級內 parent B 優先選擇與 parent A 語意距離最大者；survivor boundary 使用 seeded
-max-min 語意多樣性。如果 generation 0 完成語意去重後，seeded context 與原始
-評估使用的 context 不同，會在第一個 offspring generation 前執行相同的 parent
-refresh 遷移。Resume 會載入最後已提交的 context，並在下一個刷新邊界讀取
-library；舊 checkpoint
-若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
-目前要求 `reflection_operator_mode: static` 與
-`parent_evaluation_mode: reuse_cached`。
-`evaluation.self_play_opponent_library_capacity` 控制 library 保留數量；超過時以
-FIFO 移除最舊 reference，不會刪除 candidate artifact。
+max-min 語意多樣性。Self-play 目前要求 `reflection_operator_mode: static` 與
+`parent_evaluation_mode: reuse_cached`。Context 取樣、resume 與舊 checkpoint 的相容性以
+前述 `tournament-v1` 規範為準。
 
 Self-play 對每個可執行完整 `CandidateAgent` 建立行為語意簽章：三張 configured map
 各取 early／mid／late 一個可行動、非 terminal 的重載 `GameState`，共九個 probe。

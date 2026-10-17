@@ -129,17 +129,21 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
 - Fixed-roster candidate fitness is a ten-field opponent score mapping.
   Self-play candidate fitness contains only `game_performance`. Failed or
   incomplete candidates receive `-1000.0` for the active objective(s).
-- Explicit `evaluation.mode: self_play` uses a generation-zero `PassiveAI`
-  baseline, exact birth-generation cohorts, immutable snapshot contexts, and
-  `self_play_000`…`self_play_009` cases with uniform weights. Generation 1
-  through the configured refresh interval use the generation-zero cohort; the
-  first delayed refresh is `interval + 1` and switches to the generation-one
-  cohort. Every runnable evaluated generation is archived, while the bounded
-  semantic opponent library remains available for deduplication and provenance.
-  An empty valid pool fails the run instead of creating a poisoned context.
-  Refresh generations re-evaluate phenotype-preserving fresh-ID parents before
-  reflection and selection; resume reloads the latest delayed context and exact
-  cohort references. This mode requires static reflection.
+- The approved self-play contract uses a capacity-bounded tournament pool,
+  permanent protected opponents, seeded nonprotected duels, and immutable
+  contexts using the protected four actual case IDs plus six diagnostic slots
+  (all ten built-in sources at generation zero). Its artifact, resume-marker, and evaluation
+  rules are owned by [`eagle_architecture_spec.md`](../eagle_architecture_spec.md#9-evolution-evaluation).
+  The v4 snapshot validates configured runtime/map asset hashes before cached
+  fitness reuse; `game_performance.json` retains context identity. Tournament
+  evidence includes prepared defender class-tree hashes and available builtin
+  source/resolved-class hashes.
+  Tournament-v1 validation: 28 focused pool/config/context/resume tests passed;
+  a broader 105-test regression run passed with one skip. A separate WSL runtime
+  smoke completed 36 actual matches against LightRush and a saved generated
+  defender, including compilation and Integration. Compileall and diff checks
+  passed. A complete real evolutionary run and the full permanent roster were
+  not exercised; this checkout lacks the AllInBot JAR.
 - Fixed-roster parent/survivor selection is seeded lexicase. Self-play maximizes
   Game Performance, treats scores within `1.0` of a tier maximum as tied, and
   uses nine-probe full-agent behavior distance to preserve different semantics

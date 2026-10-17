@@ -32,10 +32,8 @@ from eagle.run_artifacts import (
     record_error_memory,
     record_generation,
 )
+from eagle.opponent_pool import initial_pool, update_pool
 from eagle.self_play import (
-    load_self_play_generation_cohort,
-    record_self_play_generation_cohort,
-    update_self_play_opponent_library,
     write_self_play_snapshot,
 )
 from eagle.strategy_diversity import (
@@ -203,12 +201,6 @@ def _run_search_impl(
     )
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, evaluated_population)
-    append_event(run_dir / "timing.jsonl", build_generation_event(
-        run_id=active_run_id,
-        generation=0,
-        candidates=evaluated_population,
-        span=generation_span.finish(),
-    ))
     generation_diversity = generation_diversity_metrics(
         evaluated_population,
         previous_archive_niches=archive_before,
@@ -218,20 +210,18 @@ def _run_search_impl(
             "Generation 0 produced no candidate that completed evaluation."
         )
     if config.evaluation_mode == "self_play":
-        record_self_play_generation_cohort(run_dir, 0, evaluated_population)
-        update_self_play_opponent_library(
-            run_dir,
-            evaluated_population,
-            capacity=config.self_play_opponent_library_capacity,
-        )
-        self_play_opponent_snapshot = load_self_play_generation_cohort(run_dir, 0)
+        update_pool(run_dir, evaluated_population, generation=0, config=config, mock=mock)
+        self_play_opponent_snapshot = initial_pool()
         write_self_play_snapshot(
             run_dir,
             generation=0,
             candidates=self_play_opponent_snapshot,
-            refresh_interval=config.self_play_refresh_interval,
-            opponent_generation=0,
+            config=config,
         )
+    append_event(run_dir / "timing.jsonl", build_generation_event(
+        run_id=active_run_id, generation=0, candidates=evaluated_population,
+        span=generation_span.finish(),
+    ))
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
     record_generation(
@@ -247,7 +237,7 @@ def _run_search_impl(
         selection_mode=config.algorithm,
     )
     self_play_opponent_snapshot = (
-        load_self_play_generation_cohort(run_dir, 0)
+        initial_pool()
         if config.evaluation_mode == "self_play"
         else None
     )

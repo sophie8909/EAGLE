@@ -463,25 +463,63 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-In `self_play`, generation zero is evaluated against the fixed `PassiveAI`
-baseline. Persist all runnable generation-zero results as an exact
-birth-generation cohort, then use that cohort as the immutable ten-slot context
-for generations 1 through `evaluation.self_play_refresh_interval`. The first
-delayed refresh is generation `evaluation.self_play_refresh_interval + 1`; it
-switches to the exact generation-one cohort, and subsequent windows advance one
-birth generation at a time. Persist every runnable evaluated generation in
-`archives/self_play_generation_cohorts.json`, independent of survivor
-retention. Retain the bounded opponent library for semantic deduplication and
-offline provenance, but do not use it to replace the exact delayed cohort
-schedule. At a context refresh, phenotype-preserving fresh-ID parent replicas
-are re-evaluated before reflection; the same migration is also performed when
-the initial candidate context differs from the baseline context. Only those
-replicas and offspring evaluated against that same context enter selection.
-Persist the cohort index, library, active context, refresh audit sidecar,
-surviving population, and metrics.
-`evaluation.self_play_opponent_library_capacity` bounds the retained semantic
-archive; FIFO eviction removes references only and never deletes candidate
-artifacts.
+In `self_play`, the maintained opponent pool and each generation's immutable
+evaluation context are separate. The pool starts with every entry in
+`SEARCH_OPPONENT_REGISTRY`. `allinbot`, `mayari`, `coac`, and `tma` are permanent
+protected members: they are never eligible for pool tournaments or eviction.
+The other six built-in baselines (`passive`, `random`, `randombias`,
+`lightrush`, `heavyrush`, `workerrush`) and admitted generated agents are
+tournament-eligible. `evaluation.self_play_opponent_library_capacity` sets total
+pool capacity, including the four protected members; it defaults to 50 and must
+be at least 10.
+
+After generation zero and each completed offspring evaluation, add novel
+eligible agents while capacity remains. Deduplicate by candidate ID, source,
+and semantic phenotype. When full, each novel entrant challenges one seeded,
+sampled nonprotected incumbent in a complete head-to-head of three maps, three
+rounds, and both sides (18 matches). Count each win as 1, draw as 0.5, and loss
+as 0. Replace the incumbent only when the entrant has strictly more wins than
+losses; ties retain the incumbent. Incomplete or failed duels cannot promote
+the entrant, and their failure evidence is retained. The tournament does not
+call an LLM; it reuses the entrant's source/classes and prepares the defender
+with the existing opponent adapters.
+
+Generation zero evaluates all ten built-in sources using the same fixed slot
+schema as later contexts: the four protected members use their actual case IDs,
+and the six other built-in sources occupy `self_play_000`…`self_play_005`. At
+generation one and each subsequent `evaluation.self_play_refresh_interval`
+boundary (generations 1, 6, 11, ... with the default interval 5), retain those
+protected case IDs and fill the six diagnostic slots with a deterministic
+sample of nonprotected pool members. Every slot has equal weight, and the
+candidate matrix remains 180 matches. Context rows record `source_opponent_id`
+for each built-in source; `source_candidate_id` and `source_generation` are null
+for built-ins.
+Re-evaluate phenotype-preserving fresh-ID parent replicas whenever this
+context changes, before selection; only candidates evaluated against the same
+context may enter selection.
+
+Persist the pool in `archives/self_play_opponents.json` (`eagle-opponent-pool-v1`)
+with capacity, protected IDs, member references, and phenotype hashes. Persist
+each duel under
+`archives/opponent_pool_tournaments/generation_NNNN/<entrant_id>/result.json`
+with per-match evidence, and record tournament duration as the
+`opponent_pool_tournament` timing event. Context snapshots use
+`eagle-self-play-snapshot-v4`, member references, and a context hash. Checkpoint
+pool state in the existing `resume_archives` and restore it before replay.
+Snapshot `runtime_identity` hashes the actual configured MicroRTS `src`, `bin`,
+and `lib` assets, builtin opponent JARs, opponent adapters/support libraries,
+and map file bytes. `load_self_play_snapshot` verifies this identity before
+cached fitness reuse; asset changes require a new run. Persisted
+`evaluation/game_performance.json` also includes `evaluation_configuration`,
+`evaluation_context_id`, and `fitness_case_ids` alongside scores so resume can
+confirm cached fitness belongs to the active context. Tournament evidence
+hashes the prepared/renamed runtime class tree used for a candidate defender.
+Builtin entries retain source and resolved-class hashes when available.
+Self-play resolved configs require
+`evaluation.self_play_pool_policy: tournament-v1`. A self-play run without
+this exact marker cannot resume under the changed policy; inspection remains
+supported. `fixed_roster` behavior is unchanged. The old cohort archive helper
+may remain for historical reads, but it does not schedule active contexts.
 
 Self-play currently requires `reflection_operator_mode: static` and
 `parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
