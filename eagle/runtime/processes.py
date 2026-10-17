@@ -8,6 +8,7 @@ import shlex
 import signal
 import socket
 import subprocess
+import sys
 import time
 import uuid
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from eagle.runtime.endpoints import health_check
 
 
 OWNERSHIP_SCHEMA_VERSION = "eagle-runtime-ownership-v1"
+_WINDOWS = sys.platform == "win32"
 
 
 @dataclass(frozen=True)
@@ -361,7 +363,74 @@ class RuntimeManager:
             _remove_legacy_files(pid_path)
 
 
+def _windows_process_record(pid: int) -> dict[str, Any] | None:
+    if pid <= 0:
+        return None
+    script = (
+        "[Console]::OutputEncoding = [Text.UTF8Encoding]::new(); "
+        f"$p = Get-CimInstance Win32_Process -Filter 'ProcessId = {int(pid)}'; "
+        "if ($null -ne $p) { @{ executable = $p.ExecutablePath; "
+        "command = $p.CommandLine; start_time = $p.CreationDate.ToFileTimeUtc(); "
+        "parent_pid = $p.ParentProcessId } | ConvertTo-Json -Compress }"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=5, check=False,
+        )
+        record = json.loads(result.stdout) if result.returncode == 0 else None
+        return record if isinstance(record, dict) else None
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return None
+
+
+def _windows_command_args(command: str) -> tuple[str, ...]:
+    if not command:
+        return ()
+    import ctypes
+    from ctypes import wintypes
+
+    shell = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    shell.CommandLineToArgvW.argtypes = (wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int))
+    shell.CommandLineToArgvW.restype = ctypes.POINTER(wintypes.LPWSTR)
+    kernel.LocalFree.argtypes = (wintypes.HLOCAL,)
+    kernel.LocalFree.restype = wintypes.HLOCAL
+    count = ctypes.c_int()
+    arguments = shell.CommandLineToArgvW(command, ctypes.byref(count))
+    if not arguments:
+        return ()
+    try:
+        return tuple(arguments[index] for index in range(count.value))
+    finally:
+        kernel.LocalFree(arguments)
+
+
+def _windows_process_alive(pid: int) -> bool:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+    if not handle:
+        return ctypes.get_last_error() == 5  # Access denied is not proof of death.
+    try:
+        return kernel.WaitForSingleObject(handle, 0) == 258  # WAIT_TIMEOUT
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def read_command_args(pid: int) -> tuple[str, ...]:
+    if _WINDOWS:
+        record = _windows_process_record(pid)
+        return () if record is None else _windows_command_args(record.get("command", ""))
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as handle:
             parts = handle.read().split(b"\0")
@@ -378,6 +447,9 @@ def read_command(pid: int) -> str:
 
 
 def read_executable(pid: int) -> str:
+    if _WINDOWS:
+        record = _windows_process_record(pid)
+        return "unavailable" if record is None else record.get("executable") or "unavailable"
     try:
         return os.readlink(f"/proc/{pid}/exe")
     except OSError:
@@ -385,6 +457,9 @@ def read_executable(pid: int) -> str:
 
 
 def read_process_start_time(pid: int) -> int | None:
+    if _WINDOWS:
+        record = _windows_process_record(pid)
+        return None if record is None else record.get("start_time")
     try:
         value = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
         remainder = value.rsplit(")", 1)[1].strip().split()
@@ -394,6 +469,9 @@ def read_process_start_time(pid: int) -> int | None:
 
 
 def read_parent_pid(pid: int) -> int | None:
+    if _WINDOWS:
+        record = _windows_process_record(pid)
+        return None if record is None else record.get("parent_pid")
     try:
         value = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
         remainder = value.rsplit(")", 1)[1].strip().split()
@@ -403,6 +481,14 @@ def read_parent_pid(pid: int) -> int | None:
 
 
 def process_identity(pid: int) -> ProcessIdentity | None:
+    if _WINDOWS:
+        record = _windows_process_record(pid)
+        if record is None or not record.get("start_time") or not record.get("executable"):
+            return None
+        command = _windows_command_args(record.get("command") or "")
+        if not command:
+            return None
+        return ProcessIdentity(pid, record["start_time"], record["executable"], command)
     start_time = read_process_start_time(pid)
     command = read_command_args(pid)
     executable = read_executable(pid)
@@ -418,6 +504,8 @@ def identity_matches_process(identity: ProcessIdentity) -> bool:
 def process_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if _WINDOWS:
+        return _windows_process_alive(pid)
     try:
         os.kill(pid, 0)
         stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
@@ -434,7 +522,11 @@ def process_alive(pid: int) -> bool:
 def port_occupied(host: str, port: int) -> bool:
     probe = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET, socket.SOCK_STREAM)
     try:
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.setsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_EXCLUSIVEADDRUSE if _WINDOWS else socket.SO_REUSEADDR,
+            1,
+        )
         probe.bind((host, port))
     except OSError:
         return True
@@ -444,6 +536,22 @@ def port_occupied(host: str, port: int) -> bool:
 
 
 def discover_listening_server_pid(host: str, port: int) -> int | None:
+    if _WINDOWS:
+        try:
+            probe = subprocess.run(
+                ["netstat.exe", "-ano", "-p", "TCP"],
+                capture_output=True, text=True, check=False, timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if probe.returncode == 0:
+            for line in probe.stdout.splitlines():
+                fields = line.split()
+                if (len(fields) == 5 and fields[0] == "TCP"
+                        and fields[1].rsplit(":", 1)[-1] == str(port)
+                        and fields[3] == "LISTENING" and fields[4].isdigit()):
+                    return int(fields[4])
+        return None
     commands = (
         ["ss", "-ltnp", f"sport = :{port}"],
         ["lsof", "-nP", f"-iTCP@{host}:{port}", "-sTCP:LISTEN", "-t"],
@@ -486,6 +594,8 @@ def terminate_pid(pid: int, timeout: float) -> None:
             return
         time.sleep(0.1)
     if process_alive(pid):
+        if _WINDOWS:
+            raise RuntimeError(f"PID {pid} did not exit after termination.")
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -501,7 +611,7 @@ def _command_matches_runtime(identity: ProcessIdentity, runtime: RuntimeConfig) 
 
 def _legacy_identity_is_trusted(identity: ProcessIdentity, runtime: RuntimeConfig) -> bool:
     command = identity.command
-    if not command or Path(identity.executable).name != "llama-server":
+    if not command or Path(identity.executable).name.lower() not in {"llama-server", "llama-server.exe"}:
         return False
     try:
         Path(identity.executable).resolve().relative_to(runtime.project_root.resolve())
@@ -546,7 +656,7 @@ def _record_is_trusted(record: dict[str, Any], runtime: RuntimeConfig) -> bool:
     return bool(
         identity is not None
         and record.get("project_root") == str(runtime.project_root)
-        and Path(identity.executable).name == "llama-server"
+        and Path(identity.executable).name.lower() in {"llama-server", "llama-server.exe"}
     )
 
 

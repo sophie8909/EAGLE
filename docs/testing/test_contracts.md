@@ -1,5 +1,30 @@
 # Test contracts
 
+## Local experiment GUI
+
+`tests/test_gui_data.py`, `tests/test_gui.py`, and `tests/test_gui_match.py`
+cover confined config paths, generated-index protection, exact YAML/unknown
+field retention, validation-before-save, atomic replace failure, survivor
+snapshot membership and retained parents, transient artifacts, materialized
+other candidates, immutable launch inputs, canonical CLI flags, stop ownership,
+bounded logs, observation command construction without fitness writes, and
+loopback Host/Origin/token guards. Observation can read canonical historical
+runs without applying current resume-only runtime validation. Adapter tests
+cover WorkerRush and SafeAllInBot classpaths and temporary compilation wiring.
+Platform checks cover POSIX session/stop behavior, Windows owned console group
+creation and Ctrl+Break dispatch, UTF-8 child logs, and portable map paths.
+`tests/test_interrupts.py` checks handler restoration and, from a Windows
+console, waking a blocked child and completing cleanup. Native process tests
+in `tests/test_runtime_windows.py` verify command quoting, creation-time
+identity fences, liveness, termination, listener discovery, and exclusive
+port checks. Real Java compile/integration tests exercise explicit UTF-8;
+native GUI smoke verifies a 100-tick window match without changing the Run.
+
+Browser checks cover form/YAML round trips, rejected invalid values,
+run/generation/candidate selection, and desktop/mobile layout. A bounded
+non-headless MicroRTS game checks WSLg startup separately from mocked launch
+tests; it does not establish full experiment/model or all-opponent coverage.
+
 ## LLM-mode DSL and pre-crossover source contract (2026-10-11)
 
 Test canonical DSL validation, ordered rules, intrinsic legality guards, idle

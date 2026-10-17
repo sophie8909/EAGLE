@@ -159,6 +159,7 @@ def compile_generated_agent(
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [
         "javac",
+        "-encoding", "UTF-8",
         "-Xlint:all",
         "-cp",
         os.pathsep.join([str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),

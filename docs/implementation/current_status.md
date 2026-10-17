@@ -1,5 +1,25 @@
 # Current implementation status
 
+## Local experiment GUI (2026-10-16)
+
+`python -m eagle gui` provides config selection, enum/boolean form controls,
+full YAML editing, validated atomic save, immutable launch snapshots, bounded
+live logs, stop/resume controls, and automatically refreshed canonical
+run/generation/candidate lists. Visual observation invokes the retained
+temporary compile/integration/MicroRTS launcher and does not change fitness.
+`gui.sh` launches on native Ubuntu; `gui.cmd` uses native Windows Python.
+`gui-wsl.cmd` retains WSL launching and WSLg observation. Windows child jobs
+use owned console groups and graceful Ctrl+Break handlers; Ubuntu retains
+POSIX sessions and signals. Runtime assets and absolute config paths must
+match the destination OS when migrating.
+Runtime ownership supports native Windows creation-time/executable/command
+identity and listener discovery alongside Linux `/proc`. Java compilers use
+explicit UTF-8 on both platforms. Native Windows GUI HTTP, interrupt cleanup,
+and a 100-tick WorkerRush window match were verified; an actual Windows
+llama-server/GPU/model experiment remains unverified.
+The visual launcher now prepares the existing WorkerRush and SafeAllInBot
+adapters and uses the canonical `lightrush` default.
+
 ## DSL and pre-crossover source contract (2026-10-11)
 
 Canonical `eagle-strategy-dsl-v1` policies are validated by `eagle/strategy_dsl.py`.

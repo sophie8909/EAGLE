@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -61,7 +62,7 @@ class SemanticSignatureTests(unittest.TestCase):
             source = ROOT / "eagle" / "java_seeds" / "CandidateAgent.java"
             subprocess.run(
                 [
-                    "javac", "-cp", f"{microrts / 'bin'}:{microrts / 'lib' / '*'}",
+                    "javac", "-encoding", "UTF-8", "-cp", os.pathsep.join([str(microrts / 'bin'), str(microrts / 'lib' / '*')]),
                     "-d", str(classes), str(source),
                 ],
                 check=True, capture_output=True, text=True,

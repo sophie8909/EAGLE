@@ -54,7 +54,7 @@ def setup_allibot(root: Path) -> Path:
     classes_dir.mkdir(parents=True)
     build = subprocess.run(
         [
-            "javac", "-Xlint:all", "-cp", str(source_dir / "lib" / "*"), "-d", str(classes_dir),
+            "javac", "-encoding", "UTF-8", "-Xlint:all", "-cp", str(source_dir / "lib" / "*"), "-d", str(classes_dir),
             *(str(path) for path in source_files),
         ],
         cwd=adapted_source_dir,
