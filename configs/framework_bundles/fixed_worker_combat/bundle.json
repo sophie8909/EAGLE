@@ -7,28 +7,28 @@
       "slot_id": "worker_target",
       "kind": "integer",
       "marker": "{{EAGLE_SLOT:worker_target}}",
-      "default": 4,
+      "default": 3,
       "minimum": 2,
       "maximum": 8,
       "step": 1,
       "choices": [],
-      "purpose": "Keep four workers gathering before the base changes to combat production."
+      "purpose": "Keep three workers gathering before the base changes to combat production, preserving an early pressure window."
     },
     {
       "slot_id": "combat_target_limit",
       "kind": "integer",
       "marker": "{{EAGLE_SLOT:combat_target_limit}}",
-      "default": 6,
+      "default": 10,
       "minimum": 1,
       "maximum": 20,
       "step": 1,
       "choices": [],
-      "purpose": "Limit how many idle combat units receive attack orders in one decision cycle."
+      "purpose": "Limit how many idle combat units receive attack orders in one decision cycle while allowing a concentrated early push."
     }
   ],
-  "slot_generation_prompt": "Use the fixed safe economy and nearest-enemy combat framework; only choose legal values for worker_target and combat_target_limit.",
+  "slot_generation_prompt": "Use the fixed early-pressure economy and nearest-enemy combat framework; only choose legal values for worker_target and combat_target_limit, retaining candidate-specific diversity when selecting an initial genome.",
   "report": {
-    "architecture_summary": "A deterministic MicroRTS agent that harvests with workers, trains workers up to a bounded target, trains Light units from Barracks, and sends a bounded group of idle combat units toward the nearest enemy.",
+    "architecture_summary": "A deterministic MicroRTS agent that harvests with a compact worker economy, trains workers up to a bounded target, trains Light units from Barracks, and sends a concentrated group of idle combat units toward the nearest enemy.",
     "decision_flow": [
       "Collect the current player units and preserve the framework action guards.",
       "Harvest the nearest resource with idle workers.",
@@ -43,8 +43,8 @@
       "All controls are finite integer values and render into valid Java expressions."
     ],
     "slot_rationale": {
-      "worker_target": "Four workers provide a stable early economy without making the baseline passive.",
-      "combat_target_limit": "Six attackers create pressure while reserving the remaining units for safe fallback behavior."
+      "worker_target": "Three workers provide enough early income while allowing the framework to transition into combat sooner.",
+      "combat_target_limit": "Ten attackers provide a meaningful pressure group while the action helpers retain safe fallback behavior."
     },
     "assumptions": [
       "The standard MicroRTS UnitTypeTable contains Resource, Worker, Light, Base, and Barracks types.",
@@ -52,7 +52,8 @@
     ],
     "risks": [
       "The compact baseline does not explicitly build Barracks, so maps without a starting Barracks remain economy-focused.",
-      "Nearest-target combat can be less robust than a richer tactical policy on large maps."
+      "Nearest-target combat can be less robust than a richer tactical policy on large maps.",
+      "A more aggressive initial genome may trade late-game economy for earlier pressure."
     ]
   }
 }
