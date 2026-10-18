@@ -1,18 +1,300 @@
 {
   "schema_version": "eagle-framework-bundle-v1",
   "framework_id": "fixed_worker_combat",
-  "java_template": "package ai.generated;\n\nimport ai.abstraction.AbstractionLayerAI;\nimport ai.abstraction.AbstractAction;\nimport ai.abstraction.pathfinding.AStarPathFinding;\nimport ai.abstraction.pathfinding.PathFinding;\nimport ai.core.AI;\nimport ai.core.ParameterSpecification;\nimport java.util.ArrayList;\nimport java.util.List;\nimport rts.GameState;\nimport rts.PhysicalGameState;\nimport rts.PlayerAction;\nimport rts.ResourceUsage;\nimport rts.UnitAction;\nimport rts.units.Unit;\nimport rts.units.UnitType;\nimport rts.units.UnitTypeTable;\n\npublic final class CandidateAgent extends AbstractionLayerAI {\n    private UnitTypeTable utt;\n    private UnitType resourceType;\n    private UnitType workerType;\n    private UnitType lightType;\n    private UnitType heavyType;\n    private UnitType rangedType;\n    private UnitType baseType;\n    private UnitType barracksType;\n    private int activePlayer = -1;\n    private GameState activeGameState;\n\n    public CandidateAgent(UnitTypeTable utt) {\n        this(utt, new AStarPathFinding());\n    }\n\n    public CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding) {\n        super(pathFinding);\n        reset(utt);\n    }\n\n    public void reset(UnitTypeTable utt) {\n        this.utt = utt;\n        activePlayer = -1;\n        activeGameState = null;\n        resourceType = utt.getUnitType(\"Resource\");\n        workerType = utt.getUnitType(\"Worker\");\n        lightType = utt.getUnitType(\"Light\");\n        heavyType = utt.getUnitType(\"Heavy\");\n        rangedType = utt.getUnitType(\"Ranged\");\n        baseType = utt.getUnitType(\"Base\");\n        barracksType = utt.getUnitType(\"Barracks\");\n    }\n\n    @Override\n    public void reset() {\n        super.reset();\n        if (utt != null) {\n            reset(utt);\n        }\n    }\n\n    @Override\n    public AI clone() {\n        return new CandidateAgent(utt, new AStarPathFinding());\n    }\n\n    @Override\n    public PlayerAction getAction(int player, GameState gs) throws Exception {\n        activePlayer = player;\n        activeGameState = gs;\n        try {\n            if (gs.gameover()) {\n                return translateActions(player, gs);\n            }\n            AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));\n            decide(context);\n            applyAutoDefense(player, gs);\n            return translateActions(player, gs);\n        } finally {\n            activePlayer = -1;\n            activeGameState = null;\n        }\n    }\n\n    // EAGLE_AGENT_STRATEGY_START\n    // Fixed offline framework: safe WorkerRush-style economy and nearest-target combat.\n    private static final int WORKER_TARGET = {{EAGLE_SLOT:worker_target}};\n    private static final int COMBAT_TARGET_LIMIT = {{EAGLE_SLOT:combat_target_limit}};\n    private void decide(AgentContext context) {\n        economy(context);\n        expansion(context);\n        combat(context);\n    }\n\n    private void economy(AgentContext context) {\n        Unit base = ownBase(context);\n        for (Unit unit : context.units) {\n            if (!isIdleAlly(unit, context) || unit.getType() != workerType) {\n                continue;\n            }\n            Unit resource = nearestResource(unit, context);\n            if (resource != null && base != null) {\n                commandHarvest(unit, resource, base);\n            } else {\n                commandIdle(unit);\n            }\n        }\n    }\n\n    private void combat(AgentContext context) {\n        int assigned = 0;\n        for (Unit unit : context.units) {\n            if (!isIdleAlly(unit, context) || !unit.getType().canAttack) {\n                continue;\n            }\n            Unit target = selectTarget(context, unit, context.units);\n            if (target != null && assigned < COMBAT_TARGET_LIMIT) {\n                commandAttack(unit, target);\n                assigned++;\n            } else {\n                commandIdle(unit);\n            }\n        }\n    }\n\n    private void expansion(AgentContext context) {\n        int resources = context.gs.getPlayer(context.player).getResources();\n        for (Unit unit : context.units) {\n            if (!isIdleAlly(unit, context)) {\n                continue;\n            }\n            if (unit.getType() == baseType && resources >= workerType.cost\n                    && countOwnUnits(context, workerType) < WORKER_TARGET) {\n                commandTrain(unit, workerType);\n                return;\n            }\n            if (unit.getType() == barracksType && resources >= lightType.cost) {\n                commandTrain(unit, lightType);\n                return;\n            }\n        }\n    }\n\n    private int countOwnUnits(AgentContext context, UnitType type) {\n        int count = 0;\n        for (Unit unit : context.units) {\n            if (unit.getPlayer() == context.player && unit.getType() == type) {\n                count++;\n            }\n        }\n        return count;\n    }\n\n    private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates) {\n        Unit best = null;\n        int bestDistance = Integer.MAX_VALUE;\n        for (Unit candidate : candidates) {\n            if (candidate.getPlayer() < 0 || candidate.getPlayer() == context.player) {\n                continue;\n            }\n            int distance = Math.abs(candidate.getX() - actor.getX())\n                    + Math.abs(candidate.getY() - actor.getY());\n            if (distance < bestDistance) {\n                best = candidate;\n                bestDistance = distance;\n            }\n        }\n        return best;\n    }\n\n    private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY) {\n        return new PathChoice(targetX, targetY);\n    }\n\n    // EAGLE_AGENT_STRATEGY_END\n\n    // EAGLE_ACTION_HELPERS_START\n    // Stable Agent operation API: strategy code should issue actions through these helpers.\n    private boolean commandMove(Unit unit, int x, int y) {\n        if (unit == null || unit.getPlayer() != activePlayer\n                || unit.getType() == baseType || unit.getType() == barracksType\n                || !isInsideActiveMap(x, y)) {\n            return false;\n        }\n        move(unit, x, y);\n        return true;\n    }\n\n    private boolean commandHarvest(Unit worker, Unit resource, Unit base) {\n        if (worker == null || resource == null || base == null) {\n            return false;\n        }\n        if (worker.getPlayer() != activePlayer || base.getPlayer() != activePlayer\n                || resource.getPlayer() >= 0 || worker.getType() != workerType\n                || resource.getType() != resourceType || base.getType() != baseType) {\n            return false;\n        }\n        harvest(worker, resource, base);\n        return true;\n    }\n\n    private boolean commandReturn(Unit worker, Unit base, AgentContext context) {\n        UnitAction planned = prepareReturn(worker, base, context);\n        return planned != null && commandReturn(worker, base, context, planned);\n    }\n\n    private boolean commandReturn(Unit worker, Unit base, AgentContext context, UnitAction planned) {\n        UnitAction expected = prepareReturn(worker, base, context);\n        if (expected == null || !expected.equals(planned)\n                || !commandPlannedAction(worker, planned, context)) {\n            return false;\n        }\n        actions.put(worker, new ReturnAction(worker, base, planned));\n        return true;\n    }\n\n    private UnitAction prepareReturn(Unit worker, Unit base, AgentContext context) {\n        if (context == null || context.gs != activeGameState || context.player != activePlayer\n                || !isIdleAlly(worker, context) || base == null\n                || worker.getType() != workerType || base.getType() != baseType\n                || base.getPlayer() != context.player || worker.getResources() <= 0\n                || !context.units.contains(base)) {\n            return null;\n        }\n        int dx = base.getX() - worker.getX();\n        int dy = base.getY() - worker.getY();\n        UnitAction action;\n        if (Math.abs(dx) + Math.abs(dy) == 1) {\n            int direction = dx == 1 ? UnitAction.DIRECTION_RIGHT\n                    : dx == -1 ? UnitAction.DIRECTION_LEFT\n                    : dy == 1 ? UnitAction.DIRECTION_DOWN : UnitAction.DIRECTION_UP;\n            action = new UnitAction(UnitAction.TYPE_RETURN, direction);\n        } else {\n            action = pf.findPathToAdjacentPosition(worker,\n                    base.getX() + base.getY() * context.gs.getPhysicalGameState().getWidth(),\n                    context.gs, context.reservations);\n        }\n        return action != null && context.gs.isUnitActionAllowed(worker, action)\n                && context.reservations.consistentWith(\n                        action.resourceUsage(worker, context.gs.getPhysicalGameState()), context.gs)\n                ? action : null;\n    }\n\n    private boolean commandPlannedAction(Unit actor, UnitAction action, AgentContext context) {\n        if (context == null || context.gs != activeGameState || context.player != activePlayer\n                || action == null || !isIdleAlly(actor, context) || !context.units.contains(actor)\n                || !actor.canExecuteAction(action, context.gs)\n                || !context.gs.isUnitActionAllowed(actor, action)) {\n            return false;\n        }\n        ResourceUsage usage = action.resourceUsage(actor, context.gs.getPhysicalGameState());\n        if (!context.reservations.consistentWith(usage, context.gs)) {\n            return false;\n        }\n        actions.put(actor, new PlannedUnitAction(actor, action));\n        context.reservations.merge(usage);\n        return true;\n    }\n\n    private boolean commandTrain(Unit producer, UnitType unitType) {\n        if (producer == null || producer.getPlayer() != activePlayer || unitType == null) {\n            return false;\n        }\n        boolean validBaseProduction = producer.getType() == baseType && unitType == workerType;\n        boolean validBarracksProduction = producer.getType() == barracksType\n                && (unitType == lightType || unitType == heavyType || unitType == rangedType);\n        if (!validBaseProduction && !validBarracksProduction) {\n            return false;\n        }\n        train(producer, unitType);\n        return true;\n    }\n\n    private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {\n        if (worker == null || worker.getPlayer() != activePlayer || buildingType == null\n                || worker.getType() != workerType\n                || (buildingType != baseType && buildingType != barracksType)\n                || !isInsideActiveMap(x, y)) {\n            return false;\n        }\n        build(worker, buildingType, x, y);\n        return true;\n    }\n\n    private boolean commandAttack(Unit attacker, Unit target) {\n        if (attacker == null || target == null || attacker.getPlayer() != activePlayer\n                || target.getPlayer() < 0 || !attacker.getType().canAttack) {\n            return false;\n        }\n        if (target.getPlayer() == activePlayer) {\n            return false;\n        }\n        attack(attacker, target);\n        return true;\n    }\n\n    private boolean commandIdle(Unit unit) {\n        if (unit == null || unit.getPlayer() != activePlayer) {\n            return false;\n        }\n        idle(unit);\n        return true;\n    }\n\n    private boolean isInsideActiveMap(int x, int y) {\n        if (activeGameState == null) {\n            return false;\n        }\n        PhysicalGameState physical = activeGameState.getPhysicalGameState();\n        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight();\n    }\n\n    // EAGLE_ACTION_HELPERS_END\n\n    private boolean isIdleAlly(Unit unit, AgentContext context) {\n        return unit != null\n                && unit.getPlayer() == context.player\n                && context.gs.getUnitAction(unit) == null\n                && getAbstractAction(unit) == null;\n    }\n\n    private Unit nearestUnit(Unit source, List<Unit> units, int owner, UnitType type) {\n        Unit best = null;\n        int bestDistance = Integer.MAX_VALUE;\n        for (Unit other : units) {\n            if (owner != Integer.MIN_VALUE && other.getPlayer() != owner) {\n                continue;\n            }\n            if (type != null && other.getType() != type) {\n                continue;\n            }\n            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());\n            if (distance < bestDistance) {\n                best = other;\n                bestDistance = distance;\n            }\n        }\n        return best;\n    }\n\n    private Unit nearestEnemy(Unit source, AgentContext context) {\n        Unit best = null;\n        int bestDistance = Integer.MAX_VALUE;\n        for (Unit other : context.units) {\n            if (other.getPlayer() < 0 || other.getPlayer() == context.player) {\n                continue;\n            }\n            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());\n            if (distance < bestDistance) {\n                best = other;\n                bestDistance = distance;\n            }\n        }\n        return best;\n    }\n\n    private Unit nearestResource(Unit source, AgentContext context) {\n        return nearestUnit(source, context.units, -1, resourceType);\n    }\n\n    private Unit ownBase(AgentContext context) {\n        for (Unit unit : context.units) {\n            if (unit.getPlayer() == context.player && unit.getType() == baseType) {\n                return unit;\n            }\n        }\n        return null;\n    }\n\n    private boolean isFreeCell(AgentContext context, int x, int y) {\n        if (context == null || context.gs == null) {\n            return false;\n        }\n        PhysicalGameState physical = context.gs.getPhysicalGameState();\n        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight()\n                && context.gs.free(x, y);\n    }\n\n    private void applyAutoDefense(int player, GameState gs) {\n        PhysicalGameState pgs = gs.getPhysicalGameState();\n        AgentContext context = new AgentContext(player, gs, new ArrayList<>(pgs.getUnits()));\n        for (Unit ally : context.units) {\n            if (!isIdleAlly(ally, context) || !ally.getType().canAttack) {\n                continue;\n            }\n            Unit enemy = nearestEnemy(ally, context);\n            if (enemy == null) {\n                continue;\n            }\n            int distance = Math.abs(enemy.getX() - ally.getX()) + Math.abs(enemy.getY() - ally.getY());\n            if (distance <= ally.getType().attackRange) {\n                commandAttack(ally, enemy);\n            }\n        }\n    }\n\n    @Override\n    public List<ParameterSpecification> getParameters() {\n        List<ParameterSpecification> parameters = new ArrayList<>();\n        parameters.add(new ParameterSpecification(\"PathFinding\", PathFinding.class, new AStarPathFinding()));\n        return parameters;\n    }\n\n    private static final class AgentContext {\n        final int player;\n        final GameState gs;\n        final List<Unit> units;\n        final ResourceUsage reservations;\n\n        AgentContext(int player, GameState gs, List<Unit> units) {\n            this.player = player;\n            this.gs = gs;\n            this.units = units;\n            this.reservations = gs.getResourceUsage().clone();\n        }\n    }\n\n    // One-cycle primitives retain the compiler's exact placement and reservations.\n    private static class PlannedUnitAction extends AbstractAction {\n        private final UnitAction action;\n        private boolean executed;\n\n        PlannedUnitAction(Unit actor, UnitAction action) {\n            super(actor);\n            this.action = action;\n        }\n\n        @Override\n        public boolean completed(GameState gs) {\n            return executed;\n        }\n\n        @Override\n        public UnitAction execute(GameState gs, ResourceUsage usage) {\n            executed = true;\n            return action;\n        }\n\n        @Override\n        public void toxml(util.XMLWriter writer) {\n            writer.tagWithAttributes(\"PlannedUnitAction\", \"unitID=\\\"\" + getUnit().getID() + \"\\\"\");\n            writer.tag(\"/PlannedUnitAction\");\n        }\n    }\n\n    private static final class ReturnAction extends PlannedUnitAction {\n        private final Unit base;\n\n        ReturnAction(Unit worker, Unit base, UnitAction action) {\n            super(worker, action);\n            this.base = base;\n        }\n\n        @Override\n        public void toxml(util.XMLWriter writer) {\n            writer.tagWithAttributes(\"Return\", \"unitID=\\\"\" + getUnit().getID()\n                    + \"\\\" base=\\\"\" + base.getID() + \"\\\"\");\n            writer.tag(\"/Return\");\n        }\n    }\n\n    private static final class PathChoice {\n        final int x;\n        final int y;\n\n        PathChoice(int x, int y) {\n            this.x = x;\n            this.y = y;\n        }\n    }\n}\n",
+  "java_template": "package ai.generated;\n\nimport ai.abstraction.AbstractionLayerAI;\nimport ai.abstraction.AbstractAction;\nimport ai.abstraction.pathfinding.AStarPathFinding;\nimport ai.abstraction.pathfinding.PathFinding;\nimport ai.core.AI;\nimport ai.core.ParameterSpecification;\nimport java.util.ArrayList;\nimport java.util.List;\nimport rts.GameState;\nimport rts.PhysicalGameState;\nimport rts.PlayerAction;\nimport rts.ResourceUsage;\nimport rts.UnitAction;\nimport rts.units.Unit;\nimport rts.units.UnitType;\nimport rts.units.UnitTypeTable;\n\npublic final class CandidateAgent extends AbstractionLayerAI {\n    private UnitTypeTable utt;\n    private UnitType resourceType;\n    private UnitType workerType;\n    private UnitType lightType;\n    private UnitType heavyType;\n    private UnitType rangedType;\n    private UnitType baseType;\n    private UnitType barracksType;\n    private int activePlayer = -1;\n    private GameState activeGameState;\n\n    public CandidateAgent(UnitTypeTable utt) {\n        this(utt, new AStarPathFinding());\n    }\n\n    public CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding) {\n        super(pathFinding);\n        reset(utt);\n    }\n\n    public void reset(UnitTypeTable utt) {\n        this.utt = utt;\n        activePlayer = -1;\n        activeGameState = null;\n        resourceType = utt.getUnitType(\"Resource\");\n        workerType = utt.getUnitType(\"Worker\");\n        lightType = utt.getUnitType(\"Light\");\n        heavyType = utt.getUnitType(\"Heavy\");\n        rangedType = utt.getUnitType(\"Ranged\");\n        baseType = utt.getUnitType(\"Base\");\n        barracksType = utt.getUnitType(\"Barracks\");\n    }\n\n    @Override\n    public void reset() {\n        super.reset();\n        if (utt != null) {\n            reset(utt);\n        }\n    }\n\n    @Override\n    public AI clone() {\n        return new CandidateAgent(utt, new AStarPathFinding());\n    }\n\n    @Override\n    public PlayerAction getAction(int player, GameState gs) throws Exception {\n        activePlayer = player;\n        activeGameState = gs;\n        try {\n            if (gs.gameover()) {\n                return translateActions(player, gs);\n            }\n            AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));\n            decide(context);\n            applyAutoDefense(player, gs);\n            return translateActions(player, gs);\n        } finally {\n            activePlayer = -1;\n            activeGameState = null;\n        }\n    }\n\n    // EAGLE_AGENT_STRATEGY_START\n    // Deterministic finite-control framework: economy, construction, production,\n    // rallying, target selection, and defense are independently recombinable.\n    private static final int WORKER_TARGET = {{EAGLE_SLOT:worker_target}};\n    private static final int BARRACKS_WORKER_THRESHOLD = {{EAGLE_SLOT:barracks_worker_threshold}};\n    private static final int BARRACKS_TARGET = {{EAGLE_SLOT:barracks_target}};\n    private static final boolean BUILD_BARRACKS = {{EAGLE_SLOT:build_barracks}};\n    private static final int BUILD_DIRECTION = {{EAGLE_SLOT:build_direction}};\n    private static final int BUILD_RETRY = {{EAGLE_SLOT:build_retry}};\n    private static final int RESOURCE_POLICY = {{EAGLE_SLOT:resource_policy}};\n    private static final int MINIMUM_RESOURCE_DISTANCE = {{EAGLE_SLOT:minimum_resource_distance}};\n    private static final int WORKER_ASSIGNMENT = {{EAGLE_SLOT:worker_assignment}};\n    private static final int WORKER_FALLBACK = {{EAGLE_SLOT:worker_fallback}};\n    private static final int PRODUCTION_PRIORITY = {{EAGLE_SLOT:production_priority}};\n    private static final int EXPANSION_MODE = {{EAGLE_SLOT:expansion_mode}};\n    private static final int COMBAT_UNIT_KIND = {{EAGLE_SLOT:combat_unit_kind}};\n    private static final int ARMY_TARGET = {{EAGLE_SLOT:army_target}};\n    private static final int WORKER_RESERVE = {{EAGLE_SLOT:worker_reserve}};\n    private static final int COMBAT_TARGET_LIMIT = {{EAGLE_SLOT:combat_target_limit}};\n    private static final int ATTACK_COMMIT_COUNT = {{EAGLE_SLOT:attack_commit_count}};\n    private static final int ATTACK_TRIGGER = {{EAGLE_SLOT:attack_trigger}};\n    private static final int TARGET_PRIORITY = {{EAGLE_SLOT:target_priority}};\n    private static final boolean FOCUS_FIRE = {{EAGLE_SLOT:focus_fire}};\n    private static final int ATTACK_ORDER = {{EAGLE_SLOT:attack_order}};\n    private static final int TARGET_DISTANCE_WEIGHT = {{EAGLE_SLOT:target_distance_weight}};\n    private static final int ATTACK_DISTANCE_POLICY = {{EAGLE_SLOT:attack_distance_policy}};\n    private static final int ATTACK_RANGE_MARGIN = {{EAGLE_SLOT:attack_range_margin}};\n    private static final int RALLY_POLICY = {{EAGLE_SLOT:rally_policy}};\n    private static final int COMBAT_FALLBACK = {{EAGLE_SLOT:combat_fallback}};\n    private static final boolean AUTO_DEFENSE = {{EAGLE_SLOT:auto_defense}};\n\n    private void decide(AgentContext context) {\n        if (PRODUCTION_PRIORITY == 0) {\n            ensureBarracks(context);\n            trainWorker(context);\n            trainCombat(context);\n        } else if (PRODUCTION_PRIORITY == 1) {\n            trainCombat(context);\n            ensureBarracks(context);\n            trainWorker(context);\n        } else {\n            economy(context);\n            ensureBarracks(context);\n            trainWorker(context);\n            trainCombat(context);\n        }\n        economy(context);\n        combat(context);\n    }\n\n    private void economy(AgentContext context) {\n        Unit base = ownBase(context);\n        for (Unit unit : context.units) {\n            if (!isIdleAlly(unit, context) || unit.getType() != workerType) {\n                continue;\n            }\n            if (shouldReserveWorker(unit, context)) {\n                commandIdle(unit);\n                continue;\n            }\n            Unit resource = selectResource(context, unit, base);\n            if (resource != null && base != null) {\n                commandHarvest(unit, resource, base);\n            } else if (WORKER_FALLBACK == 1 && unit.getResources() > 0 && base != null) {\n                commandReturn(unit, base, context);\n            } else if (WORKER_FALLBACK == 2 && base != null) {\n                commandMove(unit, base.getX(), base.getY());\n            } else {\n                commandIdle(unit);\n            }\n        }\n    }\n\n    private boolean shouldReserveWorker(Unit worker, AgentContext context) {\n        if (WORKER_ASSIGNMENT == 0 || !BUILD_BARRACKS\n                || countOwnUnits(context, barracksType) >= BARRACKS_TARGET\n                || countOwnUnits(context, workerType) < BARRACKS_WORKER_THRESHOLD) {\n            return false;\n        }\n        int reserved = 0;\n        for (Unit candidate : context.units) {\n            if (candidate.getPlayer() == context.player && candidate.getType() == workerType\n                    && isIdleAlly(candidate, context)) {\n                if (candidate == worker) {\n                    return reserved < WORKER_ASSIGNMENT;\n                }\n                reserved++;\n            }\n        }\n        return false;\n    }\n\n    private boolean ensureBarracks(AgentContext context) {\n        if (!BUILD_BARRACKS\n                || countOwnUnits(context, barracksType) >= BARRACKS_TARGET\n                || countOwnUnits(context, workerType) < BARRACKS_WORKER_THRESHOLD\n                || context.gs.getPlayer(context.player).getResources() < barracksType.cost) {\n            return false;\n        }\n        Unit base = ownBase(context);\n        if (base == null) {\n            return false;\n        }\n        for (Unit worker : context.units) {\n            if (!isIdleAlly(worker, context) || worker.getType() != workerType) {\n                continue;\n            }\n            int[][] offsets = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};\n            for (int attempt = 0; attempt < BUILD_RETRY; attempt++) {\n                int direction = (BUILD_DIRECTION + attempt) % offsets.length;\n                int x = base.getX() + offsets[direction][0];\n                int y = base.getY() + offsets[direction][1];\n                if (isFreeCell(context, x, y) && commandBuild(worker, barracksType, x, y)) {\n                    return true;\n                }\n            }\n        }\n        return false;\n    }\n\n    private boolean trainWorker(AgentContext context) {\n        int workers = countOwnUnits(context, workerType);\n        if (workers >= workerLimit(context)) {\n            return false;\n        }\n        for (Unit unit : context.units) {\n            if (isIdleAlly(unit, context) && unit.getType() == baseType\n                    && context.gs.getPlayer(context.player).getResources() >= workerType.cost) {\n                return commandTrain(unit, workerType);\n            }\n        }\n        return false;\n    }\n\n    private boolean trainCombat(AgentContext context) {\n        UnitType combatType = combatType();\n        if (countOwnUnits(context, workerType) < WORKER_RESERVE\n                || countOwnUnits(context, combatType) >= ARMY_TARGET) {\n            return false;\n        }\n        for (Unit unit : context.units) {\n            if (isIdleAlly(unit, context) && unit.getType() == barracksType\n                    && context.gs.getPlayer(context.player).getResources() >= combatType.cost) {\n                return commandTrain(unit, combatType);\n            }\n        }\n        return false;\n    }\n\n    private int countOwnUnits(AgentContext context, UnitType type) {\n        int count = 0;\n        for (Unit unit : context.units) {\n            if (unit.getPlayer() == context.player && unit.getType() == type) {\n                count++;\n            }\n        }\n        return count;\n    }\n\n    private int workerLimit(AgentContext context) {\n        if (EXPANSION_MODE == 0) {\n            return WORKER_TARGET;\n        }\n        if (EXPANSION_MODE == 1 && countOwnUnits(context, barracksType) == 0) {\n            return Math.min(WORKER_TARGET, BARRACKS_WORKER_THRESHOLD + 1);\n        }\n        return Math.min(WORKER_TARGET, BARRACKS_WORKER_THRESHOLD);\n    }\n\n    private void combat(AgentContext context) {\n        if (!attackReady(context)) {\n            rally(context);\n            return;\n        }\n        Unit focusTarget = null;\n        int assigned = 0;\n        int passes = ATTACK_ORDER == 2 ? 2 : 1;\n        for (int pass = 0; pass < passes && assigned < COMBAT_TARGET_LIMIT; pass++) {\n            for (int offset = 0; offset < context.units.size()\n                    && assigned < COMBAT_TARGET_LIMIT; offset++) {\n                int index = ATTACK_ORDER == 1\n                        ? context.units.size() - 1 - offset : offset;\n                Unit unit = context.units.get(index);\n                if (!isIdleAlly(unit, context) || !unit.getType().canAttack) {\n                    continue;\n                }\n                boolean selectedType = unit.getType() == combatType();\n                if (ATTACK_ORDER == 2 && ((pass == 0) != selectedType)) {\n                    continue;\n                }\n                Unit target = FOCUS_FIRE && focusTarget != null\n                        ? focusTarget : selectTarget(context, unit, context.units);\n                if (target == null) {\n                    combatFallback(unit, null);\n                    continue;\n                }\n                if (FOCUS_FIRE && focusTarget == null) {\n                    focusTarget = target;\n                }\n                int distance = Math.abs(target.getX() - unit.getX())\n                        + Math.abs(target.getY() - unit.getY());\n                if (ATTACK_DISTANCE_POLICY == 1\n                        && distance > unit.getType().attackRange + ATTACK_RANGE_MARGIN) {\n                    combatFallback(unit, target);\n                    continue;\n                }\n                if (commandAttack(unit, target)) {\n                    assigned++;\n                } else {\n                    combatFallback(unit, target);\n                }\n            }\n        }\n    }\n\n    private boolean attackReady(AgentContext context) {\n        int combatCount = countOwnUnits(context, combatType());\n        if (ATTACK_TRIGGER == 0) {\n            return true;\n        }\n        if (ATTACK_TRIGGER == 1) {\n            return combatCount >= ATTACK_COMMIT_COUNT;\n        }\n        return combatCount >= Math.max(ATTACK_COMMIT_COUNT, ARMY_TARGET);\n    }\n\n    private void rally(AgentContext context) {\n        Unit base = ownBase(context);\n        Unit target = base == null ? null : nearestEnemy(base, context);\n        for (Unit unit : context.units) {\n            if (!isIdleAlly(unit, context) || !unit.getType().canAttack) {\n                continue;\n            }\n            if (RALLY_POLICY == 1 && target != null) {\n                commandMove(unit, target.getX(), target.getY());\n            } else if (RALLY_POLICY == 2 && target != null) {\n                commandAttack(unit, target);\n            } else {\n                commandIdle(unit);\n            }\n        }\n    }\n\n    private void combatFallback(Unit unit, Unit target) {\n        if (COMBAT_FALLBACK == 1 && target != null) {\n            commandMove(unit, target.getX(), target.getY());\n        } else {\n            commandIdle(unit);\n        }\n    }\n\n    private Unit selectResource(AgentContext context, Unit source, Unit base) {\n        Unit best = null;\n        int bestScore = Integer.MAX_VALUE;\n        for (Unit candidate : context.units) {\n            if (candidate.getPlayer() >= 0 || candidate.getType() != resourceType) {\n                continue;\n            }\n            int workerDistance = Math.abs(candidate.getX() - source.getX())\n                    + Math.abs(candidate.getY() - source.getY());\n            if (workerDistance < MINIMUM_RESOURCE_DISTANCE) {\n                continue;\n            }\n            int baseDistance = base == null ? workerDistance\n                    : Math.abs(candidate.getX() - base.getX())\n                    + Math.abs(candidate.getY() - base.getY());\n            int score = RESOURCE_POLICY == 0 ? workerDistance\n                    : RESOURCE_POLICY == 1 ? baseDistance : workerDistance + baseDistance;\n            if (score < bestScore\n                    || (score == bestScore && (best == null || candidate.getID() < best.getID()))) {\n                best = candidate;\n                bestScore = score;\n            }\n        }\n        return best;\n    }\n\n    private UnitType combatType() {\n        if (COMBAT_UNIT_KIND == 1) {\n            return heavyType;\n        }\n        if (COMBAT_UNIT_KIND == 2) {\n            return rangedType;\n        }\n        return lightType;\n    }\n\n    private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates) {\n        Unit best = null;\n        int bestScore = Integer.MAX_VALUE;\n        for (Unit candidate : candidates) {\n            if (candidate.getPlayer() < 0 || candidate.getPlayer() == context.player) {\n                continue;\n            }\n            int distance = actor == null ? 0 : Math.abs(candidate.getX() - actor.getX())\n                    + Math.abs(candidate.getY() - actor.getY());\n            int rank = targetRank(candidate);\n            int score = rank * 100000 + distance * TARGET_DISTANCE_WEIGHT;\n            if (score < bestScore\n                    || (score == bestScore && (best == null || candidate.getID() < best.getID()))) {\n                best = candidate;\n                bestScore = score;\n            }\n        }\n        return best;\n    }\n\n    private int targetRank(Unit candidate) {\n        if (TARGET_PRIORITY == 1) {\n            return candidate.getType() == baseType ? 0 : 1;\n        }\n        if (TARGET_PRIORITY == 2) {\n            return candidate.getType() == barracksType ? 0 : 1;\n        }\n        if (TARGET_PRIORITY == 3) {\n            return candidate.getType() == workerType ? 0 : 1;\n        }\n        if (TARGET_PRIORITY == 4) {\n            return candidate.getType().canAttack ? 0 : 1;\n        }\n        return 0;\n    }\n\n    private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY) {\n        return new PathChoice(targetX, targetY);\n    }\n\n    // EAGLE_AGENT_STRATEGY_END\n\n    // EAGLE_ACTION_HELPERS_START\n    // Stable Agent operation API: strategy code should issue actions through these helpers.\n    private boolean commandMove(Unit unit, int x, int y) {\n        if (unit == null || unit.getPlayer() != activePlayer\n                || unit.getType() == baseType || unit.getType() == barracksType\n                || !isInsideActiveMap(x, y)) {\n            return false;\n        }\n        move(unit, x, y);\n        return true;\n    }\n\n    private boolean commandHarvest(Unit worker, Unit resource, Unit base) {\n        if (worker == null || resource == null || base == null) {\n            return false;\n        }\n        if (worker.getPlayer() != activePlayer || base.getPlayer() != activePlayer\n                || resource.getPlayer() >= 0 || worker.getType() != workerType\n                || resource.getType() != resourceType || base.getType() != baseType) {\n            return false;\n        }\n        harvest(worker, resource, base);\n        return true;\n    }\n\n    private boolean commandReturn(Unit worker, Unit base, AgentContext context) {\n        UnitAction planned = prepareReturn(worker, base, context);\n        return planned != null && commandReturn(worker, base, context, planned);\n    }\n\n    private boolean commandReturn(Unit worker, Unit base, AgentContext context, UnitAction planned) {\n        UnitAction expected = prepareReturn(worker, base, context);\n        if (expected == null || !expected.equals(planned)\n                || !commandPlannedAction(worker, planned, context)) {\n            return false;\n        }\n        actions.put(worker, new ReturnAction(worker, base, planned));\n        return true;\n    }\n\n    private UnitAction prepareReturn(Unit worker, Unit base, AgentContext context) {\n        if (context == null || context.gs != activeGameState || context.player != activePlayer\n                || !isIdleAlly(worker, context) || base == null\n                || worker.getType() != workerType || base.getType() != baseType\n                || base.getPlayer() != context.player || worker.getResources() <= 0\n                || !context.units.contains(base)) {\n            return null;\n        }\n        int dx = base.getX() - worker.getX();\n        int dy = base.getY() - worker.getY();\n        UnitAction action;\n        if (Math.abs(dx) + Math.abs(dy) == 1) {\n            int direction = dx == 1 ? UnitAction.DIRECTION_RIGHT\n                    : dx == -1 ? UnitAction.DIRECTION_LEFT\n                    : dy == 1 ? UnitAction.DIRECTION_DOWN : UnitAction.DIRECTION_UP;\n            action = new UnitAction(UnitAction.TYPE_RETURN, direction);\n        } else {\n            action = pf.findPathToAdjacentPosition(worker,\n                    base.getX() + base.getY() * context.gs.getPhysicalGameState().getWidth(),\n                    context.gs, context.reservations);\n        }\n        return action != null && context.gs.isUnitActionAllowed(worker, action)\n                && context.reservations.consistentWith(\n                        action.resourceUsage(worker, context.gs.getPhysicalGameState()), context.gs)\n                ? action : null;\n    }\n\n    private boolean commandPlannedAction(Unit actor, UnitAction action, AgentContext context) {\n        if (context == null || context.gs != activeGameState || context.player != activePlayer\n                || action == null || !isIdleAlly(actor, context) || !context.units.contains(actor)\n                || !actor.canExecuteAction(action, context.gs)\n                || !context.gs.isUnitActionAllowed(actor, action)) {\n            return false;\n        }\n        ResourceUsage usage = action.resourceUsage(actor, context.gs.getPhysicalGameState());\n        if (!context.reservations.consistentWith(usage, context.gs)) {\n            return false;\n        }\n        actions.put(actor, new PlannedUnitAction(actor, action));\n        context.reservations.merge(usage);\n        return true;\n    }\n\n    private boolean commandTrain(Unit producer, UnitType unitType) {\n        if (producer == null || producer.getPlayer() != activePlayer || unitType == null) {\n            return false;\n        }\n        boolean validBaseProduction = producer.getType() == baseType && unitType == workerType;\n        boolean validBarracksProduction = producer.getType() == barracksType\n                && (unitType == lightType || unitType == heavyType || unitType == rangedType);\n        if (!validBaseProduction && !validBarracksProduction) {\n            return false;\n        }\n        train(producer, unitType);\n        return true;\n    }\n\n    private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {\n        if (worker == null || worker.getPlayer() != activePlayer || buildingType == null\n                || worker.getType() != workerType\n                || (buildingType != baseType && buildingType != barracksType)\n                || !isInsideActiveMap(x, y)) {\n            return false;\n        }\n        build(worker, buildingType, x, y);\n        return true;\n    }\n\n    private boolean commandAttack(Unit attacker, Unit target) {\n        if (attacker == null || target == null || attacker.getPlayer() != activePlayer\n                || target.getPlayer() < 0 || !attacker.getType().canAttack) {\n            return false;\n        }\n        if (target.getPlayer() == activePlayer) {\n            return false;\n        }\n        attack(attacker, target);\n        return true;\n    }\n\n    private boolean commandIdle(Unit unit) {\n        if (unit == null || unit.getPlayer() != activePlayer) {\n            return false;\n        }\n        idle(unit);\n        return true;\n    }\n\n    private boolean isInsideActiveMap(int x, int y) {\n        if (activeGameState == null) {\n            return false;\n        }\n        PhysicalGameState physical = activeGameState.getPhysicalGameState();\n        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight();\n    }\n\n    // EAGLE_ACTION_HELPERS_END\n\n    private boolean isIdleAlly(Unit unit, AgentContext context) {\n        return unit != null\n                && unit.getPlayer() == context.player\n                && context.gs.getUnitAction(unit) == null\n                && getAbstractAction(unit) == null;\n    }\n\n    private Unit nearestUnit(Unit source, List<Unit> units, int owner, UnitType type) {\n        Unit best = null;\n        int bestDistance = Integer.MAX_VALUE;\n        for (Unit other : units) {\n            if (owner != Integer.MIN_VALUE && other.getPlayer() != owner) {\n                continue;\n            }\n            if (type != null && other.getType() != type) {\n                continue;\n            }\n            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());\n            if (distance < bestDistance) {\n                best = other;\n                bestDistance = distance;\n            }\n        }\n        return best;\n    }\n\n    private Unit nearestEnemy(Unit source, AgentContext context) {\n        Unit best = null;\n        int bestDistance = Integer.MAX_VALUE;\n        for (Unit other : context.units) {\n            if (other.getPlayer() < 0 || other.getPlayer() == context.player) {\n                continue;\n            }\n            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());\n            if (distance < bestDistance) {\n                best = other;\n                bestDistance = distance;\n            }\n        }\n        return best;\n    }\n\n    private Unit nearestResource(Unit source, AgentContext context) {\n        return nearestUnit(source, context.units, -1, resourceType);\n    }\n\n    private Unit ownBase(AgentContext context) {\n        for (Unit unit : context.units) {\n            if (unit.getPlayer() == context.player && unit.getType() == baseType) {\n                return unit;\n            }\n        }\n        return null;\n    }\n\n    private boolean isFreeCell(AgentContext context, int x, int y) {\n        if (context == null || context.gs == null) {\n            return false;\n        }\n        PhysicalGameState physical = context.gs.getPhysicalGameState();\n        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight()\n                && context.gs.free(x, y);\n    }\n\n    private void applyAutoDefense(int player, GameState gs) {\n        PhysicalGameState pgs = gs.getPhysicalGameState();\n        AgentContext context = new AgentContext(player, gs, new ArrayList<>(pgs.getUnits()));\n        for (Unit ally : context.units) {\n            if (!AUTO_DEFENSE || !isIdleAlly(ally, context) || !ally.getType().canAttack) {\n                continue;\n            }\n            Unit enemy = nearestEnemy(ally, context);\n            if (enemy == null) {\n                continue;\n            }\n            int distance = Math.abs(enemy.getX() - ally.getX()) + Math.abs(enemy.getY() - ally.getY());\n            if (distance <= ally.getType().attackRange) {\n                commandAttack(ally, enemy);\n            }\n        }\n    }\n\n    @Override\n    public List<ParameterSpecification> getParameters() {\n        List<ParameterSpecification> parameters = new ArrayList<>();\n        parameters.add(new ParameterSpecification(\"PathFinding\", PathFinding.class, new AStarPathFinding()));\n        return parameters;\n    }\n\n    private static final class AgentContext {\n        final int player;\n        final GameState gs;\n        final List<Unit> units;\n        final ResourceUsage reservations;\n\n        AgentContext(int player, GameState gs, List<Unit> units) {\n            this.player = player;\n            this.gs = gs;\n            this.units = units;\n            this.reservations = gs.getResourceUsage().clone();\n        }\n    }\n\n    // One-cycle primitives retain the compiler's exact placement and reservations.\n    private static class PlannedUnitAction extends AbstractAction {\n        private final UnitAction action;\n        private boolean executed;\n\n        PlannedUnitAction(Unit actor, UnitAction action) {\n            super(actor);\n            this.action = action;\n        }\n\n        @Override\n        public boolean completed(GameState gs) {\n            return executed;\n        }\n\n        @Override\n        public UnitAction execute(GameState gs, ResourceUsage usage) {\n            executed = true;\n            return action;\n        }\n\n        @Override\n        public void toxml(util.XMLWriter writer) {\n            writer.tagWithAttributes(\"PlannedUnitAction\", \"unitID=\\\"\" + getUnit().getID() + \"\\\"\");\n            writer.tag(\"/PlannedUnitAction\");\n        }\n    }\n\n    private static final class ReturnAction extends PlannedUnitAction {\n        private final Unit base;\n\n        ReturnAction(Unit worker, Unit base, UnitAction action) {\n            super(worker, action);\n            this.base = base;\n        }\n\n        @Override\n        public void toxml(util.XMLWriter writer) {\n            writer.tagWithAttributes(\"Return\", \"unitID=\\\"\" + getUnit().getID()\n                    + \"\\\" base=\\\"\" + base.getID() + \"\\\"\");\n            writer.tag(\"/Return\");\n        }\n    }\n\n    private static final class PathChoice {\n        final int x;\n        final int y;\n\n        PathChoice(int x, int y) {\n            this.x = x;\n            this.y = y;\n        }\n    }\n}\n",
   "slots": [
     {
       "slot_id": "worker_target",
       "kind": "integer",
       "marker": "{{EAGLE_SLOT:worker_target}}",
-      "default": 3,
+      "default": 4,
       "minimum": 2,
       "maximum": 8,
       "step": 1,
       "choices": [],
-      "purpose": "Keep three workers gathering before the base changes to combat production, preserving an early pressure window."
+      "purpose": "Cap the economic worker population before the framework commits more resources to combat production."
+    },
+    {
+      "slot_id": "barracks_worker_threshold",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:barracks_worker_threshold}}",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 8,
+      "step": 1,
+      "choices": [],
+      "purpose": "Choose the minimum worker count at which construction pressure may begin."
+    },
+    {
+      "slot_id": "barracks_target",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:barracks_target}}",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 3,
+      "step": 1,
+      "choices": [],
+      "purpose": "Choose whether the economy supports one, two, or three Barracks."
+    },
+    {
+      "slot_id": "build_barracks",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:build_barracks}}",
+      "default": "enabled",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "enabled",
+          "java_expression": "true",
+          "description": "Allow the worker construction branch."
+        },
+        {
+          "choice_id": "disabled",
+          "java_expression": "false",
+          "description": "Skip Barracks construction and explore a no-production-building plan."
+        }
+      ],
+      "purpose": "Toggle the construction branch while keeping the scaffold fixed."
+    },
+    {
+      "slot_id": "build_direction",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:build_direction}}",
+      "default": "north",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "north",
+          "java_expression": "0",
+          "description": "Prefer the cell north of the Base."
+        },
+        {
+          "choice_id": "east",
+          "java_expression": "1",
+          "description": "Prefer the cell east of the Base."
+        },
+        {
+          "choice_id": "south",
+          "java_expression": "2",
+          "description": "Prefer the cell south of the Base."
+        },
+        {
+          "choice_id": "west",
+          "java_expression": "3",
+          "description": "Prefer the cell west of the Base."
+        }
+      ],
+      "purpose": "Select the preferred first Barracks placement direction."
+    },
+    {
+      "slot_id": "build_retry",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:build_retry}}",
+      "default": 4,
+      "minimum": 1,
+      "maximum": 4,
+      "step": 1,
+      "choices": [],
+      "purpose": "Control how many adjacent placement directions the builder tries before waiting."
+    },
+    {
+      "slot_id": "resource_policy",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:resource_policy}}",
+      "default": "worker_nearest",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "worker_nearest",
+          "java_expression": "0",
+          "description": "Choose the resource nearest to each worker."
+        },
+        {
+          "choice_id": "base_nearest",
+          "java_expression": "1",
+          "description": "Prefer resources nearest to the Base."
+        },
+        {
+          "choice_id": "balanced",
+          "java_expression": "2",
+          "description": "Minimize worker and Base travel together."
+        }
+      ],
+      "purpose": "Choose the finite resource assignment rule."
+    },
+    {
+      "slot_id": "minimum_resource_distance",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:minimum_resource_distance}}",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 4,
+      "step": 1,
+      "choices": [],
+      "purpose": "Optionally avoid resources that are already too close to the worker, creating alternate mining patterns."
+    },
+    {
+      "slot_id": "worker_assignment",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:worker_assignment}}",
+      "default": "reserve_one",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "free",
+          "java_expression": "0",
+          "description": "Let every idle worker harvest."
+        },
+        {
+          "choice_id": "reserve_one",
+          "java_expression": "1",
+          "description": "Reserve one idle worker for pending construction."
+        },
+        {
+          "choice_id": "reserve_two",
+          "java_expression": "2",
+          "description": "Reserve two idle workers for pending construction."
+        }
+      ],
+      "purpose": "Choose how many workers remain available for the construction branch."
+    },
+    {
+      "slot_id": "worker_fallback",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:worker_fallback}}",
+      "default": "idle",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "idle",
+          "java_expression": "0",
+          "description": "Idle when no legal harvest is available."
+        },
+        {
+          "choice_id": "return",
+          "java_expression": "1",
+          "description": "Return carried resources to the Base when possible."
+        },
+        {
+          "choice_id": "move_to_base",
+          "java_expression": "2",
+          "description": "Move toward the Base when no harvest is available."
+        }
+      ],
+      "purpose": "Select the deterministic fallback for workers without a harvest order."
+    },
+    {
+      "slot_id": "production_priority",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:production_priority}}",
+      "default": "worker_first",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "worker_first",
+          "java_expression": "0",
+          "description": "Construct, train workers, then train combat units."
+        },
+        {
+          "choice_id": "combat_first",
+          "java_expression": "1",
+          "description": "Train combat units before worker expansion when possible."
+        },
+        {
+          "choice_id": "economy_then_combat",
+          "java_expression": "2",
+          "description": "Harvest first, then expand and produce combat units."
+        }
+      ],
+      "purpose": "Choose the ordering of construction, worker, and combat production decisions."
+    },
+    {
+      "slot_id": "expansion_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:expansion_mode}}",
+      "default": "balanced",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "economy_first",
+          "java_expression": "0",
+          "description": "Use the full worker target before shifting the economy."
+        },
+        {
+          "choice_id": "balanced",
+          "java_expression": "1",
+          "description": "Use a smaller pre-Barracks worker limit, then the full target."
+        },
+        {
+          "choice_id": "pressure_first",
+          "java_expression": "2",
+          "description": "Use the construction threshold as the early worker limit."
+        }
+      ],
+      "purpose": "Control the worker-limit schedule without changing the scaffold."
+    },
+    {
+      "slot_id": "combat_unit_kind",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:combat_unit_kind}}",
+      "default": "light",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "light",
+          "java_expression": "0",
+          "description": "Train Light units."
+        },
+        {
+          "choice_id": "heavy",
+          "java_expression": "1",
+          "description": "Train Heavy units."
+        },
+        {
+          "choice_id": "ranged",
+          "java_expression": "2",
+          "description": "Train Ranged units."
+        }
+      ],
+      "purpose": "Select the Barracks combat unit type from the fixed UnitTypeTable."
+    },
+    {
+      "slot_id": "army_target",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:army_target}}",
+      "default": 8,
+      "minimum": 1,
+      "maximum": 20,
+      "step": 1,
+      "choices": [],
+      "purpose": "Cap the selected combat-unit population before production yields to other actions."
+    },
+    {
+      "slot_id": "worker_reserve",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:worker_reserve}}",
+      "default": 2,
+      "minimum": 0,
+      "maximum": 6,
+      "step": 1,
+      "choices": [],
+      "purpose": "Require a minimum worker reserve before the Barracks trains combat units."
     },
     {
       "slot_id": "combat_target_limit",
@@ -23,37 +305,304 @@
       "maximum": 20,
       "step": 1,
       "choices": [],
-      "purpose": "Limit how many idle combat units receive attack orders in one decision cycle while allowing a concentrated early push."
+      "purpose": "Limit the number of attack orders issued during one decision cycle."
+    },
+    {
+      "slot_id": "attack_commit_count",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:attack_commit_count}}",
+      "default": 2,
+      "minimum": 1,
+      "maximum": 12,
+      "step": 1,
+      "choices": [],
+      "purpose": "Set the selected combat-unit count required by the threshold attack trigger."
+    },
+    {
+      "slot_id": "attack_trigger",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:attack_trigger}}",
+      "default": "threshold",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "immediate",
+          "java_expression": "0",
+          "description": "Attack whenever an eligible target exists."
+        },
+        {
+          "choice_id": "threshold",
+          "java_expression": "1",
+          "description": "Wait until the commit count is reached."
+        },
+        {
+          "choice_id": "full_army",
+          "java_expression": "2",
+          "description": "Wait until both the commit count and army target are reached."
+        }
+      ],
+      "purpose": "Select when the combat group is allowed to leave the rally phase."
+    },
+    {
+      "slot_id": "target_priority",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:target_priority}}",
+      "default": "production_first",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "nearest",
+          "java_expression": "0",
+          "description": "Rank all enemy units by distance."
+        },
+        {
+          "choice_id": "base_first",
+          "java_expression": "1",
+          "description": "Prioritize enemy Bases."
+        },
+        {
+          "choice_id": "production_first",
+          "java_expression": "2",
+          "description": "Prioritize enemy Barracks."
+        },
+        {
+          "choice_id": "worker_first",
+          "java_expression": "3",
+          "description": "Prioritize enemy Workers."
+        },
+        {
+          "choice_id": "combat_first",
+          "java_expression": "4",
+          "description": "Prioritize enemy attackers."
+        }
+      ],
+      "purpose": "Select the finite enemy target ranking rule."
+    },
+    {
+      "slot_id": "focus_fire",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:focus_fire}}",
+      "default": "enabled",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "enabled",
+          "java_expression": "true",
+          "description": "Reuse the first selected target for all assigned attackers."
+        },
+        {
+          "choice_id": "disabled",
+          "java_expression": "false",
+          "description": "Select a target independently for each attacker."
+        }
+      ],
+      "purpose": "Choose concentrated or independently selected target assignments."
+    },
+    {
+      "slot_id": "attack_order",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:attack_order}}",
+      "default": "forward",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "forward",
+          "java_expression": "0",
+          "description": "Iterate units in stable context order."
+        },
+        {
+          "choice_id": "reverse",
+          "java_expression": "1",
+          "description": "Iterate units in reverse stable context order."
+        },
+        {
+          "choice_id": "selected_type_first",
+          "java_expression": "2",
+          "description": "Issue orders to the selected combat type before other attackers."
+        }
+      ],
+      "purpose": "Select the deterministic attacker iteration order."
+    },
+    {
+      "slot_id": "target_distance_weight",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:target_distance_weight}}",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 3,
+      "step": 1,
+      "choices": [],
+      "purpose": "Weight Manhattan distance after target class priority."
+    },
+    {
+      "slot_id": "attack_distance_policy",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:attack_distance_policy}}",
+      "default": "any_distance",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "any_distance",
+          "java_expression": "0",
+          "description": "Issue attack orders at any target distance."
+        },
+        {
+          "choice_id": "in_range_only",
+          "java_expression": "1",
+          "description": "Hold or rally until the target is within the configured range margin."
+        }
+      ],
+      "purpose": "Choose whether attack orders may begin before contact."
+    },
+    {
+      "slot_id": "attack_range_margin",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:attack_range_margin}}",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 4,
+      "step": 1,
+      "choices": [],
+      "purpose": "Extend the selected attacker's legal engagement distance when in-range-only mode is active."
+    },
+    {
+      "slot_id": "rally_policy",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:rally_policy}}",
+      "default": "move_to_enemy",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "hold",
+          "java_expression": "0",
+          "description": "Keep the combat group idle until the attack trigger is satisfied."
+        },
+        {
+          "choice_id": "move_to_enemy",
+          "java_expression": "1",
+          "description": "Move toward the nearest enemy while waiting."
+        },
+        {
+          "choice_id": "attack_nearest",
+          "java_expression": "2",
+          "description": "Issue a nearest-enemy attack order while waiting."
+        }
+      ],
+      "purpose": "Select the pre-commit rally behavior."
+    },
+    {
+      "slot_id": "combat_fallback",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:combat_fallback}}",
+      "default": "idle",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "idle",
+          "java_expression": "0",
+          "description": "Idle when a target cannot receive an attack order."
+        },
+        {
+          "choice_id": "move_to_target",
+          "java_expression": "1",
+          "description": "Move toward a selected target when an attack is held."
+        }
+      ],
+      "purpose": "Choose the fallback after target filtering or command rejection."
+    },
+    {
+      "slot_id": "auto_defense",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:auto_defense}}",
+      "default": "enabled",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "enabled",
+          "java_expression": "true",
+          "description": "Keep the safe in-range defense fallback active."
+        },
+        {
+          "choice_id": "disabled",
+          "java_expression": "false",
+          "description": "Disable the automatic in-range defense fallback."
+        }
+      ],
+      "purpose": "Toggle the fixed safety defense pass as a strategy dimension."
     }
   ],
-  "slot_generation_prompt": "Use the fixed early-pressure economy and nearest-enemy combat framework; only choose legal values for worker_target and combat_target_limit, retaining candidate-specific diversity when selecting an initial genome.",
+  "slot_generation_prompt": "Select a complete legal 27-slot genome. Preserve diversity across economy, construction, production, army composition, attack timing, target ranking, rallying, fallback, and defense dimensions; every value must use the declared finite domain.",
   "report": {
-    "architecture_summary": "A deterministic MicroRTS agent that harvests with a compact worker economy, trains workers up to a bounded target, trains Light units from Barracks, and sends a concentrated group of idle combat units toward the nearest enemy.",
+    "architecture_summary": "A deterministic, complete CandidateAgent scaffold exposes a 27-slot strategy grammar. Evolution can recombine economy, construction, production, combat composition, attack timing, target ranking, rallying, fallbacks, and defense without generating arbitrary Java.",
     "decision_flow": [
-      "Collect the current player units and preserve the framework action guards.",
-      "Harvest the nearest resource with idle workers.",
-      "Train workers until the worker target is reached, then train Light units from idle Barracks.",
-      "Attack the nearest enemy with at most the configured combat target limit.",
-      "Apply the framework's safe in-range defense fallback and translate abstract actions."
+      "Observe the active player, units, resources, and immutable UnitTypeTable through the fixed AgentContext.",
+      "Choose construction placement, worker reserve, resource assignment, and worker fallback from finite controls.",
+      "Schedule Barracks construction, worker expansion, and combat production under a recombinable priority and expansion mode.",
+      "Gate combat on an attack trigger, choose rally behavior, and issue bounded attack orders.",
+      "Rank enemy targets, optionally focus fire, choose attack order and distance policy, then use safe command helpers.",
+      "Apply the optional in-range defense fallback and translate abstract actions."
     ],
     "invariants": [
-      "Only active-player units issue actions.",
-      "Resources and targets are validated by the framework action helpers.",
-      "The generated Java class and strategy marker envelope remain fixed.",
-      "All controls are finite integer values and render into valid Java expressions."
+      "Only active-player units may issue actions through the fixed helper API.",
+      "All construction positions are map-bounded and require a free adjacent cell.",
+      "All production choices are restricted to Worker, Light, Heavy, or Ranged UnitTypes supported by the scaffold.",
+      "Target selection can only choose observed enemy units; no arbitrary Java or runtime LLM path exists.",
+      "Every control is finite, run-frozen, and rendered deterministically into the editable strategy region."
     ],
     "slot_rationale": {
-      "worker_target": "Three workers provide enough early income while allowing the framework to transition into combat sooner.",
-      "combat_target_limit": "Ten attackers provide a meaningful pressure group while the action helpers retain safe fallback behavior."
+      "worker_target": "Cap the economic worker population before the framework commits more resources to combat production.",
+      "barracks_worker_threshold": "Choose the minimum worker count at which construction pressure may begin.",
+      "barracks_target": "Choose whether the economy supports one, two, or three Barracks.",
+      "build_barracks": "Toggle the construction branch while keeping the scaffold fixed.",
+      "build_direction": "Select the preferred first Barracks placement direction.",
+      "build_retry": "Control how many adjacent placement directions the builder tries before waiting.",
+      "resource_policy": "Choose the finite resource assignment rule.",
+      "minimum_resource_distance": "Optionally avoid resources that are already too close to the worker, creating alternate mining patterns.",
+      "worker_assignment": "Choose how many workers remain available for the construction branch.",
+      "worker_fallback": "Select the deterministic fallback for workers without a harvest order.",
+      "production_priority": "Choose the ordering of construction, worker, and combat production decisions.",
+      "expansion_mode": "Control the worker-limit schedule without changing the scaffold.",
+      "combat_unit_kind": "Select the Barracks combat unit type from the fixed UnitTypeTable.",
+      "army_target": "Cap the selected combat-unit population before production yields to other actions.",
+      "worker_reserve": "Require a minimum worker reserve before the Barracks trains combat units.",
+      "combat_target_limit": "Limit the number of attack orders issued during one decision cycle.",
+      "attack_commit_count": "Set the selected combat-unit count required by the threshold attack trigger.",
+      "attack_trigger": "Select when the combat group is allowed to leave the rally phase.",
+      "target_priority": "Select the finite enemy target ranking rule.",
+      "focus_fire": "Choose concentrated or independently selected target assignments.",
+      "attack_order": "Select the deterministic attacker iteration order.",
+      "target_distance_weight": "Weight Manhattan distance after target class priority.",
+      "attack_distance_policy": "Choose whether attack orders may begin before contact.",
+      "attack_range_margin": "Extend the selected attacker's legal engagement distance when in-range-only mode is active.",
+      "rally_policy": "Select the pre-commit rally behavior.",
+      "combat_fallback": "Choose the fallback after target filtering or command rejection.",
+      "auto_defense": "Toggle the fixed safety defense pass as a strategy dimension."
     },
     "assumptions": [
-      "The standard MicroRTS UnitTypeTable contains Resource, Worker, Light, Base, and Barracks types.",
-      "The checked-in CandidateAgent scaffold and abstraction helper API are the authoritative compile contract."
+      "The standard MicroRTS UnitTypeTable contains Resource, Worker, Light, Heavy, Ranged, Base, and Barracks types.",
+      "The checked-in CandidateAgent scaffold and its action helpers are the authoritative compile and safety contract.",
+      "Adjacent Barracks construction is sufficient to explore early and delayed production strategies across the configured maps."
     ],
     "risks": [
-      "The compact baseline does not explicitly build Barracks, so maps without a starting Barracks remain economy-focused.",
-      "Nearest-target combat can be less robust than a richer tactical policy on large maps.",
-      "A more aggressive initial genome may trade late-game economy for earlier pressure."
+      "Some recombinations intentionally choose slow or non-producing plans; evaluation and EA selection must discard them.",
+      "Heavy and Ranged production can be resource-sensitive on small maps, so the genome keeps explicit worker and reserve controls.",
+      "Rally and in-range-only combinations may delay attacks but create useful complementary behaviors for EA to select and cross."
     ]
   }
 }

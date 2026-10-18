@@ -634,3 +634,14 @@ Another 86 direct search/resume, reproducibility, initial-population, parent-
 evaluation, and candidate-foundation tests pass. Compileall and diff checks pass. Full discovery was stopped after a prolonged
 run without completion, so it is not reported as globally passing.
 No live Groq framework generation was performed for this change.
+
+## Rich checked-in framework control surface (2026-10-18)
+
+The checked-in `fixed_worker_combat` framework now exposes 27 finite controls
+instead of the previous two. The complete scaffold keeps the Java safety and
+materialization boundary fixed while allowing EA to recombine resource
+assignment, Barracks construction, worker expansion, production priority,
+combat-unit choice, army size, attack timing, target ranking, focus fire,
+rallying, fallbacks, and automatic defense. The default genome renders and
+compiles successfully, passes the seven-check MicroRTS Integration probe, and
+the focused framework/Coach/startup regression suite passes 57 tests.

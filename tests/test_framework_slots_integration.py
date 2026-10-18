@@ -140,6 +140,25 @@ class FrameworkSlotsIntegrationTests(unittest.TestCase):
         config.validate()
         return config
 
+    def test_checked_in_framework_exposes_rich_recombinable_control_surface(self):
+        bundle = load_framework_bundle(
+            Path("configs/framework_bundles/fixed_worker_combat/bundle.json")
+        )
+        self.assertEqual(len(bundle.slots), 27)
+        self.assertGreaterEqual(
+            sum(slot.kind == "expression_choice" for slot in bundle.slots), 16
+        )
+        genome = {slot.slot_id: slot.default for slot in bundle.slots}
+        self.assertEqual(validate_genome(bundle, genome), genome)
+        rendered = render_framework(bundle, genome)
+        validation = validate_generated_java_source(
+            rendered.source,
+            "CandidateAgent",
+            immutable_scaffold_source=bundle.java_template,
+        )
+        self.assertTrue(validation.ok, validation.error)
+        self.assertNotIn("{{EAGLE_SLOT:", rendered.source)
+
     def test_initialization_and_offspring_are_reproducible_without_reflection(self):
         with tempfile.TemporaryDirectory() as directory:
             config = self._config(Path(directory))
