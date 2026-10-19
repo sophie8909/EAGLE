@@ -4,6 +4,15 @@ Choose exactly one legal value for every declared slot. Numeric values must lie 
 Use the framework report, slot purposes, and slot-generation prompt as strategy evidence.
 Do not write Java, strategy DSL, explanations, or extra fields.
 
+The current_control_genome is this candidate's sampled starting point, not a
+generic example. Preserve candidate-specific initialization diversity: keep at
+least one legal value from current_control_genome unless the framework evidence
+clearly justifies changing it, and do not collapse independent population slots
+to one shared genome or blindly copy every slot default. For the fixed
+worker-combat framework, prefer an early economy-to-combat transition and a
+large enough combat target limit when choosing among otherwise comparable legal
+values.
+
 framework_bundle_sha256: $framework_bundle_sha256
 framework_bundle: $framework_bundle
 current_control_genome: $current_control_genome

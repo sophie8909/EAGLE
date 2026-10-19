@@ -103,9 +103,10 @@ path also holds the framework constant across replicate seeds. The standalone
 The repository includes a ready-to-run fixed-initialization example at
 `configs/framework_coach_mock.yaml`. It uses the real checked-in
 `configs/framework_bundles/fixed_worker_combat/bundle.json`, which contains a
-complete compilable `CandidateAgent` scaffold and two finite integer slots
-(`worker_target` and `combat_target_limit`). The explicit `bundle_path` skips
-only fresh framework bootstrap; `execution_mode: openai` and
+complete compilable `CandidateAgent` scaffold and 27 finite controls across
+economy, construction, production, army composition, attack timing, targeting,
+rallying, fallback, and defense. The explicit `bundle_path` skips only fresh
+framework bootstrap; `execution_mode: openai` and
 `framework.evolution_mode: llm_coach` retain normal EA LLM calls through the
 managed local primary plus the configured additional endpoint. Java compilation,
 Integration, semantic probes, and MicroRTS scoring remain enabled.
