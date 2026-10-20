@@ -1,5 +1,34 @@
 # Current implementation status
 
+## Fixed server routing and streaming candidates (2026-10-21)
+
+Functional clients stay bound to `model` and optional `generation_model`; no
+phase-switch callback remains. Omit both primary runtime paths to call an
+externally started primary. Generation servers are always external. A managed
+primary is stopped before a batch transitions to an external profile.
+Runtime startup rejects different models sharing one endpoint before preflight;
+historical staged configs remain loadable for read-only analysis and final tests.
+
+Canonical source-gated plans stream into two preparation workers. Ready
+candidates run one ten-worker match matrix while later children continue
+source checks, crossover, mutation and materialization. Server origins share a
+two-request limit across roles. Results retain original ordinals, seeds and
+candidate ordering. Cancellation closes the source, cancels queued work and
+drains active gates/preparation; timing JSONL appends are synchronized.
+Self-play context, parent-score refresh, AOS, survivor selection, checkpointing
+and trace-retirement dependencies remain in place.
+
+Validation: WSL discovery exercised 796 tests: 788 passed, five skipped, and
+three stale test expectations failed (the renamed batch patch target, list
+slicing in an interruption fixture, and the already-inactive framework Java
+prompt). Those fixtures are corrected and all three isolated reruns pass,
+including fixed-roster and self-play interrupted-work archive/resume replay.
+After the last compatibility/wait changes, 14 streaming/capacity tests and 45
+routing/runtime/final-test tests pass, as do compileall and diff checks.
+Discovery was not repeated on the final tree. Four skips require native Windows;
+one lacks the saved AllInBot regression classes. No live multi-host LLM run or
+speedup benchmark was performed.
+
 ## Fixed cross-generation evaluation (2026-10-17)
 
 The separate `eagle.fixed_evaluation` command compares runnable survivors from exact requested snapshots under one frozen final-test protocol. Selection uses the highest finite generation-local Game Performance with deterministic candidate-ID tie breaks; missing snapshots do not fall back. Each representative is separately recompiled and integrated, then receives 600 matches with candidate-independent seeds. Protocol, per-generation evidence, combined summaries, and partial progress live under `fixed_evaluation/` by default, outside canonical search artifacts. Combined filenames are `fixed_evaluation_summary.json`, `fixed_evaluation_results.csv`, and `fixed_evaluation_results.md`; explicit output directories must be new or empty. Mean match score is an unweighted benchmark mean, not search fitness; incomplete/error matrices have null aggregate score and win rate and exit nonzero. The live evaluation of `runs/20261015_003919_084002` completed on 2026-10-17 for generations 0, 5, 10, 15, and 20: all five 600-match matrices completed with zero errors. Results are under `runs/20261015_003919_084002/fixed_evaluation/`; generation 5 had the best fixed benchmark mean match score (-15.863318), while generation 20 scored -25.472979.
@@ -83,16 +112,14 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   for each opponent. Evaluation maps may define independent positive tick caps;
   string-only map entries retain the top-level `tick_limit` fallback. Normal,
   AOS head-to-head, and final-test matrices share the resolved per-map caps.
-- Match execution always uses ten bounded workers; result ordering remains
-  canonical by `match_index`. LLM candidate work uses two bounded workers per
-  phase. A phase has one managed local primary endpoint and may add one ordered
-  unmanaged OpenAI-compatible endpoint through `model.additional_endpoints`;
-  therefore there are at most two endpoints total. Canonical input index binds
-  each task to an endpoint slot, local and remote calls may overlap, and results
-  still return in input order. Retries remain on the selected endpoint and no
-  failover occurs. AOS selection and reward application remain serial. Compact
-  artifacts skip Java XML replay
-  generation, while full artifacts retain replay and round-state evidence.
+- Match execution uses one ten-worker matrix at a time. Two source-gate workers
+  release canonical plans; two preparation workers execute per-child mutation,
+  revision/generation and compilation while ready candidates run matches.
+  Canonical indices preserve endpoint routes, seeds, ordinals and final result
+  order. All roles share two active requests per server origin; different servers
+  proceed independently. AOS choices/rewards stay serial. Compact artifacts skip
+  XML replay; full artifacts retain replay and round states.
+
 - Controllable randomness is always seeded from the EA root `random_seed`.
   Stable task streams cover initialization, selection, operators, crossover,
   mutation, LLM requests, and all evaluation matrices. Parallel LLM and match
@@ -118,10 +145,10 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
   responses plus SHA-256 hashes for backend stability checks.
 - Formal experiment runs restart the owned llama-server at every run/replicate
-  boundary; model-phase reuse remains limited to the lifetime of that run.
+  boundary when local runtime paths are configured; external primaries have no process ownership.
   `RuntimeManager` manages only this primary local process. Every configured
   endpoint, including an additional external endpoint, must pass a fail-closed
-  chat-completion preflight before phase requests begin; external endpoints are
+  chat-completion preflight before candidate requests begin; external endpoints are
   never adopted, switched, signalled, or stopped.
 - `scripts/test_llm_seed_restarts.py` provides the stronger diagnostic: it
   fully restarts the owned llama-server between seeds and records the server
@@ -163,16 +190,18 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   artifacts and a generation audit sidecar.
 - In LLM mode every selected source passes its own policy/Java gate before actual variation; deterministic mode disables this Java source gate.
   Healthy contributors undergo Strategy/Prompt variation; defects/failures yield
-  one-parent diagnosed children. Reflection/rewrite finishes before final Java
+  one-parent diagnosed children. Each child's reflection/rewrite precedes its own
   materialization; corrective Java bypasses ordinary Generator overwrite.
 - Fresh search and v2 resume now execute that generation lifecycle through the
   same `eagle.evolution.search.run_generation_step` owner; only initialization, snapshot
   loading, and finalization remain entrypoint-specific.
 - The required `model` owns initialization and reflection/rewrite calls. An
   optional `generation_model` owns final Java materialization and compile repair;
-  each phase may include one ordered `{base_url, model}` additional endpoint.
-  The experiment orchestrator switches its single owned local llama.cpp process
-  only at those phase boundaries and never lifecycle-manages additional endpoints.
+  each functional profile may include one ordered `{base_url, model}` additional
+  endpoint. Clients stay permanently bound; distinct generation servers remain
+  externally managed. An external primary omits both local runtime paths.
+  There are no generation-wide model switches.
+
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
   and `aos_head2head`. Strategy/Prompt probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
@@ -237,7 +266,7 @@ candidate was created.
 to Python `--config-dir`. Python discovers sorted top-level YAML files once,
 loads each config once, and lets the batch owner validate the runtime and manage
 its cleanup. Every run or replicate restarts the owned llama.cpp process at
-the run boundary. Model phase switches are reused only within that run. Mock mode never constructs a runtime
+the run boundary. Role clients remain permanently bound within that run. Mock mode never constructs a runtime
 manager or inspects a port. Runtime state records PID plus process start time,
 exact executable/command, launcher, owner token, and resolved spec; foreign port
 owners are never killed.
@@ -544,7 +573,9 @@ proves wrapper completion, one-time marker persistence, and neutral scoring.
 Operators now have separate owners under `eagle/operators`; fresh/resume share `eagle/evolution/generation.py`, with offspring planning and parent refresh separated. Generation and evaluation are subpackages of `eagle`; evaluation separates records, decoding, opponents, matches and pipeline orchestration. Offspring planning calculates generation-best evidence once per generation. See the [plan and verification](maintainability_refactor_plan.md) and [repository map](repository_map.md). Evolution/artifact protocols are unchanged.
 
 
-## Two-endpoint phase dispatch (2026-10-15)
+## Historical two-endpoint phase dispatch (2026-10-15)
+
+Phase barriers and switching below are superseded by dependency-driven execution.
 
 The accepted runtime contract keeps one managed local primary for each model
 phase and permits at most one ordered unmanaged OpenAI-compatible endpoint in

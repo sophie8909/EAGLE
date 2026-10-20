@@ -32,14 +32,14 @@ kept as documentation entries.
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
 | `eagle/cli/analyze.py` | Run selection and report dispatch |
 | `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, owned runtime, search/resume, final test, cleanup |
-| `eagle/execution.py` | Fixed GPU/model/LLM/match concurrency policy and ordered bounded parallel mapping |
+| `eagle/execution.py` | Fixed concurrency, canonical worker routing, and shared per-server request budgets |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, framework evolution policy, EA/model/evaluation validation |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/evolution/search.py` | Fresh run initialization, generation loop, and finalization |
-| `eagle/evolution/generation.py` | Shared fresh/resume generation ordering, evaluation, credit, selection, and persistence |
-| `eagle/evolution/offspring.py` | LLM-mode selected-source Code gate and corrective Java path; mode-aware variation and evidence-parent lookup |
+| `eagle/evolution/generation.py` | Shared fresh/resume streaming offspring preparation, evaluation, credit, selection, and persistence |
+| `eagle/evolution/offspring.py` | Canonical source-gated plan stream, per-plan mutation/revision, mode-aware variation and evidence |
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/opponent_pool.py` | Tournament-v1 pool admission, deduplication, seeded promotion, and pool persistence |
 | `eagle/self_play.py` | Immutable self-play context construction, snapshot/resume, and selection guards; legacy cohort helpers remain only for historical inspection (see the [architecture spec](../eagle_architecture_spec.md#9-evolution-evaluation)) |

@@ -114,7 +114,13 @@ class EvolutionReproducibilityTests(unittest.TestCase):
                 def interrupt_after_first_candidate(candidates, **kwargs):
                     if kwargs["generation"] != 2:
                         return evaluate_population(candidates, **kwargs)
-                    evaluated = evaluate_population(candidates[:1], **kwargs)
+                    with contextlib.ExitStack() as cleanup:
+                        source = iter(candidates)
+                        close = getattr(source, "close", None)
+                        if callable(close):
+                            cleanup.callback(close)
+                        first = next(source)
+                        evaluated = evaluate_population([first], **{**kwargs, "population_size": 1})
                     candidate = evaluated[0]
                     run_dir = kwargs["candidates_dir"].parent
                     path = run_dir / "candidates" / candidate.id / "candidate.json"

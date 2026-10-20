@@ -363,11 +363,11 @@ passes, revision status is
 ot_required` and the parent Java is preserved. A
 successful reflected source enters the normal generation attempt ledger as
 `code_reflection_output` but causes no additional final Generator LLM request.
-Between diagnosis and the generation-wide materialization phase, its schema is
+Between diagnosis and the child's own materialization step, its schema is
 `eagle-code-reflection-v6` with `revision_status: pending`; materialization
 updates the same artifact to its terminal status without discarding the original
 diagnosis/evidence. `reflection_model` and `revision_model` separately identify
-the primary and generation-phase models.
+the permanently bound reflection and generation models.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus mode-specific active genotype files, optional inactive compatibility data, phenotype, evaluation, code-quality, and timing files. The loader has isolated
 fallback reads for old prompt/phenotype paths, but ignores legacy

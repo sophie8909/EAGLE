@@ -74,7 +74,7 @@ DEFAULT_UNIT_MATERIAL_VALUES = (
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """One llama.cpp model/runtime profile selected by an experiment phase."""
+    """One functional LLM endpoint, optionally backed by an owned local runtime."""
 
     name: str = "unconfigured"
     path: Path | None = None
@@ -91,6 +91,12 @@ class ModelConfig:
     def base_url(self) -> str:
         host = f"[{self.host}]" if ":" in self.host else self.host
         return f"http://{host}:{self.port}"
+
+    @property
+    def manages_runtime(self) -> bool:
+        """Return whether EAGLE owns this endpoint's local llama-server."""
+
+        return self.path is not None or self.llama_server is not None
 
     def validate(self, *, require_files: bool = False) -> None:
         if not self.name.strip():
@@ -114,7 +120,16 @@ class ModelConfig:
         ]
         if len(set(endpoint_urls)) != len(endpoint_urls):
             raise ValueError("model endpoint base URLs must be unique.")
+        if (self.path is None) != (self.llama_server is None):
+            raise ValueError(
+                "model.path and model.llama_server must be configured together "
+                "for an EAGLE-managed runtime, or both omitted for an already-running endpoint."
+            )
         if require_files:
+            if not self.manages_runtime:
+                raise ValueError(
+                    "An EAGLE-managed runtime requires model.path and model.llama_server."
+                )
             if self.path is None or not self.path.is_file():
                 raise ValueError(f"model.path does not exist or is not a file: {self.path}")
             if self.llama_server is None or not self.llama_server.is_file():
@@ -825,11 +840,25 @@ class ExperimentConfig:
     def validate_runtime_files(self) -> None:
         """Validate external model assets immediately before a production launch."""
 
-        if not self.needs_llm_runtime:
+        if not self.needs_managed_runtime:
             return
         self.model.validate(require_files=True)
-        if self.java_materialization_mode == "llm" and self.generation_model is not None:
-            self.generation_model.validate(require_files=True)
+
+    def validate_runtime_routing(self) -> None:
+        """Reject endpoint layouts that cannot be used by an active search."""
+
+        if (
+            self.java_materialization_mode == "llm"
+            and self.generation_model is not None
+            and self.generation_model.base_url.lower() == self.model.base_url.lower()
+            and self.generation_model.name != self.model.name
+        ):
+            raise ValueError(
+                "model and generation_model use the same LLM endpoint with "
+                "different model names. Start each model on a distinct server "
+                "host/port and point generation_model at its running endpoint; "
+                "EAGLE no longer swaps models at phase boundaries."
+            )
 
     @property
     def seed_schedule(self) -> tuple[int, ...]:
@@ -1004,10 +1033,6 @@ class ExperimentConfig:
 
         return self.generation_model or self.model
 
-    @property
-    def uses_distinct_generation_model(self) -> bool:
-        return self.java_materialization_mode == "llm" and self.generation_model is not None and self.generation_model != self.model
-
     def model_for_phase(self, phase: str) -> ModelConfig:
         if phase == "reflection":
             return self.model
@@ -1026,8 +1051,18 @@ class ExperimentConfig:
     @property
     def needs_llm_runtime(self) -> bool:
         if self.java_materialization_mode == "framework_slots":
-            return self.framework_evolution_mode == "llm_coach"
+            return (
+                self.framework_evolution_mode == "llm_coach"
+                or (
+                    self.framework_bundle_path is None
+                    and self.framework_bootstrap_backend == "local"
+                )
+            )
         return self.java_materialization_mode == "llm" or self.mutation_rate > 0 or self.initial_population_mode == "llm_generated_policies"
+
+    @property
+    def needs_managed_runtime(self) -> bool:
+        return self.needs_llm_runtime and self.model.manages_runtime
 
     @property
     def reflection_operator_settings(self) -> ReflectionOperatorSettings:

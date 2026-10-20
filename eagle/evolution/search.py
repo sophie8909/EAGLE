@@ -19,7 +19,7 @@ from eagle.config import ExperimentConfig
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.evaluation.pipeline import evaluate_population
 from eagle.evolution.generation import run_generation_step
-from eagle.evolution.runtime import build_search_runtime, preflight_llm_endpoint
+from eagle.evolution.runtime import build_search_runtime
 from eagle.generation.backend import InitialJavaSeedBackend
 from eagle.operators.initialization import generation_zero_uses_fixed_java, initialize_population
 from eagle.operators.selection import best_candidate, population_signature
@@ -62,7 +62,6 @@ def run_search(
     mock: bool = False,
     run_id: str | None = None,
     on_run_created: Callable[[Path], None] | None = None,
-    activate_model_phase: Callable[[str], None] | None = None,
 ) -> SearchResult:
     """Run the EA and preserve the last completed generation on Ctrl-C."""
 
@@ -80,7 +79,6 @@ def run_search(
             mock=mock,
             run_id=run_id,
             on_run_created=remember_run,
-            activate_model_phase=activate_model_phase,
         )
     except KeyboardInterrupt:
         if active_run[0] is not None:
@@ -99,7 +97,6 @@ def _run_search_impl(
     mock: bool = False,
     run_id: str | None = None,
     on_run_created: Callable[[Path], None] | None = None,
-    activate_model_phase: Callable[[str], None] | None = None,
 ) -> SearchResult:
     """Run the EA lifecycle: initialize, evaluate, select, repeat, and finalize.
 
@@ -148,25 +145,6 @@ def _run_search_impl(
     shared_client = runtime.client
     generation_client = runtime.generation_client
     operator_controller = runtime.operator_controller
-    active_model_phase = "reflection"
-
-    def activate_phase(phase: str) -> None:
-        nonlocal active_model_phase
-        if not config.uses_distinct_generation_model or phase == active_model_phase:
-            return
-        if mock:
-            active_model_phase = phase
-            return
-        if activate_model_phase is None:
-            raise RuntimeError(
-                "A distinct generation_model requires the experiment orchestrator's "
-                "model-phase activation callback."
-            )
-        activate_model_phase(phase)
-        preflight_llm_endpoint(
-            generation_client if phase == "generation" else shared_client
-        )
-        active_model_phase = phase
 
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
@@ -180,8 +158,6 @@ def _run_search_impl(
     # Generation zero enters the same evaluation boundary as every offspring,
     # so objective and failure records have one shape.
     generation_zero_fixed_java = generation_zero_uses_fixed_java(config)
-    if not generation_zero_fixed_java:
-        activate_phase("generation")
     evaluated_population = evaluate_population(
         population,
         generation=0,
@@ -269,7 +245,6 @@ def _run_search_impl(
             generation_client=generation_client,
             mutations=runtime.mutations,
             operator_controller=operator_controller,
-            activate_phase=activate_phase,
         )
         evaluated_population = step.population
         self_play_opponent_snapshot = step.self_play_opponent_snapshot

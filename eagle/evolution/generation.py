@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.pipeline import evaluate_population
 from eagle.evaluation.determinism import derive_seed
 from eagle.evolution.offspring import (
-    apply_offspring_mutations,
-    materialize_code_reflections,
-    plan_offspring,
+    OffspringPlan,
+    apply_offspring_mutation,
+    materialize_code_reflection,
+    iter_offspring_plans,
 )
 from eagle.evolution.parent_refresh import (
     build_parent_evaluation_replicas,
@@ -78,7 +80,6 @@ def run_generation_step(
     generation_client: Any,
     mutations: Any,
     operator_controller: ReflectionOperatorController,
-    activate_phase: Callable[[str], None],
 ) -> GenerationStepResult:
     """Run one generation for both new searches and resumed searches.
 
@@ -129,8 +130,7 @@ def run_generation_step(
         )
 
     parents_for_generation = parent_replicas or population
-    activate_phase("reflection")
-    plans = plan_offspring(
+    plans = iter_offspring_plans(
         parents_for_generation,
         config=config,
         generation=generation,
@@ -140,12 +140,29 @@ def run_generation_step(
         artifact_root=candidates_dir,
         error_memory=error_memory,
     )
-    plans = apply_offspring_mutations(plans, artifact_root=candidates_dir)
-    activate_phase("generation")
-    plans = materialize_code_reflections(plans, artifact_root=candidates_dir)
-    offspring = [plan.candidate for plan in plans]
+    pending_plans: dict[int, OffspringPlan] = {}
+
+    def offspring_candidates() -> Iterator[Candidate]:
+        try:
+            for index, plan in enumerate(plans):
+                pending_plans[index] = plan
+                yield plan.candidate
+        finally:
+            plans.close()
+
+    def prepare_offspring(index: int, _candidate: Candidate) -> Candidate:
+        plan = pending_plans.pop(index)
+        plan = apply_offspring_mutation(
+            plan, artifact_root=candidates_dir, total_count=config.population_size,
+        )
+        return materialize_code_reflection(
+            plan, artifact_root=candidates_dir, total_count=config.population_size,
+        ).candidate
+
     evaluated_offspring = evaluate_population(
-        offspring,
+        offspring_candidates(),
+        population_size=config.population_size,
+        candidate_transform=prepare_offspring,
         generation=generation,
         config=config,
         backend=generation_backend,

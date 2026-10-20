@@ -1,5 +1,13 @@
 # Evaluation pipeline
 
+Independent source gates run in two bounded workers and release plans in canonical
+input order. Crossover and AOS assignment remain serial and seeded. Two preparation
+workers execute each child's mutation, corrective revision or generation, validation
+and compilation. One evaluation consumer starts any ready child's Integration,
+semantic probes and matches while later children continue source gating, crossover
+or preparation. Results retain canonical candidate order and original ordinals/seeds;
+bounded completed-work buffering applies backpressure.
+
 `eagle/evaluation/pipeline.py` owns the candidate evaluation boundary. LLM decoding lives in `decoding.py`; deterministic Java materialization uses the versioned DSL compiler. Opponent setup lives in `opponents.py`; ordered match dispatch lives in `matches.py`; shared typed results live in `records.py`. Both modes share validation, compilation, integration, semantic probes, matches, diagnostics, objective construction, and candidate artifact writing.
 
 

@@ -86,7 +86,9 @@ class FrameworkStartupTests(unittest.TestCase):
 
             with patch("eagle.generation.groq_framework.generate_framework_bundle") as generate, patch(
                 "eagle.evolution.search.preflight_evaluation_opponents"
-            ):
+            ), patch(
+                "eagle.evolution.runtime.preflight_llm_endpoint"
+            ) as preflight:
                 generate.side_effect = lambda output_dir, **kwargs: self._generator_result(Path(output_dir))
                 with self.assertRaises(KeyboardInterrupt):
                     run_search(
@@ -97,6 +99,7 @@ class FrameworkStartupTests(unittest.TestCase):
                     )
 
             self.assertEqual(generate.call_args.kwargs["provider"], "local")
+            preflight.assert_called_once()
             self.assertEqual(generate.call_args.kwargs["api_root"], "http://127.0.0.1:8080/v1")
             self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 12288)
             self.assertFalse(generate.call_args.kwargs["require_api_key"])

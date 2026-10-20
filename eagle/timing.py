@@ -12,7 +12,11 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any, Iterable
+
+
+_event_lock = Lock()
 
 
 def utc_now() -> str:
@@ -50,9 +54,8 @@ def append_event(path: Path, event: dict[str, Any]) -> None:
     """Append one structured timing event without changing runtime decisions."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, ensure_ascii=False))
-        handle.write("\n")
+    with _event_lock, path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
 def operation_timing(candidate_timing: dict[str, Any], operation: str) -> dict[str, Any]:

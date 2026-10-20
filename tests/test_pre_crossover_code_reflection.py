@@ -131,7 +131,7 @@ class PreCrossoverGateTests(unittest.TestCase):
         self.assertEqual(resumed.initial_generation_record()["selection_probabilities"],
                          controller.initial_generation_record()["selection_probabilities"])
 
-    def test_generation_model_boundary_follows_diagnosis_and_precedes_revision(self):
+    def test_streamed_child_diagnosis_precedes_revision_and_evaluation(self):
         from eagle.evolution.generation import run_generation_step
         from eagle.operators.selection import population_signature
         from eagle.strategy_dsl import normalize_strategy_dsl, VERSION
@@ -140,9 +140,12 @@ class PreCrossoverGateTests(unittest.TestCase):
                            generated_java="java a")
         config = ExperimentConfig.from_mapping({"population_size": 1, "mutation_rate": 1.0,
             "crossover_rate": 0.0, "reflection_operator_mode": "static",
-            "model": {"name": "primary"}, "generation_model": {"name": "generator"}})
+            "model": {"name": "primary"},
+            "generation_model": {"name": "generator", "host": "generation.test"}})
         gate = Gate(events, faulty=("a",))
         def evaluate(children, **kwargs):
+            transform = kwargs["candidate_transform"]
+            children = [transform(index, child) for index, child in enumerate(children)]
             events.append(("evaluate",))
             return [replace(child, status="evaluated") for child in children]
         with tempfile.TemporaryDirectory() as directory, patch(
@@ -156,11 +159,8 @@ class PreCrossoverGateTests(unittest.TestCase):
                 population=[parent], population_state_signature=population_signature([parent]),
                 stagnation_count=0, error_memory=(), self_play_opponent_snapshot=None,
                 generation_backend=None, shared_client=None, generation_client=None,
-                mutations={"code": gate}, operator_controller=build_reflection_operator_controller(config),
-                activate_phase=lambda phase: events.append(("phase", phase)))
-        self.assertEqual([event[0] for event in events], ["phase", "check", "phase", "materialize", "evaluate"])
-        self.assertEqual(events[0], ("phase", "reflection"))
-        self.assertEqual(events[2], ("phase", "generation"))
+                mutations={"code": gate}, operator_controller=build_reflection_operator_controller(config))
+        self.assertEqual([event[0] for event in events], ["check", "materialize", "evaluate"])
 
     def test_generation_aggregate_counts_healthy_and_faulty_gate_calls_once(self):
         from eagle.timing import build_generation_event

@@ -191,14 +191,14 @@ existing one-worst-match Commentator/Coach path for Strategy mutation. Neither
 mode calls a Java Generator or repair model; rendering, validation, javac,
 Integration, semantic probing, and the configured fixed-roster matrix remain
 unchanged. See [framework slots](../architecture/framework_slots.md).
-The resolved `model` section selects the GGUF, llama-server executable, host,
-port, per-request context size, batch size, and health/startup timeouts. An
+The resolved `model` section selects the model name, host/port, optional managed
+GGUF/llama-server paths, per-request context size, batch size and timeouts. An
 optional `generation_model` section has the same shape and selects the model for
 final Java generation, deferred Code Reflection revision, and compile-guided
 repair. Each section may contain `additional_endpoints`, an ordered list with at
 most one unmanaged OpenAI-compatible endpoint expressed as exactly
-`{base_url, model}`. Together with the managed local primary, a phase therefore
-has one or two endpoints. GPU layers (`999`), model threads (`8`), managed-local server parallel slots (`2`),
+`{base_url, model}`. Each functional profile has one or two endpoints. GPU
+layers (`999`), model threads (`8`), managed-local server parallel slots (`2`),
 independent LLM workers (`2`), and match workers (`10`) are fixed by
 `eagle/execution.py`; they are not config fields. The server allocates
 `context_size × 2`, while each request keeps the configured context size.
@@ -208,10 +208,10 @@ selected model. Missing, stale, malformed, or partial offload evidence shuts dow
 the owned process and fails the run; EAGLE never continues on CPU. These obsolete
 keys are rejected, not migrated: `gpu_layers`, `threads`,
 `parallel`, and `evaluation.match_workers`. The orchestrator validates runtime
-files only outside mock mode, starts a fresh owned local process per run,
-switches managed models only at phase boundaries, and requires a successful
+files for managed primaries outside mock mode, starts their owned process per run,
+keeps functional clients permanently bound, and requires a successful
 bounded chat completion from the primary and every additional endpoint before
-phase work begins. Any endpoint failure is fail-closed. It runs search and the
+candidate work begins. Any endpoint failure is fail-closed. It runs search and the
 production final test, then stops only its owned local process in `finally`;
 external endpoints are never adopted, restarted, signalled, or stopped.
 
@@ -224,30 +224,36 @@ model:
   additional_endpoints:       # optional; zero or one entry
     - base_url: http://192.168.1.136:1234
       model: ministral3_8b     # exact model id accepted by that service
-generation_model:            # omit to use model for every phase
+generation_model:            # omit to share model concurrently
   name: qwen3.5_9b
-  path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
-  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
-  port: 8080
+  host: 192.168.1.137         # independently started generation server
+  port: 1234
 ```
 
-When a folder contains multiple YAML files, they run in filename order. Each
-direct experiment run, including every `runs` replicate, stops the previous
-owned `llama-server` and starts a fresh one from that run's resolved config
-before search. A changed model or server profile also stops the owned runtime
-before starting the replacement. Within a single dual-model experiment,
-all offspring assignments are first fixed, all reflection/rewrite work runs on
-`model`, and only then does the runtime switch to `generation_model` for final
-materialization. It switches back before the next generation. Only the managed
-local primary switches; any additional endpoint belongs to its declared phase
-but remains an unmanaged service.
+For a primary server you start on another machine, omit both `model.path` and
+`model.llama_server`; only `name`, `host` and `port` are needed. EAGLE
+preflights and calls that endpoint without constructing a RuntimeManager. To
+retain automatic local startup, provide both local runtime paths. Providing only
+one is invalid. Generation profiles are always external.
 
-Within a phase, canonical input index selects the ordered endpoint slot modulo
-the endpoint count. With one additional endpoint, the two LLM workers can issue
-one local and one remote request concurrently, while results are still returned
-in input order. The selected route remains fixed for dependent retries. EAGLE
-does not fail over a request to the other endpoint, and the request log/timing
-record stores the actual endpoint and model used.
+Different model names require different server hosts/ports. Start the generation
+server yourself; EAGLE only preflights and calls it. Previous swap-in-place
+configs using the same endpoint for two models must be updated for active runs.
+Historical configs remain readable for final tests; the routing check applies
+when starting active LLM work. With one model,
+omit `generation_model`; concurrent roles share two request slots per server.
+Each child's ready work progresses through source gate, crossover, mutation,
+generation/compilation and matches without an all-candidate phase barrier.
+One ten-worker match matrix overlaps preparation of later children.
+
+When a folder contains multiple YAML files, they run in filename order. Each
+direct experiment run, including every `runs` replicate, stops any previous
+owned `llama-server`. Managed primaries start a fresh process from that run's
+resolved config; external primaries are called directly. Within a run, clients stay permanently
+bound to their configured servers; no phase switching occurs. Canonical task
+index selects the ordered endpoint route, dependent retries stay there, and
+request evidence records the actual endpoint/model. Generation and additional
+servers remain unmanaged. Results retain canonical input order despite overlap.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 

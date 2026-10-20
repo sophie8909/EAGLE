@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eagle.config import ExperimentConfig
+from eagle.evolution.runtime import build_search_runtime
 from eagle.execution import GPU_LAYERS
 from eagle.runtime.config import runtime_config_from_experiment
 from eagle.runtime.processes import (
@@ -123,25 +124,25 @@ class RuntimeWorkflowTests(unittest.TestCase):
             common = {
                 "llama_server": str(server),
                 "host": "127.0.0.1",
-                "port": 18080,
             }
             config = ExperimentConfig.from_mapping({
                 "model": {
                     **common,
                     "name": "ministral",
                     "path": str(reflection_model),
+                    "port": 18080,
                 },
                 "generation_model": {
                     **common,
                     "name": "qwen3.5-9b",
                     "path": str(generation_model),
+                    "port": 18081,
                 },
             })
 
             reflection = runtime_config_from_experiment(config, phase="reflection")
             generation = runtime_config_from_experiment(config, phase="generation")
 
-            self.assertTrue(config.uses_distinct_generation_model)
             self.assertEqual(reflection.llm.model_path, reflection_model)
             self.assertEqual(generation.llm.model_path, generation_model)
             self.assertNotEqual(reflection.spec, generation.spec)
@@ -152,13 +153,97 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 "qwen3.5-9b",
             )
 
+    def test_different_models_require_distinct_running_endpoints(self):
+        config = ExperimentConfig.from_mapping({
+            "model": {
+                "name": "reflection",
+                "host": "LOCALHOST",
+                "port": 18080,
+            },
+            "generation_model": {
+                "name": "generation",
+                "host": "localhost",
+                "port": 18080,
+            },
+        })
+        config.validate()
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "eagle.evolution.runtime.preflight_llm_endpoint"
+        ) as preflight, self.assertRaisesRegex(ValueError, "distinct server host/port"):
+            root = Path(directory)
+            build_search_runtime(
+                config,
+                mock=False,
+                run_dir=root,
+                candidates_dir=root / "candidates",
+            )
+
+        preflight.assert_not_called()
+
+    def test_inactive_generation_model_may_share_primary_endpoint(self):
+        config = ExperimentConfig.from_mapping({
+            "model": {"name": "reflection", "port": 18080},
+            "generation_model": {"name": "inactive-generation", "port": 18080},
+            "java_materialization_mode": "deterministic_dsl",
+        })
+
+        config.validate()
+
+    def test_direct_generation_endpoint_does_not_require_local_runtime_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.make_config(root)
+            config = replace(
+                config,
+                generation_model=ExperimentConfig.from_mapping({
+                    "model": {
+                        "name": "generation",
+                        "host": "127.0.0.1",
+                        "port": 18081,
+                    }
+                }).model,
+            )
+
+            config.validate_runtime_files()
+
+    def test_external_primary_endpoint_needs_no_managed_runtime_files(self):
+        config = ExperimentConfig.from_mapping({
+            "model": {
+                "name": "external-model",
+                "host": "llm.example.test",
+                "port": 1234,
+            }
+        })
+
+        config.validate()
+        config.validate_runtime_files()
+
+        self.assertTrue(config.needs_llm_runtime)
+        self.assertFalse(config.needs_managed_runtime)
+        self.assertFalse(config.model.manages_runtime)
+
+    def test_managed_runtime_requires_model_and_server_paths_together(self):
+        for field, value in (
+            ("path", "model.gguf"),
+            ("llama_server", "llama-server"),
+        ):
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError, "configured together"
+            ):
+                ExperimentConfig.from_mapping({
+                    "model": {"name": "partial-runtime", field: value}
+                })
+
     def test_removed_runtime_controls_are_rejected_and_not_serialized(self):
         for model_field in ("model", "generation_model"):
             for control in ("gpu_layers", "threads", "parallel"):
                 with self.subTest(model=model_field, control=control):
                     with self.assertRaisesRegex(ValueError, "Obsolete"):
                         ExperimentConfig.from_mapping({model_field: {"name": "test", control: 1}})
-        config = ExperimentConfig.from_mapping({"generation_model": {"name": "generation"}})
+        config = ExperimentConfig.from_mapping({
+            "generation_model": {"name": "generation", "host": "generation.test"}
+        })
         for model_field in ("model", "generation_model"):
             self.assertTrue({"gpu_layers", "threads", "parallel"}.isdisjoint(config.to_mapping()[model_field]))
 

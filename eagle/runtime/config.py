@@ -151,6 +151,7 @@ def runtime_config_from_experiment(
 
     project_root = Path(__file__).resolve().parents[2]
     model = config.model_for_phase(phase)
+    config.validate_runtime_routing()
     config.validate_runtime_files()
     assert model.path is not None and model.llama_server is not None
     slug = "".join(

@@ -1,5 +1,5 @@
 schema_version: experiment-v2
-experiment_name: ministral3_8b_to_qwen3_5_9b_staged_materialization_20x10
+experiment_name: ministral3_8b_to_qwen3_5_9b_direct_routing_20x10
 algorithm: lexicase
 survivor_selection: mu_plus_lambda
 candidate_java_mode: inherited_genotype
@@ -8,18 +8,14 @@ application: microrts
 objectives: {opponent_cases: maximize}
 model:
   name: ministral3_8b
-  path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
-  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   host: 127.0.0.1
   port: 8080
   context_size: 32768
   batch_size: 512
 generation_model:
   name: qwen3_5_9b
-  path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
-  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   host: 127.0.0.1
-  port: 8080
+  port: 8081
   context_size: 32768
   batch_size: 512
   startup_timeout_seconds: 180

@@ -12,10 +12,14 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evolution.offspring import (
     OffspringPlan,
+    apply_offspring_mutation,
     apply_offspring_mutations,
+    iter_offspring_plans,
+    materialize_code_reflection,
     materialize_code_reflections,
     plan_offspring,
 )
+from eagle.execution import current_llm_worker_slot, llm_worker_slot
 from eagle.operators.adaptive import PROMPT_REFLECTION, build_reflection_operator_controller
 
 
@@ -103,6 +107,75 @@ class OffspringConcurrencyTests(unittest.TestCase):
             )
             self.assertEqual(len(plans[0].candidate.metadata["pre_crossover_code_checks"]), 1)
             self.assertEqual(len(plans[1].candidate.metadata["pre_crossover_code_checks"]), 2)
+
+    def test_first_plan_can_mutate_before_later_source_gate_completes(self):
+        later_gate_started = threading.Event()
+        first_mutation_finished = threading.Event()
+        observed = []
+
+        class Gate:
+            def mutate(self, child, context, *, artifact_dir=None):
+                if context.index == 0:
+                    if not later_gate_started.wait(3):
+                        raise AssertionError("Second source gate never started")
+                else:
+                    later_gate_started.set()
+                    if not first_mutation_finished.wait(3):
+                        raise AssertionError("First mutation waited for the whole gate batch")
+                return replace(child, metadata={"mutation": {
+                    "reflection_status": "success", "revision_required": False,
+                    "revision_status": "not_required",
+                }})
+
+        class Mutation:
+            def mutate(self, child, context, *, artifact_dir=None):
+                observed.append(context.index)
+                if context.index == 0:
+                    first_mutation_finished.set()
+                return replace(child, metadata={**child.metadata, "mutation": {"applied": True}})
+
+        parent = Candidate(id="a", strategy_prompt='{"version":"eagle-strategy-dsl-v1","rules":[]}', generation_prompt="translate", generated_java="java")
+        config = ExperimentConfig.from_mapping({
+            "population_size": 2, "crossover_rate": 0.0, "mutation_rate": 1.0,
+            "reflection_operator_mode": "static", "strategy_reflection_probability": 0.0,
+            "prompt_reflection_probability": 1.0, "code_reflection_probability": 0.0,
+        })
+        controller = build_reflection_operator_controller(config)
+        plans = iter_offspring_plans(
+            [parent], config=config, generation=1, rng=random.Random(0),
+            mutations={"code": Gate(), "prompt": Mutation()}, operator_controller=controller,
+        )
+        try:
+            first = next(plans)
+            self.assertEqual(controller.total_usage[PROMPT_REFLECTION], 1)
+            apply_offspring_mutation(first, total_count=2)
+            remaining = list(plans)
+        finally:
+            first_mutation_finished.set()
+            plans.close()
+        self.assertEqual(observed, [0])
+        self.assertEqual([first.context_index, remaining[0].context_index], [0, 1])
+        self.assertEqual(controller.total_usage[PROMPT_REFLECTION], 2)
+
+    def test_single_plan_operations_keep_callers_worker_slot(self):
+        observed = []
+
+        class Mutation:
+            def mutate(self, child, context, *, artifact_dir=None):
+                observed.append(("mutation", current_llm_worker_slot()))
+                return replace(child, metadata={"mutation": {"applied": True}})
+
+            def materialize(self, child, context, *, artifact_dir=None):
+                observed.append(("revision", current_llm_worker_slot()))
+                return child
+
+        mutation = Mutation()
+        plan = OffspringPlan(candidate=Candidate(id="first", generation=1), context_index=1,
+                             mutation_name="prompt", mutation=mutation, mutation_context=object())
+        with llm_worker_slot(1):
+            plan = apply_offspring_mutation(plan, total_count=2)
+            materialize_code_reflection(replace(plan, mutation_name="code"), total_count=2)
+        self.assertEqual(observed, [("mutation", 1), ("revision", 1)])
 
     def test_prompt_mutations_overlap_and_keep_result_and_failure_evidence(self):
         mutation = ConcurrentMutation()

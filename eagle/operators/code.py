@@ -27,7 +27,7 @@ CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v6"
 
 
 class CodeReflectionMutation:
-    """Diagnose first, then revise during the generation materialization phase."""
+    """Diagnose a source, then revise the child through its generation client."""
 
     mutation_type = "code"
 
@@ -200,7 +200,7 @@ class CodeReflectionMutation:
         *,
         artifact_dir: Path | None = None,
     ) -> Candidate:
-        """Finish a diagnosed Code Reflection using the generation-phase model."""
+        """Finish a diagnosed Code Reflection using the bound generation model."""
 
         context = coerce_structured_context(context, candidate)
         target_dir = artifact_dir or (
