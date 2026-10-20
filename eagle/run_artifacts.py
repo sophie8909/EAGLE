@@ -84,6 +84,16 @@ def freeze_framework_bundle(
             "design_brief": config.framework_design_brief,
         }
         if config.framework_bootstrap_backend == "local":
+            from eagle.evolution.runtime import preflight_llm_endpoint
+            from eagle.llm import LLMClient
+
+            preflight_llm_endpoint(LLMClient(
+                config.llm_base_url,
+                config.framework_model,
+                temperature=config.llm_temperature,
+                max_output_tokens=config.llm_max_tokens,
+                seed=config.random_seed,
+            ))
             bootstrap_kwargs.update(
                 api_root=config.llm_base_url.rstrip("/") + "/v1",
                 max_output_tokens=max(

@@ -28,10 +28,10 @@ In scope:
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
-- one resolved experiment config and one owned local llama.cpp lifecycle; each
-  model phase may add one ordered unmanaged OpenAI-compatible endpoint, while an
-  optional second generation model may share the owned-local lifecycle through
-  explicit phase switches.
+- one resolved experiment config and optional owned local llama.cpp lifecycle; each
+  functional profile may add one ordered unmanaged OpenAI-compatible endpoint.
+  The optional generation model uses an already running independent server;
+  clients remain bound throughout the run without model switching.
 
 Code quality, compiler output, function coverage, alignment, and match
 telemetry remain diagnostics. They are not additional evolutionary objectives.
@@ -43,9 +43,11 @@ flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
     L --> Z["Generation 0: configured policy, sampled genome, or LLM selection"]
-    L -->|LLM roles enabled| RT["Owned local llama.cpp primary"]
-    L -->|optional per phase| EXT["Unmanaged additional endpoint"]
+    L -->|LLM roles enabled| RT["Primary server: managed or external"]
+    L -->|optional generation_model| GS["Externally started generation server"]
+    L -->|optional per profile| EXT["Unmanaged additional endpoint"]
     RT --> PF["Fail-closed chat preflight for all endpoints"]
+    GS --> PF
     EXT --> PF
     PF -.-> Z
     Z --> SW
@@ -65,7 +67,7 @@ flowchart TD
     X --> M{"Run mode-allowed reflection work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Prompt (llm only)| PR["Prompt Reflection + prompt rewrite"]
-    M -->|No| SW["Materialization phase"]
+    M -->|No| SW["Per-child materialization"]
     SR --> SW
     PR --> SW
     CR --> SW
@@ -142,11 +144,12 @@ flowchart TD
 - `model` handles initialization and mode-allowed reflection/rewrite work. In
   LLM mode, optional `generation_model` handles final Java generation, Code
   Reflection revision, and compile-guided generation repair; when omitted,
-  `model` handles both phases. Deterministic DSL mode has no generation-model
-  phase.
+  `model` handles both roles concurrently. Different models use independently
+  running servers. Deterministic DSL has no generation-model requests.
 - `model.additional_endpoints` and the same field under `generation_model` may
-  contain at most one `{base_url, model}` entry. The primary endpoint remains
-  the managed local llama.cpp process; an additional endpoint is unmanaged.
+  contain at most one `{base_url, model}` entry. The primary is managed locally
+  when both runtime paths are present; omit both for an external primary.
+  Generation and additional endpoints are externally managed.
   Canonical input index selects the ordered endpoint slot, retries remain sticky,
   and there is no cross-endpoint failover. Results remain candidate ordered and
   request evidence records the actual endpoint and model.
@@ -193,4 +196,4 @@ for ownership and artifact details.
 
 ## Python ownership
 
-`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, framework bootstrap/rendering, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [framework-slot contract](framework_slots.md) and [repository map](../implementation/repository_map.md) for edit entrypoints. This organization does not change fitness formulas, phase barriers, configuration, or serialized run contracts.
+`eagle/evolution/` owns lifecycle and phase order; `eagle/operators/` contains one independently editable implementation per EA operator; `eagle/generation/` owns LLM Java generation, deterministic DSL compilation, framework bootstrap/rendering, and validation; `eagle/evaluation/` separates decoding, opponent preparation, matrix dispatch, scoring, and pipeline records. See the [framework-slot contract](framework_slots.md) and [repository map](../implementation/repository_map.md) for edit entrypoints. This organization preserves fitness formulas and serialized run contracts; scheduling follows per-child dependencies.

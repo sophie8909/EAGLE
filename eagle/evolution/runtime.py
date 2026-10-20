@@ -48,6 +48,8 @@ def build_search_runtime(
 ) -> SearchRuntime:
     """Build the dependencies that must be identical for fresh and resumed search."""
 
+    if not mock:
+        config.validate_runtime_routing()
     backend_name = "mock" if mock else config.execution_mode
     client = LLMClient(
         config.llm_base_url,
@@ -57,8 +59,6 @@ def build_search_runtime(
         seed=config.random_seed,
         additional_endpoints=config.model.additional_endpoints,
     )
-    if not mock and config.needs_llm_runtime:
-        preflight_llm_endpoint(client)
     generation_model = config.resolved_generation_model
     generation_client = LLMClient(
         generation_model.base_url,
@@ -68,6 +68,13 @@ def build_search_runtime(
         seed=config.random_seed,
         additional_endpoints=generation_model.additional_endpoints,
     )
+    if not mock and config.needs_llm_runtime:
+        preflight_llm_endpoint(client)
+        if (
+            config.java_materialization_mode == "llm"
+            and generation_client.endpoints != client.endpoints
+        ):
+            preflight_llm_endpoint(generation_client)
     logger = LLMCallLogger(
         run_dir / "llm_logs",
         run_id=run_dir.name,

@@ -40,7 +40,7 @@ from eagle.strategy_diversity import (
     update_strategy_archive,
 )
 from eagle.operators.selection import best_candidate, population_signature
-from eagle.evolution.runtime import build_search_runtime, preflight_llm_endpoint
+from eagle.evolution.runtime import build_search_runtime
 from eagle.self_play import (
     load_self_play_snapshot,
 )
@@ -52,7 +52,6 @@ def resume_search(
     config_path: Path | None = None,
     run_dir: Path,
     mock: bool = False,
-    activate_model_phase=None,
 ) -> SearchResult:
     """Continue from the last atomically recorded generation."""
 
@@ -67,7 +66,6 @@ def resume_search(
             config_path=config_path,
             run_dir=run_dir,
             mock=mock,
-            activate_model_phase=activate_model_phase,
         )
     except KeyboardInterrupt:
         mark_run_interrupted(run_dir)
@@ -164,7 +162,6 @@ def _resume_search_impl(
     config_path: Path | None,
     run_dir: Path,
     mock: bool = False,
-    activate_model_phase=None,
 ) -> SearchResult:
     config.validate()
     if config.evaluation_mode == "fixed_roster":
@@ -231,7 +228,6 @@ def _resume_search_impl(
         if config.stagnation_generations > 0 and stagnation >= config.stagnation_generations
         else None
     )
-    active_model_phase = "reflection"
     self_play_opponent_snapshot = (
         load_self_play_snapshot(
             run_dir,
@@ -241,24 +237,6 @@ def _resume_search_impl(
         if config.evaluation_mode == "self_play"
         else None
     )
-
-    def activate_phase(phase: str) -> None:
-        nonlocal active_model_phase
-        if not config.uses_distinct_generation_model or phase == active_model_phase:
-            return
-        if mock:
-            active_model_phase = phase
-            return
-        if activate_model_phase is None:
-            raise RuntimeError(
-                "A distinct generation_model requires the experiment orchestrator's "
-                "model-phase activation callback."
-            )
-        activate_model_phase(phase)
-        preflight_llm_endpoint(
-            generation_client if phase == "generation" else shared_client
-        )
-        active_model_phase = phase
 
     for generation in range(completed_generation + 1, config.generations + 1):
         if stop_reason is not None:
@@ -283,7 +261,6 @@ def _resume_search_impl(
             generation_client=generation_client,
             mutations=mutations,
             operator_controller=operator_controller,
-            activate_phase=activate_phase,
         )
         population = step.population
         self_play_opponent_snapshot = step.self_play_opponent_snapshot

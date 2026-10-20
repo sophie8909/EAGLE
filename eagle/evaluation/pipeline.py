@@ -1,17 +1,22 @@
 """Population and candidate evaluation orchestration."""
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Sequence, Sized
+from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import replace
 import hashlib
 import json
+from queue import Empty, Full, Queue
 import subprocess
+from threading import Event, Semaphore, Thread
 import time
 from pathlib import Path
 
 from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate, compact_candidate_metadata
 from eagle.config import ExperimentConfig
-from eagle.execution import parallel_map
+from eagle.execution import LLM_WORKERS, llm_worker_slot, parallel_map
 from eagle.evaluation.code_quality import (
     CodeQualityBreakdown,
     StrategyRegionScoreResult,
@@ -38,7 +43,7 @@ from eagle.generation.backend import GenerationBackend
 from eagle.generation.java_agent_generator import GeneratedJavaAgent
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 from eagle.opponent_pool import PoolMember, initial_pool
-from eagle.timing import utc_now
+from eagle.timing import append_event, utc_now
 
 from . import decoding, matches as match_module, opponents as opponent_setup
 from .records import (
@@ -50,7 +55,7 @@ from .records import (
 
 
 def evaluate_population(
-    population: list[Candidate],
+    population: Iterable[Candidate],
     *,
     generation: int,
     config: ExperimentConfig,
@@ -63,7 +68,16 @@ def evaluate_population(
     run_timing_path: Path | None = None,
     run_id: str | None = None,
     opponent_candidates: list[PoolMember] | None = None,
+    population_size: int | None = None,
+    candidate_transform: Callable[[int, Candidate], Candidate] | None = None,
 ) -> list[Candidate]:
+    if population_size is None:
+        if not isinstance(population, Sized):
+            raise ValueError("population_size is required for a streaming population.")
+        population_size = len(population)
+    if population_size < 0:
+        raise ValueError("population_size must be non-negative.")
+
     semantic_dataset: SemanticDataset | None = None
     semantic_dataset_error: str | None = None
     if config.semantic_probes_enabled and not mock:
@@ -92,10 +106,13 @@ def evaluate_population(
             )
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
             semantic_dataset_error = f"{type(exc).__name__}: {exc}"
-    def prepare(item):
+
+    def prepare(item: tuple[int, Candidate]) -> tuple[Candidate, BoundedGenerationResult]:
         index, candidate = item
+        if candidate_transform is not None:
+            candidate = candidate_transform(index, candidate)
         print(
-            f"[gen {generation} cand {index + 1}/{len(population)}] "
+            f"[gen {generation} cand {index + 1}/{population_size}] "
             f"{candidate.id} stage=generation status=started",
             flush=True,
         )
@@ -116,26 +133,33 @@ def evaluate_population(
         )
         return candidate, bounded_generation
 
-    prepared = parallel_map(prepare, enumerate(population))
-
     opponent_pool = None
+    requires_prepared_opponents = False
     if config.evaluation_mode == "self_play":
+        snapshot = opponent_candidates if opponent_candidates is not None else initial_pool()
+        requires_prepared_opponents = _snapshot_references_population(snapshot, population)
         if generation == 0 and opponent_candidates is None:
             opponent_pool = opponent_setup._build_initial_self_play_opponents(
                 config=config,
                 classes_dir=classes_dir,
                 mock=mock,
             )
-        else:
+        elif not requires_prepared_opponents:
             opponent_pool = opponent_setup._build_self_play_opponents(
-                opponent_candidates if opponent_candidates is not None else initial_pool(),
-                prepared=prepared,
+                snapshot,
+                prepared=[],
                 config=config,
                 classes_dir=classes_dir,
                 mock=mock,
             )
-    evaluated = []
-    for index, (candidate, bounded_generation) in enumerate(prepared):
+
+    evaluated: list[Candidate | None] = [None] * population_size
+
+    def evaluate_prepared(
+        index: int,
+        candidate: Candidate,
+        bounded_generation: BoundedGenerationResult,
+    ) -> None:
         evaluation = evaluate_candidate(
             candidate,
             config=config,
@@ -161,9 +185,159 @@ def evaluate_population(
                 matches=evaluation.match_results,
             )
         write_candidate_artifacts(candidates_dir, evaluation)
-        evaluated.append(evaluation.candidate)
-        print_progress(generation=generation, index=index, population_size=len(population), evaluation=evaluation)
-    return evaluated
+        evaluated[index] = evaluation.candidate
+        print_progress(
+            generation=generation,
+            index=index,
+            population_size=population_size,
+            evaluation=evaluation,
+        )
+
+    if requires_prepared_opponents:
+        prepared = parallel_map(prepare, enumerate(population))
+        if len(prepared) != population_size:
+            raise ValueError(
+                f"population yielded {len(prepared)} candidates; expected {population_size}."
+            )
+        opponent_pool = opponent_setup._build_self_play_opponents(
+            opponent_candidates if opponent_candidates is not None else initial_pool(),
+            prepared=prepared,
+            config=config,
+            classes_dir=classes_dir,
+            mock=mock,
+        )
+        for index, (candidate, bounded_generation) in enumerate(prepared):
+            evaluate_prepared(index, candidate, bounded_generation)
+    else:
+        stream = _stream_prepared_candidates(
+            population,
+            population_size=population_size,
+            prepare=prepare,
+        )
+        with closing(stream):
+            for index, candidate, bounded_generation in stream:
+                evaluate_prepared(index, candidate, bounded_generation)
+
+    if any(candidate is None for candidate in evaluated):
+        raise RuntimeError("population evaluation did not produce every candidate result.")
+    return [candidate for candidate in evaluated if candidate is not None]
+
+
+def _snapshot_references_population(
+    snapshot: Sequence[PoolMember],
+    population: Iterable[Candidate],
+) -> bool:
+    if not isinstance(population, Sequence):
+        return any(
+            isinstance(member, Candidate)
+            and not (member.generated_java and member.compile_status == "success")
+            for member in snapshot
+        )
+    candidate_ids = {candidate.id for candidate in population}
+    return any(
+        isinstance(member, Candidate) and member.id in candidate_ids
+        for member in snapshot
+    )
+
+
+def _stream_prepared_candidates(
+    population: Iterable[Candidate],
+    *,
+    population_size: int,
+    prepare: Callable[
+        [tuple[int, Candidate]],
+        tuple[Candidate, BoundedGenerationResult],
+    ],
+) -> Iterable[tuple[int, Candidate, BoundedGenerationResult]]:
+    """Prepare two candidates ahead while yielding completed work immediately."""
+
+    completed: Queue[tuple[str, int, object]] = Queue(maxsize=LLM_WORKERS)
+    available_slots = Semaphore(LLM_WORKERS)
+    stop = Event()
+    futures: list[Future[tuple[Candidate, BoundedGenerationResult]]] = []
+    executor = ThreadPoolExecutor(max_workers=LLM_WORKERS, thread_name_prefix="eagle-llm")
+
+    def publish(message: tuple[str, int, object]) -> None:
+        while not stop.is_set():
+            try:
+                completed.put(message, timeout=0.05)
+                return
+            except Full:
+                continue
+
+    def run(index: int, candidate: Candidate) -> tuple[Candidate, BoundedGenerationResult]:
+        with llm_worker_slot(index):
+            return prepare((index, candidate))
+
+    def produce() -> None:
+        count = 0
+        error: BaseException | None = None
+        iterator = iter(population)
+        try:
+            for index, candidate in enumerate(iterator):
+                if index >= population_size:
+                    raise ValueError(
+                        f"population yielded more than {population_size} candidates."
+                    )
+                while not stop.is_set() and not available_slots.acquire(timeout=0.05):
+                    pass
+                if stop.is_set():
+                    break
+                future = executor.submit(run, index, candidate)
+                futures.append(future)
+                future.add_done_callback(
+                    lambda finished, candidate_index=index: publish(
+                        ("prepared", candidate_index, finished)
+                    )
+                )
+                count = index + 1
+        except BaseException as exc:
+            error = exc
+        finally:
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except BaseException as exc:
+                    if error is None:
+                        error = exc
+        publish(("producer_done", count, error))
+
+    producer = Thread(target=produce, name="eagle-population-producer")
+    producer.start()
+    producer_done = False
+    submitted_count = 0
+    completed_count = 0
+    try:
+        while not producer_done or completed_count < submitted_count:
+            try:
+                # Timed waits let Windows deliver CLI interrupts before a request finishes.
+                kind, index, payload = completed.get(timeout=0.1)
+            except Empty:
+                continue
+            if kind == "producer_done":
+                producer_done = True
+                submitted_count = index
+                if payload is not None:
+                    assert isinstance(payload, BaseException)
+                    raise payload
+                if submitted_count != population_size:
+                    raise ValueError(
+                        f"population yielded {submitted_count} candidates; expected {population_size}."
+                    )
+                continue
+            future = payload
+            assert isinstance(future, Future)
+            candidate, bounded_generation = future.result()
+            completed_count += 1
+            available_slots.release()
+            yield index, candidate, bounded_generation
+    finally:
+        stop.set()
+        producer.join()
+        for future in futures:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
 
 
 def _append_match_timing_events(
@@ -174,10 +348,10 @@ def _append_match_timing_events(
     candidate: Candidate,
     matches: list[MatchResult],
 ) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", buffering=1) as handle:
-        for result in matches:
-            event = {
+    for result in matches:
+        append_event(
+            path,
+            {
                 "event": "match",
                 "run_id": run_id,
                 "generation": generation,
@@ -202,9 +376,8 @@ def _append_match_timing_events(
                 "opponent_weight": result.opponent_weight,
                 "opponent_source_generation": result.opponent_source_generation,
                 "opponent_source_candidate_id": result.opponent_source_candidate_id,
-            }
-            handle.write(json.dumps(event, ensure_ascii=False))
-            handle.write("\n")
+            },
+        )
 
 
 def evaluate_candidate(

@@ -8,6 +8,15 @@ one-worst-match Strategy Reflection, limits normal mutation/AOS to Strategy/Prom
 and rejects incompatible resume. Corrective Java preserves source genes and
 bypasses ordinary Generator. Historical artifacts are not converted.
 
+## Dependency-driven scheduling (2026-10-20)
+
+Role clients replace phase switching. Independent generation servers must be
+started externally and configured at distinct hosts/ports for different models.
+Omit `generation_model` for shared-model parallel calls. Stream source-gated
+plans and per-child mutation/materialization into bounded preparation while ready
+candidates run matches. Retain seeded choices, canonical results, immutable
+opponents, AOS/selection barriers and atomic checkpoints.
+
 ## Completed prior migrations
 
 - complete-file candidate model and first-class lineage;

@@ -124,10 +124,6 @@ class ExperimentLauncherTests(unittest.TestCase):
         def search(config, **kwargs):
             ea_calls[0] += 1
             events.append(f"ea:{config.model.name}")
-            activate_model_phase = kwargs.get("activate_model_phase")
-            if callable(activate_model_phase):
-                activate_model_phase("generation")
-                activate_model_phase("reflection")
             if ea_calls[0] == fail_on_ea_call:
                 raise RuntimeError("EA failed")
             return SearchResult(run_dir, [], None)
@@ -471,7 +467,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertEqual(events.count("stop:shared.gguf"), 3)
             self.assertEqual(events.count("ea:shared"), 3)
 
-    def test_distinct_generation_model_switches_only_at_phase_boundary(self):
+    def test_distinct_generation_model_does_not_switch_primary_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             reflection_model = root / "ministral.gguf"
@@ -489,6 +485,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 **payload["model"],
                 "name": "qwen3.5-9b",
                 "path": str(generation_model),
+                "port": 18081,
             }
             path.write_text(yaml.safe_dump(payload), encoding="utf-8")
             events: list[str] = []
@@ -505,11 +502,75 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertEqual(lifecycle, [
                 "start:ministral.gguf",
                 "stop:ministral.gguf",
-                "start:qwen.gguf",
-                "stop:qwen.gguf",
-                "start:ministral.gguf",
-                "stop:ministral.gguf",
             ])
+
+    def test_external_primary_endpoint_does_not_construct_runtime_manager(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(
+                root,
+                "external.yaml",
+                model_name="external-model",
+                model_path=root / "unused.gguf",
+                port=1234,
+            )
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["model"].pop("path")
+            payload["model"].pop("llama_server")
+            payload["model"]["host"] = "llm.example.test"
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            observed = []
+
+            def search(config, **_kwargs):
+                observed.append(config.model.base_url)
+                return SearchResult(root / "run", [], None)
+
+            ExperimentOrchestrator(
+                runtime_factory=lambda: (_ for _ in ()).throw(
+                    AssertionError("external endpoint constructed a runtime manager")
+                ),
+                search_runner=search,
+            ).run(config_path=path, skip_final_test=True)
+
+            self.assertEqual(observed, ["http://llm.example.test:1234"])
+
+    def test_managed_runtime_stops_before_external_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            managed_model = root / "managed.gguf"
+            managed_model.write_bytes(b"managed")
+            self.config(
+                root,
+                "01_managed.yaml",
+                model_name="managed",
+                model_path=managed_model,
+            )
+            external = self.config(
+                root,
+                "02_external.yaml",
+                model_name="external",
+                model_path=root / "unused.gguf",
+                port=1234,
+            )
+            payload = yaml.safe_load(external.read_text(encoding="utf-8"))
+            payload["model"].pop("path")
+            payload["model"].pop("llama_server")
+            payload["model"]["host"] = "llm.example.test"
+            external.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            events: list[str] = []
+
+            self.orchestrator(events, root / "run").run(
+                config_path=root,
+                skip_final_test=True,
+            )
+
+            lifecycle = [
+                item for item in events
+                if item.startswith(("start:", "reuse:", "stop:"))
+            ]
+            self.assertEqual(lifecycle, ["start:managed.gguf", "stop:managed.gguf"])
+            self.assertEqual(events.count("ea:managed"), 1)
+            self.assertEqual(events.count("ea:external"), 1)
 
     def test_runtime_sequence_a_a_b_b_a(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -718,6 +779,33 @@ class ExperimentLauncherTests(unittest.TestCase):
                 resume_runner=resume,
             ).run(config_path=None, resume_dir=run_dir, skip_final_test=True)
             self.assertEqual(observed, ["model.gguf", "resumed", "stopped"])
+
+    def test_resume_external_primary_does_not_construct_runtime_manager(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_dir = root / "run"
+            run_dir.mkdir()
+            config = ExperimentConfig.from_mapping({
+                "runs_dir": str(root / "runs"),
+                "model": {
+                    "name": "external-model",
+                    "host": "llm.example.test",
+                    "port": 1234,
+                },
+            })
+            (run_dir / "config.yaml").write_text(
+                yaml.safe_dump(config.to_mapping()),
+                encoding="utf-8",
+            )
+
+            ExperimentOrchestrator(
+                runtime_factory=lambda: (_ for _ in ()).throw(
+                    AssertionError("external endpoint constructed a runtime manager")
+                ),
+                resume_runner=lambda _config, **_kwargs: SearchResult(
+                    run_dir, [], None
+                ),
+            ).run(config_path=None, resume_dir=run_dir, skip_final_test=True)
 
     def test_folder_resume_prioritizes_interrupted_run_then_remaining_configs(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -39,9 +39,9 @@ Previously tracked candidate, crossover, mutation, evaluation, scoring,
 artifact, runtime, prompt, and legacy-cleanup gaps were closed at that baseline. Prompt Reflection scopes Reviewer source to the
 editable strategy region and uses deterministic reusable-rule deltas. Code
 Reflection persists a structured diagnosis, revises parent Java from that
-conclusion only in the final materialization phase, and bypasses ordinary final
-generation while preserving both prompt genes. Whole-generation assignment and
-optional primary/generation-model phase switching are also implemented and
+conclusion only in its own materialization step, and bypasses ordinary final
+generation while preserving both prompt genes. Canonical streamed assignment and
+permanent primary/generation-server routing are implemented and
 covered by contract tests. The historical immutable-cohort self-play schedule,
 same-context parent refresh, and legacy-checkpoint migration were implemented
 and covered at this baseline; the approved tournament-v1 replacement is tracked
@@ -50,6 +50,12 @@ fitness, inclusive non-chained tolerance tiers, versioned map×phase behavior
 probes, exact semantic caching/equivalence, and offline semantic analysis are
 implemented and covered.
 Historical gap rows remain available in Git history.
+
+## Dependency-driven execution (2026-10-21)
+
+| ID | Decision | Verification | Status |
+| --- | --- | --- | --- |
+| EXEC-STREAM-01 | Replace model switching and whole-batch barriers with fixed role endpoints, two server-origin request slots, canonical source-gated plan streaming, two preparation workers and one ten-worker match matrix. External primary/generation servers are never lifecycle-managed. Keep parent-score, AOS, survivor and persistence dependencies. | Source/mutation/match overlap, endpoint routing, ordering, interruption/drain, self-play dependencies and resume contracts. | Implemented |
 
 ## Gap update rule
 

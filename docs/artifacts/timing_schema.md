@@ -19,6 +19,10 @@ Existing `generation_llm` and reflection-attempt fields describe LLM materializa
 
 This is the canonical owner of candidate and LLM-attempt timing fields. Normative source: specification section 25.
 
+Overlapping stage durations are work totals and can exceed generation wall
+time. Existing schemas remain unchanged. Concurrent LLM and match timing JSONL
+appends are synchronized; each candidate retains its own stage evidence.
+
 ## Requirements
 
 - Use UTC timestamps with timezone information.
@@ -214,8 +218,8 @@ Candidate timing.json contains operation-specific mutation and crossover generat
 Prompt Reflection records one `reflector_llm` attempt stream and one bounded
 `rewriter_llm` stream. Code Reflection records the structured diagnosis calls
 in `code_reflector_llm` and the conclusion-guided Java-producing calls in
-`code_revision_llm`. The former completes before the generation-wide
-materialization boundary and the latter runs after it; the subsequent direct validation attempt adds no
+`code_revision_llm`. Each child's diagnosis completes before its revision;
+other candidates may concurrently prepare or run matches. The direct validation attempt adds no
 `generation_llm` transport event unless compile repair is required. Each actual
 request emits one run-level `llm_request` event and remains candidate-owned
 under its mutation directory.

@@ -51,12 +51,11 @@ are specified in their own sections.
 5. For healthy sources, assign normal component crossover/copy and Strategy,
    Prompt, or no mutation. Strategy changes only canonical DSL policy; Prompt
    changes only reusable generation rules. Corrective children skip both.
-6. After all diagnosis/reflection/rewrite work, switch to the optional
-   `generation_model` boundary and materialize ordinary children or corrective
-   Java children. Corrective Java bypasses ordinary Generator overwrite; all
-   candidates enter validation, compilation, integration, and evaluation.
-   Compile repair remains bounded and diagnostic-only. AOS credit covers normal
-   Strategy/Prompt mutation only; the independent gate earns no reward.
+6. Each child immediately materializes after its own diagnosis/reflection/rewrite
+   through the permanently bound generation client. Corrective Java bypasses
+   Generator overwrite. Validation/compilation and matches overlap later source
+   gates, crossover and mutation. Compile repair remains bounded and diagnostic;
+   source gates receive no AOS credit.
 
 7. From generation 1 onward, combine parents and offspring and fill the fixed
    population with mode-specific selection without replacement. Failed
@@ -97,29 +96,34 @@ The shared generation implementation is in `eagle/evolution/generation.py` and `
 
 ## Bounded execution
 
-`eagle/execution.py` fixes GPU layers to `999`, model threads to `8`, LLM
-workers to `2`, and match workers to `10`; the managed local llama-server uses
-two slots. Each phase uses its local primary plus zero or one ordered
-`additional_endpoints` entry. `parallel_map` binds canonical input index to the
-corresponding endpoint slot modulo the endpoint count, allowing the two workers
-to issue local and remote requests concurrently without making routing depend
-on completion order. Results are still consumed in candidate/assignment order.
-Dependent calls and retries for one task stay on their assigned endpoint, and
-transport failure does not trigger cross-endpoint failover.
+Independent source gates run in two bounded workers and release plans in canonical
+input order. Crossover and AOS assignment remain serial and seeded. Two preparation
+workers execute each child's mutation, corrective revision or generation, validation
+and compilation. One evaluation consumer starts any ready child's Integration,
+semantic probes and matches while later children continue source gating, crossover
+or preparation. Results retain canonical candidate order and original ordinals/seeds;
+bounded completed-work buffering applies backpressure.
 
-Independent candidate work runs in the LLM pool within its phase: source Code
-gates, reflection/rewrite, corrective Code revision, and Java generation,
-decoding, and compilation. Each candidate's dependent calls retain their
-required order. Every configured endpoint must pass a chat-completion preflight
-before phase work starts. On failure or interruption, queued tasks are cancelled
-and active requests finish before the phase returns; results are consumed in
-candidate/assignment order. The reflection/rewrite phase completes before
-switching to `generation_model`. Only the managed local primary participates in
-that process switch; additional endpoints remain unmanaged.
-AOS selection and reward calculation/application remain serial and keep their
-existing formulas. Match dispatch uses the fixed ten-worker pool. Match traces
-remain available through dependent candidate construction and are retired at
-their existing cleanup boundary.
+Role clients permanently bind initialization/reflection/rewrite to `model` and
+Java generation/corrective revision/compile repair to optional `generation_model`.
+Different models use separately running server hosts/ports; EAGLE never switches
+models between phases. Omit `generation_model` to share the model concurrently.
+Each profile retains zero or one ordered unmanaged `additional_endpoints`.
+Canonical task index selects the route; retries stay sticky with no failover.
+All roles share two active requests per normalized server origin; different
+origins can proceed independently.
+
+Every endpoint passes fail-closed bounded chat preflight before candidate work.
+A primary with both local runtime paths is managed; omitting both paths uses
+an externally started primary without lifecycle ownership; a distinct generation server
+is externally started and unmanaged. GPU preflight and full offload checks remain.
+Failure/interruption cancels queued work and drains active producers/workers.
+One candidate match matrix runs at a time, retaining ten match workers. Self-play
+opponents remain immutable; an actual dependency on this batch's unprepared
+candidates retains a preparation barrier. Parent fitness refresh precedes
+reproduction because parent selection needs those scores. Rewards, survivor
+selection, pool updates, atomic persistence and trace cleanup wait for dependent
+evaluations. Initialization uniqueness retries retain their canonical order.
 
 ## Objective contract
 

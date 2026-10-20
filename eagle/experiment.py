@@ -248,36 +248,34 @@ def _print_non_batch_output(
     print(f"completed_generation={completed_generation}")
 
 
-def _ensure_runtime_phase(
+def _ensure_primary_runtime(
     manager: RuntimeManager,
     config: ExperimentConfig,
-    phase: str,
 ) -> None:
-    runtime = runtime_config_from_experiment(config, phase=phase)
+    runtime = runtime_config_from_experiment(config)
     if manager.current_spec is None:
-        print(f"Runtime: starting {phase} model {runtime.llm.base_url}")
+        print(f"Runtime: starting primary model {runtime.llm.base_url}")
     elif manager.current_spec == runtime.spec:
-        print(f"Runtime: reusing {phase} model server")
+        print("Runtime: reusing primary model server")
     else:
-        print(f"Runtime: switching to {phase} model {runtime.llm.base_url}")
+        print(f"Runtime: starting primary model {runtime.llm.base_url}")
     status = manager.ensure(runtime)
     if status.state != "healthy":
         raise RuntimeError(
-            f"Configured {phase} llama.cpp runtime is not healthy: {status.detail}"
+            f"Configured primary llama.cpp runtime is not healthy: {status.detail}"
         )
 
 
 def _restart_runtime_for_run(
     manager: RuntimeManager,
     config: ExperimentConfig,
-    phase: str = "reflection",
 ) -> None:
     """Restart the owned server at a run boundary before the first LLM call."""
 
     if manager.current_spec is not None:
-        print(f"Runtime: restarting {phase} model for new run")
+        print("Runtime: restarting primary model for new run")
         manager.stop_owned()
-    _ensure_runtime_phase(manager, config, phase)
+    _ensure_primary_runtime(manager, config)
 
 
 def _print_batch_header(selected: Path, total: int) -> None:
@@ -335,21 +333,13 @@ class ExperimentOrchestrator:
             )
             manager: RuntimeManager | None = None
             try:
-                if not mock and config.needs_llm_runtime:
+                if not mock and config.needs_managed_runtime:
                     manager = self.runtime_factory()
-                    _restart_runtime_for_run(manager, config, "reflection")
-
-                resume_kwargs = {}
-                if not mock and config.uses_distinct_generation_model:
-                    assert manager is not None
-                    resume_kwargs["activate_model_phase"] = (
-                        lambda phase: _ensure_runtime_phase(manager, config, phase)
-                    )
+                    _restart_runtime_for_run(manager, config)
                 result = self.resume_runner(
                     None,
                     run_dir=resume_dir,
                     mock=mock,
-                    **resume_kwargs,
                 )
                 _run_final_test_if_eligible(
                     self.final_test_runner,
@@ -359,7 +349,7 @@ class ExperimentOrchestrator:
                 )
                 return result
             finally:
-                if manager is not None:
+                if manager is not None and manager.current_spec is not None:
                     manager.stop_owned()
 
         if config_path is None:
@@ -410,23 +400,17 @@ class ExperimentOrchestrator:
                         last_result = result
                         continue
 
-                    if run_config.needs_llm_runtime:
+                    if run_config.needs_managed_runtime:
                         if manager is None:
                             manager = self.runtime_factory()
-                        _restart_runtime_for_run(manager, run_config, "reflection")
-                    search_kwargs = {}
-                    if run_config.uses_distinct_generation_model:
-                        search_kwargs["activate_model_phase"] = (
-                            lambda phase, selected=run_config: _ensure_runtime_phase(
-                                manager, selected, phase
-                            )
-                        )
+                        _restart_runtime_for_run(manager, run_config)
+                    elif manager is not None and manager.current_spec is not None:
+                        manager.stop_owned()
                     result = self.search_runner(
                         run_config,
                         config_path=resolved_path,
                         mock=mock,
                         on_run_created=record_run,
-                        **search_kwargs,
                     )
                     if record_run is not None:
                         record_run(result.run_dir)
@@ -440,7 +424,7 @@ class ExperimentOrchestrator:
             if last_result is None:
                 raise RuntimeError("No configs were executed.")
         finally:
-            if manager is not None:
+            if manager is not None and manager.current_spec is not None:
                 manager.stop_owned()
         print("Batch complete")
         if not mock and manager is not None:
@@ -489,28 +473,22 @@ class ExperimentOrchestrator:
 
         def ensure_runtime(
             config: ExperimentConfig,
-            phase: str = "reflection",
             *,
             new_run: bool = False,
         ) -> None:
             nonlocal manager
-            if mock or not config.needs_llm_runtime:
+            if mock:
+                return
+            if not config.needs_managed_runtime:
+                if manager is not None and manager.current_spec is not None:
+                    manager.stop_owned()
                 return
             if manager is None:
                 manager = self.runtime_factory()
             if new_run:
-                _restart_runtime_for_run(manager, config, phase)
+                _restart_runtime_for_run(manager, config)
             else:
-                _ensure_runtime_phase(manager, config, phase)
-
-        def phase_kwargs(config: ExperimentConfig) -> dict[str, object]:
-            if mock or not config.uses_distinct_generation_model:
-                return {}
-            return {
-                "activate_model_phase": lambda phase, selected=config: ensure_runtime(
-                    selected, phase
-                )
-            }
+                _ensure_primary_runtime(manager, config)
 
         try:
             for resolved_path, replicate_index, requested, indexed_run in jobs:
@@ -540,7 +518,6 @@ class ExperimentOrchestrator:
                             None,
                             run_dir=indexed_run,
                             mock=mock,
-                            **phase_kwargs(persisted),
                         )
                 if indexed_run is None:
                     print("Status: not started; creating a new run")
@@ -550,7 +527,6 @@ class ExperimentOrchestrator:
                         config_path=resolved_path,
                         mock=mock,
                         on_run_created=record_run,
-                        **phase_kwargs(requested),
                     )
                     record_run(result.run_dir)
 
@@ -575,7 +551,7 @@ class ExperimentOrchestrator:
                     manifest.get("stop_reason"),
                 )
         finally:
-            if manager is not None:
+            if manager is not None and manager.current_spec is not None:
                 manager.stop_owned()
 
         print("Batch complete")

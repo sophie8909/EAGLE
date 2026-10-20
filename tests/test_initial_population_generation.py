@@ -357,7 +357,10 @@ class InitialPopulationGenerationTests(unittest.TestCase):
                 {
                     "runs_dir": temp_dir,
                     "model": {"name": "ministral"},
-                    "generation_model": {"name": "qwen3.5-9b"},
+                    "generation_model": {
+                        "name": "qwen3.5-9b",
+                        "host": "generation.test",
+                    },
                     "candidate_java_mode": "inherited_genotype",
                     "initial_population_mode": "llm_generated_policies",
                     "population_size": 2,

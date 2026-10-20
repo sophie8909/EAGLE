@@ -630,7 +630,7 @@ class EaglePipelineTests(unittest.TestCase):
                     "eagle.evolution.generation.evaluate_population",
                     side_effect=fake_evaluate_population,
                 ) as generation_evaluate,
-                patch("eagle.evolution.generation.plan_offspring", return_value=[]),
+                patch("eagle.evolution.generation.iter_offspring_plans", return_value=(plan for plan in ())),
             ):
                 result = run_search(
                     config,

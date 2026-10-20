@@ -3,14 +3,13 @@
 The processing details before "Deterministic DSL materialization" describe `java_materialization_mode: llm`. In that mode, the Generator is the normal genotype-to-phenotype decoder. A successful Code
 Reflection is the one exception: its deferred revision returns a complete Java
 phenotype and therefore enters validation/compilation directly. Both operations
-run in the final generation-wide materialization phase, after all offspring
-reflection and prompt-rewrite work has finished.
+run as soon as that child's own dependencies finish, overlapping preparation
+and matches for other children.
 
-`model` owns initialization plus all reflection/rewrite roles. If the optional
-`generation_model` section is configured, the experiment orchestrator switches
-the single owned llama.cpp runtime to that model for ordinary Java generation,
-Code Reflection revision, and compile-guided repair, then switches back before
-the next generation's reflection phase. Without it, `model` owns both phases.
+`model` owns initialization and reflection/rewrite. Optional `generation_model`
+permanently binds ordinary generation, Code revision and compile repair to its
+own already running server. Without it, both roles share the primary server and
+its two-request limit. There is no runtime model switching.
 
 ## Exact input and output
 

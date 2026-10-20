@@ -106,7 +106,8 @@ class PromptResourceTests(unittest.TestCase):
                 path,
             )
             self.assertEqual(config.generation_prompt_file, DEFAULT_PROMPT_DIR / "initial_generation.txt", path)
-            self.assertEqual(config.generation_prompt, "" if config.java_materialization_mode == "deterministic_dsl" else load_prompt("initial_generation"), path)
+            expected_generation_prompt = load_prompt("initial_generation") if config.java_materialization_mode == "llm" else ""
+            self.assertEqual(config.generation_prompt, expected_generation_prompt, path)
             self.assertEqual(
                 config.initial_policy_generation_prompt_file,
                 DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",

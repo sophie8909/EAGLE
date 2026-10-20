@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from eagle.evaluation.determinism import derive_seed
 from eagle.candidate import Candidate
-from eagle.execution import current_llm_worker_slot
+from eagle.execution import current_llm_worker_slot, llm_request_slot
 from eagle.llm import LLMEndpoint, LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
 from eagle.timing import utc_now
 
@@ -240,7 +240,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             self._request_context.active_request_started_at = utc_now()
             self._request_context.active_request_started_monotonic = time.monotonic()
             try:
-                with llm_request_progress(
+                with llm_request_slot(self.chat_completions_url), llm_request_progress(
                     stage="generation",
                     endpoint=self.chat_completions_url,
                     model=self.model,

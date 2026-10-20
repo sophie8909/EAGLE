@@ -253,6 +253,99 @@ class MultiEndpointExecutionTests(unittest.TestCase):
         self.assertEqual(runtime.client.endpoints, expected)
         self.assertEqual(runtime.generation_client.endpoints, expected)
 
+    def test_search_runtime_preflights_and_binds_distinct_functional_clients(self) -> None:
+        config = ExperimentConfig.from_mapping(
+            {
+                "model": {
+                    "name": "reflection-model",
+                    "host": "127.0.0.1",
+                    "port": 18080,
+                },
+                "generation_model": {
+                    "name": "generation-model",
+                    "host": "127.0.0.1",
+                    "port": 18081,
+                },
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "eagle.evolution.runtime.preflight_llm_endpoint"
+        ) as preflight:
+            root = Path(directory)
+            runtime = build_search_runtime(
+                config,
+                mock=False,
+                run_dir=root,
+                candidates_dir=root / "candidates",
+            )
+
+        self.assertEqual(preflight.call_count, 2)
+        self.assertIs(preflight.call_args_list[0].args[0], runtime.client)
+        self.assertIs(preflight.call_args_list[1].args[0], runtime.generation_client)
+        self.assertEqual(runtime.client.endpoints[0].base_url, "http://127.0.0.1:18080")
+        self.assertEqual(runtime.generation_backend.base_url, "http://127.0.0.1:18081")
+        self.assertEqual(runtime.generation_backend.model, "generation-model")
+
+    def test_shared_functional_endpoint_is_preflighted_once(self) -> None:
+        config = ExperimentConfig.from_mapping(
+            {
+                "model": {
+                    "name": "shared-model",
+                    "host": "127.0.0.1",
+                    "port": 18080,
+                },
+                "generation_model": {
+                    "name": "shared-model",
+                    "host": "127.0.0.1",
+                    "port": 18080,
+                },
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "eagle.evolution.runtime.preflight_llm_endpoint"
+        ) as preflight:
+            root = Path(directory)
+            build_search_runtime(
+                config,
+                mock=False,
+                run_dir=root,
+                candidates_dir=root / "candidates",
+            )
+
+        preflight.assert_called_once()
+
+    def test_inactive_generation_endpoint_is_not_preflighted(self) -> None:
+        config = ExperimentConfig.from_mapping(
+            {
+                "model": {
+                    "name": "reflection-model",
+                    "host": "127.0.0.1",
+                    "port": 18080,
+                },
+                "generation_model": {
+                    "name": "inactive-generation-model",
+                    "host": "127.0.0.1",
+                    "port": 18081,
+                },
+                "java_materialization_mode": "deterministic_dsl",
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "eagle.evolution.runtime.preflight_llm_endpoint"
+        ) as preflight:
+            root = Path(directory)
+            runtime = build_search_runtime(
+                config,
+                mock=False,
+                run_dir=root,
+                candidates_dir=root / "candidates",
+            )
+
+        preflight.assert_called_once_with(runtime.client)
+
     def test_preflight_checks_every_endpoint_with_its_model(self) -> None:
         client = LLMClient(
             "http://127.0.0.1:18080",

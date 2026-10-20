@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-10-15 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-10-21 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -71,12 +71,12 @@ Java render、validation、`javac`、Integration、semantic probe 與 MicroRTS
 以下 Candidate、genotype、source gate 與 generation 流程只描述
 `java_materialization_mode: llm`；deterministic 模式見上方說明。
 
-每個模型 phase 都以 `model`（或 `generation_model`）的一組本機欄位定義唯一
+每個功能 profile 都以 `model`（或 `generation_model`）的一組本機欄位定義唯一
 managed primary endpoint，並可在同一區段加入最多一筆有序的
 `additional_endpoints`。Additional endpoint 的格式嚴格為
-`{base_url, model}`，代表 EAGLE 不擁有的 OpenAI-compatible service；整個 phase
-因此最多兩個 endpoint。`RuntimeManager` 只啟停 primary local llama.cpp，絕不
-adopt、restart、signal 或 stop additional endpoint。每個 endpoint 在 phase 工作前
+`{base_url, model}`，代表 EAGLE 不擁有的 OpenAI-compatible service；整個 profile
+因此最多兩個 endpoint。`RuntimeManager` 只在 primary 提供兩個本機 runtime 路徑時啟停 llama.cpp，絕不
+adopt、restart、signal 或 stop additional endpoint。每個 endpoint 在 candidate 工作前
 都必須完成 chat-completion preflight，任何一個失敗都 fail closed，不會開始
 candidate request。
 
@@ -110,18 +110,18 @@ Controller state 使用 `eagle-reflection-operator-v6`。
 獨立 Code Reflection gate，通過後才允許實際 crossover／mutation。所有 contributor
 都必須通過。缺陷來源改產生保留 policy／generation genes 的單一父代修正子代，
 跳過 crossover／一般 mutation；診斷失敗不等於健康，也不能進入 variation。
-健康來源的獨立 gate、反思／rewrite、Code revision、Java decode／compile，
-以及初始 policy request 都在各自階段使用有界 LLM pool，結果依 candidate
-順序消費。`parallel_map` 以 canonical input index 對有序 endpoint slots 取模，
-因此在設定 additional endpoint 時，兩個 worker 可同時發出一個 local request 與
-一個 remote request；route 不受 thread 或完成順序影響。單一 task 的相依呼叫與
-retry 固定留在原 endpoint，transport failure 不會轉送到另一端。初始 policy request 使用同一 configured-seed snapshot，並依 task 使用不同
-seed；policy transport 是 stateless。Java-generation request context 才使用
-thread-local。重複結果依 candidate 順序重試。全部反思完成後才進入
-generation_model
-materialization 邊界，修正 Java 直接進 validation／javac，不讓一般 Generator 覆寫。
-之後執行 integration、180 場 evaluation。AOS selection 與 reward application
-維持序列執行，公式不變；match trace 保留至相依 candidate 工作完成後才清理。
+來源 gate 使用兩個 worker；plan 依 canonical 順序進行 crossover 與 AOS 分配，
+每個子代完成自己的依賴後立即進入 mutation、Code revision、Java decode／compile。
+兩個 preparation worker 與單一 evaluation consumer 重疊運作：先準備好的個體
+開始 integration、semantic probe 與 match，其他個體仍可交配、變異或生成。
+沒有整批 reflection／generation 屏障。完成順序不改變 candidate 結果順序、
+原始 ordinal、seed、固定對手快照或評分；match 維持最多十個 worker。
+同 server origin 的所有功能共用兩個 request 名額，不同 host／port 可獨立並行。
+每個 task 的 endpoint 由 canonical index 固定，相依呼叫與 retry 不改 route。
+初始 policy 的固定 seed snapshot 與重複結果重試順序保持不變。中斷時取消排隊
+工作並等待已執行 producer／worker 結束；trace 在相依工作與世代保存後才清理。
+
+
 之後執行正常 mutation 的 AOS credit，以及
 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
@@ -161,7 +161,7 @@ raw request/response hash 與 match seed 是追查差異的證據。時間戳、
 
 正式 experiment 也採用相同的 run 邊界：每個 run（包含 `runs` replicate）開始前
 會停止上一個 EAGLE-owned llama-server，再依該 run 的 resolved config 啟動新的
-server；同一個 run 內的 reflection／generation phase switch 才允許 reuse。
+server；同一個 run 內所有角色固定綁定各自 server，不再切換模型。
 
 ## Reflection 與 Prompt
 
@@ -190,12 +190,13 @@ correctness 包含真正 compilation、runtime、control-flow 缺陷與 game／A
 仍使用恰好一場最差 completed match，Coach 的新 policy 必須通過 DSL 驗證。
 
 設定中的 `model` 負責 initial policy、reflection 與 prompt rewrite。可選的
-`generation_model` 負責最後 Java generation、延後的 Code Reflection revision，
-以及 compile-guided repair；若未設定就仍由 `model` 全部處理。雙模型模式只使用
-一個受控 llama.cpp process，會在 materialization 前切到 generation model，並在
-下一代 reflection 前切回 primary model。兩個 phase 都可各自宣告最多一個
-`additional_endpoints`，但 phase switch 只切換受控的本機 primary；外部 endpoint
-沒有 process lifecycle 操作。
+`generation_model` 固定負責 Java generation、Code revision 與 compile repair，
+直接呼叫已啟動的 server。不同 model 必須設定不同 host／port，由操作者啟動；
+EAGLE 不再依 phase 切換模型。省略時所有功能共用 `model` 並行呼叫。
+primary 省略 `model.path` 與 `model.llama_server` 時直接使用外部 server；
+兩者皆提供才管理本機 runtime，僅提供其一屬設定錯誤。generation 與 additional
+endpoints 一律由外部管理。
+
 
 所有會產生或解讀策略的 LLM 階段共用同一份不可變的
 `microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
@@ -331,10 +332,10 @@ conclusion、帶入該 conclusion 的修碼 request/raw response
 與抽取出的 reflected source。Snapshot JSON 不重複內嵌完整 inherited Java，resume
 由 canonical genotype 檔重建。
 
-Run 的 resolved `config.yaml` 會依設定順序保存每個 phase 的 primary 與
+Run 的 resolved `config.yaml` 會依設定順序保存每個 profile 的 primary 與
 additional endpoint 清單；這個順序屬於 execution identity。Resume 不允許新增、
 刪除、重排或改指 endpoint。每筆 LLM call index 與 `timing.jsonl` request event
-都必須記錄實際處理該 request 的 endpoint 與 model，不能只記 phase primary。
+都必須記錄實際處理該 request 的 endpoint 與 model，不能只記 profile primary。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8
 `.txt` 檔。`prompts/manifest.toml` 只保存 metadata 與 placeholder contract。
@@ -495,7 +496,7 @@ canonical manifest 與最新 atomic generation snapshot；詳細端點另回傳 
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
 `experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、
-managed-local llama.cpp start/reuse/switch、全部 endpoint 的 chat preflight、EA、
+optional managed-local llama.cpp start/reuse、全部 endpoint 的 chat preflight、EA、
 resume、final test 與 owned-process cleanup。它只管理 primary local process；
 additional endpoint 永遠是 unmanaged。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 `python -m eagle runtime` 已移除。

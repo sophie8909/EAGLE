@@ -11,6 +11,7 @@ from eagle.final_test import (
     FINAL_TEST_OPPONENTS,
     _build_summary,
     _empty_cell,
+    _load_config,
     _markdown_table,
     _select_candidate,
 )
@@ -18,6 +19,32 @@ from eagle.opponents import SAFE_ALLINBOT_CLASS_NAME
 
 
 class FinalTestTests(unittest.TestCase):
+    def test_historical_staged_model_config_remains_loadable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps({
+                    "schema_version": "experiment-v2",
+                    "model": {
+                        "name": "reflection-model",
+                        "host": "127.0.0.1",
+                        "port": 18080,
+                    },
+                    "generation_model": {
+                        "name": "generation-model",
+                        "host": "127.0.0.1",
+                        "port": 18080,
+                    },
+                }),
+                encoding="utf-8",
+            )
+
+            config = _load_config(config_path, root)
+
+        self.assertEqual(config.model.name, "reflection-model")
+        self.assertEqual(config.resolved_generation_model.name, "generation-model")
+
     def test_roster_reuses_all_ten_ea_opponents_without_duplicates(self):
         ids = [item.opponent_id for item in FINAL_TEST_OPPONENTS]
         self.assertEqual(

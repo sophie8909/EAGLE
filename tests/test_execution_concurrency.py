@@ -129,6 +129,7 @@ class ExecutionConcurrencyTests(unittest.TestCase):
                     population, generation=1, config=config, backend=object(),
                     generated_agents_dir=root / "java", classes_dir=root / "classes",
                     candidates_dir=root / "candidates", mock=True,
+                    opponent_candidates=[population[0]],
                 )
             self.assertEqual(prepared_order, ["a", "b"])
             self.assertEqual([candidate.id for candidate in evaluated], ["a", "b"])
