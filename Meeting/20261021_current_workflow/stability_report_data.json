@@ -1,10 +1,36 @@
 {
-  "schema_version": "eagle-framework-stability-comparison-v1",
+  "schema_version": "eagle-framework-stability-comparison-v2",
   "source": {
     "path": "reports/1021_framework_stability_comparison.md",
     "sha256": "09f96e8b825f43e9e47a40d578afd85dd5108d626332b2b1bad61f28283dde87",
     "report_snapshot_label": "2026-10-21 13:35 Asia/Taipei",
-    "snapshot_scope": "Report snapshot only; not live batch status."
+    "snapshot_scope": "Original report plus read-only remote artifacts; all twelve runs completed.",
+    "remote_refresh": {
+      "thread_id": "01a1532f-8c1e-7d52-9e39-db06a38b5812",
+      "host": "remote-control:env_e_6a8460e4e7d0832ebe87dbd74cff01a5",
+      "artifact_root": "/home/mhlab/EAGLE",
+      "snapshot_label": "2026-10-22 Asia/Taipei",
+      "message_ids": [
+        "msg_00e51028c7b7378e016ad8e6b5b8cc819180bf90071e13234e",
+        "msg_00e51028c7b7378e016ad8e6f633988191b075856cffa679f7"
+      ],
+      "timing_definitions": {
+        "search_wall_seconds": "timing.jsonl generation events: G0.started_at to G20.finished_at; excludes framework bootstrap and Final Test",
+        "initialization_seconds": "timing.jsonl event=generation, generation=0 duration_seconds; excludes framework bootstrap",
+        "evolution_seconds": "sum of event=generation duration_seconds for generations 1..20; stage sum",
+        "final_test_seconds": "600 final-test matches: minimum timing.started_at to maximum timing.finished_at; excludes compilation and Integration",
+        "resume": "All 12 manifests have no resume_from/resumed_from and complete G0–G20 sequences"
+      },
+      "generation_sources": {
+        "path": "runs/<run_id>/generations/generation_XXXX.json",
+        "best": "metrics.game_performance.best",
+        "population_mean": "metrics.game_performance.mean",
+        "population_sd": "metrics.objectives.game_performance.standard_deviation",
+        "semantic_unique": "metrics.semantic_library.global.unique_signature_count"
+      },
+      "outcome_source": "runs/<run_id>/final_test/final_test_summary.json: table, total_matches"
+    },
+    "data_snapshot_label": "2026-10-22 Asia/Taipei"
   },
   "run_status": {
     "columns": [
@@ -132,79 +158,70 @@
         "cohort": "本次",
         "seed": 13,
         "run_id": "20261021_202021_187555",
-        "generations_completed": 4,
+        "generations_completed": 20,
         "generations_target": 20,
-        "final_test_completed": null,
-        "final_test_target": null,
-        "status": "running"
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
       }
     ],
-    "reported_completed_runs": 11,
-    "reported_pending_runs": 1
+    "reported_completed_runs": 12,
+    "reported_pending_runs": 0
   },
   "g20": {
     "previous": {
       "runs": 6,
-      "columns": [
-        "seed",
-        "best",
-        "population_mean",
-        "population_sd",
-        "semantic_unique",
-        "population_size"
-      ],
       "rows": [
         {
           "seed": 8,
-          "best": 5.592,
-          "population_mean": 4.307,
-          "population_sd": 0.675,
+          "best": 5.592004,
+          "population_mean": 4.306859,
+          "population_sd": 0.675312,
           "semantic_unique": 1,
           "population_size": 10
         },
         {
           "seed": 9,
-          "best": 25.733,
-          "population_mean": 24.711,
-          "population_sd": 0.691,
+          "best": 25.732783,
+          "population_mean": 24.711095,
+          "population_sd": 0.690845,
           "semantic_unique": 2,
           "population_size": 10
         },
         {
           "seed": 10,
-          "best": -32.037,
-          "population_mean": -38.789,
-          "population_sd": 3.609,
+          "best": -32.036904,
+          "population_mean": -38.78931,
+          "population_sd": 3.609358,
           "semantic_unique": 2,
           "population_size": 10
         },
         {
           "seed": 11,
-          "best": 10.988,
-          "population_mean": 9.419,
-          "population_sd": 0.696,
+          "best": 10.988062,
+          "population_mean": 9.419064,
+          "population_sd": 0.695889,
           "semantic_unique": 1,
           "population_size": 10
         },
         {
           "seed": 12,
-          "best": 6.761,
-          "population_mean": 5.639,
-          "population_sd": 0.698,
+          "best": 6.760507,
+          "population_mean": 5.639454,
+          "population_sd": 0.698418,
           "semantic_unique": 1,
           "population_size": 10
         },
         {
           "seed": 13,
-          "best": 18.267,
-          "population_mean": 15.719,
-          "population_sd": 1.029,
+          "best": 18.267322,
+          "population_mean": 15.719177,
+          "population_sd": 1.029331,
           "semantic_unique": 4,
           "population_size": 10
         }
       ],
-      "reported_mean_best": 5.884,
-      "computed_mean_best_from_displayed_rows": 5.884,
+      "mean_best": 5.883962333333334,
       "semantic_unique_counts": [
         1,
         2,
@@ -215,68 +232,67 @@
       ]
     },
     "current_completed": {
-      "runs": 5,
-      "columns": [
-        "seed",
-        "best",
-        "population_mean",
-        "population_sd",
-        "semantic_unique",
-        "population_size"
-      ],
+      "runs": 6,
       "rows": [
         {
           "seed": 8,
-          "best": -3.342,
-          "population_mean": -5.262,
-          "population_sd": 0.801,
+          "best": -3.341748,
+          "population_mean": -5.261612,
+          "population_sd": 0.801493,
           "semantic_unique": 3,
           "population_size": 10
         },
         {
           "seed": 9,
-          "best": 23.0,
-          "population_mean": 21.126,
-          "population_sd": 1.073,
+          "best": 22.99951,
+          "population_mean": 21.125998,
+          "population_sd": 1.072581,
           "semantic_unique": 1,
           "population_size": 10
         },
         {
           "seed": 10,
-          "best": -32.033,
-          "population_mean": -38.788,
-          "population_sd": 3.613,
+          "best": -32.033214,
+          "population_mean": -38.787987,
+          "population_sd": 3.612801,
           "semantic_unique": 2,
           "population_size": 10
         },
         {
           "seed": 11,
-          "best": 13.118,
-          "population_mean": 12.466,
-          "population_sd": 0.307,
+          "best": 13.117691,
+          "population_mean": 12.466486,
+          "population_sd": 0.306807,
           "semantic_unique": 1,
           "population_size": 10
         },
         {
           "seed": 12,
-          "best": 8.561,
-          "population_mean": 7.886,
-          "population_sd": 0.41,
+          "best": 8.560747,
+          "population_mean": 7.885555,
+          "population_sd": 0.410018,
           "semantic_unique": 1,
+          "population_size": 10
+        },
+        {
+          "seed": 13,
+          "best": 22.949003,
+          "population_mean": 21.969302,
+          "population_sd": 0.39363,
+          "semantic_unique": 5,
           "population_size": 10
         }
       ],
-      "reported_mean_best": 1.861,
-      "computed_mean_best_from_displayed_rows": 1.8608,
+      "mean_best": 5.375331500000001,
       "semantic_unique_counts": [
         3,
         1,
         2,
         1,
-        1
+        1,
+        5
       ]
-    },
-    "reported_mean_best_delta_current_minus_previous": -4.023
+    }
   },
   "trajectories": {
     "columns": [
@@ -292,101 +308,110 @@
       {
         "seed": 8,
         "cohort": "上次",
-        "g0": -57.328,
-        "g5": -1.36,
-        "g10": 6.184,
-        "g15": 5.124,
-        "g20": 5.592
-      },
-      {
-        "seed": 8,
-        "cohort": "本次",
-        "g0": -57.338,
-        "g5": -1.108,
-        "g10": 5.643,
-        "g15": 5.716,
-        "g20": -3.342
+        "g0": -57.327551,
+        "g5": -1.36018,
+        "g10": 6.183734,
+        "g15": 5.123898,
+        "g20": 5.592004
       },
       {
         "seed": 9,
         "cohort": "上次",
-        "g0": -71.714,
-        "g5": -58.547,
-        "g10": -18.482,
-        "g15": 22.95,
-        "g20": 25.733
-      },
-      {
-        "seed": 9,
-        "cohort": "本次",
-        "g0": -71.713,
-        "g5": -58.572,
-        "g10": -19.243,
-        "g15": 22.496,
-        "g20": 23.0
+        "g0": -71.713681,
+        "g5": -58.546765,
+        "g10": -18.482364,
+        "g15": 22.950039,
+        "g20": 25.732783
       },
       {
         "seed": 10,
         "cohort": "上次",
-        "g0": -70.592,
-        "g5": -49.131,
-        "g10": -41.481,
-        "g15": -14.999,
-        "g20": -32.037
-      },
-      {
-        "seed": 10,
-        "cohort": "本次",
-        "g0": -70.59,
-        "g5": -49.136,
-        "g10": -41.493,
-        "g15": -15.003,
-        "g20": -32.033
+        "g0": -70.591722,
+        "g5": -49.131152,
+        "g10": -41.481331,
+        "g15": -14.999246,
+        "g20": -32.036904
       },
       {
         "seed": 11,
         "cohort": "上次",
-        "g0": -69.304,
-        "g5": 4.586,
-        "g10": 24.21,
-        "g15": 22.45,
-        "g20": 10.988
-      },
-      {
-        "seed": 11,
-        "cohort": "本次",
-        "g0": -69.3,
-        "g5": 7.34,
-        "g10": 20.633,
-        "g15": 24.229,
-        "g20": 13.118
+        "g0": -69.303636,
+        "g5": 4.585921,
+        "g10": 24.209648,
+        "g15": 22.449908,
+        "g20": 10.988062
       },
       {
         "seed": 12,
         "cohort": "上次",
-        "g0": -70.457,
-        "g5": 0.01,
-        "g10": 9.678,
-        "g15": 23.498,
-        "g20": 6.761
-      },
-      {
-        "seed": 12,
-        "cohort": "本次",
-        "g0": -70.451,
-        "g5": 0.007,
-        "g10": 12.555,
-        "g15": 24.649,
-        "g20": 8.561
+        "g0": -70.456543,
+        "g5": 0.009543,
+        "g10": 9.67842,
+        "g15": 23.497715,
+        "g20": 6.760507
       },
       {
         "seed": 13,
         "cohort": "上次",
-        "g0": -70.967,
-        "g5": -11.476,
-        "g10": -2.799,
-        "g15": -5.855,
-        "g20": 18.267
+        "g0": -70.967267,
+        "g5": -11.476352,
+        "g10": -2.79877,
+        "g15": -5.854624,
+        "g20": 18.267322
+      },
+      {
+        "seed": 8,
+        "cohort": "本次",
+        "g0": -57.338081,
+        "g5": -1.107881,
+        "g10": 5.642987,
+        "g15": 5.716487,
+        "g20": -3.341748
+      },
+      {
+        "seed": 9,
+        "cohort": "本次",
+        "g0": -71.712625,
+        "g5": -58.571535,
+        "g10": -19.243351,
+        "g15": 22.495612,
+        "g20": 22.99951
+      },
+      {
+        "seed": 10,
+        "cohort": "本次",
+        "g0": -70.590025,
+        "g5": -49.136225,
+        "g10": -41.492792,
+        "g15": -15.00325,
+        "g20": -32.033214
+      },
+      {
+        "seed": 11,
+        "cohort": "本次",
+        "g0": -69.299692,
+        "g5": 7.34023,
+        "g10": 20.63283,
+        "g15": 24.229256,
+        "g20": 13.117691
+      },
+      {
+        "seed": 12,
+        "cohort": "本次",
+        "g0": -70.450812,
+        "g5": 0.006855,
+        "g10": 12.554927,
+        "g15": 24.649235,
+        "g20": 8.560747
+      },
+      {
+        "seed": 13,
+        "cohort": "本次",
+        "g0": -70.96479,
+        "g5": -11.474718,
+        "g10": -3.014888,
+        "g15": 1.579132,
+        "g20": 22.949003
       }
     ]
   },
@@ -404,134 +429,435 @@
     ],
     "cohorts": [
       {
-        "cohort": "上次六 seed",
+        "cohort": "上次",
         "runs": 6,
         "wins": 1164,
-        "losses": 2284,
         "draws": 152,
+        "losses": 2284,
         "errors": 0,
         "matches": 3600,
         "aggregate_win_rate_percent": 32.33
       },
       {
-        "cohort": "本次已完成五 seed",
-        "runs": 5,
-        "wins": 905,
-        "losses": 1950,
-        "draws": 145,
+        "cohort": "本次",
+        "runs": 6,
+        "wins": 1122,
+        "draws": 148,
+        "losses": 2330,
         "errors": 0,
-        "matches": 3000,
-        "aggregate_win_rate_percent": 30.17
+        "matches": 3600,
+        "aggregate_win_rate_percent": 31.17
       }
     ],
-    "source_note": "Cohort counts are report totals; win rate is wins divided by all matches."
-  },
-  "hard_opponents_current": {
-    "cohort": "本次已完成 seed 8–12",
-    "runs": 5,
-    "columns": [
-      "opponent",
-      "wins",
-      "draws",
-      "losses",
-      "errors",
-      "matches",
-      "runs"
-    ],
-    "rows": [
-      {
-        "opponent": "AllInBot",
-        "wins": 1,
-        "draws": 3,
-        "losses": 296,
-        "errors": 0,
-        "matches": 300,
-        "runs": 5
-      },
-      {
-        "opponent": "Mayari",
-        "wins": 0,
-        "draws": 11,
-        "losses": 289,
-        "errors": 0,
-        "matches": 300,
-        "runs": 5
-      },
-      {
-        "opponent": "COAC",
-        "wins": 10,
-        "draws": 0,
-        "losses": 290,
-        "errors": 0,
-        "matches": 300,
-        "runs": 5
-      },
-      {
-        "opponent": "TMA",
-        "wins": 0,
-        "draws": 0,
-        "losses": 300,
-        "errors": 0,
-        "matches": 300,
-        "runs": 5
-      }
-    ],
-    "source_note": "Errors are 0 per report statement that all five completed final tests had zero errors."
-  },
-  "pending_seed13": {
-    "cohort": "本次",
-    "seed": 13,
-    "run_id": "20261021_202021_187555",
-    "status_at_report_snapshot": "running",
-    "report_snapshot_generations": "4/20",
-    "final_test_status": "尚未開始",
-    "generation_0_to_4_each_matches": "1800/1800",
-    "generation_0_to_4_failure_count": 0,
-    "generation_4_best": -11.475,
-    "generation_4_population_mean": -12.435,
-    "live_status_checked": false,
-    "note": "僅保存報告截點，不代表目前即時狀態。"
+    "source_note": "runs/<run_id>/final_test/final_test_summary.json: table, total_matches"
   },
   "timing_evidence": {
-    "available": false,
-    "scope": "No measured wall-time value was accessible from the named run artifacts in this checkout.",
-    "sample_run_ids_checked": [
-      "20261019_152601_037528",
-      "20261021_002848_496277",
-      "20261021_165442_013504"
+    "available": true,
+    "rows": [
+      {
+        "cohort": "上次",
+        "seed": 8,
+        "run_id": "20261019_152601_037528",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 10374.866,
+        "initialization_seconds": 522.792,
+        "evolution_seconds": 9848.488,
+        "final_test_seconds": 99.512,
+        "wins": 239,
+        "draws": 13,
+        "losses": 348,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "上次",
+        "seed": 9,
+        "run_id": "20261019_182037_312877",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 12257.945,
+        "initialization_seconds": 497.646,
+        "evolution_seconds": 11755.547,
+        "final_test_seconds": 119.06,
+        "wins": 251,
+        "draws": 1,
+        "losses": 348,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "上次",
+        "seed": 10,
+        "run_id": "20261019_103405_871333",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 17362.051,
+        "initialization_seconds": 515.172,
+        "evolution_seconds": 16843.476,
+        "final_test_seconds": 150.677,
+        "wins": 79,
+        "draws": 97,
+        "losses": 424,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "上次",
+        "seed": 11,
+        "run_id": "20261020_135403_027378",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 11343.296,
+        "initialization_seconds": 570.849,
+        "evolution_seconds": 10771.148,
+        "final_test_seconds": 125.726,
+        "wins": 225,
+        "draws": 17,
+        "losses": 358,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "上次",
+        "seed": 12,
+        "run_id": "20261020_170514_392422",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 10308.799,
+        "initialization_seconds": 498.24,
+        "evolution_seconds": 9809.485,
+        "final_test_seconds": 122.554,
+        "wins": 198,
+        "draws": 19,
+        "losses": 383,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "上次",
+        "seed": 13,
+        "run_id": "20261020_195907_969170",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 12509.009,
+        "initialization_seconds": 487.231,
+        "evolution_seconds": 12020.596,
+        "final_test_seconds": 92.874,
+        "wins": 172,
+        "draws": 5,
+        "losses": 423,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "本次",
+        "seed": 8,
+        "run_id": "20261021_002848_496277",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 11907.924,
+        "initialization_seconds": 554.364,
+        "evolution_seconds": 11351.931,
+        "final_test_seconds": 116.34,
+        "wins": 209,
+        "draws": 3,
+        "losses": 388,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "本次",
+        "seed": 9,
+        "run_id": "20261021_034914_985024",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 14015.655,
+        "initialization_seconds": 561.888,
+        "evolution_seconds": 13451.897,
+        "final_test_seconds": 132.173,
+        "wins": 210,
+        "draws": 4,
+        "losses": 386,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "本次",
+        "seed": 10,
+        "run_id": "20261021_074505_348782",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 19553.744,
+        "initialization_seconds": 561.167,
+        "evolution_seconds": 18989.792,
+        "final_test_seconds": 173.538,
+        "wins": 79,
+        "draws": 97,
+        "losses": 424,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "本次",
+        "seed": 11,
+        "run_id": "20261021_131355_062329",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 13098.014,
+        "initialization_seconds": 558.229,
+        "evolution_seconds": 12536.799,
+        "final_test_seconds": 146.619,
+        "wins": 228,
+        "draws": 15,
+        "losses": 357,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "本次",
+        "seed": 12,
+        "run_id": "20261021_165442_013504",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 12183.715,
+        "initialization_seconds": 566.996,
+        "evolution_seconds": 11614.279,
+        "final_test_seconds": 152.023,
+        "wins": 179,
+        "draws": 26,
+        "losses": 395,
+        "errors": 0,
+        "matches": 600
+      },
+      {
+        "cohort": "本次",
+        "seed": 13,
+        "run_id": "20261021_202021_187555",
+        "status": "complete",
+        "generations_completed": 20,
+        "search_wall_seconds": 14174.662,
+        "initialization_seconds": 549.497,
+        "evolution_seconds": 13622.763,
+        "final_test_seconds": 102.667,
+        "wins": 217,
+        "draws": 3,
+        "losses": 380,
+        "errors": 0,
+        "matches": 600
+      }
     ],
-    "missing_paths_checked": [
-      "runs/20261019_152601_037528/manifest.json",
-      "runs/20261019_152601_037528/summary.json",
-      "runs/20261019_152601_037528/timing.jsonl",
-      "runs/20261019_152601_037528/final_test/final_test_summary.json",
-      "runs/20261021_002848_496277/manifest.json",
-      "runs/20261021_002848_496277/summary.json",
-      "runs/20261021_002848_496277/timing.jsonl",
-      "runs/20261021_002848_496277/final_test/final_test_summary.json",
-      "runs/20261021_165442_013504/manifest.json",
-      "runs/20261021_165442_013504/summary.json",
-      "runs/20261021_165442_013504/timing.jsonl",
-      "runs/20261021_165442_013504/final_test/final_test_summary.json"
-    ],
-    "initialization_separation": "No timing.jsonl was available to separate initialization from completed evolutionary generations. Do not derive per-generation or total wall time from the report tables."
+    "definitions": {
+      "search_wall_seconds": "timing.jsonl generation events: G0.started_at to G20.finished_at; excludes framework bootstrap and Final Test",
+      "initialization_seconds": "timing.jsonl event=generation, generation=0 duration_seconds; excludes framework bootstrap",
+      "evolution_seconds": "sum of event=generation duration_seconds for generations 1..20; stage sum",
+      "final_test_seconds": "600 final-test matches: minimum timing.started_at to maximum timing.finished_at; excludes compilation and Integration",
+      "resume": "All 12 manifests have no resume_from/resumed_from and complete G0–G20 sequences"
+    },
+    "source": {
+      "thread_id": "01a1532f-8c1e-7d52-9e39-db06a38b5812",
+      "host": "remote-control:env_e_6a8460e4e7d0832ebe87dbd74cff01a5",
+      "artifact_root": "/home/mhlab/EAGLE",
+      "snapshot_label": "2026-10-22 Asia/Taipei",
+      "message_ids": [
+        "msg_00e51028c7b7378e016ad8e6b5b8cc819180bf90071e13234e",
+        "msg_00e51028c7b7378e016ad8e6f633988191b075856cffa679f7"
+      ],
+      "timing_definitions": {
+        "search_wall_seconds": "timing.jsonl generation events: G0.started_at to G20.finished_at; excludes framework bootstrap and Final Test",
+        "initialization_seconds": "timing.jsonl event=generation, generation=0 duration_seconds; excludes framework bootstrap",
+        "evolution_seconds": "sum of event=generation duration_seconds for generations 1..20; stage sum",
+        "final_test_seconds": "600 final-test matches: minimum timing.started_at to maximum timing.finished_at; excludes compilation and Integration",
+        "resume": "All 12 manifests have no resume_from/resumed_from and complete G0–G20 sequences"
+      },
+      "generation_sources": {
+        "path": "runs/<run_id>/generations/generation_XXXX.json",
+        "best": "metrics.game_performance.best",
+        "population_mean": "metrics.game_performance.mean",
+        "population_sd": "metrics.objectives.game_performance.standard_deviation",
+        "semantic_unique": "metrics.semantic_library.global.unique_signature_count"
+      },
+      "outcome_source": "runs/<run_id>/final_test/final_test_summary.json: table, total_matches"
+    }
   },
   "self_checks": {
     "run_rows_count": 12,
-    "complete_run_rows": 11,
-    "pending_run_rows": 1,
+    "complete_run_rows": 12,
+    "pending_run_rows": 0,
     "previous_g20_rows": 6,
-    "current_completed_g20_rows": 5,
-    "trajectory_rows": 11,
-    "cohort600_totals_match": true,
-    "hard_opponent_rows_each_total_300": true,
-    "g20_best_mean_reported_vs_displayed_rows": {
-      "previous_reported": 5.884,
-      "previous_displayed_rows_mean": 5.884,
-      "current_reported": 1.861,
-      "current_displayed_rows_mean": 1.8608
-    },
-    "current_minus_previous_reported_best_mean": -4.023,
-    "seed10_g20_best_delta_current_minus_previous": 0.004
+    "current_completed_g20_rows": 6,
+    "trajectory_rows": 12,
+    "per_run_matches": 600,
+    "per_cohort_matches": 3600,
+    "opponent_rows_per_cohort": 10,
+    "timing_rows": 12,
+    "per_cohort_opponent_sums_match_run_sums": true,
+    "duration_fields_finite_positive": true
+  },
+  "opponents": {
+    "previous": [
+      {
+        "opponent": "passive",
+        "wins": 300,
+        "draws": 60,
+        "losses": 0,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "random",
+        "wins": 328,
+        "draws": 30,
+        "losses": 2,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "randombias",
+        "wins": 300,
+        "draws": 22,
+        "losses": 38,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "lightrush",
+        "wins": 50,
+        "draws": 10,
+        "losses": 300,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "heavyrush",
+        "wins": 130,
+        "draws": 0,
+        "losses": 230,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "workerrush",
+        "wins": 40,
+        "draws": 10,
+        "losses": 310,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "allinbot",
+        "wins": 6,
+        "draws": 5,
+        "losses": 349,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "mayari",
+        "wins": 0,
+        "draws": 15,
+        "losses": 345,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "coac",
+        "wins": 10,
+        "draws": 0,
+        "losses": 350,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "tma",
+        "wins": 0,
+        "draws": 0,
+        "losses": 360,
+        "errors": 0,
+        "matches": 360
+      }
+    ],
+    "current": [
+      {
+        "opponent": "passive",
+        "wins": 300,
+        "draws": 60,
+        "losses": 0,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "random",
+        "wins": 329,
+        "draws": 31,
+        "losses": 0,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "randombias",
+        "wins": 292,
+        "draws": 32,
+        "losses": 36,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "lightrush",
+        "wins": 60,
+        "draws": 0,
+        "losses": 300,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "heavyrush",
+        "wins": 100,
+        "draws": 0,
+        "losses": 260,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "workerrush",
+        "wins": 30,
+        "draws": 10,
+        "losses": 320,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "allinbot",
+        "wins": 1,
+        "draws": 4,
+        "losses": 355,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "mayari",
+        "wins": 0,
+        "draws": 11,
+        "losses": 349,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "coac",
+        "wins": 10,
+        "draws": 0,
+        "losses": 350,
+        "errors": 0,
+        "matches": 360
+      },
+      {
+        "opponent": "tma",
+        "wins": 0,
+        "draws": 0,
+        "losses": 360,
+        "errors": 0,
+        "matches": 360
+      }
+    ]
   }
 }

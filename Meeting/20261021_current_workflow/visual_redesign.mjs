@@ -7,7 +7,7 @@ import {renderSecondary} from './visual_pages_b.mjs';
 import {stabilityPages,renderStability,STABILITY_SLIDE_COUNT,STABILITY_CHART_SLIDES,STABILITY_TABLE_SLIDES} from './stability_slides.mjs';
 
 const work=path.dirname(fileURLToPath(import.meta.url));
-const build=path.join(work,'.codex-build/opponent-pool-template-restored');
+const build=path.join(work,'.codex-build/opponent-pool-data-only');
 const runtime='C:/Users/cinna/.cache/codex-runtimes/codex-primary-runtime/dependencies';
 const skill='C:/Users/cinna/.codex/plugins/cache/openai-primary-runtime/presentations/26.1020.11127/skills/presentations';
 process.env.RUNTIME_NODE_MODULES=path.join(runtime,'node/node_modules');
@@ -91,7 +91,7 @@ numbered.layouts.find(l=>l.type==='master').elements.push(masterNumber);
 deck=Presentation.load(numbered);
 const candidatePath=path.join(build,'candidate.pptx');
 await(await PresentationFile.exportPptx(deck)).save(candidatePath);
-const finalPath=path.join(work,'deliverables/EAGLE_20261021_opponent_pool_template_restored.pptx');
+const finalPath=path.join(work,'deliverables/EAGLE_20261022_opponent_pool_data_only.pptx');
 const receiptPath=path.join(build,'visual-workflow.validation.json');
 const result=await finalizePresentation({workspaceDir:work,candidatePath,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...STABILITY_TABLE_SLIDES.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:slides.length,requiredNativeTableOwnerSlides:STABILITY_TABLE_SLIDES,requiredNativeChartOwnerSlides:STABILITY_CHART_SLIDES,nativeChartTargetApplication:'portable',materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:editedPath,referenceSha256:source.source_sha256},verifyArtifactToolImport:true,receiptPath});
 const final=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));
