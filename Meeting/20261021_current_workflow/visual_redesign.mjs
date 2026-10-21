@@ -1,13 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {renderPrimary} from './visual_pages_a.mjs';
 import {renderSecondary} from './visual_pages_b.mjs';
 import {stabilityPages,renderStability,STABILITY_SLIDE_COUNT,STABILITY_CHART_SLIDES,STABILITY_TABLE_SLIDES} from './stability_slides.mjs';
 
 const work=path.dirname(fileURLToPath(import.meta.url));
-const build=path.join(work,'.codex-build/opponent-pool-with-stability');
+const build=path.join(work,'.codex-build/opponent-pool-template-restored');
 const runtime='C:/Users/cinna/.cache/codex-runtimes/codex-primary-runtime/dependencies';
 const skill='C:/Users/cinna/.codex/plugins/cache/openai-primary-runtime/presentations/26.1020.11127/skills/presentations';
 process.env.RUNTIME_NODE_MODULES=path.join(runtime,'node/node_modules');
@@ -53,10 +53,24 @@ function tiles(s,n,x,y,{cols=5,cell=42,gap=10,fill=C.blush,labelPrefix=''}={}){
 const sub=(s,v)=>T(s,v,66,122,1518,50,{size:27,color:C.muted});
 const foot=(s,v)=>T(s,v,66,848,1465,46,{size:24,color:C.ink});
 const H={T,R,B,Cn,L,tag,dot,tiles,C,sub,foot,F,applyChartFont:applyPresentationChartFont};
-const deck=Presentation.create({slideSize:{width:1672,height:941}});
+const templatePath=path.resolve(work,'../template/EAGLE.potx');
+const templateProto=(await PresentationFile.importPptx(await FileBlob.load(templatePath))).toProto();
+const master=templateProto.layouts.find(l=>l.type==='master');
+const artwork=master.elements.find(e=>e.name==='EAGLE geometric full-slide background');
+// A native background fill survives both PowerPoint and Artifact Tool rendering.
+const backgroundFill=artwork?.fill ?? master.background.fill;
+if(!backgroundFill?.imageReference)throw new Error('EAGLE template background is missing');
+templateProto.slides=[];templateProto.charts=[];
+for(const layout of templateProto.layouts){
+  layout.background={fill:backgroundFill};
+  layout.elements=layout.elements.filter(e=>e!==artwork&&!e.paragraphs?.some(p=>p.runs?.some(r=>r.fieldType==='slidenum')));
+}
+let deck=Presentation.load(templateProto);
+const blank=deck.layouts.items.find(l=>l.name==='空白');
 let md='# EAGLE Opponent Pool 圖解流程\n\n搜尋採 self_play 與 tournament-v1，使用單一 Game Performance fitness、語意同分處理、靜態突變與父代快取重用。正式 Final Test 是獨立的固定基準測試。\n\n保留刪頁後的 38 頁順序。來源 SHA-256：`'+source.source_sha256+'`。\n';
 for(const p of slides){
-  const s=deck.slides.add();s.background.fill=C.bg;
+  const s=deck.slides.add({layoutId:blank.id,width:1672,height:941});
+  s.background.fill={type:'image',imageReference:backgroundFill.imageReference};
   T(s,p.title,64,36,1544,82,{size:p.title.length>29?43:53,color:C.ink,bold:true});
   if(!renderPrimary(s,p,H)&&!renderSecondary(s,p,H)&&!renderStability(s,p,H,reportData))throw new Error('No visual layout for '+p.page);
   T(s,`${p.page} / ${slides.length}`,1450,906,155,28,{size:19,color:C.muted,align:'right'});
@@ -65,9 +79,19 @@ for(const p of slides){
   md+='\n## '+p.page+'. '+p.title+'\n\n'+notes+'\n';
 }
 await fs.writeFile(path.join(work,'visual_workflow_explained.md'),md.trimEnd()+'\n');
+const numbered=deck.toProto();
+for(const [i,s] of numbered.slides.entries()){
+  const footer=s.elements.at(-1),run=footer.paragraphs[0].runs[0];
+  footer.name='Slide Number';footer.placeholderType='sldNum';footer.placeholderIndex=90;
+  footer.paragraphs[0].runs=[{...run,id:`{${randomUUID().toUpperCase()}}`,text:String(i+1),fieldType:'slidenum'},{...run,text:` / ${slides.length}`}];
+}
+const masterNumber=structuredClone(numbered.slides[0].elements.at(-1));
+masterNumber.paragraphs[0].runs=masterNumber.paragraphs[0].runs.slice(0,1);
+numbered.layouts.find(l=>l.type==='master').elements.push(masterNumber);
+deck=Presentation.load(numbered);
 const candidatePath=path.join(build,'candidate.pptx');
 await(await PresentationFile.exportPptx(deck)).save(candidatePath);
-const finalPath=path.join(work,'deliverables/EAGLE_20261021_opponent_pool_with_stability.pptx');
+const finalPath=path.join(work,'deliverables/EAGLE_20261021_opponent_pool_template_restored.pptx');
 const receiptPath=path.join(build,'visual-workflow.validation.json');
 const result=await finalizePresentation({workspaceDir:work,candidatePath,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...STABILITY_TABLE_SLIDES.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:slides.length,requiredNativeTableOwnerSlides:STABILITY_TABLE_SLIDES,requiredNativeChartOwnerSlides:STABILITY_CHART_SLIDES,nativeChartTargetApplication:'portable',materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:editedPath,referenceSha256:source.source_sha256},verifyArtifactToolImport:true,receiptPath});
 const final=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));

@@ -1,6 +1,8 @@
 # EAGLE 圖解流程簡報
 
-成果：`deliverables/EAGLE_20261021_opponent_pool_with_stability.pptx`，共 45 頁。保留既有 38 頁 Opponent Pool 圖解與第 5 頁 slot 例子，追加 7 頁 `reports/1021_framework_stability_comparison.md` 的結果圖表：兩批設定與狀態、G20 分數、軌跡、正式測試、強敵剖面、多樣性與結論。圖表與表格均為可編輯的原生物件。
+成果：`deliverables/EAGLE_20261021_opponent_pool_template_restored.pptx`，共 45 頁。保留既有 38 頁 Opponent Pool 圖解與第 5 頁 slot 例子，追加 7 頁 `reports/1021_framework_stability_comparison.md` 的結果圖表：兩批設定與狀態、G20 分數、軌跡、正式測試、強敵剖面、多樣性與結論。圖表與表格均為可編輯的原生物件。
+
+恢復原 EAGLE 鷹形、羽翼與四角線條背景，保留目前配色、圖解配置及你在第 1 頁移動的「反思與選擇」文字框。原圖存為原生背景填滿，母片、版型與各頁皆能呈現；右下角只保留一組原生自動頁碼。舊的無背景版本仍保留，不覆寫開啟中的檔案。
 
 搜尋流程統一採 opponent pool 協定（`self_play` 與 `tournament-v1`）：Game Performance 與語意同層選擇、static 突變、父代快取重用及快照刷新重評。正式 Final Test 是獨立的固定基準。新增的實驗結果為 framework **local**，搜尋期間沒有 candidate-time LLM；與第 38 頁的 Coach 設定範例分開。
 
@@ -18,6 +20,6 @@
 - `visual_pages_a.mjs`、`visual_pages_b.mjs`：各頁圖解配置。
 - `visual_workflow_explained.md`：與備註對應的完整文字說明。
 
-使用本機 Codex bundled Node 與 Artifact Tool 執行 `visual_redesign.mjs`。重建前先將既有成果與 `.codex-build/opponent-pool-with-stability/visual-workflow.validation.json` 移至私人建置備份；finalizer 會拒絕覆寫成果。原稿或報告 SHA 若已變更，需先重新擷取內容，不能沿用舊快照。
+使用本機 Codex bundled Node 與 Artifact Tool 執行 `visual_redesign.mjs`，原生起始模板為 `../template/EAGLE.potx`。重建前先將既有成果與 `.codex-build/opponent-pool-template-restored/visual-workflow.validation.json` 移至私人建置備份；finalizer 會拒絕覆寫成果。原稿或報告 SHA 若已變更，需先重新擷取內容，不能沿用舊快照。
 
-本機建置、渲染與檢查檔保留在忽略版本控制的 `.codex-build/opponent-pool-with-stability/`。報告未提供耗時，具名 run artifacts 在此工作區無法取得，因此標明耗時比較缺測。未使用原生 Microsoft PowerPoint 驗證字型排版。
+本機建置、渲染與檢查檔保留在忽略版本控制的 `.codex-build/opponent-pool-template-restored/`。已檢查 45 頁渲染、原生圖表／工作簿、版面與背景；與使用者版本逐頁比對前景內容、位置及備註，並已用 Microsoft PowerPoint 16 正常開啟。報告未提供耗時，具名 run artifacts 在此工作區無法取得，因此標明耗時比較缺測。未在其他電腦或 Google Slides 驗證排版。

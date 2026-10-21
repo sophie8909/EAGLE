@@ -14,7 +14,8 @@ export function renderPrimary(s,p,H){
       Cn(s,a,b);Cn(s,b,c,'bottom','right');Cn(s,c,a,'left','left');
       T(s,'生成',1205,268,330,56,{size:26,align:'center',color:C.muted});
       T(s,'評估',1235,574,300,54,{size:26,align:'center',color:C.muted});
-      T(s,'反思與選擇',660,422,270,56,{size:26,color:C.ink,bold:true});
+      // Preserve the label position edited in PowerPoint.
+      T(s,'反思與選擇',5869811/9525,422,270,56,{size:26,color:C.ink,bold:true});
       tag(s,'對戰時直接執行 Java',76,515,420,{fill:C.gold,size:28});
       small('演化與 LLM 工作在對戰之前完成',76,580,570);
       T(s,'2026-10-21',76,734,500,56,{size:30,color:C.muted});

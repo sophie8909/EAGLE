@@ -26,6 +26,9 @@ Use the available Presentations skill for authoring, rendering and package valid
 Inspect actual reference slides/images before styling. Reuse master, theme, layouts, dimensions, fonts, palette and recurring artwork. An older reference controls appearance, not current facts. For visual-only edits, preserve approved content and major geometry.
 
 - EAGLE default: $artifact-template-eagle-0917. A user-selected reference overrides it.
+- For EAGLE, use `assets/EAGLE.potx` and `assets/reference.pptx` as the native editable starting points. Preserve the original artwork as a native background fill on the master or layout; if inherited artwork does not render reliably, apply the same fill on the affected slide. Never cover artwork with a full-slide ivory rectangle.
+- Keep the concise infographic composition: connected flow diagrams, choice grids, opponent-pool diagrams, evaluation matrices and native charts should carry the explanation. Do not revert to paragraph-heavy generic research layouts. Reference examples may include flow, slot choices, opponent pools, evaluation matrices, score, final comparison, diversity and timing views, but their data and claims are source-specific; replace them using the current task's sources rather than treating them as universal EAGLE facts.
+- On the 1672 × 941 canvas, follow the current geometry: title x64 y36 w1544 h82; subtitle x66 y122 h50; body y190–841; footer y848; one right-aligned slide number at x1450 y906. Use a native slide-number field and show only one visible number per slide.
 - Only for an explicitly selected Meeting 0830 profile, read [references/meeting-0830.md](references/meeting-0830.md).
 - Use one coherent icon family only if it explains content; retain source/license information. Do not add decoration or flatten full slides.
 - A reusable template is native POTX; a populated report is separate PPTX.
@@ -34,6 +37,6 @@ Inspect actual reference slides/images before styling. Reuse master, theme, layo
 
 Lead with dated changes, then method/experiments/results/time/comparison as needed. Use compact change tables and one substantive claim per slide. Avoid repeated disclaimers, decorative labels, generic summary pages, lengthy chronology narration and build commentary. Keep conclusion-changing caveats visible and detailed provenance in notes.
 
-Reconcile every change, baseline, diagram stage and chart value against the MD. Verify diagram branches/loops, units, sample counts, timing scope, comparison conditions, package integrity, native evidence and every rendered slide. A successful export or visual match alone does not establish completeness.
+Reconcile every change, baseline, diagram stage and chart value against the MD. Verify diagram branches/loops, units, sample counts, timing scope, comparison conditions, package integrity, native evidence and every rendered slide. Inspect every page visually and confirm original artwork is visibly rendered; finding artwork in the PPTX package alone is insufficient. A successful export or visual match alone does not establish completeness.
 
 Keep scratch files out of delivery folders, preserve unrelated work, follow the workspace commit policy, and state native PowerPoint validation limits briefly.
