@@ -1,0 +1,537 @@
+{
+  "schema_version": "eagle-framework-stability-comparison-v1",
+  "source": {
+    "path": "reports/1021_framework_stability_comparison.md",
+    "sha256": "09f96e8b825f43e9e47a40d578afd85dd5108d626332b2b1bad61f28283dde87",
+    "report_snapshot_label": "2026-10-21 13:35 Asia/Taipei",
+    "snapshot_scope": "Report snapshot only; not live batch status."
+  },
+  "run_status": {
+    "columns": [
+      "cohort",
+      "seed",
+      "run_id",
+      "generations_completed",
+      "generations_target",
+      "final_test_completed",
+      "final_test_target",
+      "status"
+    ],
+    "rows": [
+      {
+        "cohort": "上次",
+        "seed": 8,
+        "run_id": "20261019_152601_037528",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "上次",
+        "seed": 9,
+        "run_id": "20261019_182037_312877",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "上次",
+        "seed": 10,
+        "run_id": "20261019_103405_871333",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "上次",
+        "seed": 11,
+        "run_id": "20261020_135403_027378",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "上次",
+        "seed": 12,
+        "run_id": "20261020_170514_392422",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "上次",
+        "seed": 13,
+        "run_id": "20261020_195907_969170",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "本次",
+        "seed": 8,
+        "run_id": "20261021_002848_496277",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "本次",
+        "seed": 9,
+        "run_id": "20261021_034914_985024",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "本次",
+        "seed": 10,
+        "run_id": "20261021_074505_348782",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "本次",
+        "seed": 11,
+        "run_id": "20261021_131355_062329",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "本次",
+        "seed": 12,
+        "run_id": "20261021_165442_013504",
+        "generations_completed": 20,
+        "generations_target": 20,
+        "final_test_completed": 600,
+        "final_test_target": 600,
+        "status": "complete"
+      },
+      {
+        "cohort": "本次",
+        "seed": 13,
+        "run_id": "20261021_202021_187555",
+        "generations_completed": 4,
+        "generations_target": 20,
+        "final_test_completed": null,
+        "final_test_target": null,
+        "status": "running"
+      }
+    ],
+    "reported_completed_runs": 11,
+    "reported_pending_runs": 1
+  },
+  "g20": {
+    "previous": {
+      "runs": 6,
+      "columns": [
+        "seed",
+        "best",
+        "population_mean",
+        "population_sd",
+        "semantic_unique",
+        "population_size"
+      ],
+      "rows": [
+        {
+          "seed": 8,
+          "best": 5.592,
+          "population_mean": 4.307,
+          "population_sd": 0.675,
+          "semantic_unique": 1,
+          "population_size": 10
+        },
+        {
+          "seed": 9,
+          "best": 25.733,
+          "population_mean": 24.711,
+          "population_sd": 0.691,
+          "semantic_unique": 2,
+          "population_size": 10
+        },
+        {
+          "seed": 10,
+          "best": -32.037,
+          "population_mean": -38.789,
+          "population_sd": 3.609,
+          "semantic_unique": 2,
+          "population_size": 10
+        },
+        {
+          "seed": 11,
+          "best": 10.988,
+          "population_mean": 9.419,
+          "population_sd": 0.696,
+          "semantic_unique": 1,
+          "population_size": 10
+        },
+        {
+          "seed": 12,
+          "best": 6.761,
+          "population_mean": 5.639,
+          "population_sd": 0.698,
+          "semantic_unique": 1,
+          "population_size": 10
+        },
+        {
+          "seed": 13,
+          "best": 18.267,
+          "population_mean": 15.719,
+          "population_sd": 1.029,
+          "semantic_unique": 4,
+          "population_size": 10
+        }
+      ],
+      "reported_mean_best": 5.884,
+      "computed_mean_best_from_displayed_rows": 5.884,
+      "semantic_unique_counts": [
+        1,
+        2,
+        2,
+        1,
+        1,
+        4
+      ]
+    },
+    "current_completed": {
+      "runs": 5,
+      "columns": [
+        "seed",
+        "best",
+        "population_mean",
+        "population_sd",
+        "semantic_unique",
+        "population_size"
+      ],
+      "rows": [
+        {
+          "seed": 8,
+          "best": -3.342,
+          "population_mean": -5.262,
+          "population_sd": 0.801,
+          "semantic_unique": 3,
+          "population_size": 10
+        },
+        {
+          "seed": 9,
+          "best": 23.0,
+          "population_mean": 21.126,
+          "population_sd": 1.073,
+          "semantic_unique": 1,
+          "population_size": 10
+        },
+        {
+          "seed": 10,
+          "best": -32.033,
+          "population_mean": -38.788,
+          "population_sd": 3.613,
+          "semantic_unique": 2,
+          "population_size": 10
+        },
+        {
+          "seed": 11,
+          "best": 13.118,
+          "population_mean": 12.466,
+          "population_sd": 0.307,
+          "semantic_unique": 1,
+          "population_size": 10
+        },
+        {
+          "seed": 12,
+          "best": 8.561,
+          "population_mean": 7.886,
+          "population_sd": 0.41,
+          "semantic_unique": 1,
+          "population_size": 10
+        }
+      ],
+      "reported_mean_best": 1.861,
+      "computed_mean_best_from_displayed_rows": 1.8608,
+      "semantic_unique_counts": [
+        3,
+        1,
+        2,
+        1,
+        1
+      ]
+    },
+    "reported_mean_best_delta_current_minus_previous": -4.023
+  },
+  "trajectories": {
+    "columns": [
+      "seed",
+      "cohort",
+      "g0",
+      "g5",
+      "g10",
+      "g15",
+      "g20"
+    ],
+    "rows": [
+      {
+        "seed": 8,
+        "cohort": "上次",
+        "g0": -57.328,
+        "g5": -1.36,
+        "g10": 6.184,
+        "g15": 5.124,
+        "g20": 5.592
+      },
+      {
+        "seed": 8,
+        "cohort": "本次",
+        "g0": -57.338,
+        "g5": -1.108,
+        "g10": 5.643,
+        "g15": 5.716,
+        "g20": -3.342
+      },
+      {
+        "seed": 9,
+        "cohort": "上次",
+        "g0": -71.714,
+        "g5": -58.547,
+        "g10": -18.482,
+        "g15": 22.95,
+        "g20": 25.733
+      },
+      {
+        "seed": 9,
+        "cohort": "本次",
+        "g0": -71.713,
+        "g5": -58.572,
+        "g10": -19.243,
+        "g15": 22.496,
+        "g20": 23.0
+      },
+      {
+        "seed": 10,
+        "cohort": "上次",
+        "g0": -70.592,
+        "g5": -49.131,
+        "g10": -41.481,
+        "g15": -14.999,
+        "g20": -32.037
+      },
+      {
+        "seed": 10,
+        "cohort": "本次",
+        "g0": -70.59,
+        "g5": -49.136,
+        "g10": -41.493,
+        "g15": -15.003,
+        "g20": -32.033
+      },
+      {
+        "seed": 11,
+        "cohort": "上次",
+        "g0": -69.304,
+        "g5": 4.586,
+        "g10": 24.21,
+        "g15": 22.45,
+        "g20": 10.988
+      },
+      {
+        "seed": 11,
+        "cohort": "本次",
+        "g0": -69.3,
+        "g5": 7.34,
+        "g10": 20.633,
+        "g15": 24.229,
+        "g20": 13.118
+      },
+      {
+        "seed": 12,
+        "cohort": "上次",
+        "g0": -70.457,
+        "g5": 0.01,
+        "g10": 9.678,
+        "g15": 23.498,
+        "g20": 6.761
+      },
+      {
+        "seed": 12,
+        "cohort": "本次",
+        "g0": -70.451,
+        "g5": 0.007,
+        "g10": 12.555,
+        "g15": 24.649,
+        "g20": 8.561
+      },
+      {
+        "seed": 13,
+        "cohort": "上次",
+        "g0": -70.967,
+        "g5": -11.476,
+        "g10": -2.799,
+        "g15": -5.855,
+        "g20": 18.267
+      }
+    ]
+  },
+  "final_test": {
+    "protocol_matches_per_run": 600,
+    "columns": [
+      "cohort",
+      "runs",
+      "wins",
+      "losses",
+      "draws",
+      "errors",
+      "matches",
+      "aggregate_win_rate_percent"
+    ],
+    "cohorts": [
+      {
+        "cohort": "上次六 seed",
+        "runs": 6,
+        "wins": 1164,
+        "losses": 2284,
+        "draws": 152,
+        "errors": 0,
+        "matches": 3600,
+        "aggregate_win_rate_percent": 32.33
+      },
+      {
+        "cohort": "本次已完成五 seed",
+        "runs": 5,
+        "wins": 905,
+        "losses": 1950,
+        "draws": 145,
+        "errors": 0,
+        "matches": 3000,
+        "aggregate_win_rate_percent": 30.17
+      }
+    ],
+    "source_note": "Cohort counts are report totals; win rate is wins divided by all matches."
+  },
+  "hard_opponents_current": {
+    "cohort": "本次已完成 seed 8–12",
+    "runs": 5,
+    "columns": [
+      "opponent",
+      "wins",
+      "draws",
+      "losses",
+      "errors",
+      "matches",
+      "runs"
+    ],
+    "rows": [
+      {
+        "opponent": "AllInBot",
+        "wins": 1,
+        "draws": 3,
+        "losses": 296,
+        "errors": 0,
+        "matches": 300,
+        "runs": 5
+      },
+      {
+        "opponent": "Mayari",
+        "wins": 0,
+        "draws": 11,
+        "losses": 289,
+        "errors": 0,
+        "matches": 300,
+        "runs": 5
+      },
+      {
+        "opponent": "COAC",
+        "wins": 10,
+        "draws": 0,
+        "losses": 290,
+        "errors": 0,
+        "matches": 300,
+        "runs": 5
+      },
+      {
+        "opponent": "TMA",
+        "wins": 0,
+        "draws": 0,
+        "losses": 300,
+        "errors": 0,
+        "matches": 300,
+        "runs": 5
+      }
+    ],
+    "source_note": "Errors are 0 per report statement that all five completed final tests had zero errors."
+  },
+  "pending_seed13": {
+    "cohort": "本次",
+    "seed": 13,
+    "run_id": "20261021_202021_187555",
+    "status_at_report_snapshot": "running",
+    "report_snapshot_generations": "4/20",
+    "final_test_status": "尚未開始",
+    "generation_0_to_4_each_matches": "1800/1800",
+    "generation_0_to_4_failure_count": 0,
+    "generation_4_best": -11.475,
+    "generation_4_population_mean": -12.435,
+    "live_status_checked": false,
+    "note": "僅保存報告截點，不代表目前即時狀態。"
+  },
+  "timing_evidence": {
+    "available": false,
+    "scope": "No measured wall-time value was accessible from the named run artifacts in this checkout.",
+    "sample_run_ids_checked": [
+      "20261019_152601_037528",
+      "20261021_002848_496277",
+      "20261021_165442_013504"
+    ],
+    "missing_paths_checked": [
+      "runs/20261019_152601_037528/manifest.json",
+      "runs/20261019_152601_037528/summary.json",
+      "runs/20261019_152601_037528/timing.jsonl",
+      "runs/20261019_152601_037528/final_test/final_test_summary.json",
+      "runs/20261021_002848_496277/manifest.json",
+      "runs/20261021_002848_496277/summary.json",
+      "runs/20261021_002848_496277/timing.jsonl",
+      "runs/20261021_002848_496277/final_test/final_test_summary.json",
+      "runs/20261021_165442_013504/manifest.json",
+      "runs/20261021_165442_013504/summary.json",
+      "runs/20261021_165442_013504/timing.jsonl",
+      "runs/20261021_165442_013504/final_test/final_test_summary.json"
+    ],
+    "initialization_separation": "No timing.jsonl was available to separate initialization from completed evolutionary generations. Do not derive per-generation or total wall time from the report tables."
+  },
+  "self_checks": {
+    "run_rows_count": 12,
+    "complete_run_rows": 11,
+    "pending_run_rows": 1,
+    "previous_g20_rows": 6,
+    "current_completed_g20_rows": 5,
+    "trajectory_rows": 11,
+    "cohort600_totals_match": true,
+    "hard_opponent_rows_each_total_300": true,
+    "g20_best_mean_reported_vs_displayed_rows": {
+      "previous_reported": 5.884,
+      "previous_displayed_rows_mean": 5.884,
+      "current_reported": 1.861,
+      "current_displayed_rows_mean": 1.8608
+    },
+    "current_minus_previous_reported_best_mean": -4.023,
+    "seed10_g20_best_delta_current_minus_previous": 0.004
+  }
+}
