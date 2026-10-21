@@ -74,16 +74,14 @@ export function renderSecondary(s,p,H){
       return true;
     }
     case 25:{
-      const left=box(s,H,'reuse_cached\n正式預設',100,260,405,95,{fill:C.ink,size:30,color:'#FFFFFF',bold:true});
-      const mid=box(s,H,'Self-play 快照刷新\n正常評估例外',635,260,405,95,{fill:C.rose,size:28,bold:true});
-      const right=box(s,H,'regenerate_same_genotype\n診斷模式',1170,260,405,95,{fill:C.gold,size:22,bold:true});
-      box(s,H,'沿用父代 Java 與已完成分數',100,405,405,128,{fill:C.pale,size:26});
-      box(s,H,'保留 Java 表型\n新 ID、換名單重新評估',635,405,405,128,{fill:C.pale,size:26});
-      box(s,H,'基因不變，重新 Generator 與評估',1170,405,405,128,{fill:C.pale,size:26});
-      text(s,H,'一般世代直接重用',100,587,405,42,24,C.muted,true,'center');
-      text(s,H,'保留舊情境證據',635,587,405,42,24,C.muted,true,'center');
-      text(s,H,'僅 inherited Java ＋ static；新複本取代舊 ID 參選',1125,585,495,68,23,C.muted,true,'center');
-      text(s,H,'diagnostic 同時包含再生成與重新對戰的影響',450,710,770,42,25,C.ink,true,'center');
+      const same=box(s,H,'對手快照未改變',100,245,640,92,{fill:C.ink,size:34,color:'#FFFFFF',bold:true});
+      const changed=box(s,H,'對手快照到期刷新',930,245,640,92,{fill:C.rose,size:34,bold:true});
+      const reuse=box(s,H,'沿用父代 Java\n沿用同情境的已完成分數',100,435,640,135,{fill:C.pale,size:31,bold:true});
+      const refresh=box(s,H,'沿用父代 Java\n新 ID 複本，對新名單跑 180 場',930,435,640,135,{fill:C.gold,size:30,bold:true});
+      arrow(s,H,same,reuse,'bottom','top');arrow(s,H,changed,refresh,'bottom','top');
+      const joint=box(s,H,'先完成父代情境校準，再繁殖；子代也用同一快照評估',270,730,1130,80,{fill:C.blush,size:29,bold:true});
+      arrow(s,H,reuse,joint,'bottom','top');arrow(s,H,refresh,joint,'bottom','top');
+      text(s,H,'本流程要求 parent_evaluation_mode = reuse_cached；快照刷新自動執行表型不變的父代重評',180,840,1310,40,22,C.ink,false,'center');
       return true;
     }
     case 26:{
@@ -97,41 +95,34 @@ export function renderSecondary(s,p,H){
       const tie=box(s,H,'同分層',820,320,250,92,{fill:C.blush,size:31,bold:true});
       const dist=box(s,H,'比較九個 probe 的動作差異\n距離 = 不同 probe 數 ÷ 9',1190,310,350,118,{fill:C.pale,size:26});
       arrow(s,H,tie,dist);
-      const boundary=box(s,H,'只在分數邊界需要取捨時\n於 ≤ 1.0 的同分層採 seeded max-min',895,560,500,120,{fill:C.gold,size:26,bold:true});
+      const boundary=box(s,H,'父代：頂層挑行為較遠者\n倖存者：切分同層時採 max-min',895,560,500,120,{fill:C.gold,size:26,bold:true});
       arrow(s,H,dist,boundary,'bottom','top');
       text(s,H,'語意探針只解決同分，不另加搜尋目標',865,716,520,46,24,C.muted,true,'center');
       return true;
     }
     case 27:{
-      text(s,H,'μ + λ',120,275,290,90,60,C.ink,true,'center');
-      text(s,H,'N 父代',125,380,130,42,24,C.muted,true,'center');
-      text(s,H,'＋',265,380,50,42,28,C.rose,true,'center');
-      text(s,H,'N 子代',325,380,130,42,24,C.muted,true,'center');
-      const pool=box(s,H,'2N 候選\n依 ID 去重',500,305,250,112,{fill:C.gold,size:29,bold:true});
-      const done=box(s,H,'只讓完整評估者\n填入固定人口 N',840,305,280,112,{fill:C.pale,size:26});
-      arrow(s,H,pool,done);
-      const mode=box(s,H,'評估模式',1260,433,220,58,{fill:C.ink,size:25,color:'#FFFFFF',bold:true});
-      const fixed=box(s,H,'Fixed roster\n十案例 lexicase，選出即移除',1185,245,370,112,{fill:C.pale,size:24});
-      const self=box(s,H,'Self-play\n最高分錨定非串連分層\n≤ 1.0 只在切分邊界破同分',1185,555,370,126,{fill:C.pale,size:23});
-      arrow(s,H,done,mode);arrow(s,H,mode,fixed,'top','bottom');arrow(s,H,mode,self,'bottom','top');
-      text(s,H,'完成者不足 N：選擇明確失敗。失敗候選仍保留診斷證據。',410,720,900,45,25,C.ink,true,'center');
+      const pool=box(s,H,'N 父代＋N 子代\n合併、依 ID 去重',80,260,400,125,{fill:C.gold,size:30,bold:true});
+      const done=box(s,H,'只留下\n完整評估者',610,260,320,125,{fill:C.pale,size:30,bold:true});arrow(s,H,pool,done);
+      const tiers=box(s,H,'依 fitness 由高至低\n以每層最高分 − 1.0 分層',1060,260,500,125,{fill:C.blush,size:29,bold:true});arrow(s,H,done,tiers);
+      text(s,H,'整層放得下',90,520,480,48,31,C.ink,true,'center');
+      box(s,H,'整層保留\n再處理下一個分數層',90,605,480,125,{fill:C.pale,size:31,bold:true});
+      text(s,H,'剩餘名額切在同一層',760,520,780,48,31,C.ink,true,'center');
+      box(s,H,'只在該層用 seeded max-min 選子集\n優先保留與已選者行為較遠的候選',760,605,780,125,{fill:C.gold,size:29,bold:true});
+      H.L(s,1310,385,1310,450);H.L(s,330,450,1310,450);H.L(s,330,450,330,505,{arrow:true});H.L(s,1150,450,1150,505,{arrow:true});
+      text(s,H,'選滿固定 N 位；低分層不能靠新穎性越級。完成者不足 N，run 明確失敗。',160,825,1370,44,25,C.ink,true,'center');
       return true;
     }
     case 28:{
-      box(s,H,'STATIC',170,245,500,70,{fill:C.ink,size:31,color:'#FFFFFF',bold:true});
-      box(s,H,'AOS',1000,245,500,70,{fill:C.rose,size:31,bold:true});
-      text(s,H,'固定操作機率',170,348,500,54,31,C.ink,true,'center');
-      text(s,H,'reward 更新後續選擇機率',1000,348,500,54,28,C.ink,true,'center');
-      const s1=box(s,H,'Strategy',205,460,190,78,{fill:C.pale,size:26,bold:true});
-      const s2=box(s,H,'Prompt',435,460,190,78,{fill:C.gold,size:26,bold:true});
-      chip(s,H,'固定配比',310,582,200,C.blush,25);
-      const a=box(s,H,'執行狀態\n是否可執行',870,450,230,100,{fill:C.pale,size:25});
-      const b=box(s,H,'Opponents\n十案例 rank',1140,400,250,100,{fill:C.gold,size:25});
-      const c=box(s,H,'Head-to-head\n條件式 18 場',1140,540,250,100,{fill:C.blush,size:25});
-      arrow(s,H,a,b);arrow(s,H,a,c);
-      text(s,H,'EMA α = 0.20',965,680,340,46,30,C.ink,true,'center');
-      text(s,H,'Probability matching ＋最低機率',965,725,420,36,23,C.text,true,'center');
-      text(s,H,'reward 不加入搜尋 fitness',965,768,420,34,23,C.muted,true,'center');
+      text(s,H,'self_play 要求 reflection_operator_mode = static',130,195,1390,60,34,C.ink,true,'center');
+      const child=box(s,H,'交配後的子代',80,330,340,100,{fill:C.gold,size:32,bold:true});
+      const gate=box(s,H,'固定 mutation_rate\n決定是否突變',560,330,420,100,{fill:C.pale,size:31,bold:true});arrow(s,H,child,gate);
+      const mutate=box(s,H,'依已設定的靜態規則\n執行可用突變操作',1130,290,450,135,{fill:C.blush,size:30,bold:true});arrow(s,H,gate,mutate);
+      const next=box(s,H,'進入 Java 與評估',1130,650,450,100,{fill:C.ink,size:32,color:'#FFFFFF',bold:true});arrow(s,H,mutate,next,'bottom','top');
+      H.L(s,770,430,770,700);H.L(s,770,700,1130,700,{arrow:true});
+      text(s,H,'否：保留交配後基因',800,555,300,50,25,C.muted,true,'center');
+      text(s,H,'是',1020,300,80,45,26,C.ink,true,'center');
+      text(s,H,'Framework local：至多改一槽\nFramework Coach：回傳完整 genome\nLLM／DSL：依可用操作與固定配比',80,525,630,150,28,C.text,false);
+      text(s,H,'對戰結果提供 fitness 與反思證據；本流程不以 reward 動態更新操作機率',170,825,1330,44,25,C.ink,true,'center');
       return true;
     }
     case 29:{
@@ -219,8 +210,8 @@ export function renderSecondary(s,p,H){
       arrow(s,H,limit,rep);arrow(s,H,rep,compile);
       const finalMatrix=box(s,H,'Final Test\n固定十個內建對手',1210,385,340,76,{fill:C.ink,size:24,color:'#FFFFFF',bold:true});
       arrow(s,H,compile,finalMatrix,'bottom','top');
-      text(s,H,'正式 Final Test 矩陣',180,455,500,50,30,C.ink,true);
-      const items=[['180','搜尋評估','10 對手 × 3 地圖 × 3 回合 × 2 邊'],['18','Pool 挑戰','3 地圖 × 3 回合 × 2 邊'],['600','Final Test','10 對手 × 3 地圖 × 10 場 × 2 邊']];
+      text(s,H,'三種對戰矩陣各有用途',180,455,800,50,30,C.ink,true);
+      const items=[['180','搜尋評估','10 對手 × 3 地圖 × 3 回合 × 2 邊'],['18','Pool 挑戰','3 地圖 × 3 回合 × 2 邊'],['600','Final Test','10 對手 × 3 地圖 × 10 回合 × 2 邊']];
       const xs=[170,665,1160];
       items.forEach((v,i)=>{
         text(s,H,v[0],xs[i],565,280,105,76,i===2?C.ink:C.rose,true,'center');
@@ -228,6 +219,7 @@ export function renderSecondary(s,p,H){
         text(s,H,v[2],xs[i]-40,720,360,56,22,C.muted,false,'center');
       });
       text(s,H,'mock 與 --skip-final-test 可略過',780,404,400,38,23,C.muted,false,'center');
+      text(s,H,'搜尋名單會刷新；正式測試名單固定，兩者分開保存結果',180,813,1330,44,25,C.ink,true,'center');
       return true;
     }
     case 35:{

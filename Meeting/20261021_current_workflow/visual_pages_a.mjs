@@ -5,7 +5,7 @@ export function renderPrimary(s,p,H){
   const small=(v,x,y,w,h=52)=>T(s,v,x,y,w,h,{size:25,color:C.muted});
   switch(p.page){
     case 1:{
-      sub(s,'策略、Java 與對戰證據的演化迴圈');
+      sub(s,'以歷代策略維護對手池，再用凍結的 4＋6 名單評估候選');
       T(s,'離線演化',72,225,520,110,{size:86,color:C.ink,bold:true});
       T(s,'MicroRTS Java agent',76,346,590,66,{size:42,color:C.text});
       const a=B(s,'策略／控制基因',805,232,330,104,{fill:C.gold,bold:true,size:34});
@@ -18,18 +18,18 @@ export function renderPrimary(s,p,H){
       tag(s,'對戰時直接執行 Java',76,515,420,{fill:C.gold,size:28});
       small('演化與 LLM 工作在對戰之前完成',76,580,570);
       T(s,'2026-10-21',76,734,500,56,{size:30,color:C.muted});
-      foot(s,'以對戰證據反思策略，再由演化選擇保留候選');
+      foot(s,'搜尋採 opponent pool；正式 Final Test 使用獨立的固定基準');
       return true;
     }
     case 2:{
-      sub(s,'先固定 framework，再進入第 0 代與演化迴圈');
+      sub(s,'目前搜尋協定：self_play ＋ tournament-v1 opponent pool');
       R(s,65,205,1540,145,{fill:C.gold,radius:true});
       const a=B(s,'GPT 產生 Java framework',90,225,540,100,{fill:C.gold,size:35,bold:true});
       small('暫時人工由 ChatGPT\n生成固定 framework',680,236,780,78);
-      const init=B(s,'初始化 G0',100,440,325,100,{fill:C.pale,size:33,bold:true});
-      const e0=B(s,'Java 與初始評估',525,440,400,100,{fill:C.blush,size:31,bold:true});
-      const cycle=B(s,'刷新情境\n選父代與變異',1050,420,420,140,{fill:C.rose,size:32,bold:true});
-      const evals=B(s,'子代評估\n父代＋子代選倖存者',1040,680,440,125,{fill:C.blush,size:30,bold:true});
+      const init=B(s,'初始化 G0\n十個內建對手',100,440,325,100,{fill:C.pale,size:29,bold:true});
+      const e0=B(s,'候選初評\n策略開始累積入池',525,440,400,100,{fill:C.blush,size:29,bold:true});
+      const cycle=B(s,'到期刷新 4＋6\n父代重評、選擇與變異',1050,420,420,140,{fill:C.rose,size:28,bold:true});
+      const evals=B(s,'子代評估與倖存選擇\n更新 opponent pool',1040,680,440,125,{fill:C.blush,size:28,bold:true});
       const stop=B(s,'停止條件？',525,690,360,105,{fill:C.gold,size:32,bold:true});
       const ft=B(s,'Final Test',100,690,325,105,{fill:C.ink,color:'#FFFFFF',size:34,bold:true});
       Cn(s,a,init,'bottom','top');Cn(s,init,e0);Cn(s,e0,cycle);Cn(s,cycle,evals,'bottom','top');Cn(s,evals,stop,'left','right');Cn(s,stop,ft,'left','right');
@@ -97,38 +97,38 @@ export function renderPrimary(s,p,H){
       return true;
     }
     case 7:{
-      sub(s,'例：10 位父代與 10 位子代，選出固定 10 位下一代');
+      sub(s,'同一凍結快照內，10 位父代與 10 位子代選出 10 位下一代');
       T(s,'父代',76,230,260,60,{size:37,color:C.ink,bold:true});tiles(s,10,82,320,{cols:5,cell:56,gap:14,fill:C.gold});
       const select=B(s,'選父代',535,265,300,94,{fill:C.pale,size:34,bold:true});
       const vary=B(s,'交配與突變',1065,265,410,94,{fill:C.blush,size:34,bold:true});Cn(s,select,vary);
       const evals=B(s,'Java、驗證與子代評估',1065,485,410,110,{fill:C.pale,size:30,bold:true});Cn(s,vary,evals,'bottom','top');
       const surv=B(s,'父代＋子代\n選下一代',535,655,300,120,{fill:C.rose,size:31,bold:true});Cn(s,evals,surv,'bottom','right');
       const saved=B(s,'更新 pool\n保存 checkpoint',85,655,330,120,{fill:C.gold,size:31,bold:true});Cn(s,surv,saved,'left','right');Cn(s,saved,select,'top','left');
-      tag(s,'self-play 刷新時，繁殖前先重評父代',535,423,940,{fill:C.gold,size:29});
+      tag(s,'對手快照到期刷新時，繁殖前先重評父代',535,423,940,{fill:C.gold,size:28});
       foot(s,'世代提交後才前進；新入池成員等下一次快照刷新才可能成為對手');
       return true;
     }
     case 8:{
-      sub(s,'繁殖父代提供基因；評估對手與倖存者選擇是另外兩個環節');
-      section('Fixed roster',90,220,600);section('Self-play',920,220,600);
-      tag(s,'十案例 lexicase',90,290,620,{fill:C.pale,size:31});tag(s,'Game Performance 頂層',920,290,620,{fill:C.gold,size:31});
-      const f1=B(s,'打亂案例順序',130,405,540,86,{fill:C.blush,size:31});
-      const f2=B(s,'依案例留下最高分者',130,585,540,86,{fill:C.pale,size:31,bold:true});Cn(s,f1,f2,'bottom','top');
-      const g1=B(s,'距最高分 ≤ 1.0',960,405,540,86,{fill:C.blush,size:33,bold:true});
-      const g2=B(s,'第二父代可優先選\n行為差異較遠者',960,575,540,112,{fill:C.gold,size:31});Cn(s,g1,g2,'bottom','top');
-      L(s,830,235,830,765,{color:C.blush,width:1});
-      small('兩次獨立抽樣，可選中同一父代',120,734,610);small('語意距離只在同分範圍內作用',960,734,610);
+      sub(s,'先用 Game Performance 決定頂層，再在這一層中選繁殖父代');
+      const pop=B(s,'當代候選族群\n同一對手快照，已有 fitness',80,280,415,135,{fill:C.pale,size:29,bold:true});
+      const tier=B(s,'只留分數頂層\nfitness ≥ 最高分 − 1.0',625,280,460,135,{fill:C.gold,size:31,bold:true});Cn(s,pop,tier);
+      const pa=B(s,'父代 A\nseeded 抽樣',1230,250,345,110,{fill:C.blush,size:31,bold:true});Cn(s,tier,pa);
+      const pb=B(s,'父代 B\n優先挑離 A 較遠者',1230,590,345,125,{fill:C.rose,size:29,bold:true});L(s,1085,390,1150,390);L(s,1150,390,1150,652);L(s,1150,652,1230,652,{arrow:true});
+      T(s,'在同一頂層再選',1210,440,380,52,{size:28,color:C.ink,bold:true,align:'center'});
+      tag(s,'語意距離來自固定狀態中的 Java 動作',80,580,950,{fill:C.pale,size:28});
+      small('低分者不能只靠行為新穎跨越分數頂層',80,660,950);
+      foot(s,'繁殖父代提供基因；opponent pool 提供評估對手。沒有相容簽章時採 seeded fallback');
       return true;
     }
     case 9:{
-      sub(s,'教學示例：改變案例檢查順序，專長不同的策略都有機會');
-      const rows=[['候選','X','Y'],['A','90','20'],['B','90','70'],['C','80','95']];
-      rows.forEach((row,r)=>row.forEach((v,c)=>B(s,v,85+c*160,260+r*115,150,95,{fill:r===0?C.blush:(r===2&&c===1)||(r===3&&c===2)?C.gold:C.pale,size:r?36:30,bold:!r||r===2})));
-      section('順序 X、Y',730,250,800);
-      const a=B(s,'A、B、C',730,340,240,82,{fill:C.pale,size:31});const ab=B(s,'A、B',1080,340,190,82,{fill:C.gold,size:32});const b=B(s,'B',1380,340,160,82,{fill:C.rose,size:40,bold:true});Cn(s,a,ab);Cn(s,ab,b);small('X 最高分',955,295,170);small('Y 最高分',1275,295,170);
-      section('順序 Y、X',730,550,800);
-      const all=B(s,'A、B、C',730,640,240,82,{fill:C.pale,size:31});const c=B(s,'C',1130,640,240,82,{fill:C.rose,size:40,bold:true});Cn(s,all,c);small('Y 已剩一位',970,596,210);
-      foot(s,'正式流程使用十個對手案例；本頁數值只說明篩選機制');
+      sub(s,'教學示例：最高分 100，頂層門檻為 99.0；只在這層中比較行為');
+      const rows=[['候選','fitness','距候選 B'],['A','100','8／9'],['B','99.4','0'],['C','99.0','2／9'],['D','98.8','不比較']];
+      rows.forEach((row,r)=>row.forEach((v,c)=>B(s,v,80+c*195,245+r*104,183,86,{fill:r===0?C.blush:r===4?C.light:r===1?C.rose:r===2?C.gold:C.pale,size:r?31:27,bold:r<3})));
+      const first=B(s,'第一父代：seeded 抽中候選 B',875,260,660,96,{fill:C.gold,size:31,bold:true});
+      const distance=B(s,'在 A、B、C 中\n比較與 B 的語意距離',960,470,490,125,{fill:C.pale,size:31,bold:true});Cn(s,first,distance,'bottom','top');
+      const second=B(s,'第二父代選候選 A\n8／9 是最大距離',960,700,490,110,{fill:C.rose,size:32,bold:true});Cn(s,distance,second,'bottom','top');
+      small('D 低於 99.0，不能靠新穎性入選',80,776,750);
+      foot(s,'本頁為示例，非實驗結果。分數差 1.0 包含邊界；距離來自相容的九個動作探針');
       return true;
     }
     case 10:{
@@ -151,7 +151,7 @@ export function renderPrimary(s,p,H){
       const good=B(s,'健康',1110,220,180,70,{fill:C.gold,size:32,bold:true});const variation=B(s,'正常交配與突變',1110,310,445,86,{fill:C.pale,size:31});Cn(s,gate,good);Cn(s,good,variation,'bottom','top');
       const bad=B(s,'有缺陷',1110,470,180,70,{fill:C.blush,size:32,bold:true});const correction=B(s,'單一父代修正 Java\n保留原 prompt 基因',1110,560,445,110,{fill:C.pale,size:29});Cn(s,gate,bad);Cn(s,bad,correction,'bottom','top');
       const fail=B(s,'診斷失敗：保留證據，標記失敗子代',400,741,800,64,{fill:C.light,size:28});Cn(s,gate,fail,'bottom','top');
-      foot(s,'只修策略忠實度與程式正確性；Code gate 不靠勝率評分，也不計 AOS credit');
+      foot(s,'Code gate 只診斷策略忠實度與程式正確性，不使用勝率作修正依據');
       return true;
     }
     case 12:{
@@ -196,7 +196,7 @@ export function renderPrimary(s,p,H){
       const outs=[];
       modes.forEach((m,i)=>{const x=72+i*523;T(s,m[0],x,225,482,65,{size:35,color:C.ink,bold:true,align:'center'});const inp=B(s,m[1],x,340,482,135,{fill:m[3],size:30});outs.push(B(s,'完整 Java',x+58,550,365,85,{fill:m[3],size:34,bold:true}));Cn(s,inp,outs[i],'bottom','top');small(m[2],x,672,482);});
       const v=B(s,'Validation → javac → Integration → MicroRTS',370,765,955,64,{fill:C.ink,color:'#FFFFFF',size:31,bold:true});outs.forEach(o=>Cn(s,o,v,'bottom','top'));
-      foot(s,'語意 probe 為選配診斷，self-play 必須啟用');
+      foot(s,'Opponent pool 必須啟用語意 probe，用於行為去重與分數層內的選擇');
       return true;
     }
     case 16:{
@@ -230,24 +230,23 @@ export function renderPrimary(s,p,H){
       terms.forEach((v,i)=>{const x=80+i*405;T(s,v[0],x,230,310,150,{size:120,color:i===0?C.ink:C.rose,bold:true,align:'center'});tag(s,v[1],x,430,310,{fill:i%2?C.pale:C.gold,size:30});if(i<3)T(s,'×',x+330,270,70,80,{size:53,color:C.muted});});
       const total=B(s,'180 場／候選',450,590,780,140,{fill:C.ink,color:'#FFFFFF',size:68,bold:true});
       tag(s,'每個對手 18 場',85,630,305,{fill:C.pale,size:28});B(s,'每張地圖可設\ntick_limit',1280,614,305,86,{fill:C.gold,size:25,bold:true});
-      foot(s,'固定十對手或凍結的 self-play 4＋6 名單，都維持相同矩陣規模');
+      foot(s,'對手快照固定為 4 個保護成員＋6 個抽樣成員；同一快照內的候選共用名單');
       return true;
     }
     case 19:{
       sub(s,'單場結果分數，加上最多 ±10 的物資、資源與存活 shaping');
       const vals=[['敗','−100',C.blush],['和','0',C.pale],['勝','＋100',C.gold]];
       vals.forEach((v,i)=>{const x=90+i*540;T(s,v[0],x,225,450,65,{size:40,bold:true,color:C.ink,align:'center'});T(s,v[1],x,310,450,130,{size:90,bold:true,color:C.ink,align:'center'});B(s,'−10 ≤ shaping ≤ ＋10',x,490,450,64,{fill:v[2],size:28,bold:true});});
-      const f=B(s,'Fixed roster\n十個對手分數各自成一個案例',90,655,710,130,{fill:C.pale,size:30,bold:true});
-      const sp=B(s,'Self-play\n十欄等權平均＝唯一 fitness',890,655,690,130,{fill:C.gold,size:30,bold:true});
-      foot(s,'固定名單的 0.5／1／2 加權均分只用於報表與代表選擇');
+      const per=B(s,'每個對手\n18 場分數取平均',90,655,550,130,{fill:C.pale,size:31,bold:true});
+      const fit=B(s,'10 個對手等權平均\n＝候選的唯一 fitness',850,655,730,130,{fill:C.gold,size:33,bold:true});Cn(s,per,fit);
+      foot(s,'完整 180 場才有有效 fitness；語意差異只在分數同層內輔助選擇，不另加分');
       return true;
     }
     case 20:{
-      sub(s,'每個對手 18 場；演化選擇保留十個獨立案例');
-      const rows=[['基礎基準','0.5',['PassiveAI','RandomAI','RandomBiasedAI'],C.pale],['Rush 基準','1',['LightRush','HeavyRush','WorkerRush'],C.blush],['進階基準','2',['AllInBot','Mayari','COAC','TMA'],C.gold]];
-      rows.forEach((r,i)=>{const y=245+i*180;T(s,r[0],80,y+5,250,60,{size:33,color:C.ink,bold:true});dot(s,r[1],326,y,{fill:r[3],r:39,size:29});r[2].forEach((v,j)=>B(s,v,455+j*286,y,264,80,{fill:r[3],size:v==='RandomBiasedAI'?24:28,bold:true}));});
-      tag(s,'報表權重總和 12.5',80,795,440,{fill:C.pale,size:27});
-      T(s,'Lexicase 使用案例，不以加權總分過濾',620,788,935,55,{size:29,color:C.ink,bold:true});
+      sub(s,'G0 使用全部十個內建對手；之後從持續累積的池中抽取 4＋6 名單');
+      const rows=[['可替換｜基礎',['PassiveAI','RandomAI','RandomBiasedAI'],C.pale],['可替換｜Rush',['LightRush','HeavyRush','WorkerRush'],C.blush],['永久保護',['AllInBot','Mayari','COAC','TMA'],C.gold]];
+      rows.forEach((r,i)=>{const y=245+i*180;T(s,r[0],80,y+5,350,60,{size:30,color:C.ink,bold:true});r[1].forEach((v,j)=>B(s,v,455+j*286,y,264,80,{fill:r[2],size:v==='RandomBiasedAI'?24:28,bold:true}));});
+      B(s,'前 6 個可被歷代候選替換；後 4 個永久保留。評分時十欄等權',165,785,1340,62,{fill:C.pale,size:29,bold:true});
       return true;
     }
   }

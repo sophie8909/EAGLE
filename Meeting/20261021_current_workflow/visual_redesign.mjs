@@ -15,6 +15,8 @@ const {Presentation,PresentationFile,FileBlob}=await importRuntimeModule('@oai/a
 const {finalizePresentation}=await import(pathToFileURL(path.join(skill,'container_tools/artifact_tool_utils.mjs')).href);
 const source=JSON.parse(await fs.readFile(path.join(work,'visual_source.json'),'utf8'));
 if(source.slides.length!==source.source_slide_count || source.slides.some(p=>!p.title||!p.notes))throw new Error('Incomplete edited source');
+const poolContent=JSON.parse(await fs.readFile(path.join(work,'opponent_pool_content.json'),'utf8'));
+const slides=source.slides.map(p=>({...p,...poolContent[p.page]}));
 const editedPath=path.join(work,'deliverables',source.source_file);
 if(createHash('sha256').update(await fs.readFile(editedPath)).digest('hex')!==source.source_sha256)throw new Error('The edited source changed; refresh the source snapshot before building');
 await fs.mkdir(build,{recursive:true});
@@ -47,21 +49,20 @@ const sub=(s,v)=>T(s,v,66,122,1518,50,{size:27,color:C.muted});
 const foot=(s,v)=>T(s,v,66,848,1465,46,{size:24,color:C.ink});
 const H={T,R,B,Cn,L,tag,dot,tiles,C,sub,foot};
 const deck=Presentation.create({slideSize:{width:1672,height:941}});
-let md='# EAGLE 圖解流程\n\n依刪頁後的簡報順序與內容重製。來源 SHA-256：`'+source.source_sha256+'`。\n';
-for(const p of source.slides){
+let md='# EAGLE Opponent Pool 圖解流程\n\n搜尋採 self_play 與 tournament-v1，使用單一 Game Performance fitness、語意同分處理、靜態突變與父代快取重用。正式 Final Test 是獨立的固定基準測試。\n\n保留刪頁後的 38 頁順序。來源 SHA-256：`'+source.source_sha256+'`。\n';
+for(const p of slides){
   const s=deck.slides.add();s.background.fill=C.bg;
   T(s,p.title,64,36,1544,82,{size:p.title.length>29?43:53,color:C.ink,bold:true});
   if(!renderPrimary(s,p,H)&&!renderSecondary(s,p,H))throw new Error('No visual layout for '+p.page);
   T(s,`${p.page} / ${source.slides.length}`,1450,906,155,28,{size:19,color:C.muted,align:'right'});
-  const raw=p.texts.filter(v=>v!==String(p.page)).join('\n')+'\n'+p.tables.map(t=>t.map(r=>r.join(' / ')).join('\n')).join('\n');
   const notes=p.page===5?'slot 是固定 Java 模板中的可替換位置。bundle 先定義每個 slot 的型別、合法值與表達式選單；候選只保存值或 choice_id。範例中 worker_target 從 2 到 8 的整數選 6，attack_weight 從 0、0.25、0.5、0.75、1 選 0.75，target_policy 選 lowest_hp。attack_weight、target_policy 與其選單為型別教學示例，不代表目前 bundle 的實際欄位。number 同樣是有限離散選單，0.6 在此例不合法。expression_choice 保存最低血量選項的 ID，由 bundle 中預先定義的 Java 表達式取代模板 marker，不生成新表達式。完整 genome 必須包含該 bundle 的全部 slot，不能只交這三項。\n\n程式來源：eagle/generation/framework_slots.py:304-340、445-470。worker_target 實例來源：configs/framework_bundles/fixed_worker_combat/bundle.json。\n\n'+p.notes:p.notes;
-  s.speakerNotes.textFrame.setText(notes+'\n\n保留的原稿文字：\n'+raw);
-  md+='\n## '+p.page+'. '+p.title+'\n\n'+notes+'\n\n原稿補充：\n'+raw+'\n';
+  s.speakerNotes.textFrame.setText(notes);
+  md+='\n## '+p.page+'. '+p.title+'\n\n'+notes+'\n';
 }
 await fs.writeFile(path.join(work,'visual_workflow_explained.md'),md.trimEnd()+'\n');
 const candidatePath=path.join(build,'candidate.pptx');
 await(await PresentationFile.exportPptx(deck)).save(candidatePath);
-const finalPath=path.join(work,'deliverables/EAGLE_20261021_visual_workflow_v2.pptx');
+const finalPath=path.join(work,'deliverables/EAGLE_20261021_opponent_pool_workflow.pptx');
 const receiptPath=path.join(build,'visual-workflow.validation.json');
 const result=await finalizePresentation({workspaceDir:work,candidatePath,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit'],explicitTotalSlideCount:source.slides.length,requiredNativeTableOwnerSlides:[],requiredNativeChartOwnerSlides:[],fontPolicy:{basis:'reference',families:[F],referencePath:editedPath,referenceSha256:source.source_sha256},verifyArtifactToolImport:true,receiptPath});
 const final=await PresentationFile.importPptx(await FileBlob.load(result.finalPath));

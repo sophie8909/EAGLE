@@ -1,0 +1,54 @@
+{
+  "1": {
+    "title": "EAGLE Opponent Pool 流程",
+    "notes": "本流程固定採 evaluation.mode=self_play 與 self_play_pool_policy=tournament-v1。長期 opponent pool 保存內建對手與經入池規則保留的歷代策略；每個評估快照只用十個對手欄位。候選對戰時執行完整 Java，沒有即時 LLM 決策。Java materialization 與反思方式仍依所選模式啟用，但搜尋評估與選擇規則統一使用 opponent pool。正式 Final Test 是獨立的固定基準測試。\n\n來源：eagle/config.py:360-388、747-760；eagle/opponent_pool.py:136-219；eagle/final_test.py。"
+  },
+  "2": {
+    "title": "Opponent Pool 搜尋流程",
+    "notes": "本流程先由 ChatGPT 人工準備固定 Java framework。G0 用十個內建對手完成初始候選評估，已評估族群開始按規則加入長期 opponent pool。後續每代在刷新到期時凍結四個保護對手加六個抽樣對手，保留父代 Java 並重新評估其分數，才選繁殖父代。子代評估使用同一快照；合併父代與子代選下一代後，所有已評估子代按入池規則挑戰或加入 pool，最後保存世代。尚未停止則繼續；停止後獨立執行固定內建對手的 Final Test。\n\n來源：eagle/evolution/search.py:208-270；eagle/evolution/generation.py:94-285；eagle/opponent_pool.py:136-219。"
+  },
+  "7": {
+    "title": "Opponent Pool 的每個世代",
+    "notes": "一般世代產生 population_size 個子代；到期刷新對手快照時，繁殖前先重評父代。父代與子代必須在同一快照下比較。完成者以 Game Performance 分層，語意差異僅在層內輔助選擇。選擇之後更新 opponent pool，入池來源為所有已評估子代，不限倖存者。self_play 要求 static 反思操作；對手池挑戰與更新不會立即改變已凍結的評估快照。\n\n來源：eagle/evolution/generation.py:94-285；eagle/config.py:747-760。"
+  },
+  "8": {
+    "title": "Opponent Pool 的繁殖父代選擇",
+    "notes": "繁殖父代來自目前 population，與用來提供評估對手的歷史 opponent pool 分開。使用單一 Game Performance fitness；從目前最高分往下 tolerance 以內形成頂層，預設 tolerance=1.0 且包含邊界，不採相鄰分數串連。第一父代以 seeded RNG 從有完整語意簽章者抽樣；若沒有完整簽章則從頂層候選抽樣。第二父代以第一父代為參照，優先選相容動作簽章距離最大者，距離相同時 seeded 抽樣；沒有可比資料時保留 fallback。兩次選擇沒有強制父代 ID 相異。\n\n來源：eagle/operators/selection.py:42-68、200-215、245-282；eagle/evolution/offspring.py:91-119。"
+  },
+  "9": {
+    "title": "Opponent Pool 的父代選擇示例",
+    "notes": "教學示例，非實驗結果。A、B、C、D 的 fitness 分別為 100、99.4、99.0、98.8，tolerance=1.0，因此頂層只有 A、B、C。C 剛好在含邊界的門檻；D 不會因距離 C 很近而串連進來。假設第一父代 seeded 選到 B，且相容的九個 probes 中 A 與 B 有八個動作不同，C 與 B 有兩個不同，則第二父代選 A。D 已在頂層外，不能因行為新穎而越級。\n\n來源：eagle/operators/selection.py:42-68、200-215、245-282、311-320。"
+  },
+  "18": {
+    "notes": "搜尋評估使用凍結的 opponent-pool 十欄快照：四個保護對手與六個抽樣對手。只有通過 materialization、validation、compilation 與 Integration 的候選能進入對戰。每欄三張地圖、三回合、雙方位置，共十八場，十欄共一百八十場。每場使用衍生 seed、地圖 tick cap 與 timeout。矩陣必須完整才有有效 fitness。同一快照內父代與子代使用同一名單；長期 pool 更新不立即更換這個名單。\n\n來源：eagle/evaluation/match_matrix.py；eagle/evaluation/matches.py；eagle/self_play.py:24-79。"
+  },
+  "19": {
+    "notes": "Opponent-pool 搜尋使用單一 Game Performance fitness。單場結果的敗、和、勝基分為 -100、0、100，再加最多正負十的物資、資源與存活 shaping。每個對手十八場先取平均，十個對手欄位再等權平均；因每欄場數相同，也等於完整一百八十場的平均。四個保護對手沒有較高評分權重。語意距離只在分數同層內輔助選擇，不另加 fitness。必要階段失敗或矩陣未完成使用 -1000 sentinel；失敗候選保留診斷但不能擠掉足夠的完整評估候選。AllInBot 被 adapter containment 的上游故障以中性零分和局記錄，另列 opponent fault。\n\n來源：eagle/evaluation/game_performance.py:207-219；eagle/config.py:372-388；eagle/operators/selection.py:93-129；eagle/evaluation/matches.py。"
+  },
+  "20": {
+    "title": "Opponent Pool 的十個起始對手",
+    "notes": "初始 pool 含十個內建來源。PassiveAI、RandomAI、RandomBiasedAI、LightRush、HeavyRush、WorkerRush 是六個可替換成員；AllInBot、Mayari、COAC、TMA 是四個永久保護成員。G0 評估使用全部十個內建對手。後續可替換區累積經規則入池的歷代策略，每個刷新快照保留四個保護對手，再從非保護成員抽六名。這是 pool 的初始化名單，並不表示整個演化期間固定對戰這十位。搜尋評分十欄等權。\n\n來源：eagle/opponents.py:1-145；eagle/opponent_pool.py:22-35、136-219；eagle/self_play.py:24-79。"
+  },
+  "21": {"title": "Opponent Pool 的起始與容量"},
+  "24": {
+    "notes": "self_play 要求 parent_evaluation_mode=reuse_cached。快照不變時沿用父代 Java 與已完成分數。快照刷新是協定內的必要重評：建立新 ID 父代複本，保留原 Java 表型，使用新十欄名單跑完評估，不覆寫舊 context 的分數與證據。刷新評估先完成，才做繁殖選擇；子代也在該快照中評估，讓父代與子代的 fitness 可在倖存選擇時比較。\n\n來源：eagle/config.py:747-760；eagle/evolution/generation.py:94-170；eagle/evolution/parent_refresh.py。"
+  },
+  "25": {
+    "title": "父代重用與對手快照重評",
+    "notes": "本流程只有兩種父代評估情境。對手快照不變時，reuse_cached 保留 Java 與原分數；到期刷新時，快照協定自動建立父代評估複本，用新名單重新對戰，但不重新生成 Java。self_play 設定驗證要求 reuse_cached，不能使用 regenerate_same_genotype 診斷模式。父代先完成新情境評分才能繁殖，子代隨後使用同一快照完成評估。\n\n來源：eagle/config.py:747-760；eagle/evolution/generation.py:94-170；eagle/evolution/parent_refresh.py。"
+  },
+  "26": {
+    "notes": "Opponent-pool 流程強制啟用語意探針。固定三張地圖的三個階段共九個 probe，記錄實際 Java 動作簽章，距離為動作 hash 不同的 probe 比例；dataset、probe 次序與簽章需相容。繁殖時第二父代在頂層內偏好與第一父代距離較遠者。倖存者只有名額切分同一分數層時才使用 seeded max-min 子集，不能越過分數層。精確相同行為亦用於 opponent pool 的表型去重。語意不構成另一個 fitness 目標。\n\n來源：eagle/config.py:747-750；eagle/operators/selection.py:174-282、311-320；eagle/opponent_pool.py:499-540。"
+  },
+  "27": {
+    "title": "Opponent Pool 的倖存者選擇",
+    "notes": "將當代父代與已評估子代合併並按 ID 去重，只讓完整評估候選參與下一代。目標為固定人口 N。依當前剩餘候選的最高分作錨點，往下預設 1.0 分以內形成一層，不採相鄰串連；例如 100、99.2 同層，98.4 屬下一層。整層放得下就整層保留；名額切在一層內才用 seeded farthest-first max-min，最大化對已選者與本層已挑者的最小語意距離。低分層不能靠新穎性越級。若所有子代失敗但仍有 N 位完整評估父代，父代可全數留下；完整者不足 N 時 run 明確失敗。\n\n來源：eagle/operators/selection.py:70-145、174-282；eagle/evolution/generation.py:214-229。"
+  },
+  "28": {
+    "title": "Opponent Pool 的靜態突變操作",
+    "notes": "self_play 設定明確要求 reflection_operator_mode=static，不使用 AOS Opponents rank、EMA 或 head-to-head reward 更新機率。交配後依固定 mutation_rate 決定是否突變；未觸發時保留交配後基因。Framework local 至多更換一個槽位為另一合法值；Framework Coach 回傳完整 control_genome。LLM／DSL 依各自可用的反思操作與靜態配比選擇，功能是否啟用仍由 materialization 模式決定。對戰提供 Game Performance 與反思證據，不動態調整操作機率。十八場 pool 入池挑戰是另一個機制，不能和 AOS head-to-head 混用。\n\n來源：eagle/config.py:747-760；eagle/evolution/offspring.py:281-300、430-480；eagle/operators/adaptive.py:215-230。"
+  },
+  "34": {
+    "notes": "搜尋階段使用會刷新的 opponent-pool 快照，停止後的正式 Final Test 另外使用固定十個內建對手，是獨立 benchmark，不改變搜尋協定。停止條件為演化世代上限或 active selection-state signature 的 stagnation。預設從末代選可執行代表，獨立重新編譯並跑七項 Integration，再執行十對手、三地圖、十回合、雙方位置，共六百場。mock 或 skip-final-test 可略過。十八場入池挑戰只決定長期池成員替換，一百八十場搜尋評估決定 fitness，六百場 Final Test 作正式測試，三者各自保存證據。\n\n來源：eagle/final_test.py；eagle/experiment.py:409-423；eagle/opponent_pool.py:217-430。"
+  }
+}
