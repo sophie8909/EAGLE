@@ -85,6 +85,10 @@ Bootstrap 屬於搜尋啟動階段；EA 只改 control_genome
 
 ## 5. Framework 的有限選項
 
+slot 是固定 Java 模板中的可替換位置。bundle 先定義每個 slot 的型別、合法值與表達式選單；候選只保存值或 choice_id。範例中 worker_target 從 2 到 8 的整數選 6，attack_weight 從 0、0.25、0.5、0.75、1 選 0.75，target_policy 選 lowest_hp。attack_weight、target_policy 與其選單為型別教學示例，不代表目前 bundle 的實際欄位。number 同樣是有限離散選單，0.6 在此例不合法。expression_choice 保存最低血量選項的 ID，由 bundle 中預先定義的 Java 表達式取代模板 marker，不生成新表達式。完整 genome 必須包含該 bundle 的全部 slot，不能只交這三項。
+
+程式來源：eagle/generation/framework_slots.py:304-340、445-470。worker_target 實例來源：configs/framework_bundles/fixed_worker_combat/bundle.json。
+
 版本截點：2026-10-21。程式版本：fcc8b770。
 初始設計提示要求至少 24 個非恆定槽位，含至少 6 個 expression_choice 且各有至少 4 個選項，覆蓋經濟、生產、目標、戰鬥、條件與優先順序。這是設計目標，不能保證行為多樣性。候選人只保存槽值或 choice_id，不能生成新的 Java 表達式。相同 bundle、genome 與 materializer 應產生相同 Java bytes。
 

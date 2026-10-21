@@ -1,6 +1,6 @@
 # EAGLE 圖解流程簡報
 
-成果：`deliverables/EAGLE_20261021_visual_workflow.pptx`。
+成果：`deliverables/EAGLE_20261021_visual_workflow_v2.pptx`。第 5 頁改以合法選單、候選選值與 Java 模板的具體例子說明三種 slot 型別；其餘 37 頁沿用圖解版內容。
 
 依使用者刪頁後的 38 頁順序重製，以 `Meeting/20261019_opponent_pool/opponent_pool.png` 的圖解方向作為參考。文字、節點、對手格與箭頭均為可編輯的 PowerPoint 原生物件。詳細說明與原稿內容保留於每頁講者備註。
 

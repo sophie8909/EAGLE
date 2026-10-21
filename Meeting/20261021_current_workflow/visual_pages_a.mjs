@@ -64,15 +64,23 @@ export function renderPrimary(s,p,H){
       return true;
     }
     case 5:{
-      sub(s,'候選只選值；Java 結構與每個選項的意義由 bundle 決定');
-      section('integer',85,240,300);small('離散整數格點',85,300,300);
-      L(s,420,326,1530,326,{color:C.blush,width:4});
-      ['min','min＋step','…','max'].forEach((v,i)=>{dot(s,'',420+i*350,306,{fill:i===1?C.rose:C.gold,r:20});T(s,v,370+i*350,350,180,48,{size:26,align:'center'});});
-      section('number',85,450,300);small('宣告的有限數值格點',85,510,330);
-      L(s,420,526,1530,526,{color:C.blush,width:4});for(let i=0;i<9;i++)dot(s,'',420+i*135,510,{fill:i===5?C.rose:C.pale,r:16});
-      section('expression_choice',85,650,430);small('只保存 choice_id',85,711,350);
-      ['選項 A','選項 B','選項 C','…'].forEach((v,i)=>B(s,v,570+i*245,665,220,86,{fill:i===1?C.blush:C.gold,size:30,bold:i===1}));
-      foot(s,'完整 genome 必須包含每個 slot_id，拒絕缺項、未知 key 與越界值');
+      sub(s,'slot 是固定 Java 裡的可替換位置；演化只改選值，Java 骨架保持固定');
+      section('槽位的意義',75,195,330);section('bundle 定義的合法選項',435,195,650);section('候選保存的值',1120,195,470);
+      T(s,'integer｜工人數',75,285,330,48,{size:29,color:C.ink,bold:true});small('worker_target',75,334,330,42);
+      [2,3,4,5,6,7,8].forEach((v,i)=>B(s,String(v),435+i*83,290,68,66,{fill:v===6?C.rose:C.pale,size:31,bold:v===6}));
+      small('min = 2，max = 8，step = 1',435,366,650,38);
+      L(s,1045,333,1100,333,{arrow:true});B(s,'worker_target: 6',1120,290,470,86,{fill:C.gold,size:30,bold:true});
+      T(s,'number｜數值權重',75,455,340,48,{size:28,color:C.ink,bold:true});small('attack_weight',75,504,330,42);
+      ['0','0.25','0.5','0.75','1'].forEach((v,i)=>B(s,v,435+i*115,460,100,66,{fill:v==='0.75'?C.rose:C.pale,size:29,bold:v==='0.75'}));
+      small('min = 0，max = 1，step = 0.25',435,536,670,38);
+      L(s,1045,503,1100,503,{arrow:true});B(s,'attack_weight: 0.75',1120,460,470,86,{fill:C.gold,size:28,bold:true});
+      T(s,'expression_choice',75,625,340,48,{size:27,color:C.ink,bold:true});small('攻擊目標 target_policy',75,674,350,42);
+      ['最近敵人','最低血量','敵方基地'].forEach((v,i)=>B(s,v,435+i*195,630,180,70,{fill:i===1?C.rose:C.pale,size:28,bold:i===1}));
+      small('每個 choice_id 已對應一段固定 Java 表達式',435,710,690,38);
+      L(s,1045,673,1100,673,{arrow:true});B(s,'target_policy: "lowest_hp"',1120,630,470,86,{fill:C.gold,size:25,bold:true});
+      const genome=B(s,'填滿全部 slot，組成完整 genome',75,779,600,62,{fill:C.blush,size:29,bold:true});
+      const java=B(s,'驗證選值，再填入固定模板產生 Java',825,779,765,62,{fill:C.ink,color:'#FFFFFF',size:29,bold:true});Cn(s,genome,java);
+      foot(s,'簡化示例，實際選單由 bundle 決定。number 也只能選離散格點，不能任意填小數');
       return true;
     }
     case 6:{
