@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import json
-import random
 import re
 from pathlib import Path
 
 import yaml
 
-from eagle.artifacts import write_summary
 from eagle.config import (
     DSL_EVOLUTION_PROTOCOL,
     EVOLUTION_PROTOCOL,
@@ -24,7 +22,6 @@ from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.run_artifacts import (
     FRAMEWORK_BUNDLE_ARTIFACT,
     RUN_SCHEMA_VERSION,
-    finalize_run,
     RESUME_ARCHIVE_PATHS,
     load_error_memory,
     load_aos_state,
@@ -33,13 +30,12 @@ from eagle.run_artifacts import (
     mark_run_failed,
     mark_run_interrupted,
 )
-from eagle.evolution.generation import run_generation_step
-from eagle.evolution.search import SearchResult
+from eagle.evolution.loop import SearchResult, continue_search
 from eagle.strategy_diversity import (
     ensure_strategy_archive,
     update_strategy_archive,
 )
-from eagle.operators.selection import best_candidate, population_signature
+from eagle.operators.selection import best_candidate
 from eagle.evolution.runtime import build_search_runtime
 from eagle.self_play import (
     load_self_play_snapshot,
@@ -211,25 +207,10 @@ def _resume_search_impl(
         candidates_dir=candidates_dir,
         controller_state=load_aos_state(run_dir),
     )
-    generation_backend = runtime.generation_backend
-    shared_client = runtime.client
-    generation_client = runtime.generation_client
-    mutations = runtime.mutations
-    rng = random.Random(config.random_seed)
-    operator_controller = runtime.operator_controller
-    population_state_signature = population_signature(
-        population,
-        selection_mode=config.algorithm,
-    )
     snapshot_path = run_dir / "generations" / f"generation_{completed_generation:04d}.json"
     checkpoint = json.loads(snapshot_path.read_text(encoding="utf-8"))
     stagnation = int(checkpoint.get("stagnation_count", 0))
     error_memory = load_error_memory(run_dir)
-    stop_reason = (
-        f"stagnation_{config.stagnation_generations}_generations"
-        if config.stagnation_generations > 0 and stagnation >= config.stagnation_generations
-        else None
-    )
     self_play_opponent_snapshot = (
         load_self_play_snapshot(
             run_dir,
@@ -240,47 +221,18 @@ def _resume_search_impl(
         else None
     )
 
-    for generation in range(completed_generation + 1, config.generations + 1):
-        if stop_reason is not None:
-            break
-        step = run_generation_step(
-            generation=generation,
-            config=config,
-            run_dir=run_dir,
-            candidates_dir=candidates_dir,
-            generated_agents_dir=generated_agents_dir,
-            classes_dir=classes_dir,
-            mock=mock,
-            run_id=run_dir.name,
-            rng=rng,
-            population=population,
-            population_state_signature=population_state_signature,
-            stagnation_count=stagnation,
-            error_memory=error_memory,
-            self_play_opponent_snapshot=self_play_opponent_snapshot,
-            generation_backend=generation_backend,
-            shared_client=shared_client,
-            generation_client=generation_client,
-            mutations=mutations,
-            operator_controller=operator_controller,
-        )
-        population = step.population
-        self_play_opponent_snapshot = step.self_play_opponent_snapshot
-        population_state_signature = step.population_state_signature
-        stagnation = step.stagnation_count
-        error_memory = step.error_memory
-        completed_generation = generation
-        if step.stop_reason is not None:
-            stop_reason = step.stop_reason
-            break
-    best = best_candidate(population)
-    write_summary(
-        run_dir, config=config, final_population=population, best_candidate=best,
-        mock=mock, completed_generation=completed_generation,
-        stop_reason=stop_reason,
+    return continue_search(
+        config=config,
+        run_dir=run_dir,
+        run_id=run_dir.name,
+        runtime=runtime,
+        population=population,
+        completed_generation=completed_generation,
+        stagnation_count=stagnation,
+        error_memory=error_memory,
+        self_play_opponent_snapshot=self_play_opponent_snapshot,
+        mock=mock,
     )
-    finalize_run(run_dir, population, stop_reason=stop_reason)
-    return SearchResult(run_dir, population, best, completed_generation, stop_reason)
 
 
 def validate_resume_config(

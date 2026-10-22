@@ -2,6 +2,15 @@
 
 日期：2026-10-02。本計畫先於程式修改建立。
 
+## 2026-10-22 簡化與解耦計畫
+
+- 將 fresh/resume 的世代迴圈、狀態傳遞及結束寫檔集中到 `eagle/evolution/loop.py`；兩個入口只負責初始化或 checkpoint 載入。共用結果型別跟隨 loop owner。
+- 將 experiment-index 格式判斷移至中立 owner，讓 GUI 資料讀取不再匯入實驗執行器。
+- 保留 generation-zero、已完成續跑的快速返回、stagnation、AOS、self-play、錯誤與中斷、既有設定及 artifacts 契約；不新增 dependency 或通用框架。
+- 同步 callers、test patch targets 與責任地圖；以 WSL 基準、fresh/resume replay、停止條件、GUI/index 測試及完整 regression 驗證。
+
+完成驗證：最終 regression 分組覆蓋完整 803 項測試：續跑／replay／self-play／parent evaluation／Coach integration 44 項全數通過，其餘 759 項通過（含 5 項 skip）；合計 798 pass、5 skip、零失敗。另含 3 項共用迴圈狀態／停止／失敗測試，以及 GUI 匯入隔離測試。`compileall`、experiment/gui CLI help、working/staged `git diff --check` 通過。原始完整 baseline 為避免重複執行昂貴 replay 而中止，以上為最終程式的完整分組 regression。Wheel 建置因既有 venv 缺少 `setuptools.build_meta` 未完成；未新增套件、未執行真實 LLM 演化實驗。兩份原有簡報修改不納入提交。
+
 ## 目標
 
 以作者能快速找到、看懂、修改程式為優先，移除重複工作。重新組織 Python 架構，保留 EA 行為、設定、prompt／Java assets、lineage、run artifacts 與 checkpoint 格式。不新增依賴、plugin registry、通用 operator framework 或額外 fallback。效率改善以可驗證的重複計算減少為準，不宣稱未量測的 LLM／比賽加速。

@@ -19,6 +19,11 @@ opponents, AOS/selection barriers and atomic checkpoints.
 
 ## Completed prior migrations
 
+- 2026-10-22: one shared fresh/resume continuation loop and result owner;
+  neutral experiment-index recognition/validation removes the GUI-data dependency
+  on experiment orchestration. Existing initialization, resume fences and formats
+  remain unchanged; see the [refactor plan](maintainability_refactor_plan.md).
+
 - complete-file candidate model and first-class lineage;
 - Strategy/Prompt Reflection → Rewrite → Generation mutations and diagnosis-guided direct-Java Code Reflection;
 - ten-opponent, 180-match evaluation and seeded lexicase selection;

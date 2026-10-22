@@ -22,7 +22,8 @@ from eagle.evolution.resume import load_resume_config, resume_search, validate_r
 from eagle.run_artifacts import load_manifest
 from eagle.runtime.config import runtime_config_from_experiment
 from eagle.runtime.processes import RuntimeManager
-from eagle.evolution.search import SearchResult, run_search
+from eagle.evolution.loop import SearchResult
+from eagle.evolution.search import run_search
 
 
 def resolve_experiment_configs(path: str | Path) -> list[Path]:

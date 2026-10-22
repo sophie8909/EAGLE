@@ -1,5 +1,21 @@
 # Current implementation status
 
+## Shared continuation and index ownership (2026-10-22)
+
+Fresh and resumed searches delegate generation iteration, evolving state,
+stagnation stopping and summary/finalization to `eagle/evolution/loop.py`.
+Generation-zero setup and resume validation/restoration stay in their entrypoints;
+already-complete resume retains its existing early return. `SearchResult` belongs
+to the shared loop. GUI config data imports the neutral `eagle/experiment_index.py`
+for index recognition/validation without importing experiment orchestration.
+Configuration, serialization and evolutionary behavior are unchanged.
+
+Validation: complete grouped WSL regression covers 803 tests: 44 targeted tests
+pass and the other 759 finish with five skips (798 pass, zero failures).
+Compilation, experiment/gui CLI help and staged/working diff checks pass. Wheel
+building is unavailable in the existing venv because `setuptools.build_meta` is
+missing. No live LLM evolutionary experiment was run.
+
 ## Fixed server routing and streaming candidates (2026-10-21)
 
 Functional clients stay bound to `model` and optional `generation_model`; no

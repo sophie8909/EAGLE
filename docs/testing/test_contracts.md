@@ -1,5 +1,24 @@
 # Test contracts
 
+## Shared continuation and index isolation (2026-10-22)
+
+`tests/test_search_loop.py` checks state propagation across generations,
+early stopping from a checkpoint, and absence of successful finalization after
+an interrupted/failed generation. `tests/test_evolution_reproducibility.py`
+checks fresh/interrupted/resumed trajectory equality and stagnation replay
+through the shared loop owner. `tests/test_gui_data.py` additionally checks in
+a fresh interpreter that importing GUI data does not load experiment orchestration;
+existing GUI/index tests retain malformed-index protection and legacy/versioned
+batch behavior.
+
+Final grouped WSL regression: 44 targeted evolution/replay/resume/self-play/
+parent-evaluation/Coach-integration tests pass (715.980 seconds); the remaining
+759 discovered tests pass with five skips (409.946 seconds). Together these
+cover all 803 discovered tests, with 798 passes and no failures. The three
+new loop tests also pass independently. Compileall, experiment/gui CLI help and
+diff checks pass. Wheel validation remains unavailable because the existing
+venv lacks `setuptools.build_meta`; no dependency was installed for this refactor.
+
 ## Dependency-driven scheduling validation (2026-10-21)
 
 WSL full discovery exercised 796 tests (788 passed, five skipped, three stale

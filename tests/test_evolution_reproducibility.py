@@ -98,7 +98,7 @@ class EvolutionReproducibilityTests(unittest.TestCase):
                 if kwargs["generation"] == 2:
                     raise KeyboardInterrupt
                 return run_generation_step(**kwargs)
-            with patch("eagle.evolution.search.run_generation_step", side_effect=interrupt_before_generation_two):
+            with patch("eagle.evolution.loop.run_generation_step", side_effect=interrupt_before_generation_two):
                 with self.assertRaises(KeyboardInterrupt):
                     run_search(config, mock=True, run_id="interrupted")
             resumed = resume_search(run_dir=root / "runs" / "interrupted", mock=True)
@@ -161,7 +161,7 @@ class EvolutionReproducibilityTests(unittest.TestCase):
                 if kwargs["generation"] == 2:
                     raise KeyboardInterrupt
                 return run_generation_step(**kwargs)
-            with patch("eagle.evolution.search.run_generation_step", side_effect=interrupt_before_generation_two):
+            with patch("eagle.evolution.loop.run_generation_step", side_effect=interrupt_before_generation_two):
                 with self.assertRaises(KeyboardInterrupt):
                     run_search(config, mock=True, run_id="stagnation-partial")
             resumed = resume_search(run_dir=root / "runs" / "stagnation-partial", mock=True)

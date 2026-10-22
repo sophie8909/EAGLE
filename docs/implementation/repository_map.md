@@ -32,12 +32,14 @@ kept as documentation entries.
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
 | `eagle/cli/analyze.py` | Run selection and report dispatch |
 | `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, owned runtime, search/resume, final test, cleanup |
+| `eagle/experiment_index.py` | Shared index recognition/schema validation for batch execution and GUI config protection; no execution dependencies |
 | `eagle/execution.py` | Fixed concurrency, canonical worker routing, and shared per-server request budgets |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, framework evolution policy, EA/model/evaluation validation |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
-| `eagle/evolution/search.py` | Fresh run initialization, generation loop, and finalization |
+| `eagle/evolution/search.py` | Fresh run creation, generation-zero initialization/evaluation, and failure/interruption marking |
+| `eagle/evolution/loop.py` | Shared fresh/resume generation loop, state propagation, finalization, and `SearchResult` |
 | `eagle/evolution/generation.py` | Shared fresh/resume streaming offspring preparation, evaluation, credit, selection, and persistence |
 | `eagle/evolution/offspring.py` | Canonical source-gated plan stream, per-plan mutation/revision, mode-aware variation and evidence |
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
@@ -46,7 +48,7 @@ kept as documentation entries.
 | `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction, framework genome initialization, and candidate-owned evidence |
 | `eagle/operators/framework_slots.py` | Seeded per-slot crossover, one-slot mutation, and exact slot provenance |
 | `eagle/operators/framework_coach.py` | Framework initial-genome and Coach selection schemas, prompts, and strict validation |
-| `eagle/evolution/resume.py` | v2 snapshot load/finalization around the shared generation step |
+| `eagle/evolution/resume.py` | Resume fences, checkpoint/artifact restoration, and handoff to the shared loop |
 | `eagle/operators/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/operators/adaptive.py` | Static and adaptive reflection-operator selection |
 

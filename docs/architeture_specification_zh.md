@@ -534,7 +534,7 @@ git diff --check
 
 ## 2026-10-02 可維護性架構與文件入口
 
-Python 統一於 `eagle/`。修改單一 EA operator 到 `eagle/operators/` 的 initialization、selection、crossover、adaptive、strategy、prompt 或 code；演化階段順序集中於 `eagle/evolution/generation.py`，offspring 與 parent refresh 各自分開。Java 生成位於 `eagle/generation/`；評估的 records、decoding、opponents、matches、pipeline 位於 `eagle/evaluation/`。既有演算法、設定、assets、run artifacts 與 checkpoint 契約保持不變。
+Python 統一於 `eagle/`。修改單一 EA operator 到 `eagle/operators/` 的 initialization、selection、crossover、adaptive、strategy、prompt 或 code；fresh/resume 共用的世代迴圈、狀態傳遞與結束寫檔集中於 `eagle/evolution/loop.py`，單代階段順序集中於 `eagle/evolution/generation.py`，offspring 與 parent refresh 各自分開。`eagle/experiment_index.py` 共用批次索引格式驗證，GUI 資料層不再依賴實驗執行器。Java 生成位於 `eagle/generation/`；評估的 records、decoding、opponents、matches、pipeline 位於 `eagle/evaluation/`。既有演算法、設定、assets、run artifacts 與 checkpoint 契約保持不變。
 
 文件 map 新增：[可維護性重構計畫](implementation/maintainability_refactor_plan.md) 與
 [本地實驗監控](operations/monitoring_experiment.md)，前者包含掃描結果、修改入口、

@@ -59,6 +59,11 @@ Historical gap rows remain available in Git history.
 
 ## Gap update rule
 
+The 2026-10-22 maintainability extraction shares fresh/resume continuation and
+isolates experiment-index validation from execution. It changes no normative
+contract and introduces no new architecture gap; verification is recorded in
+the [refactor plan](maintainability_refactor_plan.md).
+
 Do not add a gap for an intentionally unsupported historical interface. Add a
 gap only when executable source differs from the current architecture spec.
 

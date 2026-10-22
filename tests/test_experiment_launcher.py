@@ -16,7 +16,7 @@ from eagle.experiment import (
     EXPERIMENT_INDEX_SCHEMA_VERSION, ExperimentOrchestrator,
     _load_experiment_run_index, resolve_experiment_configs,
 )
-from eagle.evolution.search import SearchResult
+from eagle.evolution.loop import SearchResult
 
 
 class ExperimentLauncherTests(unittest.TestCase):

@@ -1,30 +1,25 @@
 """Canonical evolutionary search for prompt-generated Java MicroRTS agents.
 
-This module owns fresh-run initialization, generation iteration, and
-finalization. Evaluation owns the shared child pipeline. The canonical entrypoint
-is ``run_search``.
+This module owns fresh-run initialization. The shared loop owns generation
+iteration and finalization; evaluation owns the child pipeline.
 """
 
 from __future__ import annotations
 
-import random
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from eagle.artifacts import write_run_config, write_summary
-from eagle.candidate import Candidate, has_completed_evaluation
+from eagle.artifacts import write_run_config
+from eagle.candidate import has_completed_evaluation
 from eagle.config import ExperimentConfig
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.evaluation.pipeline import evaluate_population
-from eagle.evolution.generation import run_generation_step
+from eagle.evolution.loop import SearchResult, continue_search
 from eagle.evolution.runtime import build_search_runtime
 from eagle.generation.backend import InitialJavaSeedBackend
 from eagle.operators.initialization import generation_zero_uses_fixed_java, initialize_population
-from eagle.operators.selection import best_candidate, population_signature
 from eagle.run_artifacts import (
-    finalize_run,
     freeze_framework_bundle,
     initialize_run_manifest,
     mark_run_failed,
@@ -44,15 +39,6 @@ from eagle.strategy_diversity import (
     update_strategy_archive,
 )
 from eagle.timing import Stopwatch, append_event, build_generation_event
-
-
-@dataclass(frozen=True)
-class SearchResult:
-    run_dir: Path
-    final_population: list[Candidate]
-    best_candidate: Candidate | None
-    completed_generation: int = 0
-    stop_reason: str | None = None
 
 
 def run_search(
@@ -107,7 +93,6 @@ def _run_search_impl(
     config.validate()
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
-    rng = random.Random(config.random_seed)
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
     candidates_dir = run_dir / "candidates"
@@ -141,11 +126,6 @@ def _run_search_impl(
         run_dir=run_dir,
         candidates_dir=candidates_dir,
     )
-    generation_backend = runtime.generation_backend
-    shared_client = runtime.client
-    generation_client = runtime.generation_client
-    operator_controller = runtime.operator_controller
-
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
     generation_span = Stopwatch.start()
@@ -165,13 +145,13 @@ def _run_search_impl(
         backend=(
             InitialJavaSeedBackend(config.initial_java_seed_path)
             if generation_zero_fixed_java
-            else generation_backend
+            else runtime.generation_backend
         ),
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
         mock=mock,
-        llm_client=(shared_client if generation_zero_fixed_java else generation_client),
+        llm_client=(runtime.client if generation_zero_fixed_java else runtime.generation_client),
         run_timing_path=run_dir / "timing.jsonl",
         run_id=active_run_id,
     )
@@ -205,72 +185,18 @@ def _run_search_impl(
         0,
         evaluated_population,
         diversity=generation_diversity,
-        aos=operator_controller.initial_generation_record(),
+        aos=runtime.operator_controller.initial_generation_record(),
     )
 
-    population_state_signature = population_signature(
-        evaluated_population,
-        selection_mode=config.algorithm,
-    )
-    self_play_opponent_snapshot = (
-        initial_pool()
-        if config.evaluation_mode == "self_play"
-        else None
-    )
-    stagnation_count = 0
-    completed_generation = 0
-    stop_reason: str | None = None
-    # One fixed EA step per iteration: select parents -> create offspring ->
-    # evaluate offspring -> select survivors.
-    # Generation 0 is initialization only; ``generations`` counts evolutionary
-    # offspring generations, so generations=20 runs gen1 through gen20.
-    for generation in range(1, config.generations + 1):
-        step = run_generation_step(
-            generation=generation,
-            config=config,
-            run_dir=run_dir,
-            candidates_dir=candidates_dir,
-            generated_agents_dir=generated_agents_dir,
-            classes_dir=classes_dir,
-            mock=mock,
-            run_id=active_run_id,
-            rng=rng,
-            population=evaluated_population,
-            population_state_signature=population_state_signature,
-            stagnation_count=stagnation_count,
-            error_memory=error_memory,
-            self_play_opponent_snapshot=self_play_opponent_snapshot,
-            generation_backend=generation_backend,
-            shared_client=shared_client,
-            generation_client=generation_client,
-            mutations=runtime.mutations,
-            operator_controller=operator_controller,
-        )
-        evaluated_population = step.population
-        self_play_opponent_snapshot = step.self_play_opponent_snapshot
-        population_state_signature = step.population_state_signature
-        stagnation_count = step.stagnation_count
-        error_memory = step.error_memory
-        completed_generation = generation
-        if step.stop_reason is not None:
-            stop_reason = step.stop_reason
-            break
-
-    best = best_candidate(evaluated_population)
-    write_summary(
-        run_dir,
+    return continue_search(
         config=config,
-        final_population=evaluated_population,
-        best_candidate=best,
-        mock=mock,
-        completed_generation=completed_generation,
-        stop_reason=stop_reason,
-    )
-    finalize_run(run_dir, evaluated_population, stop_reason=stop_reason)
-    return SearchResult(
         run_dir=run_dir,
-        final_population=evaluated_population,
-        best_candidate=best,
-        completed_generation=completed_generation,
-        stop_reason=stop_reason,
+        run_id=active_run_id,
+        runtime=runtime,
+        population=evaluated_population,
+        completed_generation=0,
+        stagnation_count=0,
+        error_memory=error_memory,
+        self_play_opponent_snapshot=(initial_pool() if config.evaluation_mode == "self_play" else None),
+        mock=mock,
     )
