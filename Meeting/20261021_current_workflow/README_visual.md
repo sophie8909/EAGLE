@@ -6,6 +6,8 @@
 
 最新快照為 `deliverables/EAGLE_20261022_opponent_pool_clarified.pptx`，仍為 44 頁。第 6 頁集中解釋對手池：內建與歷代策略來源、容量 50、入池及滿池 18 場替換，以及凍結的 4＋6 十人對戰名單。第 5 頁 Coach 圖改用「對手池」，第 7 頁明確區分當代族群的繁殖父代選擇；第 2 頁將「歷屆冠軍」更正為固定保護對手。`edit_manual_opponent_pool.mjs` 保留新圖解的可編輯來源，私有備份及驗證位於 `.codex-build/manual-opponent-pool/`。本次雲端來源 SHA-256：`aa66e857c94329040e780fa74fb2216b79c8777f8fb3327655c096efe4fc626b`。
 
+第五頁之後更新為 50/50 互斥子代生成圖，最新快照改為 `deliverables/EAGLE_20261022_opponent_pool_coach_routes.pptx`，共 44 頁。Coach 路徑只使用父代 A，直接依賽評產生完整基因；傳統路徑再選父代 B，以 rate 0.75 逐槽交配，再以 rate 1.0 進行 local 單槽突變。兩路合流進入共用評估。保留使用者註記的「既有結果仍為 local」，並明示本頁為新 config、50/50 是抽樣機率。`edit_manual_coach_routes.mjs` 保存圖解來源，私有備份、驗證與 PowerPoint 預覽位於 `.codex-build/manual-coach-routes/`；雲端來源 SHA-256：`81b61c5c301c338b2639d6baeaf99df8aa21c231bd767d217e6ede5c23c6a35a`。只更動第五頁，其餘頁面與實驗圖表維持原樣。
+
 版本控制快照：`deliverables/EAGLE_20261022_opponent_pool_local_coach.pptx`。`edit_manual_local_coach.mjs` 以 Artifact Tool 建立兩頁原生物件，`merge_manual_local_coach.py` 將局部變更合併回雲端來源封裝，並檢查其他頁面內容與全部圖表／工作簿保持原樣。修改前雲端 SHA-256：`b12a4982e14de2147af8495d3baf3e133c3ae0bcaa87ed71bcfb7d8519e53b9e`。原檔備份、兩頁 authoring 驗證、完整封裝與版面檢查、PowerPoint 44 頁原生預覽留在 `.codex-build/manual-local-coach/`。
 
 人工修改階段請從雲端主檔繼續編輯，不要以舊的 `visual_redesign.mjs` 重建整份簡報覆蓋主檔。
