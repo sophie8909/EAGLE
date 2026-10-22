@@ -25,7 +25,7 @@ class ReflectionContextTests(unittest.TestCase):
 
     def test_evaluation_propagates_canonical_evidence_to_next_reflection(self):
         config = ExperimentConfig.from_mapping({})
-        candidate = Candidate(strategy_prompt=worker_rush_policy())
+        candidate = Candidate(id="reflection-evidence-candidate", strategy_prompt=worker_rush_policy())
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             evaluation = evaluate_candidate(
@@ -53,6 +53,7 @@ class ReflectionContextTests(unittest.TestCase):
 
     def test_failed_context_preserves_sentinel_and_root_cause(self):
         candidate = Candidate(
+            id="failed-reflection-candidate",
             status="failed",
             failure_stage="compilation",
             failure_reason="missing symbol: commandAttack",

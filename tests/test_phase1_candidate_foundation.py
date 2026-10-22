@@ -23,11 +23,9 @@ from eagle.generation.backend import InitialJavaSeedBackend
 
 
 class Phase1CandidateFoundationTests(unittest.TestCase):
-    def test_automatic_candidate_id_includes_zero_padded_generation(self) -> None:
-        first = Candidate(generation=7)
-        second = Candidate(generation=7)
-        self.assertRegex(first.id, r"^gen_0007_[0-9a-f]{12}$")
-        self.assertNotEqual(first.id, second.id)
+    def test_candidate_requires_an_explicit_id(self) -> None:
+        with self.assertRaisesRegex(ValueError, "explicit non-empty id"):
+            Candidate(generation=7)
 
     def test_explicit_candidate_id_is_preserved_for_resume_and_fixtures(self) -> None:
         self.assertEqual(Candidate(id="legacy-candidate-id", generation=7).id, "legacy-candidate-id")
@@ -73,6 +71,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
     def test_generator_uses_checked_in_scaffold_not_parent_phenotype(self) -> None:
         parent_java = "package ai.generated;\n// PARENT_PHENOTYPE_SENTINEL\n"
         candidate = Candidate(
+            id="scaffold-parent-candidate",
             strategy_prompt=worker_rush_policy(),
             generation_prompt="translation",
             generated_java=parent_java,
@@ -222,10 +221,10 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
     def test_initial_java_seed_backend_is_generation_zero_only(self) -> None:
         config = ExperimentConfig.from_mapping({})
         backend = InitialJavaSeedBackend(config.initial_java_seed_path)
-        source = backend.generate(Candidate(generation=0), "CandidateAgent")
+        source = backend.generate(Candidate(id="initial-java-seed", generation=0), "CandidateAgent")
         self.assertEqual(source, config.initial_java_seed_path.read_text(encoding="utf-8"))
         with self.assertRaisesRegex(ValueError, "generation-zero only"):
-            backend.generate(Candidate(generation=1), "CandidateAgent")
+            backend.generate(Candidate(id="nonzero-generation", generation=1), "CandidateAgent")
 
     def test_zero_rule_idle_policy_uses_independent_code_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -93,9 +93,12 @@ Candidate Java state 有兩種明確模式。LLM materialization 下，預設 `g
 Generator 成功產生的 child Java 會成為下一代可選取的 Java component。這是
 明確設定且有版本的 genotype，不是舊版隱含的 `previous_code` 欄位。
 
-新建立的 candidate ID 使用 `gen_<四位 generation>_<12 位十六進位>`，例如
+EA factory 新建立的 candidate ID 使用由 root seed 與穩定 lineage identity
+推導的 `gen_<四位 generation>_<12 位十六進位 deterministic suffix>`，例如
 `gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
-辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
+辨識與排序。`Candidate` 不會使用 process-level UUID 自動補 ID；所有進入
+pipeline 的 candidate 都必須帶有明確且非空的 ID。從既有 artifact 或 resume
+載入的明確 ID 不會被重新命名。
 
 新 run 的 policy 只接受 `eagle-strategy-dsl-v1` JSON，由
 `eagle/strategy_dsl.py` 驗證與正規化。`rules` 依順序包含 `actor`、`when`、`action`；

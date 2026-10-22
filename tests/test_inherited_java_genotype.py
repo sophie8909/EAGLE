@@ -55,7 +55,7 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         })
         population = initialize_population(config)
         self.assertEqual(len(population), 10)
-        self.assertEqual({candidate.strategy_prompt for candidate in population}, {Candidate().strategy_prompt})
+        self.assertEqual({candidate.strategy_prompt for candidate in population}, {Candidate(id="default-policy").strategy_prompt})
         self.assertEqual({candidate.metadata["seed_index"] for candidate in population}, {0})
         self.assertEqual(
             [candidate.metadata["replicate_index"] for candidate in population],
@@ -125,11 +125,12 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         self.assertIn("parent", restored.resolved_source_candidate_ids())
 
     def test_default_request_does_not_receive_parent_java(self) -> None:
-        request = Candidate(generated_java="PARENT_JAVA_SENTINEL").generation_input()
+        request = Candidate(id="default-java-boundary", generated_java="PARENT_JAVA_SENTINEL").generation_input()
         self.assertNotIn("PARENT_JAVA_SENTINEL", request)
 
     def test_inherited_request_contains_all_active_components(self) -> None:
         request = Candidate(
+            id="inherited-request-candidate",
             strategy_prompt=worker_rush_policy(),
             generation_prompt="GENERATION_SENTINEL",
             inherited_java="INHERITED_JAVA_SENTINEL",

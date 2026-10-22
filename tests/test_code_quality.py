@@ -203,6 +203,7 @@ class CodeQualityTests(unittest.TestCase):
 
     def test_optimizer_vector_contains_only_opponent_cases(self):
         candidate = Candidate(
+            id="objective-vector-candidate",
             fitness_objectives={"passive": 4, "random": 108}
         )
         self.assertEqual(candidate.objective_vector()[:2], (4.0, 108.0))

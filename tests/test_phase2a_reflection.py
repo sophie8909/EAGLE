@@ -175,7 +175,7 @@ class Phase2AReflectionTests(unittest.TestCase):
 
         result = ReflectionStage(backend, max_attempts=2).run(
             reflection_type="prompt_reflection",
-            candidate=Candidate(strategy_prompt=""),
+            candidate=Candidate(id="reflection-stage-candidate", strategy_prompt=""),
             request="review",
         )
 
