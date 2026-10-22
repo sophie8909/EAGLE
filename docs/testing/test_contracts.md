@@ -223,7 +223,9 @@ Use the existing project virtual environment for repository validation:
 ```bash
 .venv/bin/python -m compileall -q eagle
 .venv/bin/python -m unittest discover -s tests
-.venv/bin/python -m eagle experiment --config-dir configs/experiments/deterministic_smoke.yaml --skip-final-test
+.venv/bin/python -m eagle experiment \
+  --config-dir configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml \
+  --skip-final-test
 git diff --check
 ```
 

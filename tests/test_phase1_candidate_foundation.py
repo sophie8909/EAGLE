@@ -187,9 +187,19 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertTrue(all(validate_strategy_dsl(candidate.strategy_prompt)["rules"] == [] for candidate in population))
 
     def test_three_distinct_seed_policies_share_the_no_llm_generation_zero_java(self) -> None:
-        config = ExperimentConfig.from_file(
-            "configs/experiments/static_0826/ministral3_8b_static_0.5_0.5.yaml"
-        )
+        config = ExperimentConfig.from_mapping({
+            "candidate_java_mode": "inherited_genotype",
+            "seed_prompt_files": [
+                "seeds/blank_policy.txt",
+                "seeds/worker_rush_policy.txt",
+                "seeds/random_policy.txt",
+            ],
+            "population_size": 3,
+            "reflection_operator_mode": "static",
+            "strategy_reflection_probability": 0.5,
+            "prompt_reflection_probability": 0.5,
+            "code_reflection_probability": 0.0,
+        })
         population = initialize_population(config)
         backend = InitialJavaSeedBackend(config.initial_java_seed_path)
 

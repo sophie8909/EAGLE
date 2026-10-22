@@ -94,10 +94,11 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   initial full-genome selection and the existing Commentator/Coach Strategy
   path. Both framework policies retain the frozen bundle and
   `eagle-framework-slots-v1` materializer. Java Generation and repair remain off.
-- EA factories derive candidate IDs as `gen_<zero-padded-generation>_<12-hex>`
-  from stable seeded lineage identity; `Candidate` rejects missing or blank IDs
-  instead of using process-random UUIDs. Explicitly loaded IDs remain unchanged
-  for artifact and resume compatibility.
+- EA factories derive candidate IDs as
+  `gen_<zero-padded-generation>_<12-hex-deterministic-suffix>` from stable
+  seeded lineage identity; `Candidate` rejects missing or blank IDs instead of
+  using process-random UUIDs. Explicitly loaded IDs remain unchanged for
+  artifact and resume compatibility.
 - `initial_population_mode: llm_generated_policies` keeps one configured policy
   and fills the remaining population slots with independent policy-only LLM
   calls. The tracked mixed config therefore produces one Worker Rush policy plus

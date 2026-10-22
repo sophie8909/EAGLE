@@ -17,12 +17,6 @@ from eagle.generation.backend import MockGenerationBackend
 from eagle.generation.java_agent_generator import validate_generated_java_source
 
 
-CONFIG_PATH = Path(
-    "configs/experiments/0903_llm_initial_population/"
-    "ministral3_8b_static_0.2_0.2_0.6_llm_mixed.yaml"
-)
-
-
 class ScriptedPolicyBackend:
     model = "scripted-policy-model"
     base_url = "mock://policy"
@@ -76,7 +70,13 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         self.assertEqual(len(backend.requests), 9)
 
     def test_config_generates_nine_policy_prompts_but_keeps_worker_rush_java(self) -> None:
-        config = ExperimentConfig.from_file(CONFIG_PATH)
+        config = ExperimentConfig.from_mapping({
+            "candidate_java_mode": "inherited_genotype",
+            "initial_population_mode": "llm_generated_policies",
+            "seed_prompt_files": ["seeds/worker_rush_policy.txt"],
+            "population_size": 10,
+            "llm": {"initial_policy_temperature": 0.8},
+        })
         config.validate()
         self.assertEqual(config.initial_policy_temperature, 0.8)
         backend = ScriptedPolicyBackend(

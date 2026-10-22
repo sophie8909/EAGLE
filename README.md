@@ -41,7 +41,7 @@ a run, generation, candidate, opponent, map, and side for a visual match. See
 Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and llama.cpp launch settings:
 
 ```bash
-./experiment.sh configs/experiments/qwen3_5_9b/
+./experiment.sh configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml
 ./analyze.sh --latest
 ```
 

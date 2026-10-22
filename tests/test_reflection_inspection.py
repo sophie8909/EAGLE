@@ -5,19 +5,44 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from eagle.reflection_inspection import (
     INSPECTION_SCHEMA_VERSION,
     ReflectionInspectionConfig,
     run_reflection_inspection,
 )
+from eagle.config import ExperimentConfig
 
 
-ROOT = Path(__file__).resolve().parents[1]
-CONFIG = ROOT / "configs" / "reflection_inspections" / "0903_worker_rush" / "inspection.yaml"
 class ReflectionInspectionTests(unittest.TestCase):
     def test_checked_in_config_runs_nine_independent_mock_trials(self) -> None:
-        inspection = ReflectionInspectionConfig.from_file(CONFIG)
         with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            experiment_config = root / "worker_rush_base.yaml"
+            experiment_config.write_text(
+                yaml.safe_dump(
+                    ExperimentConfig.from_mapping({
+                        "candidate_java_mode": "inherited_genotype",
+                        "initial_java_seed_path": "eagle/java_seeds/worker_rush/CandidateAgent.java",
+                    }).to_mapping()
+                ),
+                encoding="utf-8",
+            )
+            inspection_path = root / "inspection.yaml"
+            inspection_path.write_text(
+                yaml.safe_dump({
+                    "schema_version": INSPECTION_SCHEMA_VERSION,
+                    "name": "worker_rush_three_reflections",
+                    "experiment_config": str(experiment_config),
+                    "output_root": "runs/reflection_inspections",
+                    "trials_per_reflection": 3,
+                    "strategy_mutation_intent": "REFINE",
+                    "reflection_order": ["strategy", "prompt", "code"],
+                }),
+                encoding="utf-8",
+            )
+            inspection = ReflectionInspectionConfig.from_file(inspection_path)
             output = Path(temp_dir) / "inspection"
             result = run_reflection_inspection(inspection, mock=True, output_dir=output)
 
@@ -94,13 +119,24 @@ class ReflectionInspectionTests(unittest.TestCase):
 
     def test_config_rejects_missing_reflection_type(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "inspection.yaml"
+            root = Path(temp_dir)
+            experiment_config = root / "worker_rush_base.yaml"
+            experiment_config.write_text(
+                yaml.safe_dump(
+                    ExperimentConfig.from_mapping({
+                        "candidate_java_mode": "inherited_genotype",
+                        "initial_java_seed_path": "eagle/java_seeds/worker_rush/CandidateAgent.java",
+                    }).to_mapping()
+                ),
+                encoding="utf-8",
+            )
+            path = root / "inspection.yaml"
             path.write_text(
                 "\n".join(
                     [
                         f"schema_version: {INSPECTION_SCHEMA_VERSION}",
                         "name: invalid",
-                        f"experiment_config: {CONFIG.parent / 'worker_rush_base.yaml'}",
+                        f"experiment_config: {experiment_config}",
                         "reflection_order: [strategy, code]",
                     ]
                 ),

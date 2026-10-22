@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.config import DEFAULT_SEED_POLICY_PATH, ExperimentConfig
+from eagle.config import ExperimentConfig
 from eagle.strategy_dsl import (
     validate_strategy_dsl,
     worker_rush_reference_policy,
@@ -135,65 +135,6 @@ class PromptResourceTests(unittest.TestCase):
                     checked_in_seeds[config.initial_java_seed_path],
                     path,
                 )
-
-    def test_static_0826_uses_three_distinct_seed_policies_and_equal_operator_weights(self) -> None:
-        config = ExperimentConfig.from_file(
-            "configs/experiments/static_0826/ministral3_8b_static_0.5_0.5.yaml"
-        )
-        self.assertEqual(
-            config.seed_prompt_files,
-            (
-                DEFAULT_SEED_POLICY_PATH,
-                Path("seeds/worker_rush_policy.txt").resolve(),
-                Path("seeds/random_policy.txt").resolve(),
-            ),
-        )
-        self.assertEqual(config.population_size, 3)
-        self.assertEqual(config.survivor_selection, "mu_plus_lambda")
-        self.assertEqual(config.strategy_reflection_probability, 0.5)
-        self.assertEqual(config.prompt_reflection_probability, 0.5)
-        self.assertEqual(config.code_reflection_probability, 0.0)
-        self.assertEqual(config.initial_java_seed_path, Path("eagle/java_seeds/CandidateAgent.java").resolve())
-        self.assertEqual(validate_strategy_dsl(config.seed_prompts[0])["rules"], [])
-        self.assertEqual(config.seed_prompts[1], worker_rush_reference_policy())
-        self.assertTrue(all(rule["action"]["type"] == "choose" for rule in validate_strategy_dsl(config.seed_prompts[2])["rules"]))
-
-    def test_static_0826_seed_variants_generate_ten_individuals_from_one_policy(self) -> None:
-        config_dir = Path("configs/experiments/static_0826_seed_variants")
-        config_paths = sorted(config_dir.glob("ministral3_8b_static_0.5_0.5_*.yaml"))
-        configs = tuple(ExperimentConfig.from_file(path) for path in config_paths)
-
-        self.assertEqual(len(configs), 3)
-        self.assertEqual(len({config.experiment_name for config in configs}), 3)
-        self.assertEqual(
-            {config.seed_prompt_files for config in configs},
-            {
-                (DEFAULT_SEED_POLICY_PATH,),
-                (Path("seeds/worker_rush_policy.txt").resolve(),),
-                (Path("seeds/random_policy.txt").resolve(),),
-            },
-        )
-        self.assertEqual(len({config.seed_prompts for config in configs}), 3)
-        self.assertTrue(all(config.population_size == 10 for config in configs))
-        self.assertTrue(all(config.survivor_selection == "mu_plus_lambda" for config in configs))
-        self.assertTrue(all(config.candidate_java_mode == "inherited_genotype" for config in configs))
-        self.assertTrue(all(config.strategy_reflection_probability == 0.5 for config in configs))
-        self.assertTrue(all(config.prompt_reflection_probability == 0.5 for config in configs))
-        self.assertTrue(all(config.code_reflection_probability == 0.0 for config in configs))
-
-        java_paths = {config.initial_java_seed_path for config in configs}
-        self.assertEqual(java_paths, {Path("eagle/java_seeds/CandidateAgent.java").resolve()})
-        self.assertEqual(
-            {config.agent_template_path for config in configs},
-            {Path("eagle/java_seeds/CandidateAgent.java").resolve()},
-        )
-        source = java_paths.pop().read_text(encoding="utf-8")
-        decide = source.split("private void decide(AgentContext context) {", 1)[1].split("\n    }", 1)[0]
-        get_action = source.split("public PlayerAction getAction", 1)[1].split(
-            "// EAGLE_AGENT_STRATEGY_START", 1
-        )[0]
-        self.assertNotIn("command", decide)
-        self.assertNotIn("applyAutoDefense", get_action)
 
     def test_survivor_selection_defaults_and_rejects_noncanonical_modes(self) -> None:
         config = ExperimentConfig.from_mapping({})

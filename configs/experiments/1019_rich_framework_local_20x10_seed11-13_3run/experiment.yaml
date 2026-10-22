@@ -1,0 +1,8 @@
+schema_version: eagle-experiment-index-v1
+runs:
+  qwen3_5_9b_rich_framework_local_20x10_seed11_1run.yaml:
+  - /home/mhlab/EAGLE/runs/20261020_135403_027378
+  qwen3_5_9b_rich_framework_local_20x10_seed12_1run.yaml:
+  - /home/mhlab/EAGLE/runs/20261020_170514_392422
+  qwen3_5_9b_rich_framework_local_20x10_seed13_1run.yaml:
+  - /home/mhlab/EAGLE/runs/20261020_195907_969170
