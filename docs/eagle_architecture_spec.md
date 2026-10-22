@@ -42,9 +42,12 @@ compile status, active-mode fitness, executable semantic summary, diagnostics, f
 references, and timing.
 
 New candidate identities are generation-qualified as
-`gen_<zero-padded-generation>_<random-suffix>` so run artifacts remain unique
-and easy to navigate. Persisted IDs are opaque references and are never renamed
-while loading or resuming a run.
+`gen_<zero-padded-generation>_<deterministic-suffix>` so run artifacts remain
+unique and easy to navigate. EA factories derive the suffix from the root seed
+and stable lineage identity. `Candidate` never synthesizes an identity from
+process randomness; every candidate must receive an explicit non-empty ID.
+Persisted IDs are opaque references and are never renamed while loading or
+resuming a run.
 
 ### Policy DSL and LLM-mode reproduction gate
 

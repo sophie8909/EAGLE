@@ -75,7 +75,7 @@ ten-opponent or historical-run benchmark results; full discovery was not run.
 
 | Area | Required proof |
 | --- | --- |
-| Candidate | in `llm` mode, default two-prompt and opt-in prompt/prompt/Java modes; in deterministic mode, active policy-only genotype; generation-qualified automatic IDs and explicit-ID preservation; inherited Java versus generated phenotype separation; terminal failure retains state |
+| Candidate | in `llm` mode, default two-prompt and opt-in prompt/prompt/Java modes; in deterministic mode, active policy-only genotype; generation-qualified seeded IDs, explicit-ID preservation, and fail-closed rejection of missing IDs; inherited Java versus generated phenotype separation; terminal failure retains state |
 | Lineage | seed/copy/crossover/mutation schemas; active component parent IDs resolve for the selected materialization mode; graph acyclic |
 | Crossover | in `llm` mode, independent whole-component choices for both prompts and, when enabled, Java; in deterministic mode, whole-policy only; exact provenance; equal-text case; default mode has no Java inheritance |
 | Strategy Mutation | Strategy mutation in both modes; in `llm`, Commentator per selected match → Coach → final Java generation; in deterministic DSL mode → policy compiler; only policy changes; no Java/code-prompt evidence; in framework `llm_coach`, exactly one worst completed parent match → Commentator → Coach complete-genome response, with strict schema/hash/domain validation and failed-child pre-Coach genome retention |
@@ -223,7 +223,9 @@ Use the existing project virtual environment for repository validation:
 ```bash
 .venv/bin/python -m compileall -q eagle
 .venv/bin/python -m unittest discover -s tests
-.venv/bin/python -m eagle experiment --config-dir configs/experiments/deterministic_smoke.yaml --skip-final-test
+.venv/bin/python -m eagle experiment \
+  --config-dir configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml \
+  --skip-final-test
 git diff --check
 ```
 

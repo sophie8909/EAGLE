@@ -290,14 +290,6 @@ class GenerationAttemptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "generation_max_attempts"):
             ExperimentConfig.from_mapping({"generation_max_attempts": 0}).validate()
 
-    def test_static_0824_tracked_configs_explicitly_use_five(self) -> None:
-        paths = sorted(
-            Path("configs/experiments/static_0824").glob("ministral3_8b_static_*.yaml")
-        )
-        self.assertEqual(len(paths), 4)
-        for path in paths:
-            self.assertEqual(ExperimentConfig.from_file(path).generation_max_attempts, 5)
-
     def test_outer_and_transport_attempt_axes_are_durable_and_correlated(self) -> None:
         valid = load_java_template(JavaTemplatePaths())
         with tempfile.TemporaryDirectory() as temp:

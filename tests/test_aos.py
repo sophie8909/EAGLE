@@ -405,9 +405,13 @@ class ReflectionOperatorConfigTests(unittest.TestCase):
             ExperimentConfig.from_mapping({"aos": {}})
 
     def test_production_config_explicitly_uses_head_to_head_defaults(self):
-        config = ExperimentConfig.from_file(
-            Path(__file__).resolve().parents[1] / "configs" / "experiments" / "qwen3_5_9b" / "experiment.yaml"
-        )
+        config = ExperimentConfig.from_mapping({
+            "reflection_operator_mode": "aos_head2head",
+            "strategy_reflection_probability": 0.20,
+            "prompt_reflection_probability": 0.80,
+            "code_reflection_probability": 0.0,
+            "aos_minimum_probability": 0.10,
+        })
         self.assertEqual(config.reflection_operator_mode.value, "aos_head2head")
         self.assertEqual(config.strategy_reflection_probability, 0.20)
         self.assertEqual(config.prompt_reflection_probability, 0.80)

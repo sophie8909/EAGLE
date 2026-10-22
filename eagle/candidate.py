@@ -6,8 +6,6 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import uuid4
-
 from eagle.opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
 from eagle.prompts import load_prompt
 from eagle.strategy_dsl import VERSION as STRATEGY_POLICY_FORMAT, normalize_strategy_dsl
@@ -87,13 +85,12 @@ class Candidate:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Give standalone candidates an identity; EA factories always supply seeded IDs."""
+        """Require an identity before a candidate can enter any pipeline."""
 
-        if not self.id:
-            object.__setattr__(
-                self,
-                "id",
-                f"gen_{self.generation:04d}_{uuid4().hex[:12]}",
+        if not isinstance(self.id, str) or not self.id.strip():
+            raise ValueError(
+                "Candidate requires an explicit non-empty id; "
+                "EA factories must derive stable candidate identities."
             )
         if self.java_materialization_mode == "framework_slots":
             if self.candidate_java_mode != "generated_phenotype":

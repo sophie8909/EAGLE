@@ -54,8 +54,12 @@ gate and corrective Code Reflection apply only to `llm` mode. See
 | Objectives/evidence | active-mode fitness, executable semantic signature, game/code diagnostics |
 | Persistence references | `artifacts`, `timing` |
 
-New runtime IDs use `gen_<zero-padded-generation>_<12-hex-random-suffix>`.
-Explicit IDs loaded from supported artifacts remain opaque and unchanged.
+EA factories derive new runtime IDs as
+`gen_<zero-padded-generation>_<12-hex-deterministic-suffix>` from the root seed
+and stable lineage identity. `Candidate` does not synthesize an ID: every
+candidate must receive an explicit non-empty identity before entering the
+pipeline. Explicit IDs loaded from supported artifacts remain opaque and
+unchanged.
 
 ## Construction invariants
 

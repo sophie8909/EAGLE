@@ -20,7 +20,20 @@ from tests.test_framework_slots_artifacts import bundle_payload
 
 class FrameworkStartupTests(unittest.TestCase):
     def test_fixed_bundle_config_skips_bootstrap_but_keeps_coach_runtime(self):
-        config = ExperimentConfig.from_file(Path("configs/framework_coach_mock.yaml"))
+        config = ExperimentConfig.from_mapping({
+            "java_materialization_mode": "framework_slots",
+            "framework": {
+                "bundle_path": "configs/framework_bundles/fixed_worker_combat/bundle.json",
+                "evolution_mode": "llm_coach",
+            },
+            "model": {
+                "name": "qwen3_5_9b",
+                "additional_endpoints": [{
+                    "base_url": "http://192.168.1.136:1234",
+                    "model": "qwen/qwen3.5-9b",
+                }],
+            },
+        })
 
         self.assertEqual(config.execution_mode, "openai")
         self.assertEqual(config.framework_evolution_mode, "llm_coach")

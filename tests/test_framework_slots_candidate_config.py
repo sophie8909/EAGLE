@@ -86,9 +86,10 @@ class FrameworkSlotsCandidateTests(unittest.TestCase):
 
     def test_framework_candidate_requires_bundle_hash_and_valid_slot_provenance(self) -> None:
         with self.assertRaisesRegex(ValueError, "framework_bundle_sha256"):
-            Candidate(java_materialization_mode="framework_slots")
+            Candidate(id="missing-bundle-hash", java_materialization_mode="framework_slots")
         with self.assertRaisesRegex(ValueError, "slot_parent_ids"):
             Candidate(
+                id="invalid-slot-provenance",
                 java_materialization_mode="framework_slots",
                 control_genome={"known": 1},
                 slot_parent_ids={"unknown": "parent"},
@@ -96,6 +97,7 @@ class FrameworkSlotsCandidateTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "finite JSON values"):
             Candidate(
+                id="non-finite-slot-value",
                 java_materialization_mode="framework_slots",
                 control_genome={"threshold": float("nan")},
                 framework_bundle_sha256="b" * 64,

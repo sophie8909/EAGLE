@@ -431,7 +431,7 @@ class EaglePipelineTests(unittest.TestCase):
 
     def test_mock_generation_returns_valid_java_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            candidate = Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
+            candidate = Candidate(id="mock-generation-candidate", strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertIn("package ai.generated;", agent.source)
             self.assertIn("extends AbstractionLayerAI", agent.source)
@@ -454,7 +454,7 @@ class EaglePipelineTests(unittest.TestCase):
             root = Path(temp_dir)
             config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
-                Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})),
+                Candidate(id="missing-marker-candidate", strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})),
                 config=config,
                 backend=StaticGenerationBackend(),
                 generated_agents_dir=root / "generated_agents",
@@ -482,7 +482,7 @@ class EaglePipelineTests(unittest.TestCase):
             root = Path(temp_dir)
             config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
-                Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})),
+                Candidate(id="empty-java-candidate", strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})),
                 config=config,
                 backend=NonJavaBackend(),
                 generated_agents_dir=root / "generated_agents",
@@ -654,7 +654,7 @@ class EaglePipelineTests(unittest.TestCase):
 
     def test_generate_java_agent_uses_stable_template_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            candidate = Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
+            candidate = Candidate(id="stable-template-candidate", strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []}))
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertEqual(agent.class_name, "CandidateAgent")
             self.assertTrue(agent.source_path.exists())
@@ -955,7 +955,7 @@ class EaglePipelineTests(unittest.TestCase):
                 raise RuntimeError("backend down")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            evaluation = evaluate_candidate(Candidate(strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})), config=ExperimentConfig.from_mapping({}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
+            evaluation = evaluate_candidate(Candidate(id="backend-failure-candidate", strategy_prompt=json.dumps({"version": "eagle-strategy-dsl-v1", "rules": []})), config=ExperimentConfig.from_mapping({}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
