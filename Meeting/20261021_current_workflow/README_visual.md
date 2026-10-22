@@ -1,5 +1,15 @@
 # EAGLE 圖解流程簡報
 
+## 人工修改主版本（2026-10-22）
+
+目前以 `J:\我的雲端硬碟\Lab\Meeting\EAGLE_20261022_opponent_pool_data_only.pptx` 為主。使用者已刪頁，讀取時共 43 頁；本次重寫第 4 頁為 local 演化圖解，新增第 5 頁為完整 Coach 流程，共 44 頁。保留其他頁面的人工內容、背景與原生圖表，只更新頁碼。新增頁明示目前這批 local 實驗未啟用 Coach。
+
+版本控制快照：`deliverables/EAGLE_20261022_opponent_pool_local_coach.pptx`。`edit_manual_local_coach.mjs` 以 Artifact Tool 建立兩頁原生物件，`merge_manual_local_coach.py` 將局部變更合併回雲端來源封裝，並檢查其他頁面內容與全部圖表／工作簿保持原樣。修改前雲端 SHA-256：`b12a4982e14de2147af8495d3baf3e133c3ae0bcaa87ed71bcfb7d8519e53b9e`。原檔備份、兩頁 authoring 驗證、完整封裝與版面檢查、PowerPoint 44 頁原生預覽留在 `.codex-build/manual-local-coach/`。
+
+人工修改階段請從雲端主檔繼續編輯，不要以舊的 `visual_redesign.mjs` 重建整份簡報覆蓋主檔。
+
+## 原始 45 頁建置紀錄
+
 成果：`deliverables/EAGLE_20261022_opponent_pool_data_only.pptx`，共 45 頁。前 38 頁 Opponent Pool 流程維持原樣；第 39–45 頁改為純數據，包含批次完成場數、G20 分數、G0–G20 紀錄、正式測試勝和敗、全部十個對手的場數、行為簽章數及各 seed 的實測耗時與勝和敗。已移除結果解讀、結論及建議，包含講者備註。文字、圖表及表格均為可編輯的原生物件。
 
 恢復原 EAGLE 鷹形、羽翼與四角線條背景，保留目前配色、圖解配置及你在第 1 頁移動的「反思與選擇」文字框。原圖存為原生背景填滿，母片、版型與各頁皆能呈現；右下角只保留一組原生自動頁碼。舊的無背景版本仍保留，不覆寫開啟中的檔案。
