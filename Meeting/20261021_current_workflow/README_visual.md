@@ -4,6 +4,8 @@
 
 目前以 `J:\我的雲端硬碟\Lab\Meeting\EAGLE_20261022_opponent_pool_data_only.pptx` 為主。使用者已刪頁，讀取時共 43 頁；本次重寫第 4 頁為 local 演化圖解，新增第 5 頁為完整 Coach 流程，共 44 頁。保留其他頁面的人工內容、背景與原生圖表，只更新頁碼。新增頁明示目前這批 local 實驗未啟用 Coach。
 
+最新快照為 `deliverables/EAGLE_20261022_opponent_pool_clarified.pptx`，仍為 44 頁。第 6 頁集中解釋對手池：內建與歷代策略來源、容量 50、入池及滿池 18 場替換，以及凍結的 4＋6 十人對戰名單。第 5 頁 Coach 圖改用「對手池」，第 7 頁明確區分當代族群的繁殖父代選擇；第 2 頁將「歷屆冠軍」更正為固定保護對手。`edit_manual_opponent_pool.mjs` 保留新圖解的可編輯來源，私有備份及驗證位於 `.codex-build/manual-opponent-pool/`。本次雲端來源 SHA-256：`aa66e857c94329040e780fa74fb2216b79c8777f8fb3327655c096efe4fc626b`。
+
 版本控制快照：`deliverables/EAGLE_20261022_opponent_pool_local_coach.pptx`。`edit_manual_local_coach.mjs` 以 Artifact Tool 建立兩頁原生物件，`merge_manual_local_coach.py` 將局部變更合併回雲端來源封裝，並檢查其他頁面內容與全部圖表／工作簿保持原樣。修改前雲端 SHA-256：`b12a4982e14de2147af8495d3baf3e133c3ae0bcaa87ed71bcfb7d8519e53b9e`。原檔備份、兩頁 authoring 驗證、完整封裝與版面檢查、PowerPoint 44 頁原生預覽留在 `.codex-build/manual-local-coach/`。
 
 人工修改階段請從雲端主檔繼續編輯，不要以舊的 `visual_redesign.mjs` 重建整份簡報覆蓋主檔。
