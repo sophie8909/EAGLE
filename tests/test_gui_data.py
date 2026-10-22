@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -62,6 +64,13 @@ class GuiConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 save_config(self.root, "configs/experiment.yaml", "{}")
             self.assertEqual(index.read_text(encoding="utf-8"), text)
+
+    def test_gui_data_import_does_not_load_experiment_orchestration(self):
+        subprocess.run(
+            [sys.executable, "-c", "import sys; import eagle.gui_data; assert 'eagle.experiment' not in sys.modules"],
+            cwd=Path(__file__).resolve().parents[1],
+            check=True,
+        )
 
     def test_save_as_cannot_create_an_index_shaped_config(self):
         with self.assertRaises(ValueError):

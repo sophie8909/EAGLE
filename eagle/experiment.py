@@ -9,6 +9,11 @@ from typing import Callable
 import yaml
 
 from eagle.config import ExperimentConfig
+from eagle.experiment_index import (
+    EXPERIMENT_INDEX_SCHEMA_VERSION,
+    decode_experiment_run_index,
+    is_experiment_run_index,
+)
 from eagle.final_test import (
     SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS,
     main as final_test_main,
@@ -28,7 +33,7 @@ def resolve_experiment_configs(path: str | Path) -> list[Path]:
         config_paths = sorted(
             candidate for candidate in selected.iterdir()
             if candidate.is_file() and candidate.suffix.lower() in {".yaml", ".yml"}
-            and not _is_experiment_run_index(candidate)
+            and not is_experiment_run_index(candidate)
         )
         if not config_paths:
             raise ValueError(f"no YAML configs found in directory: {selected}")
@@ -43,65 +48,15 @@ def resolve_experiment_configs(path: str | Path) -> list[Path]:
     return [selected]
 
 
-EXPERIMENT_INDEX_SCHEMA_VERSION = "eagle-experiment-index-v1"
-
-
-def _is_experiment_run_index(path: Path) -> bool:
-    """Return whether ``experiment.yaml`` is a generated config-to-run index."""
-
-    if path.name != "experiment.yaml":
-        return False
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return False
-    if isinstance(payload, dict) and str(payload.get("schema_version", "")).startswith("eagle-experiment-index-"):
-        _decode_experiment_run_index(payload, path)
-        return True
-    return (
-        isinstance(payload, dict)
-        and "schema_version" not in payload
-        and all(
-            isinstance(name, str)
-            and Path(name).suffix.lower() in {".yaml", ".yml"}
-            and isinstance(run_dir, str)
-            for name, run_dir in payload.items()
-        )
-    )
-
-
 def _run_index_path(selected: Path) -> Path | None:
     """Choose the folder-owned run index without overwriting a legacy config."""
 
     if not selected.is_dir():
         return None
     path = selected / "experiment.yaml"
-    if path.exists() and not _is_experiment_run_index(path):
+    if path.exists() and not is_experiment_run_index(path):
         return None
     return path
-
-
-def _decode_experiment_run_index(payload: object, index_path: Path) -> dict[str, list[str]]:
-    """Read versioned replicate lists or migrate the legacy single-run mapping."""
-
-    if not isinstance(payload, dict):
-        raise ValueError(f"Experiment run index must contain a YAML mapping: {index_path}")
-    if "schema_version" in payload:
-        if payload["schema_version"] != EXPERIMENT_INDEX_SCHEMA_VERSION:
-            raise ValueError(f"Unsupported experiment run index schema: {payload['schema_version']}")
-        entries = payload.get("runs")
-    else:
-        entries = {name: [run_dir] for name, run_dir in payload.items()}
-    if not isinstance(entries, dict) or any(
-        not isinstance(name, str)
-        or Path(name).suffix.lower() not in {".yaml", ".yml"}
-        or not isinstance(run_dirs, list)
-        or not run_dirs
-        or any(not isinstance(folder, str) or not folder for folder in run_dirs)
-        for name, run_dirs in entries.items()
-    ):
-        raise ValueError(f"Invalid experiment run index entries: {index_path}")
-    return entries
 
 
 def _write_experiment_run_index(index_path: Path, entries: dict[str, list[str]]) -> None:
@@ -128,7 +83,7 @@ def _record_experiment_run(
 ) -> None:
     """Atomically record one replicate; repeated callbacks update the same slot."""
 
-    entries = _decode_experiment_run_index(
+    entries = decode_experiment_run_index(
         yaml.safe_load(index_path.read_text(encoding="utf-8")), index_path,
     )
     run_dirs = entries.setdefault(config_name, [])
@@ -146,12 +101,12 @@ def _load_experiment_run_index(config_dir: Path) -> dict[str, list[Path]]:
     """Load ordered replicate paths, accepting legacy single-run indices."""
 
     index_path = config_dir / "experiment.yaml"
-    if not index_path.is_file() or not _is_experiment_run_index(index_path):
+    if not index_path.is_file() or not is_experiment_run_index(index_path):
         raise ValueError(
             "Folder resume requires a generated experiment.yaml run index: "
             f"{index_path}"
         )
-    payload = _decode_experiment_run_index(
+    payload = decode_experiment_run_index(
         yaml.safe_load(index_path.read_text(encoding="utf-8")), index_path,
     )
     entries: dict[str, list[Path]] = {}
@@ -306,7 +261,7 @@ class ExperimentOrchestrator:
             is_indexed_config_folder = (
                 resume_dir.is_dir()
                 and resume_index.is_file()
-                and _is_experiment_run_index(resume_index)
+                and is_experiment_run_index(resume_index)
             )
             is_unindexed_config_folder = (
                 resume_dir.is_dir()

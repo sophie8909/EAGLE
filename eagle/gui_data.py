@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 
 from eagle.config import ExperimentConfig
-from eagle.experiment import _is_experiment_run_index
+from eagle.experiment_index import is_experiment_run_index
 from eagle.run_artifacts import GENERATION_SCHEMA_VERSION, RUN_SCHEMA_VERSION
 
 
@@ -22,7 +22,7 @@ def _config_path(root: Path, path: str) -> Path:
         raise ValueError("Choose a YAML file inside the repository configs directory.")
     if target.exists():
         try:
-            is_index = _is_experiment_run_index(target)
+            is_index = is_experiment_run_index(target)
         except ValueError as exc:
             raise ValueError("Generated experiment indices cannot be edited as configs.") from exc
         if is_index:
