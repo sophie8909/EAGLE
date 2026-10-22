@@ -142,6 +142,8 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
             framework = payload["framework"]
             if manifest.get("framework_evolution_mode", "local") != framework.get("evolution_mode", "local"):
                 raise ValueError("Resume config/manifest framework evolution mode mismatch.")
+            if manifest.get("framework_coach_offspring_probability") != framework.get("coach_offspring_probability"):
+                raise ValueError("Resume config/manifest framework Coach offspring probability mismatch.")
             framework_fences = (
                 ("java_compiler_version", payload.get("java_compiler_version")),
                 ("framework_bundle_version", framework.get("bundle_version")),

@@ -53,7 +53,10 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
             "mutation_rate": 0.0,
             "semantic_probes_enabled": False,
         }
+        coach_probability = overrides.pop("framework_coach_offspring_probability", None)
         payload.update(overrides)
+        if coach_probability is not None:
+            payload["framework"]["coach_offspring_probability"] = coach_probability
         config = ExperimentConfig.from_mapping(payload)
         config.validate()
         return config
@@ -127,6 +130,101 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
         self.assertEqual(plan.mutation_context.candidate.candidate_id, parent.id)
         self.assertEqual(plan.mutation_context.parent_comparison["framework_control_genome"], parent.control_genome)
         self.assertEqual([row["match_id"] for row in plan.mutation_context.per_match_results], ["parent-a-win", "parent-a-loss"])
+
+    def test_configured_coach_offspring_route_is_seeded_and_exclusive_of_traditional_reproduction(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = self.config(root, population_size=40, mutation_rate=1.0,
+                                 crossover_rate=1.0, framework_coach_offspring_probability=0.5)
+            runtime = self.runtime(config, root)
+            parents = [
+                Candidate(
+                    id=f"parent-{index}", generation=0,
+                    candidate_java_mode="generated_phenotype",
+                    java_materialization_mode="framework_slots",
+                    java_compiler_version=config.java_compiler_version,
+                    control_genome={"horizon": 1 + index % 3,
+                                    "policy": "balanced" if index % 2 == 0 else "aggressive"},
+                    slot_parent_ids={}, framework_bundle_sha256=config.framework_bundle_sha256,
+                    game_eval_result={"game_performance": index / 40, "match_results": []},
+                    status="evaluated",
+                )
+                for index in range(2)
+            ]
+            from eagle.evolution import offspring as offspring_module
+            original_crossover = offspring_module.crossover_framework_slots
+            original_select = offspring_module.select_parent
+            with (
+                patch("eagle.evolution.offspring.crossover_framework_slots", wraps=original_crossover) as crossover_spy,
+                patch("eagle.evolution.offspring.select_parent", wraps=original_select) as select_spy,
+            ):
+                first = plan_offspring(
+                    parents, config=config, generation=1, rng=random.Random(999),
+                    mutations=runtime.mutations,
+                    operator_controller=build_reflection_operator_controller(config),
+                )
+                crossover_calls = crossover_spy.call_count
+                select_calls = select_spy.call_count
+            second = plan_offspring(
+                parents, config=config, generation=1, rng=random.Random(1),
+                mutations=runtime.mutations,
+                operator_controller=build_reflection_operator_controller(config),
+            )
+            endpoint_plans = {}
+            for probability, mutation_rate in ((0.0, 1.0), (1.0, 0.0)):
+                endpoint_config = self.config(
+                    root, population_size=4, mutation_rate=mutation_rate,
+                    crossover_rate=1.0,
+                    framework_coach_offspring_probability=probability,
+                )
+                endpoint_runtime = self.runtime(endpoint_config, root)
+                endpoint_plans[probability] = plan_offspring(
+                    parents, config=endpoint_config, generation=1,
+                    rng=random.Random(123), mutations=endpoint_runtime.mutations,
+                    operator_controller=build_reflection_operator_controller(endpoint_config),
+                )
+
+        self.assertEqual(
+            [(plan.mutation_name, plan.candidate.control_genome) for plan in first],
+            [(plan.mutation_name, plan.candidate.control_genome) for plan in second],
+        )
+        coach = [plan for plan in first
+                 if plan.candidate.metadata.get("framework_reproduction_route") == "coach"]
+        traditional = [plan for plan in first
+                       if plan.candidate.metadata.get("framework_reproduction_route") == "traditional"]
+        self.assertTrue(coach)
+        self.assertTrue(traditional)
+        self.assertEqual(len(coach) + len(traditional), len(first))
+        self.assertEqual(crossover_calls, len(traditional))
+        self.assertEqual(select_calls, len(coach) + 2 * len(traditional))
+        self.assertTrue(all(
+            plan.candidate.metadata["framework_reproduction_route"] == "traditional"
+            and plan.candidate.mutation_type == "slot"
+            for plan in endpoint_plans[0.0]
+        ))
+        self.assertTrue(all(
+            plan.candidate.metadata["framework_reproduction_route"] == "coach"
+            and plan.mutation_name == "strategy"
+            for plan in endpoint_plans[1.0]
+        ))
+        for plan in coach:
+            self.assertEqual(plan.mutation_name, "strategy")
+            self.assertEqual(len(plan.candidate.parent_ids), 1)
+            self.assertIsNotNone(plan.mutation_context)
+            self.assertEqual(
+                plan.candidate.control_genome,
+                plan.mutation_context.parent_comparison["framework_control_genome"],
+            )
+            self.assertEqual(set(plan.candidate.slot_parent_ids.values()), set(plan.candidate.parent_ids))
+            self.assertNotIn("mutation", plan.candidate.metadata)
+        for plan in traditional:
+            self.assertIsNone(plan.mutation_name)
+            self.assertEqual(plan.candidate.mutation_type, "slot")
+            self.assertEqual(plan.candidate.operator, "crossover")
+            record = plan.candidate.metadata["mutation"]
+            self.assertEqual(record["operation"], "framework_slot_mutation")
+            self.assertTrue(record["applied"])
+            self.assertIn(record["slot_id"], plan.candidate.control_genome)
 
 
     def test_invalid_initial_selection_fails_before_compile_integration_or_matches(self) -> None:
@@ -203,7 +301,7 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            source = self.config(root, mode="llm_coach")
+            source = self.config(root, mode="llm_coach", framework_coach_offspring_probability=0.5)
             coach_run = root / "coach_run"
             coach_run.mkdir()
             frozen_coach = freeze_framework_bundle(coach_run, source)
@@ -211,9 +309,21 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
             write_run_config(coach_run, frozen_coach, mock=True)
             manifest = json.loads((coach_run / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["framework_evolution_mode"], "llm_coach")
+            self.assertEqual(manifest["framework_coach_offspring_probability"], 0.5)
             local_source = self.config(root, mode="local")
             with self.assertRaisesRegex(ValueError, "framework.evolution_mode"):
                 validate_resume_config(local_source, frozen_coach)
+            changed_coach = self.config(
+                root, mode="llm_coach", framework_coach_offspring_probability=0.25
+            )
+            with self.assertRaisesRegex(ValueError, "coach_offspring_probability"):
+                validate_resume_config(changed_coach, frozen_coach)
+            config_path = coach_run / "config.yaml"
+            persisted_config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            persisted_config["framework"]["coach_offspring_probability"] = 0.25
+            config_path.write_text(yaml.safe_dump(persisted_config, sort_keys=False), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Coach offspring probability mismatch"):
+                load_resume_config(coach_run)
 
             local_run = root / "legacy_local_run"
             local_run.mkdir()
@@ -223,6 +333,7 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
             manifest_path = local_run / "manifest.json"
             legacy_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             legacy_manifest.pop("framework_evolution_mode")
+            legacy_manifest.pop("framework_coach_offspring_probability")
             manifest_path.write_text(json.dumps(legacy_manifest), encoding="utf-8")
             config_path = local_run / "config.yaml"
             legacy_config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -309,6 +420,44 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
 
         self.assertEqual(result.completed_generation, 1)
         self.assertEqual(manifest["framework_evolution_mode"], "llm_coach")
+
+    def test_one_generation_mock_search_runs_configured_50_50_coach_and_traditional_routes(self) -> None:
+        from eagle.evolution.search import run_search
+        from eagle.evolution.resume import resume_search
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = self.config(
+                root, population_size=4, generations=1, mutation_rate=1.0,
+                framework_coach_offspring_probability=0.5,
+                runs_dir=str(root / "runs"),
+            )
+            result = run_search(config, mock=True, run_id="coach_traditional_mock")
+            manifest = json.loads((result.run_dir / "manifest.json").read_text(encoding="utf-8"))
+            generation_one = [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in (result.run_dir / "candidates").glob("*/candidate.json")
+                if json.loads(path.read_text(encoding="utf-8"))["generation"] == 1
+            ]
+            routes = [candidate["metadata"].get("framework_reproduction_route")
+                      for candidate in generation_one]
+            coach_results = list(
+                (result.run_dir / "candidates").glob("*/mutation/strategy_reflection/coach_result.json")
+            )
+            self.assertEqual(manifest["framework_coach_offspring_probability"], 0.5)
+            self.assertEqual(set(routes), {"coach", "traditional"})
+            self.assertEqual(len(generation_one), 4)
+            self.assertTrue(coach_results)
+            self.assertTrue(all("mutation" in candidate["metadata"] for candidate in generation_one
+                                if candidate["metadata"]["framework_reproduction_route"] == "coach"))
+            resumed = resume_search(run_dir=result.run_dir, mock=True)
+            self.assertEqual(resumed.completed_generation, 1)
+            self.assertEqual(
+                [candidate.control_genome for candidate in resumed.final_population],
+                [candidate.control_genome for candidate in result.final_population],
+            )
+
+        self.assertEqual(result.completed_generation, 1)
 
 
 if __name__ == "__main__":

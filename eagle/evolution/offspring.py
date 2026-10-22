@@ -359,7 +359,7 @@ def _iter_framework_slot_offspring(
     generation: int,
     mutations: dict[str, Any],
 ) -> Iterator[OffspringPlan]:
-    """Plan typed-slot crossover and either local or Coach-guided mutation."""
+    """Plan typed-slot variation, optionally routing Coach before crossover."""
 
     if config.framework_bundle_path is None or config.framework_bundle_sha256 is None:
         raise ValueError("framework_slots reproduction requires a validated bundle.")
@@ -378,7 +378,8 @@ def _iter_framework_slot_offspring(
         validate_genome(bundle, parent.control_genome)
 
     framework_coach = config.framework_evolution_mode == "llm_coach"
-    if framework_coach and "strategy" not in mutations:
+    route_probability = config.framework_coach_offspring_probability
+    if framework_coach and (route_probability is None or route_probability > 0) and "strategy" not in mutations:
         raise ValueError("framework llm_coach reproduction requires the Strategy Coach.")
     plans: list[OffspringPlan] = []
     for context_index in range(config.population_size):
@@ -398,19 +399,28 @@ def _iter_framework_slot_offspring(
             selection_mode=config.algorithm,
             fitness_tolerance=config.fitness_tie_tolerance,
         )
-        parent_b = select_parent(
-            population,
-            parent_b_rng,
-            selection_mode=config.algorithm,
-            fitness_tolerance=config.fitness_tie_tolerance,
-            semantic_reference=parent_a,
-        )
+        coach_route = False
+        if framework_coach and route_probability is not None:
+            route_rng = random.Random(
+                derive_seed(config.random_seed, "evolution", generation, context_index, "framework_offspring_route")
+            )
+            coach_route = route_rng.random() < route_probability
+        parent_b = None
+        if not coach_route:
+            parent_b = select_parent(
+                population,
+                parent_b_rng,
+                selection_mode=config.algorithm,
+                fitness_tolerance=config.fitness_tie_tolerance,
+                semantic_reference=parent_a,
+            )
         parent_selection_duration = max(0.0, time.monotonic() - selection_started)
-        use_crossover = len(population) > 1 and crossover_rng.random() < config.crossover_rate
+        use_crossover = not coach_route and len(population) > 1 and crossover_rng.random() < config.crossover_rate
 
         operation_started_at = utc_now()
         operation_started = time.monotonic()
         if use_crossover:
+            assert parent_b is not None
             crossed = crossover_framework_slots(
                 bundle,
                 parent_a.control_genome,
@@ -443,7 +453,9 @@ def _iter_framework_slot_offspring(
         mutation_timing: dict[str, Any] | None = None
         mutation_type: str | None = None
         use_mutation = mutation_rng.random() < config.mutation_rate
-        if use_mutation and not framework_coach:
+        # An explicit route replaces reproduction; omitted probability keeps old runs compatible.
+        use_coach_mutation = coach_route or (framework_coach and route_probability is None and use_mutation)
+        if use_mutation and not use_coach_mutation:
             mutation_started_at = utc_now()
             mutation_started = time.monotonic()
             mutated = mutate_framework_slot(
@@ -497,6 +509,8 @@ def _iter_framework_slot_offspring(
         if mutation_timing is not None:
             timing["mutation"] = mutation_timing
         metadata: dict[str, Any] = {"framework_id": bundle.framework_id}
+        if route_probability is not None:
+            metadata["framework_reproduction_route"] = "coach" if coach_route else "traditional"
         if mutation_record is not None:
             metadata["mutation"] = mutation_record
         child = Candidate(
@@ -517,7 +531,7 @@ def _iter_framework_slot_offspring(
             metadata=metadata,
         )
         mutation_context = None
-        if framework_coach and use_mutation:
+        if use_coach_mutation:
             mutation_context = mutation_context_from_candidate(
                 parent_a, generation=generation, index=context_index,
                 reflection_type="strategy", evolution_candidate=child,

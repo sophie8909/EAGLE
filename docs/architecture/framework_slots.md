@@ -20,6 +20,22 @@ same bundle schema, exact-byte run freeze, active genotype, renderer, and
 materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
+In `llm_coach`, optional `framework.coach_offspring_probability` selects the
+Coach offspring route before crossover. `null` (the default) preserves legacy
+Coach behavior for existing configurations; a numeric value from `0.0` through
+`1.0` routes that fraction of offspring to Coach. This choice is independent of
+`mutation_rate`; selection is stochastic per offspring, not an exact
+per-generation quota, and uses an independent seeded RNG. A Coach-routed child
+copies parent A's genome and asks Coach for a complete genome, without
+crossover or parent B. A traditionally routed child uses the configured
+`crossover_rate` and existing donor-selection behavior, followed by the local
+single-slot mutation at `mutation_rate`. These are
+exclusive offspring routes, not a Coach-versus-local-mutation choice. At `0.0`
+all offspring use the traditional route; at `1.0` all use Coach. Generation-zero
+genomes remain Coach-selected in `llm_coach` regardless of this setting. The
+resolved probability is resume-fenced; older manifests without the field mean
+`null`, and changing it requires a new run.
+
 Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
 and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
 `framework.bootstrap_backend` selects `groq` (the default API path), `mistral`
@@ -33,12 +49,15 @@ conditions, and priorities. These are requested design targets, not a guarantee
 of strategic diversity. Once the run starts, bundle bytes, template, slot IDs,
 domains, and expressions are frozen.
 With `llm_coach`, the configured experiment model selects one complete initial
-genome for each generation-zero population slot and, when Strategy mutation is
-assigned, proposes one complete replacement genome for that child. Strategy
-mutation reuses the existing evidence path: use the evaluated mutation-context
-parent (parent A), distinct from the per-slot crossover donors, select exactly
-that parent's one worst completed match, have Match Commentator diagnose that
-match, then give the Coach that diagnosis and the parent's all-match summary.
+genome for each generation-zero population slot. Under legacy
+`coach_offspring_probability: null` behavior, an assigned Strategy mutation
+proposes one complete replacement genome after crossover. With an explicit
+numeric probability, Coach is a separate offspring operator selected before
+crossover; it copies parent A and has no parent-B donor. Both Coach paths reuse
+the existing evidence protocol: select exactly the evaluated mutation-context
+parent's (parent A's) one worst completed match, have Match Commentator
+diagnose that match, then give the Coach that diagnosis and the parent's
+all-match summary.
 The Coach returns only the complete fixed-shape object below; it cannot
 edit the Java template, bundle, slot schema, prompts, or arbitrary Java:
 
@@ -86,6 +105,7 @@ framework:
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
   model: mistral-small-latest
   evolution_mode: llm_coach
+  coach_offspring_probability: 0.5  # Exclusive Coach and traditional offspring routes
 ```
 
 For `groq`, set `GROQ_API_KEY` in the environment. For `mistral`, EAGLE reads
@@ -147,8 +167,10 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    backend/model, and `evolution_mode`, and never regenerates a framework.
 5. In `local`, generation zero samples legal values and later seeded EA
    operators cross over values independently by slot and mutate at most one slot.
-   In `llm_coach`, the experiment model selects complete initial genomes and
-   returns a complete genome for each assigned Strategy mutation.
+   In `llm_coach`, the experiment model selects complete initial genomes.
+   Legacy `null` Coach behavior returns a complete genome for each assigned
+   Strategy mutation; an explicit numeric setting selects the exclusive Coach
+   offspring operator before crossover.
 6. Rendered Java follows the existing validation, one-attempt `javac`,
    Integration, semantic-probe, and evaluation pipeline. Fixed-roster evaluation
    remains ten opponents x three maps x three rounds x two sides (180 matches

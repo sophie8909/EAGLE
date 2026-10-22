@@ -446,6 +446,7 @@ def compact_candidate_metadata(
         "replicate_index",
         "initial_policy_source",
         "initial_policy_sample_index",
+        "framework_reproduction_route",
         "experimental_parent_evaluation",
         "failure_category",
         "failure_reason",

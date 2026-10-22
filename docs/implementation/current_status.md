@@ -676,3 +676,20 @@ combat-unit choice, army size, attack timing, target ranking, focus fire,
 rallying, fallbacks, and automatic defense. The default genome renders and
 compiles successfully, passes the seven-check MicroRTS Integration probe, and
 the focused framework/Coach/startup regression suite passes 57 tests.
+
+## Exclusive framework Coach offspring route (2026-10-22)
+
+The specified `llm_coach` extension adds optional
+`framework.coach_offspring_probability` to select Coach or traditional
+crossover/local-mutation offspring before crossover. `null` preserves legacy
+Coach behavior; explicit numeric values are resume-fenced, with a missing field
+in older manifests treated as `null`. Initial genomes remain Coach-selected,
+and the traditional route retains the existing crossover and mutation rates.
+The 50/50 experiment config retains population 10, 20 generations, seeds 8–13,
+`crossover_rate: 0.75`, and `mutation_rate: 1.0`. Candidate artifacts retain
+`framework_reproduction_route` for both branches. All 67 focused WSL tests pass,
+including exclusive-route dispatch, preserved local crossover, candidate
+persistence, a mixed one-generation mock search/resume, and resume-tamper
+rejection; compileall and diff checks also pass. A broader regression batch was
+interrupted during real MicroRTS matches and did not complete. No live Coach
+experiment or full-suite validation was performed.

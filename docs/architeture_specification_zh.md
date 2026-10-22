@@ -47,6 +47,16 @@ sampling、逐 slot crossover 與最多一個 slot mutation；`llm_coach` 是 op
 和 `eagle-framework-slots-v1` materializer，不呼叫 Java Generator、source
 repair 或 compile repair。Resume 僅讀 run-owned frozen bundle，驗證 hash 並比較
 `design_brief`、bootstrap model、evolution mode，不會重新 bootstrap。
+在 `llm_coach` 中，可用 `framework.coach_offspring_probability` 在 crossover
+前選擇 Coach offspring 路徑。預設 `null` 保留舊設定的 Coach 行為；明確數值
+範圍為 `0.0` 到 `1.0`，且只允許 `llm_coach`，透過獨立 seeded RNG 選擇比例。
+此路徑選擇與 `mutation_rate` 無關。Coach 路徑只複製 parent A
+的 genome，再由 Coach 提出完整 genome，不執行 crossover，也不使用 parent B。
+傳統路徑則保留設定的 `crossover_rate`、donor 選擇，並依
+`mutation_rate` 執行 local 單一 slot mutation。`0.0` 表示後續 offspring 全走
+傳統路徑，`1.0` 表示全走 Coach；Gen 0
+仍一律由 Coach 選完整 genome。Resume 會比較有效設定；舊 manifest 缺少欄位時
+視為 `null`。`local` 模式設定數值會被拒絕。
 Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
 bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index，資料夾
 重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有

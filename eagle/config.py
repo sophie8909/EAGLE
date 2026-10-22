@@ -185,6 +185,7 @@ class ExperimentConfig:
     framework_bundle_version: str | None = None
     framework_bundle_sha256: str | None = None
     framework_evolution_mode: str = "local"
+    framework_coach_offspring_probability: float | None = None
     framework_bootstrap_backend: str = "groq"
     framework_design_brief: str | None = None
     framework_model: str = "openai/gpt-oss-120b"
@@ -481,6 +482,10 @@ class ExperimentConfig:
             framework_bundle_version=framework_bundle_version,
             framework_bundle_sha256=framework_bundle_sha256,
             framework_evolution_mode=str((payload.get("framework") or {}).get("evolution_mode", "local")),
+            framework_coach_offspring_probability=(
+                None if (payload.get("framework") or {}).get("coach_offspring_probability") is None
+                else float(payload["framework"]["coach_offspring_probability"])
+            ),
             framework_bootstrap_backend=str((payload.get("framework") or {}).get("bootstrap_backend", "groq")),
             framework_design_brief=(payload.get("framework") or {}).get("design_brief"),
             framework_model=(payload.get("framework") or {}).get("model", "openai/gpt-oss-120b"),
@@ -597,6 +602,11 @@ class ExperimentConfig:
                 raise ValueError("deterministic_dsl requires parent_evaluation_mode=reuse_cached.")
         if self.framework_evolution_mode not in {"local", "llm_coach"}:
             raise ValueError("framework.evolution_mode must be local or llm_coach.")
+        if self.framework_coach_offspring_probability is not None:
+            if not 0.0 <= self.framework_coach_offspring_probability <= 1.0:
+                raise ValueError("framework.coach_offspring_probability must be in [0, 1].")
+            if self.framework_evolution_mode != "llm_coach":
+                raise ValueError("framework.coach_offspring_probability requires framework.evolution_mode=llm_coach.")
         if self.framework_bootstrap_backend not in {"groq", "mistral", "local"}:
             raise ValueError("framework.bootstrap_backend must be groq, mistral, or local.")
         if self.framework_evolution_mode != "local" and self.java_materialization_mode != "framework_slots":
@@ -998,6 +1008,8 @@ class ExperimentConfig:
         if self.java_materialization_mode == "framework_slots":
             mapping.pop("strategy_policy_format", None)
             mapping["framework"] = {"evolution_mode": self.framework_evolution_mode}
+            if self.framework_coach_offspring_probability is not None:
+                mapping["framework"]["coach_offspring_probability"] = self.framework_coach_offspring_probability
             if self.framework_bootstrap_backend != "groq":
                 mapping["framework"]["bootstrap_backend"] = self.framework_bootstrap_backend
             if self.framework_design_brief is not None:
@@ -1166,7 +1178,7 @@ def _parse_framework_bundle(
             "framework_slots requires a framework mapping with design_brief or bundle_path."
         )
     unknown = sorted(
-        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256", "evolution_mode", "bootstrap_backend", "design_brief", "model"})
+        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256", "evolution_mode", "coach_offspring_probability", "bootstrap_backend", "design_brief", "model"})
     )
     if unknown:
         raise ValueError(

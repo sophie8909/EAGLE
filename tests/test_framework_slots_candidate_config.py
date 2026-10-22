@@ -170,6 +170,17 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
         config.validate()
         return config
 
+    def test_coach_traditional_50_50_experiment_config_loads(self) -> None:
+        config = ExperimentConfig.from_file(
+            Path("configs/experiments/1022_framework_coach50_traditional50_20x10_seed8_13_1run")
+            / "qwen3_5_9b_framework_coach50_traditional50_20x10_seed8_13_1run.yaml"
+        )
+        config.validate()
+        self.assertEqual(config.framework_coach_offspring_probability, 0.5)
+        self.assertEqual(config.crossover_rate, 0.75)
+        self.assertEqual(config.mutation_rate, 1.0)
+        self.assertTrue(config.match_commentator_enabled)
+
     def test_bundle_is_required_hashed_and_written_to_resolved_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bundle = self.write_bundle(directory, suffix="\n")
@@ -196,6 +207,7 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                 "evolution_mode": "local",
             },
         )
+        self.assertNotIn("coach_offspring_probability", resolved["framework"])
         self.assertFalse(config.needs_llm_runtime)
 
     def test_resolved_bundle_hash_fences_reload_and_file_drift(self) -> None:
@@ -231,6 +243,40 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                         "framework": {"bundle_path": str(bundle)},
                     }
                 )
+
+    def test_coach_offspring_probability_is_coach_only_and_round_trips(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = self.write_bundle(directory)
+            payload = {
+                "schema_version": "experiment-v2",
+                "java_materialization_mode": "framework_slots",
+                "framework": {
+                    "bundle_path": str(bundle),
+                    "evolution_mode": "llm_coach",
+                    "coach_offspring_probability": 0.5,
+                },
+                "candidate_java_mode": "generated_phenotype",
+                "parent_evaluation_mode": "reuse_cached",
+                "reflection_operator_mode": "static",
+            }
+            config = ExperimentConfig.from_mapping(payload)
+            config.validate()
+            resolved = config.to_mapping()
+            reloaded = ExperimentConfig.from_mapping(resolved)
+            reloaded.validate()
+
+            for probability in (-0.01, 1.01, float("nan")):
+                invalid = {**payload, "framework": {**payload["framework"], "coach_offspring_probability": probability}}
+                with self.subTest(probability=probability), self.assertRaisesRegex(ValueError, "coach_offspring_probability"):
+                    ExperimentConfig.from_mapping(invalid).validate()
+
+            local = {**payload, "framework": {"bundle_path": str(bundle), "coach_offspring_probability": 0.8}}
+            with self.assertRaisesRegex(ValueError, "coach_offspring_probability"):
+                ExperimentConfig.from_mapping(local).validate()
+
+        self.assertEqual(config.framework_coach_offspring_probability, 0.5)
+        self.assertEqual(reloaded.framework_coach_offspring_probability, 0.5)
+        self.assertEqual(resolved["framework"]["coach_offspring_probability"], 0.5)
 
     def test_mode_requires_generated_phenotype_cached_parents_and_static_operator(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

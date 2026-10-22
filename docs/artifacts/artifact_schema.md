@@ -105,6 +105,13 @@ attempts and a failed manifest; pending config cannot resume without a usable
 frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
 The resolved `framework.evolution_mode` defaults to `local` and must match on
 resume; it does not alter the bundle or materializer version.
+In `llm_coach` mode, `framework.coach_offspring_probability` is resume-fenced
+and recorded as manifest field
+`framework_coach_offspring_probability`. A missing field in an older manifest
+means `null`, preserving legacy Coach behavior. `null` is the default; numeric
+values are in the inclusive range `0.0`–`1.0`. A numeric value requires
+`framework.evolution_mode: llm_coach`; config validation rejects it in `local`
+mode.
 ## Generation snapshot
 
 `generations/generation_<nnnn>.json` contains:
@@ -212,6 +219,9 @@ with `genotype/control_genome.json` and adds
 `eagle-candidate-v8` and `4.0`. The candidate index pins
 `framework_bundle_sha256`, references `../../framework/bundle.json`, and records
 all `slot_parent_ids`; it does not serialize policy/prompt/Java-parent fields.
+For explicit numeric `framework.coach_offspring_probability`, the candidate
+index also records `metadata.framework_reproduction_route` as `coach` or
+`traditional` for later offspring.
 Framework evidence schema `eagle-framework-materialization-v1` records operation
 `framework_slot_assembly`, materializer version, framework ID, exact-byte and
 canonical bundle hashes, template/genome/source hashes, complete control genome,

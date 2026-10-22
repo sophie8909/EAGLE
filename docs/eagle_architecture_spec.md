@@ -781,26 +781,41 @@ version/hash drift and never adopts a changed external file. The only active
 candidate component is `control_genome`. In the default `local` evolution policy,
 generation zero samples complete legal genomes; seeded uniform crossover selects
 each slot independently with `slot_parent_ids`, and mutation changes at most one
-slot to a different legal value. `llm_coach` instead requests one complete legal
-genome for each initial slot and uses the Coach for each assigned Strategy
-mutation; validation is against the same frozen bundle. Equal bundle/genome/
-materializer inputs produce byte-identical complete Java and reconstructible
-hashes.
+slot to a different legal value. `llm_coach` requests one complete legal
+genome for each initial slot. Optional `framework.coach_offspring_probability`
+selects an exclusive Coach offspring route before crossover; `null` (the
+default) preserves legacy Coach behavior, and numeric values from `0.0` through
+`1.0` select that fraction of later offspring stochastically using an
+independent seeded RNG; this is not an exact per-generation quota and is
+independent of `mutation_rate`.
+The Coach route copies parent A's genome and requests a complete replacement,
+without crossover or parent B. The traditional route preserves the existing
+configured `crossover_rate` and donor selection, followed by local single-slot
+mutation at `mutation_rate`. At `0.0` all later offspring use the traditional
+route; at `1.0` all use Coach. Generation-zero genomes remain Coach-selected at
+all values. Resume fences the effective setting, interpreting a missing field
+in older manifests as `null`. Validation is against the same frozen bundle.
+Equal bundle/genome/materializer inputs produce byte-identical complete Java
+and reconstructible hashes.
 
 Framework-slot mode uses `candidate_java_mode: generated_phenotype`,
 `parent_evaluation_mode: reuse_cached`, `reflection_operator_mode: static`, and
 protocol/materializer version `eagle-framework-slots-v1`. The default
 `framework.evolution_mode: local` performs no candidate-time LLM request. The
-opt-in `llm_coach` mode uses the configured experiment model only for initial
-complete-genome selection and the existing one-worst-match Commentator/Coach
-Strategy path. It does not call a Java Generator, Code Reflection, source repair,
+opt-in `llm_coach` mode uses the configured experiment model for initial
+complete-genome selection. With legacy `coach_offspring_probability: null`, it
+also uses the existing one-worst-match Commentator/Coach Strategy path after
+crossover; an explicit numeric probability selects Coach as an exclusive
+offspring operator before crossover. It does not call a Java Generator, Code Reflection, source repair,
 or compile repair. Both modes render locally, and render failure has no fallback.
 Successfully rendered source continues through unchanged security validation,
 one javac, Integration, semantic probe, objectives, parent-plus-offspring
 selection, and ten-opponent x three-map x three-round x two-side evaluation.
 The bundle, slot domains, template, materializer version, and bundle hash remain
 frozen across both evolution policies; resume also compares the resolved
-`framework.evolution_mode`.
+`framework.evolution_mode` and effective Coach offspring probability. The
+latter defaults to `null` for older manifests; a numeric value requires
+`llm_coach` and is rejected in `local` mode.
 
 `GROQ_API_KEY` and the Mistral key are accepted only from their provider-specific
 credential sources and are never written to prompt, request, config, bootstrap,
