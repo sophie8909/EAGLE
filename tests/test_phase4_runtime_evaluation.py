@@ -50,6 +50,24 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertFalse(hasattr(config, "deterministic_mode"))
         self.assertEqual(config.match_workers, 10)
 
+    def test_serial_match_execution_is_persisted_and_uses_one_worker(self):
+        config = ExperimentConfig.from_mapping({"evaluation": {"match_execution": "serial"}})
+        config.validate()
+
+        self.assertEqual(config.match_execution, "serial")
+        self.assertEqual(config.match_workers, 1)
+        self.assertEqual(config.to_mapping()["evaluation"]["match_execution"], "serial")
+
+        restored = ExperimentConfig.from_mapping(config.to_mapping())
+        self.assertEqual(restored.match_execution, "serial")
+        self.assertEqual(restored.match_workers, 1)
+
+    def test_unknown_match_execution_is_rejected(self):
+        config = ExperimentConfig.from_mapping({"evaluation": {"match_execution": "random"}})
+
+        with self.assertRaisesRegex(ValueError, "evaluation.match_execution"):
+            config.validate()
+
     def test_legacy_mode_flag_cannot_disable_seeded_execution(self):
         for legacy_value in (True, False):
             config = ExperimentConfig.from_mapping({"deterministic_mode": legacy_value})

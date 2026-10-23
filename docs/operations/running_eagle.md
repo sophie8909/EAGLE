@@ -199,8 +199,9 @@ repair. Each section may contain `additional_endpoints`, an ordered list with at
 most one unmanaged OpenAI-compatible endpoint expressed as exactly
 `{base_url, model}`. Each functional profile has one or two endpoints. GPU
 layers (`999`), model threads (`8`), managed-local server parallel slots (`2`),
-independent LLM workers (`2`), and match workers (`10`) are fixed by
-`eagle/execution.py`; they are not config fields. The server allocates
+independent LLM workers (`2`) are fixed by `eagle/execution.py`. Match execution
+uses ten workers by default; set `evaluation.match_execution: serial` to use one
+worker for same-seed audits and reduced scheduling variance. The server allocates
 `context_size × 2`, while each request keeps the configured context size.
 Before starting llama.cpp, GPU-device preflight must succeed. Every fresh child
 startup must also emit positive full `offloaded N/N layers to GPU` evidence for the
@@ -267,9 +268,12 @@ repeat count, for example `random_seeds: [7, 8, 9]` with `runs: 2` executes
 multiple replicates per config.
 With `random_seeds: [8]` and `runs: 3`, the config receives seeds `8, 8, 8`.
 
-Match execution always uses ten bounded workers, with canonical results in
-match_index order. Match worker count is fixed; resource tuning does not expose
-a config override. match_timeout_seconds and match_artifact_mode remain
+Match execution uses ten bounded workers by default, with canonical results in
+match_index order. `evaluation.match_execution: serial` switches the matrix to
+one worker while preserving the same match identities and result ordering.
+This reduces scheduling variance but cannot control external opponent wall-clock
+budgets or private RNGs, so it is not a bitwise reproducibility guarantee.
+match_timeout_seconds and match_artifact_mode remain
 independent top-level settings because they control per-process timeout and
 evidence retention rather than scheduling.
 

@@ -193,6 +193,7 @@ class ExperimentConfig:
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
     evaluation_mode: str = "fixed_roster"
+    match_execution: str = "parallel"
     self_play_refresh_interval: int = 5
     self_play_opponent_library_capacity: int = 50
     self_play_pool_policy: str = "tournament-v1"
@@ -232,7 +233,7 @@ class ExperimentConfig:
 
     @property
     def match_workers(self) -> int:
-        return MATCH_WORKERS
+        return 1 if self.match_execution == "serial" else MATCH_WORKERS
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ExperimentConfig":
@@ -363,8 +364,12 @@ class ExperimentConfig:
         if not isinstance(evaluation_settings, dict):
             raise ValueError("evaluation must be a mapping.")
         if "match_workers" in evaluation_settings:
-            raise ValueError("Obsolete evaluation.match_workers is not supported; match parallelism is mandatory.")
+            raise ValueError(
+                "Obsolete evaluation.match_workers is not supported; use "
+                "evaluation.match_execution instead."
+            )
         evaluation_mode = str(evaluation_settings.get("mode", "fixed_roster"))
+        match_execution = str(evaluation_settings.get("match_execution", "parallel"))
         self_play_pool_policy = str(
             evaluation_settings.get("self_play_pool_policy", "tournament-v1")
         )
@@ -530,6 +535,7 @@ class ExperimentConfig:
             candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
             parent_evaluation_mode=str(payload.get("parent_evaluation_mode", "reuse_cached")),
             evaluation_mode=evaluation_mode,
+            match_execution=match_execution,
             self_play_refresh_interval=int(
                 evaluation_settings.get("self_play_refresh_interval", 5)
             ),
@@ -718,6 +724,8 @@ class ExperimentConfig:
                 )
         if self.evaluation_mode not in EVALUATION_MODES:
             raise ValueError("evaluation.mode must be fixed_roster or self_play.")
+        if self.match_execution not in {"parallel", "serial"}:
+            raise ValueError("evaluation.match_execution must be parallel or serial.")
         if self.self_play_refresh_interval < 1:
             raise ValueError("evaluation.self_play_refresh_interval must be at least 1.")
         if self.self_play_opponent_library_capacity < 1:
@@ -963,6 +971,7 @@ class ExperimentConfig:
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
                 "mode": self.evaluation_mode,
+                "match_execution": self.match_execution,
                 "self_play_refresh_interval": self.self_play_refresh_interval,
                 "self_play_opponent_library_capacity": self.self_play_opponent_library_capacity,
                 "self_play_pool_policy": self.self_play_pool_policy,

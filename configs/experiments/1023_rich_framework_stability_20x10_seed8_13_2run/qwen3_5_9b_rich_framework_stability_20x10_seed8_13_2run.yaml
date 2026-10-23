@@ -54,6 +54,8 @@ stagnation_generations: 25
 
 evaluation:
   mode: self_play
+  # Serialize match subprocesses to reduce scheduling variance in same-seed audits.
+  match_execution: serial
   maps:
     - path: maps/8x8/basesWorkers8x8.xml
       tick_limit: 1500

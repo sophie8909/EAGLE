@@ -153,12 +153,15 @@ replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
 
 `random_seed` 是整個 EA 的根 seed；初始化、選擇、operator、crossover、mutation、
 reflection sampling、LLM request 與 retry 都依穩定任務身分衍生獨立 seed。
-可控的執行流程永遠採用此規則，不再提供 deterministic/non-deterministic 切換。
+可控的執行流程永遠採用此規則；一般流程沒有完整的 deterministic/non-deterministic
+切換。`evaluation.match_execution` 預設為 `parallel`，也可設為 `serial`，以單一
+worker 按順序執行 match、降低同 seed audit 的排程差異；但它無法控制外部 opponent
+的 wall-clock 預算或私有 RNG，因此不能保證 bitwise 相同的比賽輸出。
 一般評估、父子對戰及 final test 都傳遞並保存每場比賽的 JVM seed；多執行緒依固定
 match 順序彙整，seed 與決策不依完成順序或 thread 身分。LLM endpoint assignment
 也只由 canonical input index 與 resolved config 中保存的 endpoint 順序決定。GPU
-layer 固定為 `999`、model thread 固定為 `8`、managed-local server slot 固定為 `2`、LLM worker 固定為 `2`、match worker 固定為 `10`，
-由 `eagle/execution.py` 統一管理。CUDA/GPU preflight 必須成功，無 GPU 時明確失敗，不回退 CPU。
+layer 固定為 `999`、model thread 固定為 `8`、managed-local server slot 固定為 `2`、LLM worker 固定為 `2`；match worker 預設為 `10`，`serial` 時為 `1`，
+由 `eagle/execution.py` 與 resolved config 統一管理。CUDA/GPU preflight 必須成功，無 GPU 時明確失敗，不回退 CPU。
 LLM temperature 仍可設定。相同版本的新 checkpoint 保存 stagnation 狀態，resume 可延續相同軌跡。
 
 外部 LLM 可能忽略 seed 或改變模型；GPU kernel、batching、浮點運算、外部 opponent

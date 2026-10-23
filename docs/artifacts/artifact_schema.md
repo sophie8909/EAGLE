@@ -61,10 +61,11 @@ including `survivor_selection: mu_plus_lambda`, `candidate_java_mode`,
 reflection mode/probabilities, and the evaluation matrix. Deterministic mode
 requires `candidate_java_mode: generated_phenotype` and
 `parent_evaluation_mode: reuse_cached`. `evaluation.match_workers`, model
-`gpu_layers`, `threads`, and `parallel` are rejected config keys; fixed runtime
-and worker values are not written into the resolved config. The runtime uses GPU
-layers `999`, eight model threads, two server slots, two LLM workers, and ten
-match workers. `context_size` remains the per-request limit; the server allocates
+`gpu_layers`, `threads`, and `parallel` are rejected config keys. The persisted
+`evaluation.match_execution` is `parallel` by default and may be `serial` for
+one-worker match execution. The runtime uses GPU layers `999`, eight model
+threads, two server slots, two LLM workers, and ten match workers by default;
+serial mode uses one. `context_size` remains the per-request limit; the server allocates
 twice that amount for two slots. `match_timeout_seconds` and
 `match_artifact_mode` remain top-level because they describe process limits and
 evidence retention. Every resolved `evaluation.maps` entry is a `{path,

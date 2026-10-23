@@ -155,7 +155,10 @@ A primary with both local runtime paths is managed; omitting both paths uses
 an externally started primary without lifecycle ownership; a distinct generation server
 is externally started and unmanaged. GPU preflight and full offload checks remain.
 Failure/interruption cancels queued work and drains active producers/workers.
-One candidate match matrix runs at a time, retaining ten match workers. Self-play
+One candidate match matrix runs at a time, using ten match workers by default.
+An explicitly configured `evaluation.match_execution: serial` runs the same
+matrix with one worker to reduce scheduling variance during same-seed audits.
+Self-play
 opponents remain immutable; an actual dependency on this batch's unprepared
 candidates retains a preparation barrier. Parent fitness refresh precedes
 reproduction because parent selection needs those scores. Rewards, survivor
@@ -165,7 +168,11 @@ evaluations. Initialization uniqueness retries retain their canonical order.
 ## 4. Reproducibility
 
 `random_seed` is the EA-wide root seed. Execution always seeds controllable
-randomness; there is no deterministic/non-deterministic mode switch. Legacy
+randomness; there is no general deterministic/non-deterministic mode switch.
+`evaluation.match_execution` defaults to `parallel` and may be set to `serial`
+for ordered, one-worker match execution that reduces scheduling variance. This
+does not control external opponent wall-clock budgets or private RNGs and thus
+does not guarantee bitwise-identical match outputs. Legacy
 `deterministic_mode` keys in saved configurations are ignored and omitted from
 new resolved configurations. Stable task identities and named streams derive
 seeds for candidate initialization/IDs, parent and survivor selection,
@@ -188,9 +195,11 @@ in canonical matrix order, so seed assignment, fitness aggregation, and seeded
 tie-breaking are independent of scheduling. LLM endpoint assignment is likewise
 derived from canonical input index and the persisted endpoint order, not thread
 or completion order. GPU layers (`999`), model threads (`8`), managed-local
-server slots (`2`), LLM workers (`2`), and match workers (`10`) are fixed by
-`eagle/execution.py`. CUDA/GPU preflight is required before managed local server
-startup; unavailable GPU support fails instead of falling back to CPU.
+server slots (`2`), and LLM workers (`2`) are fixed by `eagle/execution.py`;
+match workers remain `10` by default and are reduced to
+`1` by the persisted serial option. CUDA/GPU preflight is required before
+managed local server startup; unavailable GPU support fails instead of falling
+back to CPU.
 Temperatures remain configurable. New generation checkpoints preserve
 stagnation and bounded EA archive state; independent generation streams allow
 same-version resumes to continue the same seeded trajectory. Uncommitted
