@@ -19,8 +19,8 @@ model:
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 max_prompt_chars: 16000
 
-# Each listed seed gets exactly three independent replicate runs: 8, 8, 8, 13, 13, 13.
-runs: 3
+# Each listed seed gets exactly two independent replicate runs: 8, 8, 13, 13.
+runs: 2
 random_seeds: [8, 13]
 generations: 20
 population_size: 10
