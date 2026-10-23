@@ -67,8 +67,9 @@ select survivors.
 
 For self-play, parent and survivor selection maximize `game_performance`.
 Candidates within `1.0` inclusive of the current tier maximum are tied. The
-anchor is not updated while forming a tier. A second parent prefers maximum
-semantic distance from the first, and a survivor boundary uses seeded
+anchor is not updated while forming a tier. A second parent prefers minimum
+compatible semantic distance from the first, excluding the first parent when
+another top-tier member exists (a singleton tier reuses its member). A survivor boundary uses seeded
 farthest-first selection over compatible nine-probe signatures. Semantic
 evidence cannot promote a candidate from a lower fitness tier.
 

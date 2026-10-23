@@ -1,5 +1,23 @@
 # Test contracts
 
+## Nearest-behavior mating (2026-10-23)
+
+`tests/test_single_objective_selection.py` covers nearest distinct mates,
+positive and zero distances, inclusive fitness-tier boundaries, seeded
+order-independent distance ties, singleton reuse, missing/incompatible
+signature fallback, and unchanged farthest-first survivor selection.
+The focused WSL batch passes all 60 tests across that module,
+`test_framework_slots`, `test_framework_slots_candidate_config`,
+`test_framework_slots_integration`, `test_framework_coach_integration`, and
+`test_offspring_concurrency`.
+
+The new `1023_rich_framework_local_nearest_20x10_seed8_13_1run` YAML passes
+`ExperimentConfig.validate()`. An assert-based check confirms its six-run seed
+schedule (8–13), population 10, 20 generations, local mutation, and disabled
+Commentator. Building its production search runtime with LLM preflight and
+prompt-backend creation patched to fail succeeds with an empty mutation-LLM
+mapping. No full suite or evolutionary experiment was run.
+
 ## Shared continuation and index isolation (2026-10-22)
 
 `tests/test_search_loop.py` checks state propagation across generations,

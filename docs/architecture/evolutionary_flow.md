@@ -94,6 +94,12 @@ are specified in their own sections.
 The shared generation implementation is in `eagle/evolution/generation.py` and `eagle/evolution/offspring.py`; selection is in `eagle/operators/selection.py`, with evaluation in
 `eagle/evaluation/pipeline.py`.
 
+Self-play mating chooses parent B with minimum compatible behavioral distance
+to parent A within the highest fitness tier. It excludes parent A when another
+tier member exists; a singleton tier reuses its member. Missing/incompatible
+signatures use seeded fallback. Survivor boundary selection retains max-min
+semantic diversity. Fixed-roster lexicase selection is unchanged.
+
 ## Bounded execution
 
 Independent source gates run in two bounded workers and release plans in canonical

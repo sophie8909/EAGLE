@@ -1,5 +1,13 @@
 # Architecture gaps
 
+## Nearest-behavior mating decision (2026-10-23)
+
+The user changed self-play mating to minimum compatible behavioral distance
+within the highest fitness tier. Parent A is excluded when another tier member
+exists; a singleton tier reuses its member. Seeded ties and signature fallback
+remain, while survivor max-min diversity is unchanged. This decision is
+implemented and covered by the single-objective selection contracts.
+
 ## Deterministic DSL compiler decision (2026-10-14)
 
 | ID | Gap | Decision | Verification | Status |

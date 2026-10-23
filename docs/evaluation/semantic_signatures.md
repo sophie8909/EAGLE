@@ -1,8 +1,8 @@
 # Semantic signatures
 
-Self-play uses deterministic full-agent behavior signatures only to preserve
-behavioral diversity among candidates whose Game Performance is effectively
-equal. They are not a second objective.
+Self-play uses deterministic full-agent behavior signatures to choose similar
+mates and preserve survivor diversity among candidates whose Game Performance
+is effectively equal. They are not a second objective.
 
 ## Dataset
 
@@ -40,9 +40,11 @@ not fabricate signatures.
 ## Selection and analysis
 
 Self-play forms non-chained scalar-fitness tiers using the tier maximum as the
-anchor. A difference of at most `1.0` is a tie. Compatible semantics choose a
-different second parent and use seeded max-min selection when a survivor tier
-crosses the population boundary. Missing/incompatible evidence is fallback.
+anchor. A difference of at most `1.0` is a tie. Parent B minimizes compatible
+distance to parent A within the top tier, excluding parent A when another tier
+member exists; a singleton tier reuses its member. Distance ties use seeded
+choice in candidate-ID order. Survivor boundary cuts retain seeded max-min
+selection. Missing/incompatible evidence is fallback.
 
 `python -m eagle analyze --run-dir <run> --semantics` reads artifacts only and
 writes `semantic_candidates.csv`, `semantic_probe_signatures.csv`,

@@ -57,7 +57,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
 
         self.assertEqual(selected_ids, {"maximum", "boundary"})
 
-    def test_parent_reference_prefers_maximum_compatible_distance(self) -> None:
+    def test_parent_reference_prefers_nearest_distinct_compatible_candidate(self) -> None:
         reference = candidate("reference", 10.0, ("a", "a", "a"))
         population = [
             reference,
@@ -73,7 +73,79 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
             semantic_reference=reference,
         )
 
-        self.assertEqual(chosen.id, "different")
+        self.assertEqual(chosen.id, "same")
+
+    def test_parent_reference_prefers_minimum_positive_distance(self) -> None:
+        reference = candidate("reference", 10.0, ("a", "a", "a"))
+        population = [
+            reference,
+            candidate("near", 9.0, ("a", "b", "a")),
+            candidate("far", 10.0, ("b", "b", "b")),
+            candidate("outside-tier", 8.999999, ("a", "a", "a")),
+            candidate("incompatible", 10.0, ("a", "a", "a"), dataset_id="other"),
+        ]
+
+        chosen = select_parent(
+            population,
+            random.Random(7),
+            selection_mode=GAME_PERFORMANCE_SELECTION,
+            semantic_reference=reference,
+        )
+
+        self.assertEqual(chosen.id, "near")
+
+    def test_parent_reference_nearest_ties_are_seeded_and_order_independent(self) -> None:
+        reference = candidate("reference", 10.0, ("a", "a", "a"))
+        population = [
+            reference,
+            candidate("near-a", 10.0, ("a", "b", "a")),
+            candidate("near-b", 10.0, ("b", "a", "a")),
+            candidate("far", 10.0, ("b", "b", "b")),
+        ]
+        selected_ids = set()
+        for seed in range(20):
+            chosen = select_parent(
+                population,
+                random.Random(seed),
+                selection_mode=GAME_PERFORMANCE_SELECTION,
+                semantic_reference=reference,
+            )
+            reversed_choice = select_parent(
+                list(reversed(population)),
+                random.Random(seed),
+                selection_mode=GAME_PERFORMANCE_SELECTION,
+                semantic_reference=reference,
+            )
+            self.assertEqual(chosen.id, reversed_choice.id)
+            selected_ids.add(chosen.id)
+        self.assertEqual(selected_ids, {"near-a", "near-b"})
+
+    def test_parent_reference_reuses_only_member_of_top_tier(self) -> None:
+        reference = candidate("reference", 10.0, ("a", "a", "a"))
+        for population in ([reference], [reference, candidate("lower", 8.0, ("a", "a", "a"))]):
+            with self.subTest(size=len(population)):
+                chosen = select_parent(
+                    population,
+                    random.Random(7),
+                    selection_mode=GAME_PERFORMANCE_SELECTION,
+                    semantic_reference=reference,
+                )
+                self.assertEqual(chosen.id, reference.id)
+
+    def test_parent_reference_without_comparable_evidence_excludes_itself(self) -> None:
+        reference = candidate("reference", 10.0, ("a", "a", "a"))
+        for alternative in (
+            candidate("incompatible", 10.0, ("a", "a", "a"), dataset_id="other"),
+            candidate("missing", 10.0, None, status="unavailable"),
+        ):
+            with self.subTest(candidate=alternative.id):
+                chosen = select_parent(
+                    [reference, alternative],
+                    random.Random(7),
+                    selection_mode=GAME_PERFORMANCE_SELECTION,
+                    semantic_reference=reference,
+                )
+                self.assertEqual(chosen.id, alternative.id)
 
     def test_parent_missing_or_incompatible_signature_is_fallback(self) -> None:
         reference = candidate("reference", 5.0, ("a", "a", "a"))

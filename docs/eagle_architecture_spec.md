@@ -550,6 +550,10 @@ Scores within `fitness_tie_tolerance` (default and canonical value `1.0`,
 inclusive) of a tier's maximum are equal for selection. Tiers use that maximum
 as a fixed anchor, so pairwise chaining cannot merge a worse candidate. Missing
 or incompatible signatures are fallback evidence, never maximally novel.
+Within the top tier, parent B minimizes compatible semantic distance to parent A,
+excluding parent A when another tier member exists. A singleton tier reuses its
+only member. Equal distances use seeded choice in candidate-ID order. Survivor
+boundary selection retains seeded farthest-first max-min diversity.
 
 Code Quality is a diagnostic and mutation-evidence signal, not a selection
 objective. Successful Code Quality is:

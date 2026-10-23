@@ -417,7 +417,8 @@ identity 才重用 cached fitness；runtime 或 map 資產變更時必須建立�
 
 Self-play 以每個 tier 的最高
 `game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
-同級內 parent B 優先選擇與 parent A 語意距離最大者；survivor boundary 使用 seeded
+最高適應度同級內 parent B 優先選擇與 parent A 語意距離最小的不同個體；同級只有
+parent A 時沿用它，距離相同時以 candidate ID 排序後做 seeded 選擇。survivor boundary 使用 seeded
 max-min 語意多樣性。Self-play 目前要求 `reflection_operator_mode: static` 與
 `parent_evaluation_mode: reuse_cached`。Context 取樣、resume 與舊 checkpoint 的相容性以
 前述 `tournament-v1` 規範為準。

@@ -1,5 +1,16 @@
 # Current implementation status
 
+## Nearest-behavior mating (2026-10-23)
+
+Self-play parent B now minimizes compatible behavioral distance within the top
+fitness tier, excluding parent A when another tier member exists. A singleton
+tier reuses its member; seeded ties and missing-signature fallback remain.
+Survivor boundary selection still maximizes diversity. The new
+`1023_rich_framework_local_nearest_20x10_seed8_13_1run` experiment uses six seeds
+(8–13), population 10, 20 generations, the frozen local framework, crossover
+0.75 and local mutation 1.0, with no Coach/Commentator requests. Validation is
+recorded in the [test contracts](../testing/test_contracts.md).
+
 ## Shared continuation and index ownership (2026-10-22)
 
 Fresh and resumed searches delegate generation iteration, evolving state,

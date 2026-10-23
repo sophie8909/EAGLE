@@ -51,8 +51,9 @@ def select_parent(
 
     Scalar selection considers only the top non-chained Game Performance tier.
     A second-parent request may supply the first parent as a semantic reference;
-    complete compatible action signatures then break the fitness tie by maximum
-    distance. Missing or incompatible signatures remain fallback candidates.
+    complete compatible action signatures then break the fitness tie by minimum
+    distance, excluding that parent when another member of the tier exists.
+    Missing or incompatible signatures remain fallback candidates.
     """
 
     if selection_mode == LEXICASE_SELECTION:
@@ -63,8 +64,10 @@ def select_parent(
         raise ValueError("Cannot select from an empty population.")
 
     tier = _top_score_tier(population, tolerance=fitness_tolerance)
+    if semantic_reference is not None:
+        tier = [candidate for candidate in tier if candidate.id != semantic_reference.id] or tier
     references = [] if semantic_reference is None else [semantic_reference]
-    return _choose_semantically_novel(tier, references, rng)
+    return _choose_by_semantic_distance(tier, references, rng, prefer_nearest=True)
 
 
 def select_next_generation(
@@ -232,7 +235,7 @@ def _semantic_subset(
     chosen: list[Candidate] = []
     remaining = list(candidates)
     while len(chosen) < count:
-        candidate = _choose_semantically_novel(
+        candidate = _choose_by_semantic_distance(
             remaining,
             [*references, *chosen],
             rng,
@@ -242,12 +245,14 @@ def _semantic_subset(
     return chosen
 
 
-def _choose_semantically_novel(
+def _choose_by_semantic_distance(
     candidates: list[Candidate],
     references: list[Candidate],
     rng: random.Random,
+    *,
+    prefer_nearest: bool = False,
 ) -> Candidate:
-    """Choose maximum min-distance, falling back when comparison is unavailable."""
+    """Choose nearest mates or max-min survivors, with seeded fallback."""
 
     if not candidates:
         raise ValueError("Cannot select from an empty candidate tier.")
@@ -272,12 +277,13 @@ def _choose_semantically_novel(
             scored.append((candidate, min(distances)))
 
     if scored:
-        best_distance = max(distance for _, distance in scored)
+        optimum = min if prefer_nearest else max
+        best_distance = optimum(distance for _, distance in scored)
         best = [candidate for candidate, distance in scored if distance == best_distance]
         return rng.choice(best)
 
-    # With no comparable reference, seed farthest-first selection from a
-    # complete summary. Missing/incompatible summaries are fallback only.
+    # With no comparable reference, seed selection from a complete summary.
+    # Missing/incompatible summaries are fallback only.
     complete = [candidate for candidate in candidates if _semantic_summary(candidate) is not None]
     return rng.choice(complete or candidates)
 
