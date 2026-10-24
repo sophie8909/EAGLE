@@ -206,17 +206,18 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                 with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                     invalid.validate()
 
-    def test_reflection_experiment_uses_gpt_bootstrap_and_local_qwen(self) -> None:
+    def test_reflection_experiment_uses_fixed_gpt_framework_and_local_qwen(self) -> None:
         config = ExperimentConfig.from_file(
             Path("configs/experiments/1024_rich_framework_reflection_20x10_seed8_13_1run")
             / "qwen3_5_9b_rich_framework_reflection_20x10_seed8_13_1run.yaml"
         )
         config.validate()
         self.assertEqual(config.framework_evolution_mode, "reflection")
-        self.assertEqual(config.framework_bootstrap_backend, "groq")
-        self.assertEqual(config.framework_model, "openai/gpt-oss-120b")
-        self.assertIsNone(config.framework_bundle_path)
-        self.assertTrue(config.framework_design_brief)
+        self.assertEqual(
+            config.framework_bundle_path,
+            Path("configs/framework_bundles/fixed_worker_combat/bundle.json").resolve(),
+        )
+        self.assertIsNone(config.framework_design_brief)
         self.assertEqual(config.model.name, "qwen3_5_9b")
         self.assertEqual(config.self_play_refresh_interval, 5)
         self.assertEqual(config.random_seeds, (8, 9, 10, 11, 12, 13))
