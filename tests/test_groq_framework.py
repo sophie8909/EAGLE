@@ -644,6 +644,28 @@ class GroqFrameworkTests(unittest.TestCase):
                 8_000,
             )
 
+    def test_groq_caps_experiment_wide_output_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            return_value=_Response(_provider_response()),
+        ) as urlopen:
+            generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_output_tokens=12_288,
+                max_attempts=1,
+                request_interval_seconds=0,
+            )
+
+        payload = json.loads(urlopen.call_args.args[0].data)
+        self.assertEqual(payload["max_completion_tokens"], DEFAULT_MAX_OUTPUT_TOKENS)
+        self.assertLessEqual(
+            payload["max_completion_tokens"] + GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE,
+            8_000,
+        )
+
     def test_transient_429_retries_then_succeeds(self) -> None:
         rate_limited = urllib.error.HTTPError(
             "https://api.groq.com/openai/v1/chat/completions", 429,

@@ -52,10 +52,13 @@ GROQ_FREE_TOKENS_PER_MINUTE = 8_000
 GROQ_FREE_TOKENS_PER_DAY = 200_000
 GROQ_RATE_WINDOW_SECONDS = 60.0
 DEFAULT_GROQ_REQUEST_INTERVAL_SECONDS = GROQ_RATE_WINDOW_SECONDS
-# The provider's TPM accounting includes the rendered input prompt.  The
-# current bootstrap prompt uses about 1,442 tokens, so reserve 1,600 tokens
-# and keep the default request below Groq's 8,000-token entry-tier ceiling.
-GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE = 1_600
+# The provider's TPM accounting includes the rendered input prompt.  Keep a
+# wider reserve than the current prompt's observed size because retry prompts
+# append bounded validation feedback.  The experiment's shared
+# ``llm.max_tokens`` value may be larger for the local Qwen runtime, so the
+# Groq bootstrap must enforce this provider-specific ceiling at the request
+# boundary as well as in its default.
+GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE = 2_000
 DEFAULT_MAX_OUTPUT_TOKENS = (
     GROQ_FREE_TOKENS_PER_MINUTE - GROQ_FRAMEWORK_INPUT_TOKEN_RESERVE
 )
@@ -313,6 +316,11 @@ def generate_framework_bundle(
         api_root=api_root,
         require_https=require_https,
     )
+    if provider == "groq":
+        # Groq's entry-tier TPM limit applies to the input prompt and the
+        # requested completion budget.  Do not let a larger experiment-wide
+        # local-model budget produce a request that Groq rejects with HTTP 413.
+        max_output_tokens = min(max_output_tokens, DEFAULT_MAX_OUTPUT_TOKENS)
     api_key = _load_api_key(provider, require_api_key=require_api_key)
     _prepare_output_directory(target)
 
