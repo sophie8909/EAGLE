@@ -218,8 +218,15 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    first Groq request uses the `eagle_framework` JSON Schema. If Groq returns
    `json_validate_failed`, EAGLE retains that raw response and performs a
    bounded retry in JSON Object Mode; local bundle validation remains
-   authoritative. On failure, attempt artifacts and a failed manifest remain
-   with the pending config. The failed run cannot resume until a valid frozen
+   authoritative. Bootstrap also validates the generated Java envelope before
+   publication: it must use `ai.generated.CandidateAgent extends
+   AbstractionLayerAI`, both `CandidateAgent(UnitTypeTable)` and
+   `CandidateAgent(UnitTypeTable, AStarPathFinding)` constructors, and the
+   `getAction(int, GameState)`, `reset()`, and `clone()` lifecycle signatures.
+   Invalid templates remain raw attempt evidence and consume the bounded retry
+   budget; they are never frozen into a run. On failure, attempt artifacts and a
+   failed manifest remain with the pending config. The failed run cannot resume
+   until a valid frozen
    bundle exists; the unsuccessful replicate is not added to the folder-batch
    index, so a folder rerun can retry the missing slot.
 3. EAGLE validates and normalizes one `eagle-framework-bundle-v1` bundle. The

@@ -22,8 +22,15 @@ additional semantic requirements:
 - framework_id is a lowercase slug containing only letters, digits,
   underscores, or hyphens, and starts with a letter.
 - java_template is one complete compilable-shape ai.generated.CandidateAgent
-  source file. It declares `public final class CandidateAgent extends
-  AbstractionLayerAI`, the required constructors, getAction, reset, and clone.
+  source file. It must import and use the vendored MicroRTS API and declare
+  exactly `public final class CandidateAgent extends AbstractionLayerAI`.
+  It must include both public constructors with these exact parameter types:
+  `CandidateAgent(UnitTypeTable utt)` and
+  `CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding)`.
+  It must also declare `public PlayerAction getAction(int player, GameState gs)`,
+  `public void reset()`, and `public AI clone()`; do not use a no-argument
+  constructor, a three-argument getAction, UnitAction as the return type, or
+  the alternate `rts.AI.AbstractionLayerAI` API.
 - java_template contains exactly one ordered
   `// EAGLE_AGENT_STRATEGY_START` / `// EAGLE_AGENT_STRATEGY_END` pair.
 - Every declared slot appears exactly once inside that strategy region as the

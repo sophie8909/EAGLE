@@ -657,6 +657,32 @@ def _validate_generated_java_template(bundle: FrameworkBundle) -> None:
             "java_template must define public final CandidateAgent extending "
             "AbstractionLayerAI."
         )
+    constructor_one = re.search(
+        r"\bpublic\s+CandidateAgent\s*\(\s*UnitTypeTable\s+\w+\s*\)",
+        source,
+    )
+    constructor_two = re.search(
+        r"\bpublic\s+CandidateAgent\s*\(\s*UnitTypeTable\s+\w+\s*,\s*"
+        r"AStarPathFinding\s+\w+\s*\)",
+        source,
+    )
+    if constructor_one is None or constructor_two is None:
+        raise ValueError(
+            "java_template must contain both required constructors: "
+            "CandidateAgent(UnitTypeTable) and "
+            "CandidateAgent(UnitTypeTable, AStarPathFinding)."
+        )
+    required_methods = (
+        r"\bpublic\s+PlayerAction\s+getAction\s*\(\s*int\s+\w+\s*,\s*"
+        r"GameState\s+\w+\s*\)",
+        r"\bpublic\s+void\s+reset\s*\(\s*\)",
+        r"\bpublic\s+AI\s+clone\s*\(\s*\)",
+    )
+    if not all(re.search(pattern, source) for pattern in required_methods):
+        raise ValueError(
+            "java_template must declare public getAction(int, GameState), "
+            "reset(), and clone() lifecycle methods."
+        )
     strategy_start = "// EAGLE_AGENT_STRATEGY_START"
     strategy_end = "// EAGLE_AGENT_STRATEGY_END"
     if source.count(strategy_start) != 1 or source.count(strategy_end) != 1:

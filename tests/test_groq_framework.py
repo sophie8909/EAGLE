@@ -50,7 +50,18 @@ def _bundle() -> dict[str, object]:
         "schema_version": FRAMEWORK_SCHEMA_VERSION,
         "framework_id": "micro_control_1",
         "java_template": """package ai.generated;
+import ai.abstraction.pathfinding.AStarPathFinding;
+import ai.core.AI;
+import ai.core.ParameterSpecification;
+import rts.GameState;
+import rts.PlayerAction;
+import rts.units.UnitTypeTable;
 public final class CandidateAgent extends AbstractionLayerAI {
+    public CandidateAgent(UnitTypeTable utt) { this(utt, new AStarPathFinding()); }
+    public CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding) { super(pathFinding); }
+    public PlayerAction getAction(int player, GameState gs) { return null; }
+    public void reset() { }
+    public AI clone() { return new CandidateAgent(null); }
     // EAGLE_AGENT_STRATEGY_START
     private static final int WORKER_TARGET = {{EAGLE_SLOT:worker_target}};
     private double score() { return {{EAGLE_SLOT:score_formula}}; }
@@ -718,6 +729,15 @@ class GroqFrameworkTests(unittest.TestCase):
         slots[0] = {**slots[0], "marker": "{{EAGLE_SLOT:not_worker_target}}"}
         bundle["slots"] = slots
         with self.assertRaisesRegex(ValueError, "canonical marker"):
+            parse_groq_framework_response(_provider_response(bundle))
+
+    def test_bundle_validation_rejects_missing_runtime_contract(self) -> None:
+        bundle = _bundle()
+        bundle["java_template"] = bundle["java_template"].replace(
+            "    public CandidateAgent(UnitTypeTable utt) { this(utt, new AStarPathFinding()); }\n",
+            "",
+        )
+        with self.assertRaisesRegex(ValueError, "both required constructors"):
             parse_groq_framework_response(_provider_response(bundle))
 
     def test_missing_api_key_fails_without_creating_output(self) -> None:

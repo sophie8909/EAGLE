@@ -348,7 +348,8 @@ persists credential-free requests and raw bytes before parsing. A provider
 request uses JSON Object Mode and still passes local exact validation. Tests
 also cover failed attempts, bounded provider diagnostics and retry
 classification, exact bundle/report/marker validation, normalized bundle
-selection, and that provider credentials (`GROQ_API_KEY` and `api_key/mistral`)
+selection, early rejection of invalid CandidateAgent constructors/lifecycle
+signatures, and that provider credentials (`GROQ_API_KEY` and `api_key/mistral`)
 are never persisted. Provider schema
 enforcement is best-effort; local exact validation, CLI dispatch, and
 non-overwrite behavior are contracts.
