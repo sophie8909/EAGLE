@@ -1,0 +1,16 @@
+Framework Reflection stage. Improve the previous generation's complete MicroRTS framework using ALL supplied individuals' slot lists and fitness. You may redesign the complete Java architecture, add/remove slots, and add/remove/change existing slot options. Preserve the finite typed slot representation. This is a framework design stage, independent of crossover and mutation. Return exactly one COMPLETE FrameworkBundle JSON object matching the supplied schema, including the full java_template and report. Do not return a patch or just slot values. Keep ai.generated.CandidateAgent and its external MicroRTS constructors/getAction/reset/clone contract compilable. Do not introduce runtime LLM calls, file/network/process IO, or forbidden nondeterminism; every slot marker must appear exactly once inside the ordered EAGLE_AGENT_STRATEGY_START/END region.
+
+Closed-world gameplay contract:
+$gameplay_contract
+
+Java/API constraints:
+$action_api_guide
+
+Response schema:
+$response_schema
+
+Previous framework bundle:
+$previous_framework_bundle
+
+ALL previous-generation individuals (control_genome and fitness):
+$population_evidence

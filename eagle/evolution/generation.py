@@ -18,6 +18,7 @@ from eagle.evolution.offspring import (
     materialize_code_reflection,
     iter_offspring_plans,
 )
+from eagle.evolution.framework_reflection import reflect_population_framework
 from eagle.evolution.parent_refresh import (
     build_parent_evaluation_replicas,
     build_self_play_fitness_refresh_replicas,
@@ -57,6 +58,7 @@ class GenerationStepResult:
     diversity: dict[str, Any]
     aos_record: dict[str, Any]
     stop_reason: str | None
+    config: ExperimentConfig | None = None
 
 
 def run_generation_step(
@@ -108,8 +110,14 @@ def run_generation_step(
             candidates=self_play_opponent_snapshot,
             config=config,
         )
+    framework_replicas = None
+    if snapshot_refreshed and generation > 1 and config.framework_evolution_mode == "reflection":
+        config, framework_replicas = reflect_population_framework(
+            population=source_parents, config=config, run_dir=run_dir,
+            generation=generation, client=shared_client, mock=mock,
+        )
     if snapshot_refreshed or context_migration_required:
-        parent_replicas = build_self_play_fitness_refresh_replicas(
+        parent_replicas = framework_replicas or build_self_play_fitness_refresh_replicas(
             source_parents,
             generation=generation,
             random_seed=config.random_seed,
@@ -240,7 +248,7 @@ def run_generation_step(
         next_population,
         previous_archive_niches=archive_before,
     )
-    if parent_replicas:
+    if parent_replicas and framework_replicas is None:
         if snapshot_refreshed or context_migration_required:
             write_self_play_parent_refresh_sidecar(
                 run_dir,
@@ -292,4 +300,5 @@ def run_generation_step(
         diversity=diversity,
         aos_record=aos_record,
         stop_reason=stop_reason,
+        config=config,
     )

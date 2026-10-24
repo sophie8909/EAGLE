@@ -50,7 +50,7 @@ class Candidate:
     java_materialization_mode: str = "llm"
     java_compiler_version: str | None = None
     # ``framework_slots`` candidates evolve only this structured control
-    # genome. The framework bundle remains immutable run input, while each
+    # genome. Each framework version remains immutable run input, while each
     # slot records independent component provenance.
     control_genome: dict[str, Any] = field(default_factory=dict)
     slot_parent_ids: dict[str, str] = field(default_factory=dict)
@@ -83,6 +83,7 @@ class Candidate:
     artifacts: dict[str, str] = field(default_factory=dict)
     timing: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    strategy_description: str = ""
 
     def __post_init__(self) -> None:
         """Require an identity before a candidate can enter any pipeline."""
@@ -92,6 +93,8 @@ class Candidate:
                 "Candidate requires an explicit non-empty id; "
                 "EA factories must derive stable candidate identities."
             )
+        if not isinstance(self.strategy_description, str):
+            raise ValueError("Candidate strategy_description must be a string.")
         if self.java_materialization_mode == "framework_slots":
             if self.candidate_java_mode != "generated_phenotype":
                 raise ValueError(
@@ -235,6 +238,7 @@ class Candidate:
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
             "strategy_prompt": self.strategy_prompt,
+            "strategy_description": self.strategy_description,
             "generation_prompt": self.generation_prompt,
             "generated_java": self.generated_java,
             "generated_java_path": self.generated_java_path,
@@ -303,6 +307,7 @@ class Candidate:
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             **self.materialization_to_json_dict(),
             "candidate_id": self.id,
+            "strategy_description": self.strategy_description,
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
             "operator": self.operator,

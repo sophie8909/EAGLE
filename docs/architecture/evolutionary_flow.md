@@ -1,5 +1,17 @@
 # EAGLE evolutionary flow
 
+In framework `reflection` self-play, completed interval boundaries trigger whole
+framework reflection alongside opponent refresh (interval 5: G6 uses G5, then
+G11 uses G10). G1 only initializes the opponent snapshot. Every preceding
+survivor contributes its description, complete genome, and fitness. A separate
+strategy-reflection stage revises descriptions before a following batch Coach
+fills complete genomes from them under the new framework. Generation zero uses
+ten distinct authored descriptions, including WorkerRush, and Coach fills its
+initial genomes. Local offspring inherit parent A's description.
+Accepted versions create fresh parent replicas and reevaluate them under the new opponent context before
+ordinary local mating/mutation. Failed reflection keeps the old framework.
+The [framework contract](framework_slots.md) owns the precise activation rules.
+
 This document describes the active implementation. Fixed-roster evaluation
 uses ten opponent cases. Self-play uses scalar Game Performance plus exact
 behavior signatures only when scalar fitness is tied.

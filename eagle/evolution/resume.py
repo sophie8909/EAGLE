@@ -165,6 +165,9 @@ def _resume_search_impl(
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
+    from eagle.framework_versions import config_for_population
+
+    config = config_for_population(config, run_dir, population)
     for candidate in population:
         if candidate.java_materialization_mode != config.java_materialization_mode:
             raise ValueError("Resume candidate materialization mode does not match the run.")

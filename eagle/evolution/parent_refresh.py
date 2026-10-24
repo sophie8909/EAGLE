@@ -44,6 +44,7 @@ def build_parent_evaluation_replicas(
             slot_parent_ids=dict(parent.slot_parent_ids),
             framework_bundle_sha256=parent.framework_bundle_sha256,
             strategy_prompt=parent.strategy_prompt,
+            strategy_description=parent.strategy_description,
             generation_prompt=parent.generation_prompt,
             inherited_java=parent.inherited_java,
             java_parent_id=parent.java_parent_id,
@@ -91,17 +92,22 @@ def build_self_play_fitness_refresh_replicas(
             java_materialization_mode=parent.java_materialization_mode,
             java_compiler_version=parent.java_compiler_version,
             control_genome=dict(parent.control_genome),
-            slot_parent_ids=dict(parent.slot_parent_ids),
+            slot_parent_ids=(
+                {slot_id: parent.id for slot_id in parent.control_genome}
+                if parent.java_materialization_mode == "framework_slots"
+                else dict(parent.slot_parent_ids)
+            ),
             framework_bundle_sha256=parent.framework_bundle_sha256,
             strategy_prompt=parent.strategy_prompt,
+            strategy_description=parent.strategy_description,
             generation_prompt=parent.generation_prompt,
             inherited_java=parent.inherited_java,
-            java_parent_id=parent.id,
+            java_parent_id=None if parent.java_materialization_mode == "framework_slots" else parent.id,
             generated_java=parent.generated_java,
             operator="self_play_fitness_refresh",
             mutation_type=None,
-            strategy_parent_id=parent.id,
-            generation_prompt_parent_id=parent.id,
+            strategy_parent_id=None if parent.java_materialization_mode == "framework_slots" else parent.id,
+            generation_prompt_parent_id=None if parent.java_materialization_mode == "framework_slots" else parent.id,
             source_candidate_ids=(parent.id,),
             # The refresh reuses byte-identical Java and the immutable probe
             # suite, so its semantic evidence remains valid and cacheable.

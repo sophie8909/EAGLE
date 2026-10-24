@@ -101,7 +101,7 @@ Both paths publish the validated exact bytes as run-owned
 The manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
 `framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable.
 Resume validates its exact bytes, compares design brief, bootstrap backend/model, and
-evolution mode, and never regenerates a framework. Failed bootstrap preserves
+evolution mode, and never repeats initial bootstrap. Failed bootstrap preserves
 attempts and a failed manifest; pending config cannot resume without a usable
 frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
 The resolved `framework.evolution_mode` defaults to `local` and must match on
@@ -111,8 +111,51 @@ and recorded as manifest field
 `framework_coach_offspring_probability`. A missing field in an older manifest
 means `null`, preserving legacy Coach behavior. `null` is the default; numeric
 values are in the inclusive range `0.0`–`1.0`. A numeric value requires
-`framework.evolution_mode: llm_coach`; config validation rejects it in `local`
-mode.
+`framework.evolution_mode: llm_coach`; config validation rejects it in the other
+modes.
+
+In `reflection`, additional immutable bundles live under
+`framework/versions/<sha256>/bundle.json`. The initial root bundle/config and
+manifest identity remain unchanged. Completed generation snapshots select the
+active version; resume validates that version and ignores uncommitted attempt
+files. Each accepted version has `reflection.json`
+(`eagle-framework-reflection-version-v1`) with its parent/new hashes, generation,
+accepted status, and reflection artifact reference.
+
+Reflection invocations live under
+`framework/reflections/generation_<nnnn>/invocation_<nnn>/`, retaining previous
+bundle, complete survivor-genome/fitness evidence, every request/raw response,
+parse/repair result, compilation probes, and final outcome. A replay uses a fresh
+invocation, preserving interrupted evidence. Migration evidence
+(`eagle-framework-migration-v1`) records parent/replica genomes, source
+`framework_coach`, and removed/changed slot IDs; it has no default migration.
+Coach attempts live at `coach/attempt_<nnn>/` with `request.txt`,
+`response_raw.txt`, and `result.json`. The response schema
+`eagle-framework-coach-migration-v1` pins the new exact-byte bundle hash and
+contains complete new genomes for exactly all prior source IDs. Coach errors
+reject the outer framework proposal and share its repair budget. Source candidate
+artifacts remain immutable. Each candidate
+references the bundle version that rendered its phenotype. Raw responses precede
+parsing; exhaustion records fallback without changing the active version.
+
+Reflection candidates optionally persist `strategy_description` and
+`genotype/strategy_description.txt`; missing descriptions in older snapshots
+remain compatible. Generation-zero descriptions and Coach slot filling retain
+evidence at `initialization/framework_strategy/attempt_<nnn>/`, with
+`request.txt`, `response_raw.txt`, and `result.json`. Filling uses
+`eagle-framework-coach-migration-v1`; malformed production output exhausts at
+most four calls and fails initialization without random/default fallback.
+At a boundary, separate strategy-revision attempts
+live under `strategy_revision/attempt_<nnn>/` in the reflection invocation,
+before the separate `coach/` fill attempts. Evidence retains old and revised
+descriptions using response schema `eagle-framework-strategy-revision-v1`,
+whose complete ID mapping requires nonempty text but permits equal later
+descriptions. Evidence also retains every prior genome/fitness, complete source-ID coverage, and raw
+responses before parsing. Revision/fill/schema/compilation failure shares the
+outer proposal repair budget, and exhaustion keeps old descriptions, genomes,
+and framework together. Local offspring inherit parent A's description.
+Successful transitions persist revised descriptions/genomes even if the bundle
+bytes remain unchanged.
 ## Generation snapshot
 
 `generations/generation_<nnnn>.json` contains:
@@ -218,7 +261,8 @@ with `genotype/control_genome.json` and adds
 `generation/framework_evidence.json` plus, when rendering produced source,
 `generation/rendered_candidate.java`. Candidate/lineage schema versions are
 `eagle-candidate-v8` and `4.0`. The candidate index pins
-`framework_bundle_sha256`, references `../../framework/bundle.json`, and records
+`framework_bundle_sha256`, references `../../framework/bundle.json` for the initial
+bundle or the exact immutable version under `framework/versions/`, and records
 all `slot_parent_ids`; it does not serialize policy/prompt/Java-parent fields.
 For explicit numeric `framework.coach_offspring_probability`, the candidate
 index also records `metadata.framework_reproduction_route` as `coach` or

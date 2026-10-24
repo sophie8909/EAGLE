@@ -775,8 +775,8 @@ persists raw responses before parsing and publishes one strictly validated
 when the selected backend is `groq`; `api_key/mistral` is read only when the
 selected backend is `mistral`.
 Bootstrap is a startup operation, not part of EA;
-`framework.evolution_mode` selects local evolution (the default) or the opt-in
-Coach-assisted selection path described below.
+`framework.evolution_mode` selects local evolution (the default), the opt-in
+Coach-assisted selection path, or self-play framework `reflection` described below.
 The structured bundle has exactly `schema_version`, `framework_id`,
 `java_template`, `slots`, `slot_generation_prompt`, and `report`. Each slot has
 exactly `slot_id`, `kind`, `marker`, `default`, `minimum`, `maximum`, `step`,
@@ -828,10 +828,47 @@ Successfully rendered source continues through unchanged security validation,
 one javac, Integration, semantic probe, objectives, parent-plus-offspring
 selection, and ten-opponent x three-map x three-round x two-side evaluation.
 The bundle, slot domains, template, materializer version, and bundle hash remain
-frozen across both evolution policies; resume also compares the resolved
+frozen in `local` and `llm_coach`; resume also compares the resolved
 `framework.evolution_mode` and effective Coach offspring probability. The
 latter defaults to `null` for older manifests; a numeric value requires
-`llm_coach` and is rejected in `local` mode.
+`llm_coach` and is rejected in the other modes.
+
+With `framework.evolution_mode: reflection`, initial design uses the configured
+bootstrap backend/model, while the local experiment model reflects on the whole
+framework and every preceding survivor's complete slot list and fitness at
+self-play refresh boundaries. For interval 5, G6/G11/G16 use G5/G10/G15 evidence;
+G1 only refreshes the initial opponents, and the terminal generation triggers
+no additional reflection. The model may change the entire architecture, slot
+count, and finite domains/choices while retaining the strict slot bundle and
+CandidateAgent contracts. Mating and mutation use only seeded local operators.
+Generation zero begins with ten distinct authored
+natural-language strategy descriptions, including faithful WorkerRush behavior;
+Coach fills each initial genome following its description. Malformed initial
+filling fails initialization after at most four calls, without random/default
+production fallback. Only initial descriptions must differ; later descriptions
+may converge and selection imposes no description-uniqueness constraint. At refresh, a
+separate batch Qwen strategy reflection first revises all source individuals'
+descriptions from performance, then a separate Coach stage fills their complete
+new-framework genomes following those revised descriptions and using old/new
+frameworks and all prior slots/fitness. It covers exactly every source ID and pins the new
+exact-byte bundle hash. There is no mating/mutation Coach or Commentator call.
+
+The initial reflection proposal plus at most three diagnostic-guided repair
+calls must pass schema validation and Java validation/compilation before
+activation; exhausted attempts retain the preceding active framework. Each
+accepted version is immutable under `framework/versions/<sha256>/bundle.json`.
+Root initial bundle/config identity is preserved; only a completed generation
+snapshot activates a new version for resume. Parent replicas use Coach-selected
+complete genomes, then rerender and reevaluate under the refreshed opponent
+context. There is no automatic default migration. Coach parse/selection/compile
+failure rejects the complete transition and shares the outer framework repair
+budget; exhaustion retains the old framework, descriptions, and population.
+Candidates preserve optional `strategy_description`; local offspring inherit
+parent A's description without an LLM request. Source candidate artifacts
+remain immutable. See [framework slots](architecture/framework_slots.md).
+Successful description/genome transitions are retained even if the proposed
+framework bundle itself is unchanged. Mock initialization retains sampled
+genomes and the authored descriptions without external calls.
 
 `GROQ_API_KEY` and the Mistral key are accepted only from their provider-specific
 credential sources and are never written to prompt, request, config, bootstrap,

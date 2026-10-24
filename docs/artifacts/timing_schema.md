@@ -262,7 +262,7 @@ compiler/materializer version `eagle-framework-slots-v1`, operation
 `framework_slot_assembly`, UTC boundaries, monotonic duration, status, and
 nullable error. Validation, compilation, Integration, semantic probe, and
 matches retain their existing timing owners. `generation_llm` is null with empty
-attempts in both evolution policies. Under `framework.evolution_mode: local`,
+attempts in all framework evolution policies. Under `framework.evolution_mode: local`,
 all reflection streams are null with empty attempts and the run emits no
 candidate-time `llm_request` event.
 
@@ -281,4 +281,11 @@ candidate `reflection_llm` envelope retains the actual role attempts and their
 summed duration so generation LLM aggregates include these calls. These
 calls do not populate `generation_llm`, which remains null with empty attempts
 because no Java Generator runs. Local framework evolution has no LLM attempts or
-request events. Bootstrap timing remains separate from both modes.
+request events. In framework `reflection`, whole-framework requests and repair
+attempts, boundary strategy-revision, and separate batch framework-Coach fill
+calls retain their own run-level
+request/timing evidence and are not candidate mutation or Java-generation
+attempts. Generation-zero description-guided slot filling is initialization
+work; it is separate from boundary strategy revision and subsequent slot filling.
+Mating/mutation Coach and Commentator streams remain empty. Bootstrap timing remains separate
+from framework reflection and candidate work.

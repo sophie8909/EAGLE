@@ -521,6 +521,7 @@ def _iter_framework_slot_offspring(
             java_materialization_mode="framework_slots",
             java_compiler_version=config.java_compiler_version,
             control_genome=genome,
+            strategy_description=parent_a.strategy_description,
             slot_parent_ids=slot_parent_ids,
             framework_bundle_sha256=config.framework_bundle_sha256,
             generation_prompt="",

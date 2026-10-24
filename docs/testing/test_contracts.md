@@ -1,5 +1,39 @@
 # Test contracts
 
+## Periodic framework reflection (2026-10-24)
+
+`test_framework_slots_candidate_config` covers opt-in `reflection` serialization,
+self-play/framework-slot requirements, mandatory local runtime, rejected Coach
+offspring probability, and the new GPT-bootstrap/Qwen-reflection 20x10 seed8–13
+config. All 12 focused tests in that module pass under the project WSL venv.
+
+The reflection integration contract includes G1 exclusion; G6/G11 interval
+boundaries; every prior survivor genome and fitness in the prompt; complete
+bundle schema/domain changes; default/choice/endpoint and Coach-selected genome Java
+probes; initial request plus at most three repairs; fallback; immutable version
+and source candidates; batch Coach old/new framework and all-survivor evidence;
+exact source-ID coverage and new bundle-hash pinning; complete selected genomes
+including every new slot; no automatic default migration; Coach parse/selection/
+compile failure sharing the outer repair budget; whole-transition fallback;
+fresh Coach-filled replicas and reevaluation under refreshed opponents; completed
+snapshot version restoration; and raw-response preservation across interruption.
+Compilation probes cover selected genomes, not the full Cartesian product.
+Mock mode must skip reflection requests. Live GPT/Qwen requests and a full
+evolutionary experiment are separate validation steps.
+
+Strategy-description contracts cover ten distinct initial descriptions with one
+faithful WorkerRush; generation-zero Coach slot filling guided by those
+descriptions; optional candidate round-trip and text artifact; old-snapshot
+compatibility; parent-A description inheritance without mating/mutation LLM
+requests; boundary performance-driven revision before a separate slot-fill call;
+nonempty revised descriptions and exact source-ID coverage; later convergence
+accepted without survivor selection constraints; revised
+description input to filling; and transactional rollback of descriptions,
+genomes, and framework under the shared outer repair budget; unchanged-bundle
+successful description/genome updates; at most four malformed initial-fill
+calls before failure without random/default production fallback; mock sampled
+initial genomes with authored descriptions and zero external calls.
+
 ## Nearest-behavior mating (2026-10-23)
 
 `tests/test_single_objective_selection.py` covers nearest distinct mates,

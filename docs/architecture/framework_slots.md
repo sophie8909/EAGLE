@@ -4,7 +4,9 @@
 bootstrap when no external bundle is configured, then evolves only typed slot
 values. Startup
 validates the generated framework, writes it under the run-owned `framework/`
-directory, and freezes its exact bytes and hash before search. API bootstrap is
+directory, and freezes its exact bytes and hash before search. Opt-in framework
+reflection can activate additional immutable versions at refresh boundaries.
+API bootstrap is
 outside the evolutionary loop; bounded retries belong to startup bootstrap.
 This document is the canonical owner of the framework-bundle, slot-domain, and
 bootstrap boundary. The shared downstream Java and MicroRTS stages remain owned
@@ -19,6 +21,69 @@ crossover, and at-most-one-slot mutation. The opt-in `llm_coach` mode keeps the
 same bundle schema, exact-byte run freeze, active genotype, renderer, and
 materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
+
+`reflection` is a separate opt-in policy requiring self-play. Initial framework
+design uses the configured bootstrap backend/model (the new experiment uses
+Groq `openai/gpt-oss-120b`); local Qwen subsequently reflects on the complete
+active framework and every survivor from the immediately completed generation,
+including each candidate's complete `control_genome` slot list and fitness.
+Generation zero starts from ten distinct natural-language strategy descriptions,
+including one faithful to the vendored WorkerRush implementation. These
+descriptions are authored inputs; one Coach stage fills complete slot genomes
+from each description and the initial framework. Each individual preserves its
+`strategy_description`. Local crossover/mutation inherit parent A's description;
+they make no LLM request and do not claim that inherited prose describes every
+subsequent slot-level variation exactly.
+Distinctness applies only to initialization. Later revisions and survivor
+populations may converge; selection has no description-uniqueness constraint.
+The ten profiles are registered in `prompts/framework_initial_strategies.txt`
+and loaded by `FRAMEWORK_INITIAL_STRATEGIES` in initialization. Malformed
+production initial filling gets at most four calls, then fails initialization;
+it does not silently substitute random or default genomes.
+`coach_offspring_probability` is rejected in this policy.
+
+Reflection occurs with opponent-snapshot refresh after completed evolutionary
+intervals. For interval 5, G1 performs only the ordinary initial opponent
+refresh; G6/G11/G16 reflect on G5/G10/G15 before constructing the next generation.
+No extra reflection runs after the terminal generation. Qwen may change the
+whole Java framework, add/remove slots, change slot domains/choices, and revise
+the architecture, while preserving the strict finite-slot bundle schema and
+CandidateAgent safety/interface contracts.
+
+Each proposed bundle is schema-validated and checked through Java validation and
+compilation with defaults, independent expression choices/numeric endpoints,
+and every Coach-selected transition genome before activation. These probes do not exhaust
+the Cartesian product of slot values. An initial
+reflection call may be followed by at most three diagnostic-guided repair calls.
+Exhaustion retains the preceding active bundle and normal evolution continues.
+An accepted bundle is stored at `framework/versions/<sha256>/bundle.json`;
+the initial `framework/bundle.json` and resolved root config remain immutable.
+Completed generation snapshots identify the active version; interrupted work
+cannot activate a version merely by leaving its files on disk.
+
+For every proposed new framework, a separate batch Qwen strategy revision first
+reflects on performance and returns a complete source-ID-to-description mapping.
+Its descriptions must be nonempty, with complete source-ID coverage; later
+descriptions may coincide. A following, separate Coach
+stage receives the old/new framework descriptions, the revised strategy
+descriptions, and every preceding individual's complete slots and fitness. It
+selects a complete new `control_genome` following each revised description,
+including all new slots. The response must pin the new exact-byte
+bundle hash, cover exactly every source ID, and satisfy every new slot domain.
+There is no automatic retention/default migration. Coach parsing, selection,
+description revision, or compilation failure rejects the whole proposal and sends diagnostics through
+the same outer framework repair budget; there is no nested Coach retry loop.
+Exhaustion keeps the old framework, descriptions, and population together.
+
+At activation, fresh parent replicas use those Coach-selected genomes and are
+rendered and reevaluated against the refreshed opponents before mating and
+survivor selection. Source candidates, their fitness, and their bundle references
+remain unchanged. Resume restores the version referenced by the last completed
+generation and validates its exact-byte hash.
+A successful revision/fill transition can update descriptions and genomes even
+when the proposed framework is unchanged.
+Mock mode retains sampled initial genomes with the distinct authored
+descriptions, skips boundary reflection, and performs no external request.
 
 In `llm_coach`, optional `framework.coach_offspring_probability` selects the
 Coach offspring route before crossover. `null` (the default) preserves legacy
@@ -46,8 +111,9 @@ bundle for reuse. The bootstrap requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
 four distinct choices each, covering economy, production, targeting, combat,
 conditions, and priorities. These are requested design targets, not a guarantee
-of strategic diversity. Once the run starts, bundle bytes, template, slot IDs,
-domains, and expressions are frozen.
+of strategic diversity. Bundle bytes, template, slot IDs, domains, and expressions
+are frozen within each version; `local` and `llm_coach` retain one version for
+the entire run.
 With `llm_coach`, the configured experiment model selects one complete initial
 genome for each generation-zero population slot. Under legacy
 `coach_offspring_probability: null` behavior, an assigned Strategy mutation
@@ -164,7 +230,9 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    file. Otherwise, startup generates the bundle in the run-owned directory.
    Both paths freeze exact bytes and hash before search. Resume reads only that
    frozen bundle, checks its version/hash, compares `design_brief`, bootstrap
-   backend/model, and `evolution_mode`, and never regenerates a framework.
+   backend/model, and `evolution_mode`, and never repeats initial bootstrap.
+   In `reflection`, the last completed generation additionally selects and
+   validates its immutable active version.
 5. In `local`, generation zero samples legal values and later seeded EA
    operators cross over values independently by slot and mutate at most one slot.
    In `llm_coach`, the experiment model selects complete initial genomes.
@@ -269,11 +337,13 @@ it.
 The active genotype is exactly `control_genome`. It maps every declared slot ID
 to one valid domain value and contains no unknown or missing key. Candidate
 snapshots pin `framework_bundle_sha256`; lineage records `slot_parent_ids` for
-every slot. Framework source, report, and prompt are immutable run input, not
+every slot. Framework source, report, and prompt are immutable version input, not
 candidate genes.
 
 In `local`, generation-zero sampling and variation derive independent per-slot
-RNG streams from the experiment seed and stable identities. Uniform crossover
+RNG streams from the experiment seed and stable identities. `reflection` uses
+Coach for description-guided generation-zero genomes and local seeded variation
+afterwards. Uniform crossover
 chooses each slot from one parent and retains exact slot provenance. Mutation
 selects at most one mutable slot and chooses a different legal lattice point or
 expression choice. Equal seed, bundle, parents, generation, and child index must
@@ -296,7 +366,10 @@ Reflection/source gating, Java Generation, and compile-guided repair are all
 disabled. Under `llm_coach`, only initial genome selection and the
 Commentator/Coach Strategy path make candidate-time requests; Prompt Reflection,
 Code Reflection/source gating, Java Generation, source repair, and compile
-repair remain disabled. A render, validation, or compilation failure remains at
+repair remain disabled. `reflection` uses separate description-guided initial
+slot filling and boundary strategy-revision/slot-filling stages, while mating
+and mutation remain local. Whole-framework reflection uses its independent bounded
+repair before version activation. A candidate render, validation, or compilation failure remains at
 its actual stage with hashes and diagnostics; it never falls back to an LLM.
 
 ## Bootstrap artifacts and security
@@ -331,9 +404,9 @@ untrusted generated input until strict schema, Java-envelope, marker, normal
 validation, `javac`, and Integration checks succeed.
 
 During a run, candidate evidence must make the result reconstructible from the
-run-frozen bundle, `control_genome`, materializer version, and hashes. Partial
+candidate-pinned immutable bundle, `control_genome`, materializer version, and hashes. Partial
 materialization evidence survives failure. Resume starts only from an atomic
-generation, reloads the run-owned bundle, verifies its byte hash and version,
+generation, reloads that snapshot's active run-owned bundle, verifies its byte hash and version,
 and rejects external bundle drift rather than silently adopting it.
 
 ## Unchanged downstream semantics

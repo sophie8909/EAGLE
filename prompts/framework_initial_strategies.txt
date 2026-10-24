@@ -1,0 +1,10 @@
+WorkerRush reference: whenever resources permit, the Base trains Workers. If no Base remains, a free Worker rebuilds one when affordable. Reserve one free Worker to harvest the nearest resource and return cargo to the nearest friendly stockpile; if harvesting is impossible it rejoins the fighters. All other Workers and idle combat units immediately attack the nearest enemy by Manhattan distance. Do not construct Barracks or deliberately produce a military army.
+Light timing attack: build an early Barracks, maintain a small harvesting economy, accumulate a coordinated group of Light units, then attack enemy production before expanding.
+Ranged defensive counterattack: protect the Base and harvesters with Ranged units, focus fire on approaching attackers, and counterattack only after surviving the first assault.
+Continuous harassment: use early Workers and inexpensive combat units to disrupt enemy harvesting, avoid expensive buildup, and keep pressure on exposed economic targets.
+Heavy timing attack: secure enough harvesters to fund Heavy production, concentrate a durable army, and launch a coordinated attack once it can overwhelm the nearest defenders.
+Base defense and counterattack: keep the army near the Base and resource line, prioritize enemies threatening Workers, and pursue a counterattack when the defending force has an advantage.
+Economy and expansion: prioritize efficient harvesting and additional resource access, preserve enough defenders to protect the economy, and convert the resource lead into sustained production.
+Anti-rush survival: preserve Workers and the Base against immediate aggression, interrupt production greed when enemies approach, and turn a successful defense into gradual military pressure.
+Mixed army control: combine complementary Light, Heavy, and Ranged units, contest resource routes, and engage only when the local army composition and numbers are favorable.
+Ranged offensive timing: maintain a minimal defensive opening, invest in Ranged production, assemble a focused ranged group, and attack valuable enemy units while avoiding unfavorable close combat.

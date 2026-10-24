@@ -183,6 +183,48 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
         self.assertEqual(config.mutation_rate, 1.0)
         self.assertTrue(config.match_commentator_enabled)
 
+    def test_reflection_requires_self_play_and_uses_runtime_without_coach(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = self.config(self.write_bundle(directory))
+            payload = base.to_mapping()
+            payload.pop("algorithm", None)
+            payload["framework"]["evolution_mode"] = "reflection"
+            payload["evaluation"]["mode"] = "self_play"
+            payload["evaluation"]["semantic_probes"]["enabled"] = True
+            config = ExperimentConfig.from_mapping(payload)
+            config.validate()
+            reloaded = ExperimentConfig.from_mapping(config.to_mapping())
+            reloaded.validate()
+            self.assertEqual(reloaded.framework_evolution_mode, "reflection")
+            self.assertTrue(reloaded.needs_llm_runtime)
+            self.assertIsNone(reloaded.framework_coach_offspring_probability)
+            for invalid, message in (
+                (replace(config, evaluation_mode="fixed_roster"), "evaluation.mode=self_play"),
+                (replace(config, java_materialization_mode="llm"), "framework_slots"),
+                (replace(config, framework_coach_offspring_probability=0.5), "coach_offspring_probability"),
+            ):
+                with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                    invalid.validate()
+
+    def test_reflection_experiment_uses_gpt_bootstrap_and_local_qwen(self) -> None:
+        config = ExperimentConfig.from_file(
+            Path("configs/experiments/1024_rich_framework_reflection_20x10_seed8_13_1run")
+            / "qwen3_5_9b_rich_framework_reflection_20x10_seed8_13_1run.yaml"
+        )
+        config.validate()
+        self.assertEqual(config.framework_evolution_mode, "reflection")
+        self.assertEqual(config.framework_bootstrap_backend, "groq")
+        self.assertEqual(config.framework_model, "openai/gpt-oss-120b")
+        self.assertIsNone(config.framework_bundle_path)
+        self.assertTrue(config.framework_design_brief)
+        self.assertEqual(config.model.name, "qwen3_5_9b")
+        self.assertEqual(config.self_play_refresh_interval, 5)
+        self.assertEqual(config.random_seeds, (8, 9, 10, 11, 12, 13))
+        self.assertEqual(config.generations, 20)
+        self.assertEqual(config.population_size, 10)
+        self.assertFalse(config.match_commentator_enabled)
+        self.assertIsNone(config.framework_coach_offspring_probability)
+
     def test_bundle_is_required_hashed_and_written_to_resolved_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bundle = self.write_bundle(directory, suffix="\n")

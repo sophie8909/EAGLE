@@ -75,3 +75,20 @@ previous genome, selected genome, and Coach evidence. With an explicit numeric
 not contain policy, generation-prompt, or Java-parent fields. Resume verifies the
 slot keys and every referenced parent against the frozen bundle and prior
 generation before reconstruction. The evolution mode is also compared on resume.
+
+Framework `reflection` migration creates a fresh parent replica pinned to the
+accepted immutable bundle version and references its source parent. Migration
+evidence records old/new genomes, source `framework_coach`, changed slots, and
+removed IDs. A separate batch Coach reflection chooses every new slot value;
+no slot is migrated automatically from old values or defaults. Source
+candidate lineage is unchanged. New local offspring use the migrated parents'
+slot provenance under the active version. Resume validates each candidate's
+bundle identity rather than assuming every historical candidate uses the root
+initial bundle.
+
+Optional `strategy_description` is preserved as supporting strategy intent.
+Generation-zero descriptions have no parents; local offspring inherit parent A's
+description, and boundary replicas record their source parent's old description
+and the separately revised one in transition evidence. Older candidates without
+the field remain readable. This adds no local strategy-description mutation or
+LLM request to mating/mutation.

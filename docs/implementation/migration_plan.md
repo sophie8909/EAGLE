@@ -1,5 +1,18 @@
 # Migration plan
 
+## Framework reflection (2026-10-24)
+
+The additive `framework.evolution_mode: reflection` policy leaves existing
+`local`/`llm_coach` runs compatible. Initial run config/bundle identity remains
+immutable; accepted whole-framework revisions gain versioned bundles selected
+by completed generation snapshots. A separate batch Coach reflection fills every
+prior individual's complete new-framework genome following a separate
+performance-driven strategy-description revision, before creating fresh replicas,
+preserving prior candidate and evaluation evidence. Coach failure shares the
+outer repair budget; exhaustion retains old framework/descriptions/population together.
+Existing experiments opt in
+through a new config/run; changing evolution mode during resume is rejected.
+
 ## LLM-mode DSL and pre-crossover source contract (2026-10-11)
 
 The [integration plan](dsl_pre_crossover_reflection_plan.md) migrates policy seeds

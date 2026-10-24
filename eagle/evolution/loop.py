@@ -75,6 +75,7 @@ def continue_search(
             operator_controller=runtime.operator_controller,
         )
         population = step.population
+        config = step.config or config
         self_play_opponent_snapshot = step.self_play_opponent_snapshot
         population_state_signature = step.population_state_signature
         stagnation_count = step.stagnation_count

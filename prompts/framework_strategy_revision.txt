@@ -1,0 +1,14 @@
+ROLE: framework_coach
+Framework Strategy Revision stage. FIRST reflect on EVERY individual's previous natural-language strategy_description using the complete prior population's descriptions, slot lists, and fitness evidence. Revise each individual's strategy for the proposed framework, explaining its intended economy, production, targeting, combat, priorities, and conditions in natural language. Strategies may converge to the same description when supported by performance evidence; assess every individual. Retain useful behaviors supported by fitness and correct weaknesses supported by evidence. A later separate stage will fill slots from these revised descriptions. This is population strategy reflection independent of mating and mutation. Return only the supplied JSON schema with exactly EVERY source candidate_id. Do not return slot values, Java, or framework edits.
+
+Previous framework evidence:
+$previous_framework_bundle
+
+Proposed framework evidence:
+$framework_bundle
+
+ALL previous-generation descriptions, slot lists, and fitness:
+$population_evidence
+
+Response schema:
+$response_schema

@@ -26,6 +26,11 @@ from urllib.parse import urlparse
 from eagle.execution import LLM_WORKERS, current_llm_worker_slot
 
 
+# llama.cpp context includes both prompt and generated output. Keeping ordinary
+# requests below 80K characters leaves room for responses in a 32K-token context.
+DEFAULT_MAX_PROMPT_CHARS = 80_000
+
+
 __all__ = [
     "DEFAULT_MAX_PROMPT_CHARS",
     "GENERIC_JSON_OBJECT_SCHEMA",
@@ -127,6 +132,7 @@ class LLMClient:
         temperature: float | None = None,
         response_schema: dict[str, object] | None = None,
         response_schema_name: str = "eagle_response",
+        max_prompt_chars: int | None = DEFAULT_MAX_PROMPT_CHARS,
         response_schema_selector: Callable[
             [str], tuple[dict[str, object], str] | None
         ] | None = None,
@@ -147,6 +153,7 @@ class LLMClient:
             additional_endpoints=self.additional_endpoints,
             response_schema=response_schema,
             response_schema_name=response_schema_name,
+            max_prompt_chars=max_prompt_chars,
             response_schema_selector=response_schema_selector,
         )
 
@@ -159,14 +166,6 @@ def generate_seeded(backend: Any, prompt: str, seed: int) -> str:
 
 
 # OpenAI-compatible response decoding and prompt bounds
-# llama.cpp context includes both prompt and generated output.  Keeping the
-# request below this bound leaves room for the configured response budget on a
-# 32K context server while still retaining substantially more than the normal
-# EAGLE prompts.  Large raw telemetry remains persisted in run artifacts.
-# The current 32K-token runtime has ample room for the observed ~6.5K-token
-# generator responses when requests are bounded at 80K characters.
-DEFAULT_MAX_PROMPT_CHARS = 80_000
-
 # LM Studio accepts structured JSON output through ``json_schema`` but rejects
 # the older OpenAI ``json_object`` response format. Semantic role validators
 # remain authoritative after transport, so roles without a dedicated schema

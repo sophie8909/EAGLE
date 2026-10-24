@@ -1,0 +1,17 @@
+ROLE: framework_coach
+Framework migration reflection stage. Fill ALL slots of the NEW framework for EVERY source individual using the complete previous generation's slot lists and fitness. This is the population transition after whole-framework redesign, independent of mating and mutation. You may choose fresh values for every slot; do not merely copy old values or fill only changed slots. Return exactly one complete JSON object matching the supplied schema. selections must contain exactly every source candidate_id and a complete new control_genome for each. Every value must belong to the NEW slot domain. Follow EACH individual's supplied strategy_description when selecting its slot values; previous_strategy_description is historical evidence only. The strategy_description is the current intended strategy and must guide economy, production, combat, priorities, and conditions in that individual's complete genome. Do not revise descriptions in this slot-filling stage. Do not edit the framework or return Java.
+
+New exact-byte bundle SHA-256:
+$framework_bundle_sha256
+
+Previous framework strategy/slot evidence:
+$previous_framework_bundle
+
+New framework strategy/slot evidence:
+$framework_bundle
+
+ALL previous-generation individuals and fitness:
+$population_evidence
+
+Response schema:
+$response_schema

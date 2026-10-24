@@ -1,5 +1,13 @@
 # Candidate model
 
+Framework reflection candidates additionally preserve optional natural-language
+`strategy_description`, with old snapshots omitting it remaining readable.
+Generation-zero Coach fills slots from the authored description; boundary Coach
+reflection revises the description before a separate slot-filling stage.
+Local offspring inherit parent A's description. The executable active genotype
+remains `control_genome`; description prose is supporting strategy intent and is
+not rendered as Java or used as an extra local mutation component.
+
 ## Genotype and phenotype modes
 
 In `java_materialization_mode: llm`, active genes are `strategy_prompt` and

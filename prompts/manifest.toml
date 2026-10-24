@@ -138,6 +138,12 @@ role = "reference"
 stages = ["population_initialization"]
 required_variables = []
 
+[prompts.framework_initial_strategies]
+file = "framework_initial_strategies.txt"
+role = "reference"
+stages = ["population_initialization"]
+required_variables = []
+
 [prompts.initial_generation]
 file = "initial_generation.txt"
 role = "seed"
@@ -186,6 +192,24 @@ file = "groq_framework_design.txt"
 role = "generator"
 stages = ["framework_bootstrap"]
 required_variables = ["design_brief", "gameplay_contract", "action_api_guide"]
+
+[prompts.framework_reflection]
+file = "framework_reflection.txt"
+role = "coach"
+stages = ["framework_reflection"]
+required_variables = ["gameplay_contract", "action_api_guide", "response_schema", "previous_framework_bundle", "population_evidence"]
+
+[prompts.framework_coach_migration]
+file = "framework_coach_migration.txt"
+role = "coach"
+stages = ["framework_coach_migration", "population_initialization"]
+required_variables = ["framework_bundle_sha256", "previous_framework_bundle", "framework_bundle", "population_evidence", "response_schema"]
+
+[prompts.framework_strategy_revision]
+file = "framework_strategy_revision.txt"
+role = "coach"
+stages = ["framework_strategy_revision"]
+required_variables = ["previous_framework_bundle", "framework_bundle", "population_evidence", "response_schema"]
 
 [prompts.strategy_dsl_reference]
 file = "strategy_dsl_reference.txt"
