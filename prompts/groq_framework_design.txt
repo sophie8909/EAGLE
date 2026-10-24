@@ -2,9 +2,9 @@ Groq GPT-OSS Framework Design stage.
 
 Design one complete Java MicroRTS CandidateAgent framework whose evolutionary
 variation is restricted to a rich, explicit set of finite typed slots. The framework
-itself is immutable after this bootstrap call. Later evolutionary code may
-replace only the declared slot markers; it must never ask an LLM to regenerate
-the framework.
+is immutable within each version. Crossover and mutation replace only declared
+slot markers. A separately configured periodic reflection stage may redesign
+the complete framework while preserving typed slots and the MicroRTS contract.
 
 User design brief:
 $design_brief

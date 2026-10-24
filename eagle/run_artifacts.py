@@ -729,6 +729,19 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         return value if isinstance(value, dict) else {}
 
     artifact_refs = payload.get("artifacts") or {}
+    strategy_description = payload.get("strategy_description", "")
+    if not isinstance(strategy_description, str):
+        raise ValueError("Candidate strategy_description must be a string.")
+    if strategy_description or "strategy_description" in artifact_refs:
+        description_ref = "genotype/strategy_description.txt"
+        if artifact_refs.get("strategy_description") != description_ref:
+            raise ValueError("Invalid strategy_description artifact reference.")
+        description_path = candidate_dir / description_ref
+        if (
+            not description_path.is_file()
+            or description_path.read_bytes().decode("utf-8") != strategy_description
+        ):
+            raise ValueError("Candidate strategy_description artifact mismatch.")
     failed_source_is_evidence_only = "failed_generation_source" in artifact_refs
     phenotype_path = candidate_dir / "phenotype" / "CandidateAgent.java"
     legacy_generation_path = candidate_dir / "generation" / "normalized_candidate.java"
@@ -792,6 +805,8 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         elif evidence.get("reference_source_sha256") is not None:
             raise ValueError("Ordinary deterministic policy has a reference source hash.")
     elif mode == "framework_slots":
+        from eagle.framework_versions import framework_bundle_artifact
+
         if payload.get("candidate_id") != candidate_id:
             raise ValueError("Framework candidate snapshot identifier mismatch.")
         if payload.get("candidate_schema_version") != FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION:
@@ -803,16 +818,17 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         if payload.get("active_genotype_components") != ["control_genome"]:
             raise ValueError("Invalid framework_slots active genotype components.")
 
+        bundle_artifact = framework_bundle_artifact(run_dir, payload.get("framework_bundle_sha256"))
         expected_refs = {
             "control_genome": "genotype/control_genome.json",
             "framework_evidence": "generation/framework_evidence.json",
-            "framework_bundle": "../../framework/bundle.json",
+            "framework_bundle": f"../../{bundle_artifact}",
         }
         for name, expected in expected_refs.items():
             if artifact_refs.get(name) != expected:
                 raise ValueError(f"Invalid framework_slots artifact reference: {name}")
 
-        bundle_path = run_dir / FRAMEWORK_BUNDLE_ARTIFACT
+        bundle_path = run_dir / bundle_artifact
         if not bundle_path.is_file():
             raise ValueError("Frozen framework bundle is missing.")
         bundle_bytes = bundle_path.read_bytes()
@@ -835,7 +851,7 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
             ("evolution_protocol", FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL),
             ("java_compiler_version", FRAMEWORK_SLOTS_MATERIALIZATION_VERSION),
             ("framework_bundle_version", FRAMEWORK_BUNDLE_SCHEMA_VERSION),
-            ("framework_bundle_sha256", exact_bundle_sha256),
+            ("framework_bundle_sha256", hashlib.sha256((run_dir / FRAMEWORK_BUNDLE_ARTIFACT).read_bytes()).hexdigest()),
             ("framework_bundle_artifact", FRAMEWORK_BUNDLE_ARTIFACT),
         )
         for key, expected in manifest_fences:
@@ -956,6 +972,7 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         id=candidate_id,
         generation=int(payload.get("generation") or 0),
         parent_ids=tuple(payload.get("parent_ids") or ()),
+        strategy_description=strategy_description,
         strategy_prompt=(
             text("genotype/policy_prompt.txt")
             or text("genotype/strategy_prompt.txt")

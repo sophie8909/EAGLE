@@ -39,6 +39,7 @@ class SearchLoopTests(unittest.TestCase):
             self_play_opponent_snapshot=[], population_state_signature="updated",
             stagnation_count=1, error_memory=({"error": "retained"},),
             diversity={}, aos_record={}, stop_reason=None,
+            config=replace(self.config, llm_max_tokens=1234),
         )
         stopped = replace(first, stagnation_count=2, stop_reason="stagnation_2_generations")
         with patch("eagle.evolution.loop.run_generation_step", side_effect=[first, stopped]) as step, \
@@ -48,6 +49,7 @@ class SearchLoopTests(unittest.TestCase):
         self.assertEqual([call.kwargs["generation"] for call in step.call_args_list], [1, 2])
         second = SimpleNamespace(**step.call_args_list[1].kwargs)
         self.assertIs(second.population, first.population)
+        self.assertIs(second.config, first.config)
         self.assertIs(second.self_play_opponent_snapshot, first.self_play_opponent_snapshot)
         self.assertIs(second.error_memory, first.error_memory)
         self.assertEqual(second.population_state_signature, "updated")

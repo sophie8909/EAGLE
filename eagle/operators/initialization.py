@@ -41,6 +41,9 @@ INITIAL_POLICY_VARIANTS = tuple(
     for line in load_prompt("initial_policy_variants").splitlines()
     if line.strip()
 )
+FRAMEWORK_INITIAL_STRATEGIES = tuple(
+    line.strip() for line in load_prompt("framework_initial_strategies").splitlines() if line.strip()
+)
 
 
 class InitialPolicyBackend(Protocol):
@@ -83,6 +86,13 @@ def initialize_population(
             config.framework_bundle_path,
             expected_sha256=config.framework_bundle_sha256,
         )
+        if config.framework_evolution_mode == "reflection" and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
+            raise ValueError("Add distinct framework initial strategies for the requested population size.")
+        if config.framework_evolution_mode == "reflection" and len({
+            " ".join(description.split()).casefold()
+            for description in FRAMEWORK_INITIAL_STRATEGIES[:config.population_size]
+        }) != config.population_size:
+            raise ValueError("Initial framework strategy descriptions must be distinct.")
         population = [
             Candidate(
                 id=derive_candidate_id(
@@ -103,6 +113,10 @@ def initialize_population(
                 slot_parent_ids={},
                 framework_bundle_sha256=config.framework_bundle_sha256,
                 generation_prompt="",
+                strategy_description=(
+                    FRAMEWORK_INITIAL_STRATEGIES[index]
+                    if config.framework_evolution_mode == "reflection" else ""
+                ),
                 operator="seed",
                 metadata={
                     "seed_index": index,

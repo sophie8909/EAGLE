@@ -1,11 +1,11 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-10-21 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-10-24 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
 
-在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 在 fresh startup inline 呼叫 Groq GPT-OSS bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA 或 Coach 輔助的完整 genome 選擇。實際比賽執行時
+在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 在 fresh startup inline 呼叫 Groq GPT-OSS bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA、Coach 輔助的完整 genome 選擇，或獨立的週期性 framework 反思。實際比賽執行時
 不會呼叫 LLM。每個 phenotype 都是一份完整的
 `ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
 runtime LLM policy。
@@ -64,6 +64,45 @@ bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index
 process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，兩者
 都絕不寫入 config 或 artifact。完整契約見
 [framework slots](architecture/framework_slots.md)。
+
+新增 opt-in `framework.evolution_mode: reflection`，要求 self-play；初始 framework
+由 GPT 設計。Gen 0 使用十份不同的自然語言策略描述，其中一份忠實描述 vendored
+WorkerRush，再由本地 Qwen Coach 依每份描述填完整 slots。每個個體保存
+`strategy_description`，一般交配突變不呼叫 LLM，並繼承 parent A 的描述。
+「不同」只要求初始十份描述，之後允許策略收斂，不增加每代 selection 限制。
+初始描述由已登錄的 `prompts/framework_initial_strategies.txt` 提供；production
+初始 slots 填寫格式錯誤最多呼叫四次，仍失敗就停止初始化，不偷換隨機或 default。
+每五代與對手 snapshot 更新一起執行：G1 只初始化對手，G6/G11/G16
+分別使用 G5/G10/G15 的完整 survivor population，每個個體的完整 slot list
+（`control_genome`）與 fitness 都會納入。最後一代結束後不額外反思。
+Qwen 可以增減 slots、修改選項及整個 framework 架構，但必須保留有限 typed-slot
+bundle schema 與 CandidateAgent 安全／介面契約。初次反思失敗後最多再修復三次；
+schema、Java validation 或編譯仍失敗就繼續使用上一版本。
+
+通過的版本寫入 immutable `framework/versions/<sha256>/bundle.json`；初始 root
+bundle/config 不改寫，以完成的 generation snapshot 決定 resume 使用哪個版本。
+每次新 framework 提案先由獨立的 Qwen Coach 策略反思，依上代全部個體的描述、
+slots／fitness 改寫每份自然語言策略，回傳完整來源 ID 對應且非空的描述；允許彼此相同。
+之後另一個獨立 Coach 階段接收新舊 framework 與改寫後描述，
+批次依每份描述為來源個體選出完整的新 `control_genome`，
+包括所有新增 slots；不自動保留舊值或補 default。回應必須涵蓋恰好全部來源 ID，
+並綁定新 bundle exact-byte hash。Coach 解析、選值或編譯失敗，會將診斷送回外層
+framework 修復流程，共用最多三次重試；沒有另一層 Coach 重試。全程失敗就保留舊
+framework、舊描述與舊 population。通過才建立新 replica、render 並與新對手評估，
+原個體及舊 fitness artifact 保留。策略反思與 slots 填寫是分開的呼叫，共用外層
+修復預算。描述另外存入 `genotype/strategy_description.txt`，舊 snapshot 沒有此
+欄位仍可讀取。Coach 在 Gen 0 與 framework 轉換階段選值，不參與交配突變。
+即使 framework bytes 沒有變，成功的描述／genome 更新仍會保留。Gen 0 證據位於
+`initialization/framework_strategy/attempt_NNN/`；邊界描述反思使用
+`strategy_revision/attempt_NNN/` 及 `eagle-framework-strategy-revision-v1`。
+Mock 初始採 sampled genomes 搭配明確描述，不呼叫 API。
+編譯檢查涵蓋 defaults、各 choice／數值端點及 Coach 選出的實際 genomes，並非所有 slot 組合。
+Mock 跳過反思。新設定位於
+`configs/experiments/1024_rich_framework_reflection_20x10_seed8_13_1run/`。
+反思 owner 為 `eagle/evolution/framework_reflection.py`；契約與 artifact／timing
+索引仍由 [framework slots](architecture/framework_slots.md)、
+[artifact schema](artifacts/artifact_schema.md)、[timing schema](artifacts/timing_schema.md)
+與 [test contracts](testing/test_contracts.md) 管理。
 
 Repository 另提供固定初始 framework 範例：
 `configs/framework_coach_mock.yaml` 搭配

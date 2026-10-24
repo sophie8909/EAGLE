@@ -34,6 +34,11 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     candidate_dir = candidates_dir / candidate.id
     genotype_dir = candidate_dir / "genotype"
     genotype_dir.mkdir(parents=True, exist_ok=True)
+    description_path = genotype_dir / "strategy_description.txt"
+    if candidate.strategy_description:
+        description_path.write_bytes(candidate.strategy_description.encode("utf-8"))
+    else:
+        description_path.unlink(missing_ok=True)
     if candidate.java_materialization_mode == "framework_slots":
         (genotype_dir / "control_genome.json").write_text(
             canonical_json(candidate.control_genome) + "\n",
@@ -673,6 +678,8 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "objectives": "evaluation/objectives.json",
         "timing": "timing.json",
     }
+    if candidate.strategy_description:
+        artifact_references["strategy_description"] = "genotype/strategy_description.txt"
     if candidate.java_materialization_mode == "llm" and (candidate.inherited_java or candidate.java_parent_id is not None):
         artifact_references["inherited_java"] = "genotype/inherited_java.java"
     if candidate.java_materialization_mode == "deterministic_dsl":
@@ -682,12 +689,20 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
                                    normalized_policy="generation/normalized_policy.json",
                                    compiler_scaffold="generation/scaffold.java")
     elif candidate.java_materialization_mode == "framework_slots":
+        from eagle.framework_versions import framework_bundle_artifact
+
+        run_dir = candidates_dir.parent
+        bundle_artifact = (
+            framework_bundle_artifact(run_dir, candidate.framework_bundle_sha256)
+            if (run_dir / "manifest.json").is_file()
+            else "framework/bundle.json"
+        )
         artifact_references.pop("policy_prompt", None)
         artifact_references.pop("code_generation_prompt", None)
         artifact_references.update(
             control_genome="genotype/control_genome.json",
             framework_evidence="generation/framework_evidence.json",
-            framework_bundle="../../framework/bundle.json",
+            framework_bundle=f"../../{bundle_artifact}",
         )
     candidate_dir = candidates_dir / candidate.id
     if (candidate_dir / "evaluation" / "semantic_signature.json").is_file():
@@ -733,6 +748,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         **candidate.materialization_to_json_dict(),
         "strategy_policy_format": "eagle-strategy-dsl-v1",
         "candidate_id": candidate.id,
+        "strategy_description": candidate.strategy_description,
         "generation": candidate.generation,
         "parent_ids": list(candidate.parent_ids),
         "operator": candidate.operator,

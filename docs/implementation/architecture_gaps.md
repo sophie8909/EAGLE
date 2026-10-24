@@ -1,5 +1,11 @@
 # Architecture gaps
 
+## Framework reflection decision (2026-10-24)
+
+| ID | Decision | Contract | Status |
+| --- | --- | --- | --- |
+| FWSLOT-03 | Separate whole-framework reflection from candidate evolution | Opt-in `reflection` requires framework slots and self-play; GPT bootstrap, local-Qwen revisions at refresh after completed evolutionary intervals, all preceding survivor descriptions/genomes/fitness, complete finite-slot bundle revisions, initial proposal plus three repairs, compilation-gated immutable versions, fallback, distinct authored initial descriptions with WorkerRush and Coach initialization, separate boundary strategy revision then batch Coach-selected complete genomes for every source individual, parent replicas/reevaluation, checkpoint-driven resume; local mating/mutation only | Resolved; tracked by framework reflection contracts |
+
 ## Nearest-behavior mating decision (2026-10-23)
 
 The user changed self-play mating to minimum compatible behavioral distance

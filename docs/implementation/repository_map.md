@@ -37,6 +37,7 @@ kept as documentation entries.
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, framework evolution policy, EA/model/evaluation validation |
+| `eagle/evolution/framework_reflection.py` | Refresh-boundary whole-framework reflection, batch Coach transition, compilation probes, immutable version publication, and parent replicas |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/evolution/search.py` | Fresh run creation, generation-zero initialization/evaluation, and failure/interruption marking |
 | `eagle/evolution/loop.py` | Shared fresh/resume generation loop, state propagation, finalization, and `SearchResult` |
@@ -45,7 +46,8 @@ kept as documentation entries.
 | `eagle/evolution/parent_refresh.py` | Phenotype-preserving fitness refresh and diagnostic rematerialization replicas/sidecars |
 | `eagle/opponent_pool.py` | Tournament-v1 pool admission, deduplication, seeded promotion, and pool persistence |
 | `eagle/self_play.py` | Immutable self-play context construction, snapshot/resume, and selection guards; legacy cohort helpers remain only for historical inspection (see the [architecture spec](../eagle_architecture_spec.md#9-evolution-evaluation)) |
-| `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction, framework genome initialization, and candidate-owned evidence |
+| `eagle/operators/initialization.py` | Configured/LLM generation-zero policy construction, authored framework strategy profiles, description-guided Coach initialization, and evidence |
+| `prompts/framework_initial_strategies.txt` | Registered ten-profile natural-language initial strategy set, including faithful vendored WorkerRush |
 | `eagle/operators/framework_slots.py` | Seeded per-slot crossover, one-slot mutation, and exact slot provenance |
 | `eagle/operators/framework_coach.py` | Framework initial-genome and Coach selection schemas, prompts, and strict validation |
 | `eagle/evolution/resume.py` | Resume fences, checkpoint/artifact restoration, and handoff to the shared loop |
@@ -76,6 +78,7 @@ kept as documentation entries.
 | `eagle/generation/backend.py` | LLM-mode mock/OpenAI-compatible complete-source generation |
 | `eagle/generation/groq_framework.py` | Shared fresh-run/standalone Groq structured bootstrap, bounded attempt evidence, and normalized bundle publication |
 | `eagle/generation/framework_slots.py` | Strict bundle/genome validation, finite domains, hashing, seeded sampling, and deterministic marker rendering |
+| `eagle/generation/framework_reflection.py` | Whole-bundle local-model reflection and batch Coach genome requests, raw evidence, bounded diagnostic-guided repairs, and fallback |
 | `eagle/generation/java_agent_generator.py` | LLM-mode complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
 | `eagle/generation/agent_template.py` | Java template and canonical scaffold assembly contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |

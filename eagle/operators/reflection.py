@@ -19,6 +19,7 @@ from eagle.timing import utc_now
 from eagle.evaluation.determinism import derive_seed
 from eagle.execution import current_llm_worker_slot, llm_request_slot
 from eagle.llm import (
+    DEFAULT_MAX_PROMPT_CHARS,
     GENERIC_JSON_OBJECT_SCHEMA,
     LLMEndpoint,
     generate_seeded,
@@ -403,7 +404,7 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = (), response_schema: dict[str, object] | None = None, response_schema_name: str = "eagle_response", response_schema_selector: ResponseSchemaSelector | None = None) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None, seed: int | None = None, additional_endpoints: tuple[LLMEndpoint, ...] = (), response_schema: dict[str, object] | None = None, response_schema_name: str = "eagle_response", response_schema_selector: ResponseSchemaSelector | None = None, max_prompt_chars: int | None = DEFAULT_MAX_PROMPT_CHARS) -> None:
         self._endpoints = (
             LLMEndpoint(base_url.rstrip("/"), model),
             *(LLMEndpoint(endpoint.base_url.rstrip("/"), endpoint.model) for endpoint in additional_endpoints),
@@ -420,6 +421,7 @@ class OpenAICompatibleReflectionBackend:
         self.response_schema = response_schema or GENERIC_JSON_OBJECT_SCHEMA
         self.response_schema_name = response_schema_name
         self.response_schema_selector = response_schema_selector
+        self.max_prompt_chars = max_prompt_chars
 
     @property
     def selected_endpoint(self) -> LLMEndpoint:
@@ -444,7 +446,8 @@ class OpenAICompatibleReflectionBackend:
         return self.generate_seeded(prompt, seed)
 
     def generate_seeded(self, prompt: str, seed: int) -> str:
-        prompt = truncate_prompt(prompt)
+        if self.max_prompt_chars is not None:
+            prompt = truncate_prompt(prompt, max_chars=self.max_prompt_chars)
         response_schema = self.response_schema
         response_schema_name = self.response_schema_name
         if self.response_schema_selector is not None:
@@ -505,13 +508,14 @@ def build_reflection_backend(
     response_schema: dict[str, object] | None = None,
     response_schema_name: str = "eagle_response",
     response_schema_selector: ResponseSchemaSelector | None = None,
+    max_prompt_chars: int | None = DEFAULT_MAX_PROMPT_CHARS,
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name == "openai":
         if not model:
             raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
-        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints, response_schema=response_schema, response_schema_name=response_schema_name, response_schema_selector=response_schema_selector)
+        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens, seed=seed, additional_endpoints=additional_endpoints, response_schema=response_schema, response_schema_name=response_schema_name, response_schema_selector=response_schema_selector, max_prompt_chars=max_prompt_chars)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 

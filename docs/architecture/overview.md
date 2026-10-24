@@ -1,14 +1,20 @@
 # Architecture overview
 
+Framework-slot self-play additionally supports opt-in
+`framework.evolution_mode: reflection`: GPT designs the initial framework and
+the configured local model revises whole finite-slot bundle versions at opponent
+refresh boundaries. Candidate mating/mutation stay local. See the canonical
+[framework contract](framework_slots.md) for repair, migration, and resume rules.
+
 EAGLE evolves one complete Java MicroRTS agent. Candidate state mode and Java
 materialization mode are independent settings. `candidate_java_mode` controls
 whether generated Java is phenotype-only or an inherited genotype component;
 `java_materialization_mode` selects LLM translation, deterministic DSL
-compilation, or run-frozen framework-slot rendering. Deterministic DSL and
+compilation, or immutable-bundle framework-slot rendering. Deterministic DSL and
 framework-slot configurations require `candidate_java_mode: generated_phenotype`
 and `parent_evaluation_mode: reuse_cached`. Framework-slot mode bootstraps
 inline on fresh startup when no explicit `framework.bundle_path` is supplied; it
-freezes the framework and finite domains in the run. `framework.evolution_mode`
+freezes each framework version and finite domains in the run. `framework.evolution_mode`
 defaults to local deterministic EA; opt-in `llm_coach` uses the experiment model for initial genome selection and
 Strategy mutation while Java rendering stays local. The active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).

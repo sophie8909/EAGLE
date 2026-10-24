@@ -1,5 +1,32 @@
 # Current implementation status
 
+## Periodic framework reflection (2026-10-24)
+
+`framework.evolution_mode: reflection` separates initial GPT framework design
+from local-Qwen whole-framework reflection. The new
+`1024_rich_framework_reflection_20x10_seed8_13_1run` config uses Groq
+`openai/gpt-oss-120b`, local Qwen, six seeds 8–13, 20 generations, population 10,
+and five-generation self-play refresh. G6/G11/G16 use every G5/G10/G15 survivor's
+slot list and fitness; G1 only refreshes opponents. Generation zero has ten
+distinct authored strategy descriptions, including faithful WorkerRush, and
+Coach fills each initial genome from its description. Mating and mutation remain
+local and inherit parent A's description. At boundaries, a separate Coach stage
+first revises every description from performance, then a separate slot-filling
+stage chooses complete genomes following revised descriptions, before creating
+and reevaluating replicas. This
+transition has no automatic default migration; Coach/schema/compilation failure
+shares the framework repair budget, and exhaustion keeps the previous framework
+descriptions and population. See the [framework contract](../architecture/framework_slots.md)
+and [test contracts](../testing/test_contracts.md) for behavior and validation.
+
+Validation: 174 focused WSL tests pass, including real framework `javac`,
+strategy revision/filling, interrupted G6-to-G7 resume, bounded rollback,
+and historical artifact compatibility. Experiment config validation,
+`compileall`, and diff checks pass. No live GPT/Qwen evolution or completed
+full-suite run is claimed.
+Distinctness is required only initially; later descriptions may converge.
+Successful revisions/filling remain effective even if the framework is unchanged.
+
 ## Nearest-behavior mating (2026-10-23)
 
 Self-play parent B now minimizes compatible behavioral distance within the top
@@ -119,8 +146,10 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   `control_genome`. Framework evolution defaults to seeded local operators;
   opt-in `framework.evolution_mode: llm_coach` uses the experiment model only for
   initial full-genome selection and the existing Commentator/Coach Strategy
-  path. Both framework policies retain the frozen bundle and
-  `eagle-framework-slots-v1` materializer. Java Generation and repair remain off.
+  path. `local` and `llm_coach` retain one frozen bundle; `reflection` revises
+  immutable bundle versions at refresh boundaries, with local candidate operators.
+  All retain the `eagle-framework-slots-v1` materializer. Candidate Java Generation
+  and repair remain off; whole-framework reflection has its own bounded repair.
 - EA factories derive candidate IDs as
   `gen_<zero-padded-generation>_<12-hex-deterministic-suffix>` from stable
   seeded lineage identity; `Candidate` rejects missing or blank IDs instead of

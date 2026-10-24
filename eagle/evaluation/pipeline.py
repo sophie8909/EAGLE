@@ -895,6 +895,7 @@ def evaluate_candidate(
         generation=candidate.generation,
         parent_ids=candidate.parent_ids,
         strategy_prompt=candidate.strategy_prompt,
+        strategy_description=candidate.strategy_description,
         generation_prompt=candidate.generation_prompt,
         candidate_java_mode=config.candidate_java_mode,
         java_materialization_mode=config.java_materialization_mode,

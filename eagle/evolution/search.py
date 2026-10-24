@@ -135,6 +135,13 @@ def _run_search_impl(
         candidates_dir=candidates_dir,
         timing_logger=runtime.llm_logger,
     )
+    if config.java_materialization_mode == "framework_slots" and config.framework_evolution_mode == "reflection":
+        from eagle.evolution.framework_reflection import initialize_framework_strategies
+
+        population = initialize_framework_strategies(
+            population=population, config=config, run_dir=run_dir,
+            client=runtime.client, mock=mock,
+        )
     # Generation zero enters the same evaluation boundary as every offspring,
     # so objective and failure records have one shape.
     generation_zero_fixed_java = generation_zero_uses_fixed_java(config)
