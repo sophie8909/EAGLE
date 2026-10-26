@@ -23,12 +23,14 @@ from eagle.run_artifacts import (
     FRAMEWORK_BUNDLE_ARTIFACT,
     RUN_SCHEMA_VERSION,
     RESUME_ARCHIVE_PATHS,
-    load_error_memory,
+    has_framework_startup_checkpoint,
     load_aos_state,
+    load_error_memory,
+    load_manifest,
     load_resume_population,
-    mark_run_started,
     mark_run_failed,
     mark_run_interrupted,
+    mark_run_started,
 )
 from eagle.evolution.loop import SearchResult, continue_search
 from eagle.strategy_diversity import (
@@ -164,6 +166,21 @@ def _resume_search_impl(
     config.validate()
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
+    manifest = load_manifest(run_dir)
+    if manifest.get("latest_generation") is None:
+        if (
+            config.java_materialization_mode != "framework_slots"
+            or not has_framework_startup_checkpoint(run_dir, manifest=manifest)
+        ):
+            raise ValueError(f"Run has no completed generation to resume: {run_dir}")
+        print(
+            "Framework bootstrap: resuming frozen checkpoint without provider call",
+            flush=True,
+        )
+        _restore_framework_startup_checkpoint(run_dir)
+        from eagle.evolution.search import run_generation_zero
+
+        return run_generation_zero(config, run_dir=run_dir, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
     from eagle.framework_versions import config_for_population
 
@@ -235,6 +252,59 @@ def _resume_search_impl(
         error_memory=error_memory,
         self_play_opponent_snapshot=self_play_opponent_snapshot,
         mock=mock,
+    )
+
+
+def _restore_framework_startup_checkpoint(run_dir: Path) -> None:
+    """Archive partial generation-zero work while preserving the frozen bundle."""
+
+    run_root = run_dir.resolve()
+    pending: list[Path] = []
+    for root_name in (
+        "candidates",
+        "generated_agents",
+        "classes",
+        "generations",
+        "initialization",
+        "llm_logs",
+        "final_test",
+    ):
+        root = run_root / root_name
+        if root.is_dir():
+            pending.extend(sorted(root.iterdir()))
+    archives_root = run_root / "archives"
+    if archives_root.is_dir():
+        pending.extend(
+            path
+            for path in sorted(archives_root.iterdir())
+            if path.name != "interrupted_work"
+        )
+    timing_path = run_root / "timing.jsonl"
+    if timing_path.is_file() and timing_path.stat().st_size:
+        pending.append(timing_path)
+    if not pending:
+        return
+
+    interrupted_root = run_root / "archives" / "interrupted_work"
+    attempt = 1
+    while (interrupted_root / f"startup_attempt_{attempt:04d}").exists():
+        attempt += 1
+    archive_root = interrupted_root / f"startup_attempt_{attempt:04d}"
+    for source in pending:
+        resolved = source.resolve()
+        destination = archive_root / source.relative_to(run_root)
+        if (
+            not resolved.is_relative_to(run_root)
+            or not destination.resolve().is_relative_to(run_root)
+        ):
+            raise ValueError(f"Interrupted artifact escapes the run directory: {source}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source.rename(destination)
+    timing_path.touch(exist_ok=True)
+    print(
+        "Framework bootstrap: archived partial generation-0 work "
+        f"at {archive_root.relative_to(run_root)}",
+        flush=True,
     )
 
 

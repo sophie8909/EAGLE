@@ -19,7 +19,7 @@ from eagle.final_test import (
     main as final_test_main,
 )
 from eagle.evolution.resume import load_resume_config, resume_search, validate_resume_config
-from eagle.run_artifacts import load_manifest
+from eagle.run_artifacts import has_framework_startup_checkpoint, load_manifest
 from eagle.runtime.config import runtime_config_from_experiment
 from eagle.runtime.processes import RuntimeManager
 from eagle.evolution.loop import SearchResult
@@ -463,11 +463,24 @@ class ExperimentOrchestrator:
                         continue
                     manifest = load_manifest(indexed_run)
                     search_complete = str(manifest.get("status") or "") == "complete"
-                    if not search_complete and manifest.get("latest_generation") is None:
+                    startup_checkpoint = has_framework_startup_checkpoint(
+                        indexed_run, manifest=manifest,
+                    )
+                    if (
+                        not search_complete
+                        and manifest.get("latest_generation") is None
+                        and not startup_checkpoint
+                    ):
                         print("Status: interrupted before generation 0; creating a replacement run")
                         indexed_run = None
                     else:
-                        print(f"Status: resuming {indexed_run}")
+                        if startup_checkpoint and manifest.get("latest_generation") is None:
+                            print(
+                                "Status: resuming frozen framework checkpoint "
+                                f"before generation 0: {indexed_run}"
+                            )
+                        else:
+                            print(f"Status: resuming {indexed_run}")
                         if not search_complete:
                             ensure_runtime(persisted, new_run=True)
                         result = self.resume_runner(

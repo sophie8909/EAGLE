@@ -329,7 +329,11 @@ the committed smoke uses 100 ticks. No 20×10 evolutionary experiment was run.
 Inline startup tests cover design-brief/model config round trips, generation before
 population initialization, failure evidence without binding a batch-index slot,
 mock-mode rejection without network calls, and frozen-bundle resume with source
-identity checks. Stubbed evaluation covers the complete startup-to-EA handoff.
+identity checks. They also cover direct and indexed-folder resume from a valid
+frozen framework with no generation-zero snapshot, legacy manifests without the
+new checkpoint marker, partial generation-zero archival, and exactly one
+bootstrap provider call. Stubbed evaluation covers the complete startup-to-EA
+handoff.
 
 For `framework.evolution_mode`, test that omission resolves to `local`,
 `llm_coach` is opt-in, and resume rejects a mode mismatch while keeping the
@@ -350,7 +354,9 @@ also cover failed attempts, bounded provider diagnostics and retry
 classification, exact bundle/report/marker validation, normalized bundle
 selection, early rejection of invalid CandidateAgent constructors/lifecycle
 signatures, and that provider credentials (`GROQ_API_KEY`, `api_key/mistral`, and
-`api_key/gpt`) are never persisted. Codex bootstrap tests prove the read-only,
+`api_key/gpt`) are never persisted. Stdout tests require flushed, credential-safe
+start/attempt/failure/success/freeze progress without full provider payloads.
+Codex bootstrap tests prove the read-only,
 ephemeral, schema-constrained command, direct-JSON validation, no GPT key/API
 access on success, and fallback on missing executable, timeout, nonzero exit,
 or invalid output. GPT bootstrap tests additionally prove the

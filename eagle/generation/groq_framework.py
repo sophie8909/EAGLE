@@ -370,6 +370,11 @@ def generate_framework_bundle(
             rate_limit_not_before = max(rate_limit_not_before, next_request_not_before)
         wait_seconds = rate_limit_not_before - now
         if wait_seconds > 0:
+            print(
+                "Framework bootstrap: "
+                f"provider={provider} waiting={wait_seconds:.1f}s before attempt={attempt}/{max_attempts}",
+                flush=True,
+            )
             time.sleep(wait_seconds)
         attempt_prompt = _retry_prompt(
             prompt,
@@ -400,6 +405,12 @@ def generate_framework_bundle(
         started_at = _utc_now()
         started = time.monotonic()
         next_request_not_before = started + request_interval_seconds
+        print(
+            "Framework bootstrap: "
+            f"provider={provider} model={model} attempt={attempt}/{max_attempts} "
+            f"requesting timeout={timeout_seconds:g}s",
+            flush=True,
+        )
         status = "failed"
         error: str | None = None
         http_status: int | None = None
@@ -503,6 +514,24 @@ def generate_framework_bundle(
                 "artifact": f"attempts/attempt_{attempt:03d}",
             }
         )
+        finish_reason = _response_finish_reason(raw_response)
+        if bundle is not None:
+            print(
+                "Framework bootstrap: "
+                f"provider={provider} attempt={attempt}/{max_attempts} validated "
+                f"duration={duration_seconds:.1f}s http_status={http_status} "
+                f"finish_reason={finish_reason} total_tokens={total_tokens}",
+                flush=True,
+            )
+        else:
+            console_error = " ".join((safe_error or last_error).split())[:240]
+            print(
+                "Framework bootstrap: "
+                f"provider={provider} attempt={attempt}/{max_attempts} failed "
+                f"duration={duration_seconds:.1f}s http_status={http_status} "
+                f"finish_reason={finish_reason} retryable={retryable} error={console_error}",
+                flush=True,
+            )
         if bundle is not None:
             selected_attempt = attempt
             selected_bundle = bundle
@@ -577,6 +606,12 @@ def generate_framework_bundle(
         "error": None,
     }
     _write_json(target / "bootstrap.json", bootstrap_record)
+    print(
+        "Framework bootstrap: "
+        f"provider={provider} complete selected_attempt={selected_attempt} "
+        f"bundle_sha256={bundle_sha256}",
+        flush=True,
+    )
     return GroqFrameworkResult(
         output_dir=target,
         bundle_path=target / "bundle.json",

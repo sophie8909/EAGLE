@@ -12,7 +12,7 @@ from unittest.mock import patch
 import yaml
 
 from eagle.config import ExperimentConfig
-from eagle.evolution.resume import load_resume_config, validate_resume_config
+from eagle.evolution.resume import load_resume_config, resume_search, validate_resume_config
 from eagle.evolution.runtime import build_search_runtime
 from eagle.evolution.search import run_search
 from eagle.run_artifacts import FRAMEWORK_BUNDLE_ARTIFACT
@@ -408,6 +408,91 @@ class FrameworkStartupTests(unittest.TestCase):
             run_dir = callback_runs[0]
             self.assertTrue((run_dir / FRAMEWORK_BUNDLE_ARTIFACT).is_file())
             self.assertTrue((run_dir / "manifest.json").is_file())
+            manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["startup_checkpoint"], "framework_frozen")
+            self.assertTrue(manifest["resumable"])
+
+    def test_resume_from_frozen_framework_checkpoint_replays_generation_zero_without_api(self):
+        from tests.test_framework_slots_integration import FrameworkSlotsIntegrationTests
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(root, evolution_mode="reflection")
+            created: list[Path] = []
+            fixture = FrameworkSlotsIntegrationTests()
+
+            def stop_after_bootstrap(run_dir: Path) -> None:
+                created.append(run_dir)
+                raise KeyboardInterrupt
+
+            with patch(
+                "eagle.generation.groq_framework.generate_framework_bundle"
+            ) as generate, patch("eagle.evolution.search.preflight_evaluation_opponents"):
+                def generate_bundle(output_dir, **_kwargs):
+                    output = Path(output_dir)
+                    output.mkdir(parents=True, exist_ok=True)
+                    return SimpleNamespace(bundle_path=fixture._write_bundle(output))
+
+                generate.side_effect = generate_bundle
+                with self.assertRaises(KeyboardInterrupt):
+                    run_search(
+                        config,
+                        mock=False,
+                        run_id="framework-bootstrap-resume",
+                        on_run_created=stop_after_bootstrap,
+                    )
+                run_dir = created[0]
+                legacy_manifest_path = run_dir / "manifest.json"
+                legacy_manifest = json.loads(legacy_manifest_path.read_text(encoding="utf-8"))
+                legacy_manifest.pop("startup_checkpoint", None)
+                legacy_manifest["resumable"] = False
+                legacy_manifest_path.write_text(
+                    json.dumps(legacy_manifest), encoding="utf-8"
+                )
+                partial = run_dir / "candidates" / "gen_0000_partial"
+                partial.mkdir(parents=True)
+                (partial / "evidence.txt").write_text("partial", encoding="utf-8")
+                (run_dir / "timing.jsonl").write_text(
+                    '{"event":"partial"}\n', encoding="utf-8"
+                )
+                stale_initialization = (
+                    run_dir
+                    / "initialization"
+                    / "framework_strategy"
+                    / "attempt_001"
+                    / "stale.txt"
+                )
+                stale_initialization.parent.mkdir(parents=True)
+                stale_initialization.write_text("stale", encoding="utf-8")
+
+                result = resume_search(run_dir=run_dir, mock=True)
+
+            generate.assert_called_once()
+            self.assertEqual(result.run_dir, run_dir)
+            self.assertEqual(result.completed_generation, 1)
+            self.assertTrue(
+                (
+                    run_dir
+                    / "archives/interrupted_work/startup_attempt_0001"
+                    / "candidates/gen_0000_partial/evidence.txt"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    run_dir
+                    / "archives/interrupted_work/startup_attempt_0001/timing.jsonl"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    run_dir
+                    / "archives/interrupted_work/startup_attempt_0001"
+                    / "initialization/framework_strategy/attempt_001/stale.txt"
+                ).is_file()
+            )
+            manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "complete")
+            self.assertEqual(manifest["latest_generation"], 1)
 
     def test_bootstrap_completes_a_mock_evaluated_run_and_resumes_by_source(self):
         from eagle.evolution.runtime import build_search_runtime as real_build_search_runtime

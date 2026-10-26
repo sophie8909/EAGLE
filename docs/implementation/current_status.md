@@ -728,16 +728,24 @@ Fresh framework-slot runs accept `framework.design_brief` and optional bootstrap
 Operators no longer need to create a separate bundle or execute the standalone
 bootstrap command. Existing external bundles remain supported for controlled
 reuse across seeds. Resume uses the frozen run bundle and checks brief, model,
-and evolution-mode identity without another provider request.
+and evolution-mode identity without another provider request. The frozen bundle,
+resolved config, and manifest now form a resumable startup checkpoint before
+generation zero. Direct and folder resume can replay generation zero in the same
+run after archiving partial initialization artifacts; older valid frozen runs
+without the new manifest marker are inferred from their exact-byte fences.
 
-Failed startup retains bootstrap evidence, requested config, and a failed or
-interrupted manifest without binding a folder-batch index slot. Mock mode
-requires an existing bundle. Seven startup tests pass, including the complete
+Framework startup now emits flushed, credential-safe stdout for backend/model
+start, each provider attempt and outcome, bundle freeze, checkpoint reuse, and
+the generation-zero handoff. Full prompts, responses, and credentials remain in
+their existing protected/evidence boundaries rather than stdout.
+
+Failed startup without a valid frozen bundle retains bootstrap evidence,
+requested config, and a failed or interrupted manifest without binding a
+folder-batch index slot. Mock mode
+requires an existing bundle. The focused provider/framework/Coach/startup/
+resume/batch/artifact regression passes 135 tests, including the complete
 startup-to-EA handoff with the provider, runtime, and evaluation mocked.
-The focused framework/Groq/Coach/batch regression suite passes all 90 tests.
-Another 86 direct search/resume, reproducibility, initial-population, parent-
-evaluation, and candidate-foundation tests pass. Compileall and diff checks pass. Full discovery was stopped after a prolonged
-run without completion, so it is not reported as globally passing.
+Compileall and diff checks pass. No live provider request was required.
 No live Groq framework generation was performed for this change.
 
 ## Rich checked-in framework control surface (2026-10-18)

@@ -47,6 +47,7 @@ RESUME_ARCHIVE_PATHS = (
 )
 
 FRAMEWORK_BUNDLE_ARTIFACT = "framework/bundle.json"
+FRAMEWORK_STARTUP_CHECKPOINT = "framework_frozen"
 CODEX_BOOTSTRAP_SCHEMA_VERSION = "eagle-codex-gpt-bootstrap-v1"
 
 
@@ -73,6 +74,7 @@ def _publish_codex_bootstrap_bundle(
     selected_artifact: str | None = None
     selected_bundle_path: Path | None = None
     try:
+        print("Framework bootstrap: Codex attempt 1/1 started", flush=True)
         codex_result = generate_codex_framework_bundle(
             framework_dir / "codex_primary",
             model=config.framework_model,
@@ -81,8 +83,13 @@ def _publish_codex_bootstrap_bundle(
         selected_provider = "codex"
         selected_artifact = "codex_primary"
         selected_bundle_path = codex_result.bundle_path
+        print("Framework bootstrap: Codex attempt 1/1 validated", flush=True)
     except CodexFrameworkError as exc:
         codex_error = str(exc)
+        print(
+            "Framework bootstrap: Codex attempt failed; starting GPT API fallback",
+            flush=True,
+        )
         try:
             fallback_result = generate_framework_bundle(
                 framework_dir / "gpt_fallback",
@@ -162,6 +169,11 @@ def freeze_framework_bundle(
         return config
     source = config.framework_bundle_path
     if source is None:
+        print(
+            "Framework bootstrap: starting "
+            f"backend={config.framework_bootstrap_backend} model={config.framework_model}",
+            flush=True,
+        )
         if mock:
             raise ValueError(
                 "Mock framework startup requires framework.bundle_path; "
@@ -255,10 +267,19 @@ def freeze_framework_bundle(
             framework_bundle_sha256=hashlib.sha256(bundle_path.read_bytes()).hexdigest(),
         )
         frozen.validate()
+        print(
+            "Framework bootstrap: frozen checkpoint "
+            f"sha256={frozen.framework_bundle_sha256} path={bundle_path.resolve()}",
+            flush=True,
+        )
         return frozen
     expected_digest = config.framework_bundle_sha256
     if expected_digest is None:
         raise ValueError("framework_slots requires a configured framework bundle.")
+    print(
+        f"Framework bootstrap: freezing configured bundle source={source}",
+        flush=True,
+    )
     data = source.read_bytes()
     actual_digest = hashlib.sha256(data).hexdigest()
     if actual_digest != expected_digest:
@@ -272,11 +293,39 @@ def freeze_framework_bundle(
     temporary.replace(target)
     frozen = replace(config, framework_bundle_path=target.resolve())
     frozen.validate()
+    print(
+        "Framework bootstrap: frozen configured bundle "
+        f"sha256={frozen.framework_bundle_sha256} path={target.resolve()}",
+        flush=True,
+    )
     return frozen
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def has_framework_startup_checkpoint(
+    run_dir: Path,
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> bool:
+    """Return whether a run has a complete exact-byte framework checkpoint."""
+
+    run_dir = run_dir.resolve()
+    manifest = load_manifest(run_dir) if manifest is None else manifest
+    if (
+        manifest.get("java_materialization_mode") != "framework_slots"
+        or manifest.get("framework_bundle_version") != FRAMEWORK_BUNDLE_SCHEMA_VERSION
+        or manifest.get("framework_bundle_artifact") != FRAMEWORK_BUNDLE_ARTIFACT
+        or not (run_dir / "config.yaml").is_file()
+    ):
+        return False
+    expected_digest = manifest.get("framework_bundle_sha256")
+    bundle_path = run_dir / FRAMEWORK_BUNDLE_ARTIFACT
+    if not isinstance(expected_digest, str) or not bundle_path.is_file():
+        return False
+    return hashlib.sha256(bundle_path.read_bytes()).hexdigest() == expected_digest
 
 
 def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
@@ -288,6 +337,13 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
         directory.mkdir(parents=True, exist_ok=True)
     (run_dir / "timing.jsonl").touch(exist_ok=True)
 
+    framework_checkpoint = (
+        config.java_materialization_mode == "framework_slots"
+        and config.framework_bundle_path == (run_dir / FRAMEWORK_BUNDLE_ARTIFACT).resolve()
+        and (run_dir / FRAMEWORK_BUNDLE_ARTIFACT).is_file()
+        and config.framework_bundle_sha256
+        == hashlib.sha256((run_dir / FRAMEWORK_BUNDLE_ARTIFACT).read_bytes()).hexdigest()
+    )
     atomic_json(
         run_dir / "manifest.json",
         {
@@ -309,6 +365,10 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "run_id": run_dir.name,
             "created_at": utc_now(),
             "status": "initialized",
+            "startup_checkpoint": (
+                FRAMEWORK_STARTUP_CHECKPOINT if framework_checkpoint else None
+            ),
+            "resumable": bool(framework_checkpoint),
             "experiment_name": config.experiment_name,
             "model_name": config.model.name,
             "generation_model_name": config.resolved_generation_model.name,
@@ -336,7 +396,7 @@ def mark_run_started(run_dir: Path, *, pid: int | None = None) -> None:
 
 
 def mark_run_interrupted(run_dir: Path) -> None:
-    """Mark a run resumable after Ctrl-C without inventing a population snapshot."""
+    """Mark a run resumable from a generation or frozen-framework checkpoint."""
 
     manifest = load_manifest(run_dir)
     if manifest.get("status") == "complete":
@@ -344,7 +404,10 @@ def mark_run_interrupted(run_dir: Path) -> None:
     completed = manifest.get("latest_generation")
     manifest.update(
         status="interrupted",
-        resumable=completed is not None,
+        resumable=(
+            completed is not None
+            or has_framework_startup_checkpoint(run_dir, manifest=manifest)
+        ),
         interrupted_at=utc_now(),
         updated_at=utc_now(),
     )
@@ -360,7 +423,10 @@ def mark_run_failed(run_dir: Path, error: BaseException) -> None:
     completed = manifest.get("latest_generation")
     manifest.update(
         status="failed",
-        resumable=completed is not None,
+        resumable=(
+            completed is not None
+            or has_framework_startup_checkpoint(run_dir, manifest=manifest)
+        ),
         failure_type=type(error).__name__,
         failure_reason=str(error) or type(error).__name__,
         failed_at=utc_now(),
@@ -544,10 +610,14 @@ def finalize_run(run_dir: Path, population: list[Candidate], *, stop_reason: str
         if has_completed_evaluation(candidate)
     ]
     if valid:
-        manifest.update(status="complete", stop_reason=stop_reason)
+        manifest.update(status="complete", stop_reason=stop_reason, resumable=False)
     else:
         manifest.update(
             status="failed",
+            resumable=(
+                manifest.get("latest_generation") is not None
+                or has_framework_startup_checkpoint(run_dir, manifest=manifest)
+            ),
             stop_reason=stop_reason or "all_candidates_failed",
             failure_type="population_failure",
             failure_reason="The final population contains no candidate that completed evaluation.",

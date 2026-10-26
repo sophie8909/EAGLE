@@ -118,8 +118,36 @@ def _run_search_impl(
         raise
     if on_run_created is not None:
         on_run_created(run_dir)
+
+    return run_generation_zero(
+        config,
+        run_dir=run_dir,
+        mock=mock,
+    )
+
+
+def run_generation_zero(
+    config: ExperimentConfig,
+    *,
+    run_dir: Path,
+    mock: bool = False,
+) -> SearchResult:
+    """Initialize generation zero in a fresh or frozen-framework run."""
+
+    active_run_id = run_dir.name
+    candidates_dir = run_dir / "candidates"
+    generated_agents_dir = run_dir / "generated_agents"
+    classes_dir = run_dir / "classes"
+    for directory in (candidates_dir, generated_agents_dir, classes_dir):
+        directory.mkdir(parents=True, exist_ok=True)
     ensure_strategy_archive(run_dir)
 
+    framework_slots = config.java_materialization_mode == "framework_slots"
+    if framework_slots:
+        print(
+            "Framework bootstrap: checkpoint persisted; entering generation 0",
+            flush=True,
+        )
     runtime = build_search_runtime(
         config,
         mock=mock,
@@ -129,6 +157,8 @@ def _run_search_impl(
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
     generation_span = Stopwatch.start()
+    if framework_slots:
+        print("Generation 0: initializing population", flush=True)
     population = initialize_population(
         config,
         policy_backend=runtime.initial_policy_backend,
@@ -138,12 +168,18 @@ def _run_search_impl(
     if config.java_materialization_mode == "framework_slots" and config.framework_evolution_mode == "reflection":
         from eagle.evolution.framework_reflection import initialize_framework_strategies
 
+        print(
+            "Generation 0: selecting initial framework genomes from strategy descriptions",
+            flush=True,
+        )
         population = initialize_framework_strategies(
             population=population, config=config, run_dir=run_dir,
             client=runtime.client, mock=mock,
         )
     # Generation zero enters the same evaluation boundary as every offspring,
     # so objective and failure records have one shape.
+    if framework_slots:
+        print("Generation 0: evaluating initial population", flush=True)
     generation_zero_fixed_java = generation_zero_uses_fixed_java(config)
     evaluated_population = evaluate_population(
         population,
@@ -194,6 +230,8 @@ def _run_search_impl(
         diversity=generation_diversity,
         aos=runtime.operator_controller.initial_generation_record(),
     )
+    if framework_slots:
+        print("Generation 0: checkpoint complete", flush=True)
 
     return continue_search(
         config=config,

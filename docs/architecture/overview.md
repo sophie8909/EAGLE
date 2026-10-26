@@ -139,7 +139,9 @@ flowchart TD
   generation/repair are disabled.
 - Under `framework_slots`, fresh startup bootstraps from `design_brief` unless an
   external bundle is supplied, then freezes `eagle-framework-bundle-v1` bytes
-  and SHA-256; candidates evolve only
+  and SHA-256 as a resumable pre-generation checkpoint. An interruption before
+  generation zero reuses that checkpoint without another provider call after
+  archiving partial initialization evidence; candidates evolve only
   `control_genome`. The local default uses seeded EA operators. Opt-in
   `llm_coach` uses the experiment model for initial complete-genome selection
   and the one-worst-match Commentator/Coach Strategy path. Formula-like control

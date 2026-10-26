@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
 import hashlib
 import io
 import json
@@ -420,6 +421,37 @@ class GroqFrameworkTests(unittest.TestCase):
             self.assertGreaterEqual(first_result["duration_seconds"], 0.0)
             self.assertEqual(len(first_result["request_sha256"]), 64)
             self.assertEqual(len(first_result["response_sha256"]), 64)
+
+    def test_bootstrap_prints_flushed_attempt_progress_without_credentials(self) -> None:
+        responses = [
+            _Response(
+                b'{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"not json"}}]}'
+            ),
+            _Response(_provider_response()),
+        ]
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"GROQ_API_KEY": "secret-progress-key"}, clear=True
+        ), patch(
+            "eagle.generation.groq_framework.urllib.request.urlopen",
+            side_effect=responses,
+        ), patch.object(
+            stdout, "flush", wraps=stdout.flush
+        ) as flush_stdout, redirect_stdout(stdout):
+            generate_framework_bundle(
+                Path(directory) / "framework",
+                design_brief="Build a framework.",
+                max_attempts=2,
+                request_interval_seconds=0,
+            )
+
+        output = stdout.getvalue()
+        self.assertIn("provider=groq model=openai/gpt-oss-120b attempt=1/2 requesting", output)
+        self.assertIn("attempt=1/2 failed", output)
+        self.assertIn("attempt=2/2 validated", output)
+        self.assertIn("complete selected_attempt=2", output)
+        self.assertNotIn("secret-progress-key", output)
+        self.assertGreaterEqual(flush_stdout.call_count, 4)
 
     def test_validation_retry_receives_error_feedback(self) -> None:
         invalid = _bundle()

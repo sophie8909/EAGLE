@@ -678,9 +678,12 @@ final-test summary resumes at final testing. Fully completed slots are skipped.
 Missing replicate slots are created after indexed recovery; each new run is
 added atomically to the same index. A fresh launch starts a fresh index. A direct
 run-directory target retains the single-run resume behavior. If interruption
-occurred before generation 0 was atomically recorded, folder resume replaces
-that slot with a new run and updates the index; prior evidence remains on disk
-because no resumable population exists.
+occurred before generation 0 was atomically recorded, a framework-slot run with
+a validated run-owned frozen bundle resumes in place from its framework startup
+checkpoint and replays generation-zero initialization without another provider
+call. Partial generation-zero evidence is archived first. Other runs replace
+that slot with a new run and update the index because no resumable population or
+startup checkpoint exists; prior evidence remains on disk.
 
 Legacy plain filename-to-path mappings remain readable as one-item replicate
 lists and are upgraded atomically the next time a run is recorded. The exact
@@ -803,7 +806,11 @@ schema and bootstrap prompt contract are canonical in
 
 External bundles are validated during config resolution; inline bundles are validated during startup. Both paths freeze exact bytes and record their schema
 version and SHA-256. Run creation freezes a run-owned copy; each replicate bootstraps its own framework unless all use the same explicit bundle path. Resume compares design brief, bootstrap backend/model, and evolution mode, rejects
-version/hash drift and never adopts a changed external file. The only active
+version/hash drift and never adopts a changed external file. The frozen bundle,
+resolved config, and manifest form an atomic pre-generation startup checkpoint.
+If generation zero is absent, resume archives partial post-bootstrap work and
+replays generation-zero initialization from that checkpoint without calling the
+bootstrap provider again. The only active
 candidate component is `control_genome`. In the default `local` evolution policy,
 generation zero samples complete legal genomes; seeded uniform crossover selects
 each slot independently with `slot_parent_ids`, and mutation changes at most one

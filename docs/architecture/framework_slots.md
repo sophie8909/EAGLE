@@ -253,6 +253,11 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    Both paths freeze exact bytes and hash before search. Resume reads only that
    frozen bundle, checks its version/hash, compares `design_brief`, bootstrap
    backend/model, and `evolution_mode`, and never repeats initial bootstrap.
+   The frozen bundle plus resolved config and manifest is a resumable startup
+   checkpoint before generation zero. If generation zero is absent, resume
+   archives partial post-bootstrap work, including reflection initialization
+   attempts, and replays initialization in the same run without a provider
+   request.
    In `reflection`, the last completed generation additionally selects and
    validates its immutable active version.
 5. In `local`, generation zero samples legal values and later seeded EA
@@ -418,7 +423,10 @@ run-owned `framework/` directory:
 parsing. Attempt records include UTC boundaries, monotonic duration, status,
 retryability, HTTP status, model/endpoint, redacted error, and request/response
 SHA-256. `bootstrap.json` identifies the selected attempt and exact published
-bundle bytes. The command refuses a nonempty output directory.
+bundle bytes. The command refuses a nonempty output directory. Flushed stdout
+reports bootstrap start, each request attempt and its bounded outcome, final
+bundle freeze, and the handoff into generation zero without printing credentials
+or full prompts/responses.
 
 The `codex` route instead publishes the canonical `framework/bundle.json` and
 route-level `framework/bootstrap.json`, with process evidence under
@@ -427,7 +435,7 @@ evidence is added under `framework/gpt_fallback/`. The route record identifies
 the selected provider and retains both safe failure diagnostics when neither
 transport succeeds.
 
-Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
+Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. A usable frozen bundle is also the startup checkpoint when no generation snapshot exists; partial generation-zero work is archived under `archives/interrupted_work/startup_attempt_<nnnn>/` before deterministic replay. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
 bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
 receives the selected provider key; stored errors redact that value. Bundle content is
 untrusted generated input until strict schema, Java-envelope, marker, normal
@@ -435,8 +443,9 @@ validation, `javac`, and Integration checks succeed.
 
 During a run, candidate evidence must make the result reconstructible from the
 candidate-pinned immutable bundle, `control_genome`, materializer version, and hashes. Partial
-materialization evidence survives failure. Resume starts only from an atomic
-generation, reloads that snapshot's active run-owned bundle, verifies its byte hash and version,
+materialization evidence survives failure. Resume starts from either the frozen
+pre-generation startup checkpoint or an atomic generation, reloads the relevant
+active run-owned bundle, verifies its byte hash and version,
 and rejects external bundle drift rather than silently adopting it.
 
 ## Unchanged downstream semantics

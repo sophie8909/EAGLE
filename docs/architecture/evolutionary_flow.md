@@ -226,7 +226,10 @@ LLM. Resolved protocol/compiler versions are `eagle-dsl-compiler-v1` and
 On fresh startup, EAGLE validates an explicit external bundle or bootstraps one
 from `framework.design_brief` into the run-owned `framework/` directory. It
 freezes the bundle before search. Resume uses only the frozen bundle and never
-runs bootstrap again. See the [framework-slot contract](framework_slots.md).
+runs bootstrap again. When no generation snapshot exists yet, the frozen bundle
+is the startup checkpoint: partial generation-zero artifacts are archived and
+generation zero is replayed in the same run. See the
+[framework-slot contract](framework_slots.md).
 Generation zero samples one complete valid `control_genome` per population slot
 with independent derived RNG streams.
 From generation one, ordinary selection remains unchanged. Reproduction uses

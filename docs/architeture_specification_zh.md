@@ -58,14 +58,18 @@ repair 或 compile repair。Resume 僅讀 run-owned frozen bundle，驗證 hash 
 仍一律由 Coach 選完整 genome。Resume 會比較有效設定；舊 manifest 缺少欄位時
 視為 `null`。`local` 模式設定數值會被拒絕。
 Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
-bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index，資料夾
-重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有
+bundle 建立前不可 resume；bundle、resolved config 與 manifest 完成 exact-byte
+freeze 後即形成 generation zero 前的 startup checkpoint。此時中斷可在同一 run
+封存未完成的 Gen 0 artifacts 後重跑初始化，不會再次呼叫 provider。失敗 replicate
+若沒有有效 frozen bundle，不會加入 folder-batch index，資料夾重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有
 `bundle_path` 會拒絕執行，確保不呼叫 API。Groq 的 `GROQ_API_KEY` 從
 process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，GPT 的
 key 從 `api_key/gpt` 讀取，三者都絕不寫入 config 或 artifact。GPT API
 只用於初始 framework bootstrap；後續 framework reflection、策略描述修訂與
 slot 填寫仍使用 top-level 本地 model。完整契約見
 [framework slots](architecture/framework_slots.md)。
+Bootstrap 期間 stdout 會以 `flush=True` 顯示 backend/model、每次 request attempt、
+驗證結果、bundle freeze 與進入 Gen 0 的進度；不輸出 credential、完整 prompt 或 response。
 
 新增 opt-in `framework.evolution_mode: reflection`，要求 self-play；初始 framework
 由 GPT 設計。Gen 0 使用十份不同的自然語言策略描述，其中一份忠實描述 vendored
@@ -561,7 +565,7 @@ additional endpoint 永遠是 unmanaged。舊的 `run.sh`、`run_env.sh`、`pyth
 
 以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，格式為 `schema_version: eagle-experiment-index-v1`，以 `runs` 將精確 config 檔名對應至絕對 run folder 的有序清單；清單位置是從零開始的 replicate index。索引在每個 run 建立時立即原子更新。舊版「檔名 → 單一路徑」格式仍會讀取為一項清單，並在下次記錄 run 時原子升級，不會在下次執行時被當成 config。既有的 `experiment-v2` 同名設定檔不會被覆寫，該資料夾也不會產生批次索引。
 
-`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先驗證每個槽位的 effective seed 與完整有序 endpoint 清單，再優先續跑已索引但 search 或必要 final test 尚未完成的 run，跳過完整完成槽位，之後建立缺少的 replicate；新 run 仍會原子寫回同一索引。若 generation zero 尚未記錄，該槽位會換成新 run，舊 evidence 仍保留。若 search 已完成、只缺 final test，則不會為該步驟啟動 llama.cpp。全新啟動會建立新的索引。
+`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先驗證每個槽位的 effective seed 與完整有序 endpoint 清單，再優先續跑已索引但 search 或必要 final test 尚未完成的 run，跳過完整完成槽位，之後建立缺少的 replicate；新 run 仍會原子寫回同一索引。若 generation zero 尚未記錄但 framework frozen startup checkpoint 完整，會沿用同一 run 與 bundle、封存 partial Gen 0 work 後重跑初始化，不再次消耗 bootstrap API token；其他模式或缺少有效 bundle 的槽位才會換成新 run，舊 evidence 仍保留。若 search 已完成、只缺 final test，則不會為該步驟啟動 llama.cpp。全新啟動會建立新的索引。
 
 ## 驗證
 

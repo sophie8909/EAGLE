@@ -39,7 +39,7 @@ kept as documentation entries.
 | `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, framework evolution policy, EA/model/evaluation validation |
 | `eagle/evolution/framework_reflection.py` | Refresh-boundary whole-framework reflection, batch Coach transition, compilation probes, immutable version publication, and parent replicas |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
-| `eagle/evolution/search.py` | Fresh run creation, generation-zero initialization/evaluation, and failure/interruption marking |
+| `eagle/evolution/search.py` | Fresh run creation plus shared fresh/startup-checkpoint generation-zero initialization/evaluation and failure/interruption marking |
 | `eagle/evolution/loop.py` | Shared fresh/resume generation loop, state propagation, finalization, and `SearchResult` |
 | `eagle/evolution/generation.py` | Shared fresh/resume streaming offspring preparation, evaluation, credit, selection, and persistence |
 | `eagle/evolution/offspring.py` | Canonical source-gated plan stream, per-plan mutation/revision, mode-aware variation and evidence |
@@ -50,7 +50,7 @@ kept as documentation entries.
 | `prompts/framework_initial_strategies.txt` | Registered ten-profile natural-language initial strategy set, including faithful vendored WorkerRush |
 | `eagle/operators/framework_slots.py` | Seeded per-slot crossover, one-slot mutation, and exact slot provenance |
 | `eagle/operators/framework_coach.py` | Framework initial-genome and Coach selection schemas, prompts, and strict validation |
-| `eagle/evolution/resume.py` | Resume fences, checkpoint/artifact restoration, and handoff to the shared loop |
+| `eagle/evolution/resume.py` | Resume fences, frozen-framework/atomic-generation checkpoint restoration, partial-work archival, and handoff to generation zero or the shared loop |
 | `eagle/operators/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/operators/adaptive.py` | Static and adaptive reflection-operator selection |
 

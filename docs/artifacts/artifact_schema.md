@@ -99,9 +99,18 @@ optional `framework.model` (default `openai/gpt-oss-120b`) to create the bundle.
 Both paths publish the validated exact bytes as run-owned
 `framework/bundle.json` before search and point the runtime config at that file.
 The manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
-`framework_bundle_artifact: framework/bundle.json`. The frozen file is immutable.
+`framework_bundle_artifact: framework/bundle.json`. Once those fields and the
+run-owned bytes agree, `startup_checkpoint: framework_frozen` marks the
+pre-generation checkpoint and `resumable` is true even when
+`latest_generation` is null. Older manifests without the marker remain
+compatible when the resolved config, manifest fences, and exact bytes prove the
+same checkpoint. The frozen file is immutable.
 Resume validates its exact bytes, compares design brief, bootstrap backend/model, and
-evolution mode, and never repeats initial bootstrap. Failed bootstrap preserves
+evolution mode, and never repeats initial bootstrap. When generation zero is
+not yet atomic, resume moves partial candidate, class, generation,
+initialization, LLM-log, archive, final-test, and run-timing evidence below
+`archives/interrupted_work/startup_attempt_<nnnn>/`, then replays generation
+zero from the frozen framework. Failed bootstrap preserves
 attempts and a failed manifest; pending config cannot resume without a usable
 frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
 The resolved `framework.evolution_mode` defaults to `local` and must match on

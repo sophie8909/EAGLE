@@ -943,6 +943,76 @@ class ExperimentLauncherTests(unittest.TestCase):
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
             self.assertEqual(index["runs"], {"a.yaml": [str(replacement.resolve())]})
 
+    def test_folder_resume_reuses_frozen_framework_before_generation_zero(self):
+        from eagle.run_artifacts import initialize_run_manifest
+        from tests.test_framework_slots_artifacts import bundle_payload
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_bundle = root / "source_bundle.json"
+            source_bundle.write_text(json.dumps(bundle_payload()), encoding="utf-8")
+            source = ExperimentConfig.from_mapping({
+                "schema_version": "experiment-v2",
+                "experiment_name": "framework_resume",
+                "java_materialization_mode": "framework_slots",
+                "candidate_java_mode": "generated_phenotype",
+                "parent_evaluation_mode": "reuse_cached",
+                "reflection_operator_mode": "static",
+                "framework": {"bundle_path": str(source_bundle)},
+                "population_size": 2,
+                "generations": 1,
+                "evaluation": {"mode": "self_play"},
+            })
+            config_path = root / "a.yaml"
+            config_path.write_text(
+                yaml.safe_dump(source.to_mapping(), sort_keys=False), encoding="utf-8"
+            )
+
+            run_dir = root / "runs" / "framework-checkpoint"
+            frozen_bundle = run_dir / "framework" / "bundle.json"
+            frozen_bundle.parent.mkdir(parents=True)
+            frozen_bundle.write_bytes(source_bundle.read_bytes())
+            frozen = replace(source, framework_bundle_path=frozen_bundle.resolve())
+            (run_dir / "config.yaml").write_text(
+                yaml.safe_dump(frozen.to_mapping(mock=True), sort_keys=False),
+                encoding="utf-8",
+            )
+            initialize_run_manifest(run_dir, config=frozen)
+            manifest_path = run_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update(status="interrupted", latest_generation=None)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "experiment.yaml").write_text(
+                yaml.safe_dump({
+                    "schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION,
+                    "runs": {"a.yaml": [str(run_dir.resolve())]},
+                }),
+                encoding="utf-8",
+            )
+            resumed: list[Path] = []
+
+            def resume(_config, *, run_dir, **_kwargs):
+                resumed.append(run_dir)
+                return SearchResult(run_dir, [], None)
+
+            result = ExperimentOrchestrator(
+                search_runner=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("frozen framework checkpoint created a replacement run")
+                ),
+                resume_runner=resume,
+            ).run(
+                config_path=None,
+                resume_dir=root,
+                mock=True,
+                skip_final_test=True,
+            )
+
+            self.assertEqual(result.run_dir, run_dir)
+            self.assertEqual(resumed, [run_dir])
+            self.assertEqual(
+                _load_experiment_run_index(root)["a.yaml"], [run_dir]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
