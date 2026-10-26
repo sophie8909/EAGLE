@@ -201,12 +201,141 @@ class FrameworkStartupTests(unittest.TestCase):
             config.validate()
             self.assertEqual(config.framework_bootstrap_backend, "gpt")
 
-    def test_framework_reflection_uses_local_model_after_gpt_bootstrap(self):
+    def test_codex_bootstrap_is_primary_and_skips_gpt_api(self):
+        from eagle.generation.codex_framework import CodexFrameworkResult
+
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = self._source_config(
                 root,
-                bootstrap_backend="gpt",
+                bootstrap_backend="codex",
+                model="gpt-6.1-sol",
+            )
+
+            def codex_generate(output_dir, **kwargs):
+                result = self._generator_result(Path(output_dir))
+                return CodexFrameworkResult(
+                    output_dir=Path(output_dir),
+                    bundle_path=result.bundle_path,
+                    result_path=Path(output_dir) / "result.json",
+                    bundle=bundle_payload(),
+                )
+
+            with patch(
+                "eagle.generation.codex_framework.generate_codex_framework_bundle",
+                side_effect=codex_generate,
+            ) as codex, patch(
+                "eagle.generation.groq_framework.generate_framework_bundle"
+            ) as gpt, patch(
+                "eagle.evolution.search.preflight_evaluation_opponents"
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    run_search(
+                        config,
+                        mock=False,
+                        run_id="codex-framework-bootstrap",
+                        on_run_created=lambda run_dir: (_ for _ in ()).throw(KeyboardInterrupt),
+                    )
+
+            codex.assert_called_once()
+            self.assertEqual(codex.call_args.kwargs["model"], "gpt-6.1-sol")
+            gpt.assert_not_called()
+            framework_dir = root / "runs" / "codex-framework-bootstrap" / "framework"
+            self.assertTrue((framework_dir / "bundle.json").is_file())
+            route = json.loads((framework_dir / "bootstrap.json").read_text(encoding="utf-8"))
+            self.assertEqual(route["selected_provider"], "codex")
+            self.assertFalse(route["fallback_used"])
+
+    def test_codex_failure_uses_gpt_api_fallback(self):
+        from eagle.generation.codex_framework import CodexFrameworkError
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="codex",
+                model="gpt-6.1-sol",
+            )
+
+            with patch(
+                "eagle.generation.codex_framework.generate_codex_framework_bundle",
+                side_effect=CodexFrameworkError("codex unavailable"),
+            ) as codex, patch(
+                "eagle.generation.groq_framework.generate_framework_bundle"
+            ) as gpt, patch(
+                "eagle.evolution.search.preflight_evaluation_opponents"
+            ):
+                gpt.side_effect = lambda output_dir, **kwargs: self._generator_result(Path(output_dir))
+                with self.assertRaises(KeyboardInterrupt):
+                    run_search(
+                        config,
+                        mock=False,
+                        run_id="codex-gpt-fallback",
+                        on_run_created=lambda run_dir: (_ for _ in ()).throw(KeyboardInterrupt),
+                    )
+
+            codex.assert_called_once()
+            gpt.assert_called_once()
+            self.assertEqual(gpt.call_args.kwargs["provider"], "gpt")
+            self.assertEqual(gpt.call_args.kwargs["api_root"], "https://api.openai.com/v1")
+            self.assertEqual(gpt.call_args.kwargs["model"], "gpt-6.1-sol")
+            framework_dir = root / "runs" / "codex-gpt-fallback" / "framework"
+            route = json.loads((framework_dir / "bootstrap.json").read_text(encoding="utf-8"))
+            self.assertEqual(route["selected_provider"], "gpt")
+            self.assertTrue(route["fallback_used"])
+            self.assertEqual(route["codex_error"], "codex unavailable")
+
+    def test_codex_and_gpt_failure_preserves_both_diagnostics(self):
+        from eagle.generation.codex_framework import CodexFrameworkError
+        from eagle.generation.groq_framework import GroqFrameworkError
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="codex",
+                model="gpt-6.1-sol",
+            )
+
+            with patch(
+                "eagle.generation.codex_framework.generate_codex_framework_bundle",
+                side_effect=CodexFrameworkError("codex unavailable"),
+            ), patch(
+                "eagle.generation.groq_framework.generate_framework_bundle",
+                side_effect=GroqFrameworkError("GPT API key is required in api_key/gpt."),
+            ), self.assertRaisesRegex(
+                GroqFrameworkError,
+                "Codex framework bootstrap failed and GPT API fallback also failed",
+            ):
+                run_search(
+                    config,
+                    mock=False,
+                    run_id="codex-gpt-both-fail",
+                )
+
+            framework_dir = root / "runs" / "codex-gpt-both-fail" / "framework"
+            route = json.loads((framework_dir / "bootstrap.json").read_text(encoding="utf-8"))
+            self.assertEqual(route["status"], "failed")
+            self.assertEqual(route["codex_error"], "codex unavailable")
+            self.assertIn("api_key/gpt", route["fallback_error"])
+            self.assertFalse((framework_dir / "bundle.json").exists())
+
+    def test_codex_bootstrap_backend_is_accepted_by_config_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._source_config(
+                Path(directory),
+                bootstrap_backend="codex",
+                model="gpt-6.1-sol",
+            )
+            config.validate()
+            self.assertEqual(config.framework_bootstrap_backend, "codex")
+
+    def test_framework_reflection_uses_local_model_after_codex_bootstrap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="codex",
                 model="gpt-6.1-sol",
                 evolution_mode="reflection",
             )

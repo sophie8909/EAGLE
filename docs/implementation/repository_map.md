@@ -77,6 +77,7 @@ kept as documentation entries.
 | --- | --- |
 | `eagle/generation/backend.py` | LLM-mode mock/OpenAI-compatible complete-source generation |
 | `eagle/generation/groq_framework.py` | Shared fresh-run multi-provider/standalone Groq structured bootstrap, bounded attempt evidence, and normalized bundle publication |
+| `eagle/generation/codex_framework.py` | One-shot read-only Codex CLI framework bootstrap with schema-constrained output and durable process evidence |
 | `eagle/generation/framework_slots.py` | Strict bundle/genome validation, finite domains, hashing, seeded sampling, and deterministic marker rendering |
 | `eagle/generation/framework_reflection.py` | Whole-bundle local-model reflection and batch Coach genome requests, raw evidence, bounded diagnostic-guided repairs, and fallback |
 | `eagle/generation/java_agent_generator.py` | LLM-mode complete-source extraction, envelope checks, canonical assembly, validation, source persistence |

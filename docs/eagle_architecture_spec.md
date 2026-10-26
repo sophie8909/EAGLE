@@ -767,7 +767,8 @@ uses an explicit external `framework.bundle_path` if supplied. Otherwise, startu
 requires `framework.design_brief` and accepts optional `framework.model`
 (default `openai/gpt-oss-120b`) to bootstrap the framework inline.
 `framework.bootstrap_backend` selects the default `groq` API path, the `mistral`
-API path, the `gpt` OpenAI API path, or the configured local llama-server path.
+API path, the direct `gpt` OpenAI API path, the `codex` CLI-first path with GPT
+API fallback, or the configured local llama-server path.
 Groq reads `GROQ_API_KEY`, Mistral reads `api_key/mistral`, and GPT reads
 `api_key/gpt`; the local path reads no API key. The standalone
 `python -m eagle framework` CLI remains available for compatibility. Startup
@@ -775,9 +776,13 @@ persists raw responses before parsing and publishes one strictly validated
 `eagle-framework-bundle-v1`. `GROQ_API_KEY` is read only from the environment
 when the selected backend is `groq`; `api_key/mistral` is read only when the
 selected backend is `mistral`; `api_key/gpt` is read only when the selected
-backend is `gpt`. The GPT path targets `https://api.openai.com/v1/chat/completions`
-and uses `gpt-6.1-sol` when selected by the experiment config. This provider is
-used only for initial bootstrap; `framework.evolution_mode: reflection` continues
+backend is direct `gpt` or a failed `codex` attempt. The GPT path targets
+`https://api.openai.com/v1/chat/completions` and uses `gpt-6.1-sol` when selected
+by the experiment config. The `codex` path invokes one read-only, ephemeral,
+schema-constrained `codex exec` using the existing Codex login; a missing
+executable, timeout, nonzero exit, or invalid output activates bounded GPT API
+fallback. These providers are used only for initial bootstrap;
+`framework.evolution_mode: reflection` continues
 to use the top-level local experiment model for all later reflection calls.
 Bootstrap is a startup operation, not part of EA;
 `framework.evolution_mode` selects local evolution (the default), the opt-in

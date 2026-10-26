@@ -19,10 +19,11 @@ See the [implementation plan](docs/implementation/dsl_pre_crossover_reflection_p
 
 EAGLE also provides `framework_slots` mode. Fresh experiments bootstrap a
 complete Java framework inline from `framework.design_brief` when no external
-bundle path is supplied. Bootstrap can use Groq, Mistral, GPT/OpenAI, or the
-configured local server. GPT reads `api_key/gpt` and can use `gpt-6.1-sol` for
-this one initial call; later framework reflection remains on the top-level local
-experiment model. An explicit `framework.bundle_path`
+bundle path is supplied. Bootstrap can use Codex CLI with GPT API fallback,
+Groq, Mistral, direct GPT/OpenAI, or the configured local server. The `codex`
+route uses the existing Codex login first and reads `api_key/gpt` only if Codex
+cannot produce a valid bundle. This one initial call can use `gpt-6.1-sol`;
+later framework reflection remains on the top-level local experiment model. An explicit `framework.bundle_path`
 reuses a prepared framework across replicates, and the standalone
 `python -m eagle framework` command remains available for compatibility.
 `framework.evolution_mode` defaults to `local`; opt-in `llm_coach` uses the

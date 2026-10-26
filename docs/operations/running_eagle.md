@@ -94,13 +94,16 @@ Fresh framework-slot runs bootstrap inline from `framework.design_brief` unless
 an external `framework.bundle_path` is provided. Set
 `framework.bootstrap_backend: local` to use the configured local llama-server
 without an API key, `groq` to use the default Groq API path, `mistral` to use
-Mistral, or `gpt` to use OpenAI. For Groq, set `GROQ_API_KEY` in the process
+Mistral, `gpt` to use OpenAI directly, or `codex` to try `codex exec` before
+falling back to OpenAI. For Groq, set `GROQ_API_KEY` in the process
 environment; for Mistral, store the key in `api_key/mistral`; for GPT, store it
 in `api_key/gpt`. Do not put credentials in YAML, CLI
 arguments, shell history, or artifacts. `framework.model` defaults to
 `openai/gpt-oss-120b`; use `mistral-small-latest` with Mistral or `gpt-6.1-sol`
-with GPT. The GPT credential and endpoint are used only during initial framework
-bootstrap. Later `reflection` stages use the top-level local model. The standalone
+with GPT or Codex fallback. The `codex` route uses the existing Codex login and
+does not read the GPT key unless Codex is missing, times out, exits unsuccessfully,
+or returns an invalid bundle. The GPT credential and endpoint are used only
+during initial framework bootstrap. Later `reflection` stages use the top-level local model. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
 
@@ -134,7 +137,7 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: gpt  # groq, mistral, gpt, or local
+  bootstrap_backend: codex  # codex (GPT fallback), groq, mistral, gpt, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
   model: gpt-6.1-sol
   evolution_mode: reflection

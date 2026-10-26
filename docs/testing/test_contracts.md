@@ -350,7 +350,10 @@ also cover failed attempts, bounded provider diagnostics and retry
 classification, exact bundle/report/marker validation, normalized bundle
 selection, early rejection of invalid CandidateAgent constructors/lifecycle
 signatures, and that provider credentials (`GROQ_API_KEY`, `api_key/mistral`, and
-`api_key/gpt`) are never persisted. GPT bootstrap tests additionally prove the
+`api_key/gpt`) are never persisted. Codex bootstrap tests prove the read-only,
+ephemeral, schema-constrained command, direct-JSON validation, no GPT key/API
+access on success, and fallback on missing executable, timeout, nonzero exit,
+or invalid output. GPT bootstrap tests additionally prove the
 OpenAI endpoint, `gpt-6.1-sol`, JSON Schema, `max_completion_tokens`,
 `reasoning_effort: medium`, and absence of unsupported `temperature`; reflection
 routing remains bound to the top-level local model. Provider schema
@@ -374,6 +377,7 @@ fail before replay. The focused command is:
 
 ```bash
 python3 -m unittest \
+  tests.test_codex_framework \
   tests.test_groq_framework \
   tests.test_framework_slots \
   tests.test_framework_slots_candidate_config \
@@ -384,7 +388,8 @@ python3 -m unittest \
   tests.test_framework_coach_integration
 ```
 
-The 2026-10-26 GPT bootstrap regression additionally covers `api_key/gpt`,
-OpenAI request shape, startup routing, config round-trip, and preservation of
-the local framework-reflection runtime. The expanded framework suite ran 118
-tests successfully without a live provider call.
+The 2026-10-26 bootstrap regression additionally covers Codex-first routing,
+credential-lazy GPT fallback through `api_key/gpt`, OpenAI request shape,
+config round-trip, and preservation of the local framework-reflection runtime.
+Validation uses mocked subprocess and HTTP transports; no live provider call is
+required.

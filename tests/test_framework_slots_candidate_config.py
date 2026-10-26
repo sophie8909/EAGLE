@@ -206,7 +206,7 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                 with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                     invalid.validate()
 
-    def test_reflection_experiment_uses_gpt_bootstrap_and_local_qwen(self) -> None:
+    def test_reflection_experiment_uses_codex_bootstrap_and_local_qwen(self) -> None:
         config = ExperimentConfig.from_file(
             Path("configs/experiments/1024_rich_framework_reflection_20x10_seed8_13_1run")
             / "qwen3_5_9b_rich_framework_reflection_20x10_seed8_13_1run.yaml"
@@ -214,7 +214,7 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
         config.validate()
         self.assertEqual(config.framework_evolution_mode, "reflection")
         self.assertIsNone(config.framework_bundle_path)
-        self.assertEqual(config.framework_bootstrap_backend, "gpt")
+        self.assertEqual(config.framework_bootstrap_backend, "codex")
         self.assertEqual(config.framework_model, "gpt-6.1-sol")
         self.assertIn("complete MicroRTS Java agent framework", config.framework_design_brief)
         self.assertEqual(config.model.name, "qwen3_5_9b")

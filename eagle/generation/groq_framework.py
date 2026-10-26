@@ -626,9 +626,24 @@ def parse_framework_response(
     if not isinstance(content, str) or not content.strip():
         raise ValueError(f"{provider_label} structured response must contain JSON text.")
     generated = json.loads(content)
-    if not isinstance(generated, dict):
-        raise ValueError(f"{provider_label} framework content must be one JSON object.")
-    bundle = validate_framework_bundle(generated)
+    try:
+        return validate_framework_bundle_payload(generated)
+    except ValueError as exc:
+        raise ValueError(f"{provider_label} framework content is invalid: {exc}") from exc
+
+
+def validate_framework_bundle_payload(payload: object) -> dict[str, object]:
+    """Validate one direct framework JSON object and its Java source envelope.
+
+    The HTTP providers wrap generated JSON in a Chat Completions envelope,
+    while the Codex CLI writes its final message directly.  Keeping this
+    validation at the shared boundary ensures both transports publish exactly
+    the same immutable bundle contract.
+    """
+
+    if not isinstance(payload, dict):
+        raise ValueError("framework content must be one JSON object.")
+    bundle = validate_framework_bundle(payload)
     _validate_generated_java_template(bundle)
     return bundle.to_json_dict()
 

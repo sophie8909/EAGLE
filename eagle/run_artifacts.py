@@ -47,6 +47,102 @@ RESUME_ARCHIVE_PATHS = (
 )
 
 FRAMEWORK_BUNDLE_ARTIFACT = "framework/bundle.json"
+CODEX_BOOTSTRAP_SCHEMA_VERSION = "eagle-codex-gpt-bootstrap-v1"
+
+
+def _publish_codex_bootstrap_bundle(
+    run_dir: Path,
+    config: ExperimentConfig,
+    *,
+    generate_framework_bundle: Any,
+    gpt_api_root: str,
+    gpt_max_output_tokens: int,
+) -> Path:
+    """Try Codex once, then lazily use the existing bounded GPT API path."""
+
+    from eagle.generation.codex_framework import (
+        CodexFrameworkError,
+        generate_codex_framework_bundle,
+    )
+    from eagle.generation.groq_framework import GroqFrameworkError
+
+    framework_dir = run_dir / "framework"
+    framework_dir.mkdir(parents=True, exist_ok=False)
+    codex_error: str | None = None
+    selected_provider: str | None = None
+    selected_artifact: str | None = None
+    selected_bundle_path: Path | None = None
+    try:
+        codex_result = generate_codex_framework_bundle(
+            framework_dir / "codex_primary",
+            model=config.framework_model,
+            design_brief=config.framework_design_brief,
+        )
+        selected_provider = "codex"
+        selected_artifact = "codex_primary"
+        selected_bundle_path = codex_result.bundle_path
+    except CodexFrameworkError as exc:
+        codex_error = str(exc)
+        try:
+            fallback_result = generate_framework_bundle(
+                framework_dir / "gpt_fallback",
+                model=config.framework_model,
+                design_brief=config.framework_design_brief,
+                api_root=gpt_api_root,
+                max_output_tokens=max(
+                    config.llm_max_tokens or 0,
+                    gpt_max_output_tokens,
+                ),
+                request_interval_seconds=0.0,
+                provider="gpt",
+                require_api_key=True,
+                require_https=True,
+                json_object_mode=False,
+                reasoning_effort="medium",
+            )
+            selected_provider = "gpt"
+            selected_artifact = "gpt_fallback"
+            selected_bundle_path = fallback_result.bundle_path
+        except GroqFrameworkError as fallback_exc:
+            atomic_json(
+                framework_dir / "bootstrap.json",
+                {
+                    "schema_version": CODEX_BOOTSTRAP_SCHEMA_VERSION,
+                    "status": "failed",
+                    "configured_backend": "codex",
+                    "selected_provider": None,
+                    "selected_artifact": None,
+                    "fallback_used": True,
+                    "codex_error": codex_error,
+                    "fallback_error": str(fallback_exc),
+                },
+            )
+            raise GroqFrameworkError(
+                "Codex framework bootstrap failed and GPT API fallback also failed: "
+                f"{fallback_exc}"
+            ) from fallback_exc
+
+    assert selected_bundle_path is not None
+    bundle_bytes = selected_bundle_path.read_bytes()
+    canonical_path = framework_dir / "bundle.json"
+    temporary = canonical_path.with_name(f".{canonical_path.name}.tmp")
+    temporary.write_bytes(bundle_bytes)
+    temporary.replace(canonical_path)
+    atomic_json(
+        framework_dir / "bootstrap.json",
+        {
+            "schema_version": CODEX_BOOTSTRAP_SCHEMA_VERSION,
+            "status": "success",
+            "configured_backend": "codex",
+            "selected_provider": selected_provider,
+            "selected_artifact": selected_artifact,
+            "fallback_used": codex_error is not None,
+            "codex_error": codex_error,
+            "fallback_error": None,
+            "bundle_sha256": hashlib.sha256(bundle_bytes).hexdigest(),
+        },
+    )
+    return canonical_path
 
 
 def freeze_framework_bundle(
@@ -138,15 +234,25 @@ def freeze_framework_bundle(
                 json_object_mode=False,
                 reasoning_effort="medium",
             )
-        result = generate_framework_bundle(
-            run_dir / "framework",
-            **bootstrap_kwargs,
-        )
+        if config.framework_bootstrap_backend == "codex":
+            bundle_path = _publish_codex_bootstrap_bundle(
+                run_dir,
+                config,
+                generate_framework_bundle=generate_framework_bundle,
+                gpt_api_root=DEFAULT_GPT_API_ROOT,
+                gpt_max_output_tokens=DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS,
+            )
+        else:
+            result = generate_framework_bundle(
+                run_dir / "framework",
+                **bootstrap_kwargs,
+            )
+            bundle_path = result.bundle_path
         frozen = replace(
             config,
-            framework_bundle_path=result.bundle_path.resolve(),
+            framework_bundle_path=bundle_path.resolve(),
             framework_bundle_version=FRAMEWORK_BUNDLE_SCHEMA_VERSION,
-            framework_bundle_sha256=hashlib.sha256(result.bundle_path.read_bytes()).hexdigest(),
+            framework_bundle_sha256=hashlib.sha256(bundle_path.read_bytes()).hexdigest(),
         )
         frozen.validate()
         return frozen

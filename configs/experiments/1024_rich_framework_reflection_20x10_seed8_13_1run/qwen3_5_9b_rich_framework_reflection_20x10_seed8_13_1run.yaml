@@ -36,7 +36,7 @@ prompt_reflection_probability: 0.0
 code_reflection_probability: 0.0
 
 framework:
-  bootstrap_backend: gpt
+  bootstrap_backend: codex
   model: gpt-6.1-sol
   design_brief: >-
     Design a complete MicroRTS Java agent framework with rich combinable rules

@@ -104,8 +104,9 @@ resolved probability is resume-fenced; older manifests without the field mean
 Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
 and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
 `framework.bootstrap_backend` selects `groq` (the default API path), `mistral`
-(the Mistral API path), `gpt` (the OpenAI API path), or `local` (the configured
-local llama-server, without an API key). The standalone
+(the Mistral API path), `gpt` (the direct OpenAI API path), `codex` (one Codex
+CLI attempt followed by GPT API fallback only on failure), or `local` (the
+configured local llama-server, without an API key). The standalone
 `python -m eagle framework` command remains available to prepare an external
 bundle for reuse. The bootstrap requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
@@ -161,20 +162,22 @@ and Java validation remain local and deterministic.
 
 Put the design brief and bootstrap model in the experiment config. The model is
 optional and defaults to `openai/gpt-oss-120b` for the default Groq backend.
-Select `gpt` and `gpt-6.1-sol` for the OpenAI bootstrap path:
+Select `codex` and `gpt-6.1-sol` for the Codex-first bootstrap path:
 
 ```yaml
 java_materialization_mode: framework_slots
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: gpt  # groq, mistral, gpt, or local
+  bootstrap_backend: codex  # codex (GPT fallback), groq, mistral, gpt, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
   model: gpt-6.1-sol
   evolution_mode: reflection
 ```
 
 For `groq`, set `GROQ_API_KEY` in the environment. For `mistral`, EAGLE reads
-the key from `api_key/mistral`; for `gpt`, it reads `api_key/gpt`. For `local`,
+the key from `api_key/mistral`; for direct `gpt`, it reads `api_key/gpt`. The
+`codex` route uses the current Codex login first and reads `api_key/gpt` lazily
+only if Codex cannot return a valid framework. For `local`,
 the top-level experiment `model` profile supplies the already managed llama-server
 and no API key is read. Provider keys are bootstrap-only. In `reflection` mode,
 all later framework, strategy-description, and genome reflection calls use the
@@ -208,7 +211,10 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    read only for `mistral`; `api_key/gpt` is read only for `gpt`; the local
    backend reads no API key. Each fresh
    replicate designs a separate framework unless it uses the same explicit
-   `bundle_path` as the other replicates.
+   `bundle_path` as the other replicates. With `codex`, the primary process runs
+   once in read-only, ephemeral mode with the checked-in response schema. A
+   missing executable, timeout, nonzero exit, empty/malformed result, or local
+   bundle-validation failure activates the existing bounded GPT API generator.
 2. The Groq backend sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
    The Mistral backend sends the same prompt to
@@ -388,7 +394,8 @@ its actual stage with hashes and diagnostics; it never falls back to an LLM.
 
 ## Bootstrap artifacts and security
 
-Standalone bootstrap outputs use this layout; inline run bootstrap stores the same evidence under the run-owned `framework/` directory:
+Standalone and direct-provider inline bootstraps use this layout under the
+run-owned `framework/` directory:
 
 ```text
 <output>/
@@ -410,6 +417,13 @@ parsing. Attempt records include UTC boundaries, monotonic duration, status,
 retryability, HTTP status, model/endpoint, redacted error, and request/response
 SHA-256. `bootstrap.json` identifies the selected attempt and exact published
 bundle bytes. The command refuses a nonempty output directory.
+
+The `codex` route instead publishes the canonical `framework/bundle.json` and
+route-level `framework/bootstrap.json`, with process evidence under
+`framework/codex_primary/`. If and only if Codex fails, the normal bounded HTTP
+evidence is added under `framework/gpt_fallback/`. The route record identifies
+the selected provider and retains both safe failure diagnostics when neither
+transport succeeds.
 
 Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
 bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
