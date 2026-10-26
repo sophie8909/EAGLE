@@ -349,8 +349,11 @@ request uses JSON Object Mode and still passes local exact validation. Tests
 also cover failed attempts, bounded provider diagnostics and retry
 classification, exact bundle/report/marker validation, normalized bundle
 selection, early rejection of invalid CandidateAgent constructors/lifecycle
-signatures, and that provider credentials (`GROQ_API_KEY` and `api_key/mistral`)
-are never persisted. Provider schema
+signatures, and that provider credentials (`GROQ_API_KEY`, `api_key/mistral`, and
+`api_key/gpt`) are never persisted. GPT bootstrap tests additionally prove the
+OpenAI endpoint, `gpt-6.1-sol`, JSON Schema, `max_completion_tokens`,
+`reasoning_effort: medium`, and absence of unsupported `temperature`; reflection
+routing remains bound to the top-level local model. Provider schema
 enforcement is best-effort; local exact validation, CLI dispatch, and
 non-overwrite behavior are contracts.
 
@@ -380,3 +383,8 @@ python3 -m unittest \
   tests.test_framework_coach \
   tests.test_framework_coach_integration
 ```
+
+The 2026-10-26 GPT bootstrap regression additionally covers `api_key/gpt`,
+OpenAI request shape, startup routing, config round-trip, and preservation of
+the local framework-reflection runtime. The expanded framework suite ran 118
+tests successfully without a live provider call.

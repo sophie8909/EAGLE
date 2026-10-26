@@ -3,9 +3,9 @@
 This module intentionally stops at framework-bundle creation. Evolutionary
 configuration, candidate state, and Java materialization consume the bundle in
 separate layers. The Groq backend reads authentication only from
-``GROQ_API_KEY``; the Mistral backend reads only ``api_key/mistral``; the local
-backend sends no authorization header. Secrets are never included in persisted
-request or result artifacts.
+``GROQ_API_KEY``; the Mistral and GPT backends read only their repository key
+files; the local backend sends no authorization header. Secrets are never
+included in persisted request or result artifacts.
 """
 
 from __future__ import annotations
@@ -38,10 +38,13 @@ DEFAULT_GROQ_API_ROOT = "https://api.groq.com/openai/v1"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_MISTRAL_API_ROOT = "https://api.mistral.ai/v1"
 DEFAULT_MISTRAL_MODEL = "mistral-small-latest"
+DEFAULT_GPT_API_ROOT = "https://api.openai.com/v1"
+DEFAULT_GPT_MODEL = "gpt-6.1-sol"
 DEFAULT_TIMEOUT_SECONDS = 300.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
 DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
+DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS = 12_288
 # Conservative defaults for Groq's free-plan limits.  Framework bootstrap is
 # intentionally serialized: a complete framework response is large enough
 # that a second request inside the same rolling minute can exhaust TPM even
@@ -65,6 +68,7 @@ DEFAULT_MAX_OUTPUT_TOKENS = (
 GROQ_USER_AGENT = "EAGLE/1.0"
 GROQ_REASONING_EFFORT = "low"
 MISTRAL_API_KEY_PATH = Path(__file__).resolve().parents[2] / "api_key" / "mistral"
+GPT_API_KEY_PATH = Path(__file__).resolve().parents[2] / "api_key" / "gpt"
 
 FRAMEWORK_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -298,11 +302,12 @@ def generate_framework_bundle(
 
     target = Path(output_dir).expanduser().resolve()
     provider = provider.strip().lower()
-    if provider not in {"groq", "mistral", "local"}:
-        raise ValueError("framework provider must be groq, mistral, or local.")
+    if provider not in {"groq", "mistral", "gpt", "local"}:
+        raise ValueError("framework provider must be groq, mistral, gpt, or local.")
     provider_label = {
         "groq": "Groq",
         "mistral": "Mistral",
+        "gpt": "GPT",
         "local": "local LLM",
     }[provider]
     _validate_settings(
@@ -441,7 +446,7 @@ def generate_framework_bundle(
             if json_validation_failure and provider != "local":
                 # The provider's best-effort JSON Schema mode can reject a valid-looking
                 # partial generation before the response reaches local parsing.
-                # Groq/Mistral retain their explicit provider compatibility path.
+                # Remote providers retain their explicit compatibility path.
                 # Local/LM Studio accepts json_schema but rejects json_object, so
                 # it must remain schema-constrained on every retry.
                 json_object_fallback = True
@@ -724,13 +729,14 @@ def _request_payload(
     payload: dict[str, object] = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
         "response_format": response_format,
     }
     if provider == "mistral":
         payload["max_tokens"] = max_output_tokens
     else:
         payload["max_completion_tokens"] = max_output_tokens
+    if provider != "gpt":
+        payload["temperature"] = temperature
     if reasoning_effort is not None:
         payload["reasoning_effort"] = reasoning_effort
     if chat_template_kwargs is not None:
@@ -757,6 +763,16 @@ def _load_api_key(provider: str, *, require_api_key: bool) -> str:
             ) from exc
         if not api_key:
             raise GroqFrameworkError("Mistral API key is required in api_key/mistral.")
+        return api_key
+    if provider == "gpt":
+        try:
+            api_key = GPT_API_KEY_PATH.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise GroqFrameworkError(
+                "GPT API key is required in api_key/gpt."
+            ) from exc
+        if not api_key:
+            raise GroqFrameworkError("GPT API key is required in api_key/gpt.")
         return api_key
     return ""
 

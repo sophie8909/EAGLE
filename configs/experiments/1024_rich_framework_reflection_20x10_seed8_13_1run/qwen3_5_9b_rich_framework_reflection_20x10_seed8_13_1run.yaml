@@ -36,7 +36,12 @@ prompt_reflection_probability: 0.0
 code_reflection_probability: 0.0
 
 framework:
-  bundle_path: configs/framework_bundles/fixed_worker_combat/bundle.json
+  bootstrap_backend: gpt
+  model: gpt-6.1-sol
+  design_brief: >-
+    Design a complete MicroRTS Java agent framework with rich combinable rules
+    and finite parameter options for economy, production, targeting, combat,
+    retreat, conditions, and priorities.
   evolution_mode: reflection
 
 llm:

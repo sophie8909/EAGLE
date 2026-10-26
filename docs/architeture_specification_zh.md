@@ -5,7 +5,7 @@
 
 ## 系統定位
 
-在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 在 fresh startup inline 呼叫 Groq GPT-OSS bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA、Coach 輔助的完整 genome 選擇，或獨立的週期性 framework 反思。實際比賽執行時
+在 `java_materialization_mode: llm` 下，EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent；`deterministic_dsl` 以版本化 compiler 產生 Java；`framework_slots` 在 fresh startup inline 呼叫所選 provider bootstrap 建立完整 Java framework 與有限 typed slots，再由 `framework.evolution_mode` 選擇 local EA、Coach 輔助的完整 genome 選擇，或獨立的週期性 framework 反思。實際比賽執行時
 不會呼叫 LLM。每個 phenotype 都是一份完整的
 `ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
 runtime LLM policy。
@@ -29,10 +29,10 @@ Gen 0 的 WorkerRush seed 是唯一封閉的 reference policy：deterministic co
 記錄官方來源 SHA-256；LLM 生成與 Strategy Mutation 不得產生 reference policy。
 Deterministic 設定必須使用 `candidate_java_mode: generated_phenotype` 與 `parent_evaluation_mode: reuse_cached`，其他值會被拒絕。
 
-### Groq framework 與有限 slots
+### Provider framework bootstrap 與有限 slots
 
-`framework_slots` 會在 fresh experiment startup inline 執行 bounded Groq GPT-OSS
-bootstrap。未設定 `framework.bundle_path` 時，必須提供
+`framework_slots` 會在 fresh experiment startup inline 執行 bounded Groq、
+Mistral、GPT/OpenAI 或 local bootstrap。未設定 `framework.bundle_path` 時，必須提供
 `framework.design_brief`；`framework.model` 可省略，預設為
 `openai/gpt-oss-120b`。每個 replicate 會建立獨立 framework；若要跨 seeds
 固定 framework，請明確共用同一 `bundle_path`。Standalone
@@ -61,8 +61,10 @@ Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可�
 bundle 建立前不可 resume；失敗 replicate 不會加入 folder-batch index，資料夾
 重跑可再次啟動缺少的 slot。Mock 模式若只有 `design_brief` 而沒有既有
 `bundle_path` 會拒絕執行，確保不呼叫 API。Groq 的 `GROQ_API_KEY` 從
-process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，兩者
-都絕不寫入 config 或 artifact。完整契約見
+process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，GPT 的
+key 從 `api_key/gpt` 讀取，三者都絕不寫入 config 或 artifact。GPT API
+只用於初始 framework bootstrap；後續 framework reflection、策略描述修訂與
+slot 填寫仍使用 top-level 本地 model。完整契約見
 [framework slots](architecture/framework_slots.md)。
 
 新增 opt-in `framework.evolution_mode: reflection`，要求 self-play；初始 framework

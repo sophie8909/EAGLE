@@ -4,8 +4,10 @@
 
 `framework.evolution_mode: reflection` separates initial GPT framework design
 from local-Qwen whole-framework reflection. The new
-`1024_rich_framework_reflection_20x10_seed8_13_1run` config uses Groq
-`openai/gpt-oss-120b`, local Qwen, six seeds 8–13, 20 generations, population 10,
+`1024_rich_framework_reflection_20x10_seed8_13_1run` config uses the OpenAI API
+with `gpt-6.1-sol` only for initial framework bootstrap, reads its key from
+`api_key/gpt`, and uses local Qwen for all later reflection. It runs six seeds
+8–13, 20 generations, population 10,
 and five-generation self-play refresh. G6/G11/G16 use every G5/G10/G15 survivor's
 slot list and fitness; G1 only refreshes opponents. Generation zero has ten
 distinct authored strategy descriptions, including faithful WorkerRush, and
@@ -26,6 +28,12 @@ and historical artifact compatibility. Experiment config validation,
 full-suite run is claimed.
 Distinctness is required only initially; later descriptions may converge.
 Successful revisions/filling remain effective even if the framework is unchanged.
+
+The 2026-10-26 GPT bootstrap extension adds the `gpt` provider, reads only
+`api_key/gpt`, and uses `gpt-6.1-sol` with OpenAI Chat Completions structured
+output. Provider/key/payload, startup, local-reflection routing, framework-slot,
+Coach, version, and reflection regressions pass all 118 focused tests. No live
+OpenAI request was made during validation.
 
 ## Nearest-behavior mating (2026-10-23)
 
@@ -666,7 +674,8 @@ commands, evidence, and the fixed-roster asset limitation.
 The explicit two-stage `framework_slots` mode is implemented. The shared
 framework bootstrap path supports bounded attempts, raw-before-parse evidence,
 timing/hashes, and normalized bundle publication; Groq uses `GROQ_API_KEY` and
-the Mistral experiment backend reads `api_key/mistral`. The Groq JSON Schema
+the Mistral experiment backend reads `api_key/mistral`; the GPT bootstrap backend
+reads `api_key/gpt`. The Groq JSON Schema
 request uses `strict: false`
 because `report.slot_rationale` has dynamic keys. Provider enforcement is
 best-effort; local exact validation remains authoritative. Its exact schema is
@@ -713,7 +722,7 @@ Fresh framework-slot runs accept `framework.design_brief` and optional bootstrap
 Operators no longer need to create a separate bundle or execute the standalone
 bootstrap command. Existing external bundles remain supported for controlled
 reuse across seeds. Resume uses the frozen run bundle and checks brief, model,
-and evolution-mode identity without another Groq request.
+and evolution-mode identity without another provider request.
 
 Failed startup retains bootstrap evidence, requested config, and a failed or
 interrupted manifest without binding a folder-batch index slot. Mock mode

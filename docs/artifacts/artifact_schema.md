@@ -626,7 +626,8 @@ Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standa
     └── result.json
 ```
 
-`bootstrap.json` records the selected `groq` or `local` backend. `response_raw.json` is flushed before provider-envelope or generated-content
+`bootstrap.json` records the selected `groq`, `mistral`, `gpt`, or `local`
+backend. `response_raw.json` is flushed before provider-envelope or generated-content
 parsing, including failed responses. Attempt schema
 `eagle-groq-framework-attempt-v1` records status/retryability, redacted error,
 provider/model/endpoint/HTTP status, UTC boundaries, duration, and exact request
@@ -650,7 +651,7 @@ the bounded retry switches to JSON Object Mode; the same local bundle parser
 and validator remain authoritative for the fallback response.
 
 The API key is never an artifact. Groq reads only `GROQ_API_KEY`; Mistral reads
-only `api_key/mistral`. The selected key is sent in the HTTP Bearer
+only `api_key/mistral`; GPT reads only `api_key/gpt`. The selected key is sent in the HTTP Bearer
 authorization header, excluded from request JSON/config, and redacted from
 stored errors. A bootstrap target must be new or empty so previous evidence is
 never overwritten. See [framework slots](../architecture/framework_slots.md) for

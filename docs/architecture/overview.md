@@ -1,8 +1,8 @@
 # Architecture overview
 
 Framework-slot self-play additionally supports opt-in
-`framework.evolution_mode: reflection`: GPT designs the initial framework and
-the configured local model revises whole finite-slot bundle versions at opponent
+`framework.evolution_mode: reflection`: the bootstrap-only GPT API designs the
+initial framework and the configured local model revises whole finite-slot bundle versions at opponent
 refresh boundaries. Candidate mating/mutation stay local. See the canonical
 [framework contract](framework_slots.md) for repair, migration, and resume rules.
 

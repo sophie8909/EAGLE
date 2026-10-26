@@ -23,7 +23,7 @@ When code and the specification differ, preserve the specification and update [`
 | Modify Strategy/Prompt mutation or Code source gating | [architecture spec](eagle_architecture_spec.md) + [mutation](architecture/mutation.md) + [artifact schema](artifacts/artifact_schema.md) + [timing schema](artifacts/timing_schema.md) |
 | Modify Uniform Crossover | [architecture spec](eagle_architecture_spec.md) + [crossover](architecture/crossover.md) + [lineage schema](artifacts/lineage_schema.md) |
 | Modify Java generation, validation, or compilation | [architecture spec](eagle_architecture_spec.md) + [Java generation](architecture/java_generation.md) + [failure classification](evaluation/failure_classification.md) |
-| Modify Groq framework bootstrap, local slots, or Coach-assisted slot evolution | [framework slots](architecture/framework_slots.md) + [candidate model](architecture/candidate_model.md) + [artifact schema](artifacts/artifact_schema.md) |
+| Modify provider framework bootstrap, local slots, or Coach-assisted slot evolution | [framework slots](architecture/framework_slots.md) + [candidate model](architecture/candidate_model.md) + [artifact schema](artifacts/artifact_schema.md) |
 | Modify MicroRTS execution | [evaluation pipeline](evaluation/evaluation_pipeline.md) + [failure classification](evaluation/failure_classification.md) + [artifact schema](artifacts/artifact_schema.md) |
 | Modify `game_performance` | [game performance](evaluation/game_performance.md) + [evaluation pipeline](evaluation/evaluation_pipeline.md) |
 | Modify `code_quality` | [code quality](evaluation/code_quality.md) + [failure classification](evaluation/failure_classification.md) |

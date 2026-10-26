@@ -24,7 +24,7 @@ part of run identity; resume rejects a mode mismatch.
 
 `reflection` is a separate opt-in policy requiring self-play. Initial framework
 design uses the configured bootstrap backend/model (the new experiment uses
-Groq `openai/gpt-oss-120b`); local Qwen subsequently reflects on the complete
+the OpenAI API with `gpt-6.1-sol`); local Qwen subsequently reflects on the complete
 active framework and every survivor from the immediately completed generation,
 including each candidate's complete `control_genome` slot list and fitness.
 Generation zero starts from ten distinct natural-language strategy descriptions,
@@ -104,8 +104,8 @@ resolved probability is resume-fenced; older manifests without the field mean
 Without `framework.bundle_path`, fresh startup requires `framework.design_brief`
 and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
 `framework.bootstrap_backend` selects `groq` (the default API path), `mistral`
-(the Mistral API path), or `local` (the configured local llama-server, without
-an API key). The standalone
+(the Mistral API path), `gpt` (the OpenAI API path), or `local` (the configured
+local llama-server, without an API key). The standalone
 `python -m eagle framework` command remains available to prepare an external
 bundle for reuse. The bootstrap requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
@@ -160,23 +160,25 @@ and Java validation remain local and deterministic.
 ## Minimal use
 
 Put the design brief and bootstrap model in the experiment config. The model is
-optional and defaults to `openai/gpt-oss-120b`; the API key stays in the process
-environment:
+optional and defaults to `openai/gpt-oss-120b` for the default Groq backend.
+Select `gpt` and `gpt-6.1-sol` for the OpenAI bootstrap path:
 
 ```yaml
 java_materialization_mode: framework_slots
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: mistral  # groq, mistral, or local
+  bootstrap_backend: gpt  # groq, mistral, gpt, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: mistral-small-latest
-  evolution_mode: llm_coach
-  coach_offspring_probability: 0.5  # Exclusive Coach and traditional offspring routes
+  model: gpt-6.1-sol
+  evolution_mode: reflection
 ```
 
 For `groq`, set `GROQ_API_KEY` in the environment. For `mistral`, EAGLE reads
-the key from `api_key/mistral`. For `local`, the top-level experiment `model`
-profile supplies the already managed llama-server and no API key is read. Start
+the key from `api_key/mistral`; for `gpt`, it reads `api_key/gpt`. For `local`,
+the top-level experiment `model` profile supplies the already managed llama-server
+and no API key is read. Provider keys are bootstrap-only. In `reflection` mode,
+all later framework, strategy-description, and genome reflection calls use the
+top-level local experiment model. Start
 the ordinary experiment with
 `python -m eagle experiment --config-dir configs/experiments/framework.yaml` or
 `./experiment.sh configs/experiments/framework.yaml`. The top-level experiment
@@ -203,14 +205,19 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    the backend selected by `framework.bootstrap_backend` (default `groq`) with `framework.model` (default
    `openai/gpt-oss-120b`), and writes bootstrap evidence under run-owned
    `framework/`. `GROQ_API_KEY` is read only for `groq`; `api_key/mistral` is
-   read only for `mistral`; the local backend reads no API key. Each fresh
+   read only for `mistral`; `api_key/gpt` is read only for `gpt`; the local
+   backend reads no API key. Each fresh
    replicate designs a separate framework unless it uses the same explicit
    `bundle_path` as the other replicates.
 2. The Groq backend sends the checked-in `groq_framework_design` prompt to
    `https://api.groq.com/openai/v1/chat/completions` with Bearer authorization.
    The Mistral backend sends the same prompt to
    `https://api.mistral.ai/v1/chat/completions` with Bearer authorization and
-   uses Mistral JSON Object Mode with `max_tokens`. The local backend sends the
+   uses Mistral JSON Object Mode with `max_tokens`. The GPT backend sends it to
+   `https://api.openai.com/v1/chat/completions` with the `eagle_framework` JSON
+   Schema, `max_completion_tokens`, and `reasoning_effort: medium`; it omits
+   sampling temperature because GPT-6.1 Sol reasoning requests do not accept it.
+   The local backend sends the
    same prompt to the configured local
    `llama-server/v1/chat/completions` endpoint without authorization and starts
    with the framework JSON Schema plus `chat_template_kwargs.enable_thinking: false` so

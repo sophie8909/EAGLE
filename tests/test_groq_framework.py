@@ -15,6 +15,9 @@ from eagle.generation.groq_framework import (
     ATTEMPT_SCHEMA_VERSION,
     BOOTSTRAP_SCHEMA_VERSION,
     DEFAULT_GROQ_MODEL,
+    DEFAULT_GPT_API_ROOT,
+    DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS,
+    DEFAULT_GPT_MODEL,
     DEFAULT_MISTRAL_API_ROOT,
     DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
     DEFAULT_MISTRAL_MODEL,
@@ -233,6 +236,82 @@ class GroqFrameworkTests(unittest.TestCase):
                 path.read_bytes() for path in output.rglob("*") if path.is_file()
             )
             self.assertNotIn(secret.encode("utf-8"), persisted)
+
+    def test_gpt_reads_repository_key_file_and_uses_openai_payload(self) -> None:
+        secret = "gpt-test-key-that-must-not-be-persisted"
+        captured_requests = []
+
+        def transport(request, timeout):
+            captured_requests.append((request, timeout))
+            return _Response(_provider_response())
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_path = Path(directory) / "gpt"
+            key_path.write_text(secret + "\n", encoding="utf-8")
+            with patch.dict(os.environ, {}, clear=True), patch(
+                "eagle.generation.groq_framework.GPT_API_KEY_PATH", key_path
+            ), patch(
+                "eagle.generation.groq_framework.urllib.request.urlopen",
+                side_effect=transport,
+            ):
+                output = Path(directory) / "framework"
+                result = generate_framework_bundle(
+                    output,
+                    model=DEFAULT_GPT_MODEL,
+                    design_brief="Build a bounded economy and combat controller.",
+                    provider="gpt",
+                    api_root=DEFAULT_GPT_API_ROOT,
+                    max_output_tokens=DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                    max_attempts=1,
+                    request_interval_seconds=0.0,
+                    json_object_mode=False,
+                    reasoning_effort="medium",
+                )
+
+            self.assertEqual(result.bundle, _bundle())
+            request, timeout = captured_requests[0]
+            self.assertEqual(timeout, 300.0)
+            self.assertEqual(request.full_url, "https://api.openai.com/v1/chat/completions")
+            headers = {key.lower(): value for key, value in request.header_items()}
+            self.assertEqual(headers["authorization"], f"Bearer {secret}")
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(payload["model"], DEFAULT_GPT_MODEL)
+            self.assertEqual(payload["max_completion_tokens"], DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS)
+            self.assertNotIn("max_tokens", payload)
+            self.assertEqual(payload["response_format"]["type"], "json_schema")
+            self.assertEqual(payload["reasoning_effort"], "medium")
+            self.assertNotIn("temperature", payload)
+            persisted = b"\n".join(
+                path.read_bytes() for path in output.rglob("*") if path.is_file()
+            )
+            self.assertNotIn(secret.encode("utf-8"), persisted)
+
+    def test_gpt_requires_a_nonempty_repository_key_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            missing_path = root / "gpt"
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "ignored"}, clear=True), patch(
+                "eagle.generation.groq_framework.GPT_API_KEY_PATH", missing_path
+            ):
+                with self.assertRaisesRegex(GroqFrameworkError, "api_key/gpt"):
+                    generate_framework_bundle(
+                        root / "missing-framework",
+                        design_brief="Build a bounded controller.",
+                        provider="gpt",
+                        max_attempts=1,
+                    )
+
+            missing_path.write_text("\n", encoding="utf-8")
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "ignored"}, clear=True), patch(
+                "eagle.generation.groq_framework.GPT_API_KEY_PATH", missing_path
+            ):
+                with self.assertRaisesRegex(GroqFrameworkError, "api_key/gpt"):
+                    generate_framework_bundle(
+                        root / "empty-framework",
+                        design_brief="Build a bounded controller.",
+                        provider="gpt",
+                        max_attempts=1,
+                    )
 
     def test_bootstrap_persists_schema_artifacts_hashes_and_no_secret(self) -> None:
         secret = "test-api-key-that-must-not-be-persisted"

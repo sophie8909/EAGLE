@@ -69,9 +69,11 @@ def freeze_framework_bundle(
         if mock:
             raise ValueError(
                 "Mock framework startup requires framework.bundle_path; "
-                "Groq is disabled in mock mode; framework bootstrap is disabled in mock mode."
+                "provider bootstrap is disabled in mock mode."
             )
         from eagle.generation.groq_framework import (
+            DEFAULT_GPT_API_ROOT,
+            DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS,
             DEFAULT_LOCAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
             DEFAULT_MISTRAL_API_ROOT,
             DEFAULT_MISTRAL_FRAMEWORK_MAX_OUTPUT_TOKENS,
@@ -121,6 +123,20 @@ def freeze_framework_bundle(
                 require_https=True,
                 json_object_mode=True,
                 reasoning_effort=None,
+            )
+        elif config.framework_bootstrap_backend == "gpt":
+            bootstrap_kwargs.update(
+                api_root=DEFAULT_GPT_API_ROOT,
+                max_output_tokens=max(
+                    config.llm_max_tokens or 0,
+                    DEFAULT_GPT_FRAMEWORK_MAX_OUTPUT_TOKENS,
+                ),
+                request_interval_seconds=0.0,
+                provider="gpt",
+                require_api_key=True,
+                require_https=True,
+                json_object_mode=False,
+                reasoning_effort="medium",
             )
         result = generate_framework_bundle(
             run_dir / "framework",

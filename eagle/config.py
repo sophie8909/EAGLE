@@ -615,8 +615,8 @@ class ExperimentConfig:
                 raise ValueError("framework.coach_offspring_probability must be in [0, 1].")
             if self.framework_evolution_mode != "llm_coach":
                 raise ValueError("framework.coach_offspring_probability requires framework.evolution_mode=llm_coach.")
-        if self.framework_bootstrap_backend not in {"groq", "mistral", "local"}:
-            raise ValueError("framework.bootstrap_backend must be groq, mistral, or local.")
+        if self.framework_bootstrap_backend not in {"groq", "mistral", "gpt", "local"}:
+            raise ValueError("framework.bootstrap_backend must be groq, mistral, gpt, or local.")
         if self.framework_evolution_mode != "local" and self.java_materialization_mode != "framework_slots":
             raise ValueError("framework.evolution_mode requires framework_slots materialization.")
         if self.java_materialization_mode == "framework_slots":

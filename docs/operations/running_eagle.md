@@ -93,11 +93,14 @@ conda run --no-capture-output -n eagle \
 Fresh framework-slot runs bootstrap inline from `framework.design_brief` unless
 an external `framework.bundle_path` is provided. Set
 `framework.bootstrap_backend: local` to use the configured local llama-server
-without an API key, `groq` to use the default Groq API path, or `mistral` to use
-Mistral. For Groq, set `GROQ_API_KEY` in the process environment; for Mistral,
-store the key in `api_key/mistral`. Do not put credentials in YAML, CLI
+without an API key, `groq` to use the default Groq API path, `mistral` to use
+Mistral, or `gpt` to use OpenAI. For Groq, set `GROQ_API_KEY` in the process
+environment; for Mistral, store the key in `api_key/mistral`; for GPT, store it
+in `api_key/gpt`. Do not put credentials in YAML, CLI
 arguments, shell history, or artifacts. `framework.model` defaults to
-`openai/gpt-oss-120b`; use `mistral-small-latest` with the Mistral backend. The standalone
+`openai/gpt-oss-120b`; use `mistral-small-latest` with Mistral or `gpt-6.1-sol`
+with GPT. The GPT credential and endpoint are used only during initial framework
+bootstrap. Later `reflection` stages use the top-level local model. The standalone
 `python -m eagle framework` command remains available for preparing a bundle to
 reuse across runs or replicate seeds.
 
@@ -131,10 +134,10 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: mistral  # groq, mistral, or local
+  bootstrap_backend: gpt  # groq, mistral, gpt, or local
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
-  model: mistral-small-latest
-  evolution_mode: llm_coach
+  model: gpt-6.1-sol
+  evolution_mode: reflection
 ```
 
 Set the top-level `model` profile for the experiment runtime as usual. Omit
@@ -180,7 +183,7 @@ after failure. Successful bootstrap validates and freezes the bundle at
 frozen bundle and compares the design brief, bootstrap backend/model, and evolution
 mode; it never regenerates the framework. Each fresh replicate bootstraps a
 separate framework unless the same explicit bundle path is shared. Mock mode
-rejects inline bootstrap without an existing bundle, ensuring no Groq request.
+rejects inline bootstrap without an existing bundle, ensuring no provider request.
 Failed attempts and a failed manifest remain; the pending config cannot resume
 until a valid frozen bundle exists.
 

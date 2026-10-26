@@ -767,13 +767,18 @@ uses an explicit external `framework.bundle_path` if supplied. Otherwise, startu
 requires `framework.design_brief` and accepts optional `framework.model`
 (default `openai/gpt-oss-120b`) to bootstrap the framework inline.
 `framework.bootstrap_backend` selects the default `groq` API path, the `mistral`
-API path, or the configured local llama-server path. Groq reads `GROQ_API_KEY`
-and Mistral reads `api_key/mistral`; the local path reads no API key. The standalone
+API path, the `gpt` OpenAI API path, or the configured local llama-server path.
+Groq reads `GROQ_API_KEY`, Mistral reads `api_key/mistral`, and GPT reads
+`api_key/gpt`; the local path reads no API key. The standalone
 `python -m eagle framework` CLI remains available for compatibility. Startup
 persists raw responses before parsing and publishes one strictly validated
 `eagle-framework-bundle-v1`. `GROQ_API_KEY` is read only from the environment
 when the selected backend is `groq`; `api_key/mistral` is read only when the
-selected backend is `mistral`.
+selected backend is `mistral`; `api_key/gpt` is read only when the selected
+backend is `gpt`. The GPT path targets `https://api.openai.com/v1/chat/completions`
+and uses `gpt-6.1-sol` when selected by the experiment config. This provider is
+used only for initial bootstrap; `framework.evolution_mode: reflection` continues
+to use the top-level local experiment model for all later reflection calls.
 Bootstrap is a startup operation, not part of EA;
 `framework.evolution_mode` selects local evolution (the default), the opt-in
 Coach-assisted selection path, or self-play framework `reflection` described below.
@@ -870,7 +875,7 @@ Successful description/genome transitions are retained even if the proposed
 framework bundle itself is unchanged. Mock initialization retains sampled
 genomes and the authored descriptions without external calls.
 
-`GROQ_API_KEY` and the Mistral key are accepted only from their provider-specific
+`GROQ_API_KEY`, the Mistral key, and the GPT key are accepted only from their provider-specific
 credential sources and are never written to prompt, request, config, bootstrap,
 run, candidate, or failure artifacts. Raw provider output and structured report
 are untrusted evidence;

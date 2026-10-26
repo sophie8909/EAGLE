@@ -13,6 +13,7 @@ import yaml
 
 from eagle.config import ExperimentConfig
 from eagle.evolution.resume import load_resume_config, validate_resume_config
+from eagle.evolution.runtime import build_search_runtime
 from eagle.evolution.search import run_search
 from eagle.run_artifacts import FRAMEWORK_BUNDLE_ARTIFACT
 from tests.test_framework_slots_artifacts import bundle_payload
@@ -156,6 +157,70 @@ class FrameworkStartupTests(unittest.TestCase):
             self.assertTrue(generate.call_args.kwargs["require_https"])
             self.assertTrue(generate.call_args.kwargs["json_object_mode"])
             self.assertIsNone(generate.call_args.kwargs["reasoning_effort"])
+
+    def test_gpt_bootstrap_backend_routes_to_openai_without_local_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="gpt",
+                model="gpt-6.1-sol",
+            )
+
+            with patch("eagle.generation.groq_framework.generate_framework_bundle") as generate, patch(
+                "eagle.evolution.search.preflight_evaluation_opponents"
+            ), patch(
+                "eagle.evolution.runtime.preflight_llm_endpoint"
+            ) as preflight:
+                generate.side_effect = lambda output_dir, **kwargs: self._generator_result(Path(output_dir))
+                with self.assertRaises(KeyboardInterrupt):
+                    run_search(
+                        config,
+                        mock=False,
+                        run_id="gpt-framework-bootstrap",
+                        on_run_created=lambda on_run_dir: (_ for _ in ()).throw(KeyboardInterrupt),
+                    )
+
+            self.assertEqual(generate.call_args.kwargs["provider"], "gpt")
+            self.assertEqual(generate.call_args.kwargs["api_root"], "https://api.openai.com/v1")
+            self.assertEqual(generate.call_args.kwargs["model"], "gpt-6.1-sol")
+            self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 12288)
+            self.assertTrue(generate.call_args.kwargs["require_api_key"])
+            self.assertTrue(generate.call_args.kwargs["require_https"])
+            self.assertFalse(generate.call_args.kwargs["json_object_mode"])
+            self.assertEqual(generate.call_args.kwargs["reasoning_effort"], "medium")
+            preflight.assert_not_called()
+
+    def test_gpt_bootstrap_backend_is_accepted_by_config_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._source_config(
+                Path(directory),
+                bootstrap_backend="gpt",
+                model="gpt-6.1-sol",
+            )
+            config.validate()
+            self.assertEqual(config.framework_bootstrap_backend, "gpt")
+
+    def test_framework_reflection_uses_local_model_after_gpt_bootstrap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self._source_config(
+                root,
+                bootstrap_backend="gpt",
+                model="gpt-6.1-sol",
+                evolution_mode="reflection",
+            )
+            with patch("eagle.evolution.runtime.preflight_llm_endpoint") as preflight:
+                runtime = build_search_runtime(
+                    config,
+                    mock=False,
+                    run_dir=root / "run",
+                    candidates_dir=root / "run" / "candidates",
+                )
+
+            self.assertEqual(runtime.client.model, config.llm_model)
+            self.assertNotEqual(runtime.client.model, config.framework_model)
+            preflight.assert_called_once_with(runtime.client)
 
     def test_resume_validation_accepts_frozen_bundle_and_rejects_changed_source(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -313,7 +378,7 @@ class FrameworkStartupTests(unittest.TestCase):
                 self._source_config(root, model=" ").validate()
             config = self._source_config(root)
             with patch("eagle.generation.groq_framework.generate_framework_bundle") as generate:
-                with self.assertRaisesRegex(ValueError, "Groq is disabled in mock mode"):
+                with self.assertRaisesRegex(ValueError, "provider bootstrap is disabled in mock mode"):
                     run_search(config, mock=True, run_id="mock-framework-bootstrap")
             generate.assert_not_called()
 
