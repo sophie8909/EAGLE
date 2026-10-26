@@ -137,7 +137,7 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: codex  # codex (GPT fallback), groq, mistral, gpt, or local
+  bootstrap_backend: gpt  # direct API; codex, groq, mistral, and local are also supported
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
   model: gpt-6.1-sol
   evolution_mode: reflection

@@ -184,11 +184,11 @@ class FrameworkStartupTests(unittest.TestCase):
             self.assertEqual(generate.call_args.kwargs["provider"], "gpt")
             self.assertEqual(generate.call_args.kwargs["api_root"], "https://api.openai.com/v1")
             self.assertEqual(generate.call_args.kwargs["model"], "gpt-6.1-sol")
-            self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 12288)
+            self.assertEqual(generate.call_args.kwargs["max_output_tokens"], 32768)
             self.assertTrue(generate.call_args.kwargs["require_api_key"])
             self.assertTrue(generate.call_args.kwargs["require_https"])
             self.assertFalse(generate.call_args.kwargs["json_object_mode"])
-            self.assertEqual(generate.call_args.kwargs["reasoning_effort"], "medium")
+            self.assertEqual(generate.call_args.kwargs["reasoning_effort"], "low")
             preflight.assert_not_called()
 
     def test_gpt_bootstrap_backend_is_accepted_by_config_validation(self):
@@ -279,6 +279,8 @@ class FrameworkStartupTests(unittest.TestCase):
             self.assertEqual(gpt.call_args.kwargs["provider"], "gpt")
             self.assertEqual(gpt.call_args.kwargs["api_root"], "https://api.openai.com/v1")
             self.assertEqual(gpt.call_args.kwargs["model"], "gpt-6.1-sol")
+            self.assertEqual(gpt.call_args.kwargs["max_output_tokens"], 32768)
+            self.assertEqual(gpt.call_args.kwargs["reasoning_effort"], "low")
             framework_dir = root / "runs" / "codex-gpt-fallback" / "framework"
             route = json.loads((framework_dir / "bootstrap.json").read_text(encoding="utf-8"))
             self.assertEqual(route["selected_provider"], "gpt")

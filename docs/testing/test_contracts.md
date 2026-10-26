@@ -355,7 +355,8 @@ ephemeral, schema-constrained command, direct-JSON validation, no GPT key/API
 access on success, and fallback on missing executable, timeout, nonzero exit,
 or invalid output. GPT bootstrap tests additionally prove the
 OpenAI endpoint, `gpt-6.1-sol`, JSON Schema, `max_completion_tokens`,
-`reasoning_effort: medium`, and absence of unsupported `temperature`; reflection
+`reasoning_effort: low`, a 32,768-token bootstrap budget, and absence of
+unsupported `temperature`; reflection
 routing remains bound to the top-level local model. Provider schema
 enforcement is best-effort; local exact validation, CLI dispatch, and
 non-overwrite behavior are contracts.

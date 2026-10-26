@@ -4,11 +4,11 @@
 
 `framework.evolution_mode: reflection` separates initial GPT framework design
 from local-Qwen whole-framework reflection. The new
-`1024_rich_framework_reflection_20x10_seed8_13_1run` config invokes
-`gpt-6.1-sol` through `codex exec` for initial framework bootstrap and falls
-back to the OpenAI API, reading `api_key/gpt`, only when Codex is unavailable
-or its structured output fails validation. It uses local Qwen for all later
-reflection. It runs six seeds
+`1024_rich_framework_reflection_20x10_seed8_13_1run` config invokes the OpenAI
+API directly with `gpt-6.1-sol` for initial framework bootstrap and reads
+`api_key/gpt`. It uses low reasoning effort and a 32,768-token completion budget
+after a production attempt exhausted 12,288 tokens entirely on reasoning and
+returned no visible content. It uses local Qwen for all later reflection. It runs six seeds
 8–13, 20 generations, population 10,
 and five-generation self-play refresh. G6/G11/G16 use every G5/G10/G15 survivor's
 slot list and fitness; G1 only refreshes opponents. Generation zero has ten
@@ -31,12 +31,14 @@ full-suite run is claimed.
 Distinctness is required only initially; later descriptions may converge.
 Successful revisions/filling remain effective even if the framework is unchanged.
 
-The 2026-10-26 bootstrap extension retains direct `gpt` as an explicit provider
-and adds `codex` as the preferred route. Codex runs once with read-only,
-ephemeral, schema-constrained execution; only a missing/failing Codex process or
-invalid result activates the existing bounded GPT API path. Provider/key/payload,
+The 2026-10-26 bootstrap extension retains both direct `gpt` and optional
+Codex-first routing. Codex runs once with read-only, ephemeral,
+schema-constrained execution; only a missing/failing Codex process or invalid
+result activates the existing bounded GPT API path. The tracked reflection
+experiment selects direct GPT after the Codex route failed in production. Provider/key/payload,
 startup, fallback, local-reflection routing, framework-slot, Coach, version, and
-reflection regressions are covered without making a live Codex or OpenAI request.
+reflection regressions use mocked transports. The production evidence above is
+the only live provider result claimed here; no valid framework was published.
 
 ## Nearest-behavior mating (2026-10-23)
 

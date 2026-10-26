@@ -162,13 +162,13 @@ and Java validation remain local and deterministic.
 
 Put the design brief and bootstrap model in the experiment config. The model is
 optional and defaults to `openai/gpt-oss-120b` for the default Groq backend.
-Select `codex` and `gpt-6.1-sol` for the Codex-first bootstrap path:
+Select `gpt` and `gpt-6.1-sol` for the direct OpenAI bootstrap path:
 
 ```yaml
 java_materialization_mode: framework_slots
 reflection_operator_mode: static
 framework:
-  bootstrap_backend: codex  # codex (GPT fallback), groq, mistral, gpt, or local
+  bootstrap_backend: gpt  # direct API; codex, groq, mistral, and local are also supported
   design_brief: "Design a complete CandidateAgent framework with a rich finite control surface."
   model: gpt-6.1-sol
   evolution_mode: reflection
@@ -221,8 +221,10 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    `https://api.mistral.ai/v1/chat/completions` with Bearer authorization and
    uses Mistral JSON Object Mode with `max_tokens`. The GPT backend sends it to
    `https://api.openai.com/v1/chat/completions` with the `eagle_framework` JSON
-   Schema, `max_completion_tokens`, and `reasoning_effort: medium`; it omits
+   Schema, `max_completion_tokens`, and `reasoning_effort: low`; it omits
    sampling temperature because GPT-6.1 Sol reasoning requests do not accept it.
+   GPT bootstrap reserves 32,768 completion tokens independently of the local
+   experiment model's smaller configured completion budget.
    The local backend sends the
    same prompt to the configured local
    `llama-server/v1/chat/completions` endpoint without authorization and starts

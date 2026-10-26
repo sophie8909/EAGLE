@@ -98,7 +98,7 @@ def _publish_codex_bootstrap_bundle(
                 require_api_key=True,
                 require_https=True,
                 json_object_mode=False,
-                reasoning_effort="medium",
+                reasoning_effort="low",
             )
             selected_provider = "gpt"
             selected_artifact = "gpt_fallback"
@@ -232,7 +232,7 @@ def freeze_framework_bundle(
                 require_api_key=True,
                 require_https=True,
                 json_object_mode=False,
-                reasoning_effort="medium",
+                reasoning_effort="low",
             )
         if config.framework_bootstrap_backend == "codex":
             bundle_path = _publish_codex_bootstrap_bundle(
