@@ -99,14 +99,21 @@ optional `framework.model` (default `openai/gpt-oss-120b`) to create the bundle.
 Both paths publish the validated exact bytes as run-owned
 `framework/bundle.json` before search and point the runtime config at that file.
 The manifest records `framework_bundle_version`, `framework_bundle_sha256`, and
-`framework_bundle_artifact: framework/bundle.json`. Once those fields and the
+`framework_bundle_artifact: framework/bundle.json`, plus the resolved
+`framework_bootstrap_scope` and `framework_bootstrap_max_attempts`. With
+`bootstrap_scope: experiment`, the first scheduled seed owns provider attempt
+evidence; every later seed stores an independent run-owned copy of the same
+initial bytes and hash, then produces only its own later reflection versions.
+Once those fields and the
 run-owned bytes agree, `startup_checkpoint: framework_frozen` marks the
 pre-generation checkpoint and `resumable` is true even when
 `latest_generation` is null. Older manifests without the marker remain
 compatible when the resolved config, manifest fences, and exact bytes prove the
 same checkpoint. The frozen file is immutable.
-Resume validates its exact bytes, compares design brief, bootstrap backend/model, and
-evolution mode, and never repeats initial bootstrap. When generation zero is
+Resume validates its exact bytes, compares design brief, bootstrap backend/model,
+scope/attempt limit, and evolution mode, and never repeats initial bootstrap.
+Folder resume uses seed 0's frozen checkpoint as the source for missing later
+replicates. When generation zero is
 not yet atomic, resume moves partial candidate, class, generation,
 initialization, LLM-log, archive, final-test, and run-timing evidence below
 `archives/interrupted_work/startup_attempt_<nnnn>/`, then replays generation
@@ -649,6 +656,10 @@ accepted only for the local backend after the complete response passes local
 bundle validation; Groq still requires `stop`. `eagle-groq-framework-bootstrap-v1` records the selected
 attempt, total duration, attempt summaries, and the SHA-256 of the exact
 published `bundle.json` bytes.
+
+`framework.bootstrap_max_attempts` controls the total number of HTTP generator
+attempts. The tracked shared-bootstrap experiment sets it to `3`; it does not
+mean one initial call followed by three additional retries.
 
 The OpenAI-compatible request uses user content in `messages` and
 `response_format` JSON Schema named `eagle_framework` with `strict: false`. The normalized bundle, extracted template,

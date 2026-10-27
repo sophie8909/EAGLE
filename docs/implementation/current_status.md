@@ -748,6 +748,16 @@ startup-to-EA handoff with the provider, runtime, and evaluation mocked.
 Compileall and diff checks pass. No live provider request was required.
 No live Groq framework generation was performed for this change.
 
+## Experiment-scoped framework bootstrap (2026-10-27)
+
+Framework-slot configs may now set `framework.bootstrap_scope: experiment` so
+the first scheduled seed performs the only inline provider bootstrap. Its exact
+initial bundle is copied into every later run-owned `framework/bundle.json`,
+preserving per-run hashes and resume invariants while later framework reflection
+remains seed-local. `framework.bootstrap_max_attempts` is persisted and
+resume-fenced as a total attempt limit. The tracked 50×10 config uses seeds
+8–13 and a limit of three attempts. No live experiment was launched.
+
 ## Rich checked-in framework control surface (2026-10-18)
 
 The checked-in `fixed_worker_combat` framework now exposes 27 finite controls

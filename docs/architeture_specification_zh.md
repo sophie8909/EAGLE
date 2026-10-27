@@ -34,8 +34,12 @@ Deterministic 設定必須使用 `candidate_java_mode: generated_phenotype` 與 
 `framework_slots` 會在 fresh experiment startup inline 執行 bounded Groq、
 Mistral、GPT/OpenAI 或 local bootstrap。未設定 `framework.bundle_path` 時，必須提供
 `framework.design_brief`；`framework.model` 可省略，預設為
-`openai/gpt-oss-120b`。每個 replicate 會建立獨立 framework；若要跨 seeds
-固定 framework，請明確共用同一 `bundle_path`。Standalone
+`openai/gpt-oss-120b`。`framework.bootstrap_scope` 預設為 `run`，因此每個
+replicate 會建立獨立 framework；設為 `experiment` 時，只有第一個排程 seed
+執行 inline bootstrap，後續 seeds 將相同 exact bytes 複製到各自 run-owned
+`framework/bundle.json` 後才獨立演化。`framework.bootstrap_max_attempts` 表示
+HTTP generator 的總嘗試次數（不是第一次加上額外三次重試）。若要預先
+固定 framework，也可明確共用同一 `bundle_path`。Standalone
 `python -m eagle framework` 仍支援預先建立 bundle 的相容流程。
 
 Experiment 啟動時會將 bundle exact bytes 寫入 run 的

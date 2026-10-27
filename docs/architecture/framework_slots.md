@@ -108,7 +108,12 @@ and optionally accepts `framework.model` (default `openai/gpt-oss-120b`).
 CLI attempt followed by GPT API fallback only on failure), or `local` (the
 configured local llama-server, without an API key). The standalone
 `python -m eagle framework` command remains available to prepare an external
-bundle for reuse. The bootstrap requests at least 24
+bundle for reuse. `framework.bootstrap_scope` defaults to `run`. Setting it to
+`experiment` makes the first scheduled seed the only inline-bootstrap owner;
+later seeds copy those exact bytes into their own run-owned bundle before they
+diverge. `framework.bootstrap_max_attempts` is the total bounded HTTP-generator
+attempt count, not an initial request plus that many retries. The bootstrap
+requests at least 24
 nonconstant slots, including at least six `expression_choice` slots with at least
 four distinct choices each, covering economy, production, targeting, combat,
 conditions, and priorities. These are requested design targets, not a guarantee
@@ -209,9 +214,10 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    `openai/gpt-oss-120b`), and writes bootstrap evidence under run-owned
    `framework/`. `GROQ_API_KEY` is read only for `groq`; `api_key/mistral` is
    read only for `mistral`; `api_key/gpt` is read only for `gpt`; the local
-   backend reads no API key. Each fresh
-   replicate designs a separate framework unless it uses the same explicit
-   `bundle_path` as the other replicates. With `codex`, the primary process runs
+   backend reads no API key. Each fresh replicate designs a separate framework
+   under the default `bootstrap_scope: run`. Under `bootstrap_scope: experiment`,
+   seed 0 bootstraps once and every later seed receives a run-owned exact-byte
+   copy with the same SHA-256. With `codex`, the primary process runs
    once in read-only, ephemeral mode with the checked-in response schema. A
    missing executable, timeout, nonzero exit, empty/malformed result, or local
    bundle-validation failure activates the existing bounded GPT API generator.
@@ -252,7 +258,8 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    file. Otherwise, startup generates the bundle in the run-owned directory.
    Both paths freeze exact bytes and hash before search. Resume reads only that
    frozen bundle, checks its version/hash, compares `design_brief`, bootstrap
-   backend/model, and `evolution_mode`, and never repeats initial bootstrap.
+   backend/model, bootstrap scope/attempt limit, and `evolution_mode`, and never
+   repeats initial bootstrap.
    The frozen bundle plus resolved config and manifest is a resumable startup
    checkpoint before generation zero. If generation zero is absent, resume
    archives partial post-bootstrap work, including reflection initialization
@@ -435,7 +442,7 @@ evidence is added under `framework/gpt_fallback/`. The route record identifies
 the selected provider and retains both safe failure diagnostics when neither
 transport succeeds.
 
-Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. A usable frozen bundle is also the startup checkpoint when no generation snapshot exists; partial generation-zero work is archived under `archives/interrupted_work/startup_attempt_<nnnn>/` before deterministic replay. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path`. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
+Failed bootstrap attempts and manifest remain while config is pending; resume requires a usable frozen bundle. A usable frozen bundle is also the startup checkpoint when no generation snapshot exists; partial generation-zero work is archived under `archives/interrupted_work/startup_attempt_<nnnn>/` before deterministic replay. Each fresh replicate designs its own framework unless replicates share an explicit `bundle_path` or select experiment-scoped bootstrap. Folder resume recovers the first seed's frozen checkpoint before creating any missing later seed. Provider credentials remain outside config and artifacts. Credentials are never accepted in YAML or CLI arguments, embedded in request
 bodies, or persisted in any artifact. Only the HTTP Bearer authorization header
 receives the selected provider key; stored errors redact that value. Bundle content is
 untrusted generated input until strict schema, Java-envelope, marker, normal

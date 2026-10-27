@@ -772,6 +772,10 @@ requires `framework.design_brief` and accepts optional `framework.model`
 `framework.bootstrap_backend` selects the default `groq` API path, the `mistral`
 API path, the direct `gpt` OpenAI API path, the `codex` CLI-first path with GPT
 API fallback, or the configured local llama-server path.
+`framework.bootstrap_scope` defaults to `run`; `experiment` assigns the first
+scheduled seed as the sole inline-bootstrap owner and copies its exact initial
+bundle into each later run. `framework.bootstrap_max_attempts` is the total
+HTTP-generator attempt limit.
 Groq reads `GROQ_API_KEY`, Mistral reads `api_key/mistral`, and GPT reads
 `api_key/gpt`; the local path reads no API key. The standalone
 `python -m eagle framework` CLI remains available for compatibility. Startup
@@ -805,7 +809,7 @@ schema and bootstrap prompt contract are canonical in
 [framework slots](architecture/framework_slots.md).
 
 External bundles are validated during config resolution; inline bundles are validated during startup. Both paths freeze exact bytes and record their schema
-version and SHA-256. Run creation freezes a run-owned copy; each replicate bootstraps its own framework unless all use the same explicit bundle path. Resume compares design brief, bootstrap backend/model, and evolution mode, rejects
+version and SHA-256. Run creation freezes a run-owned copy; each replicate bootstraps its own framework unless all use the same explicit bundle path or the config selects experiment scope. Experiment-scoped later runs copy the first seed's bytes and then evolve independently. Resume compares design brief, bootstrap backend/model, scope/attempt limit, and evolution mode, rejects
 version/hash drift and never adopts a changed external file. The frozen bundle,
 resolved config, and manifest form an atomic pre-generation startup checkpoint.
 If generation zero is absent, resume archives partial post-bootstrap work and

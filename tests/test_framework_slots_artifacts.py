@@ -299,6 +299,40 @@ class FrameworkSlotsArtifactTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "protocol mismatch"):
                 load_resume_config(root / "run")
 
+    def test_inline_bootstrap_uses_configured_total_attempt_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_dir = root / "run"
+            run_dir.mkdir()
+            config = ExperimentConfig.from_mapping({
+                "java_materialization_mode": "framework_slots",
+                "candidate_java_mode": "generated_phenotype",
+                "parent_evaluation_mode": "reuse_cached",
+                "reflection_operator_mode": "static",
+                "framework": {
+                    "bootstrap_backend": "gpt",
+                    "bootstrap_scope": "experiment",
+                    "bootstrap_max_attempts": 3,
+                    "design_brief": "Build a test framework.",
+                },
+            })
+
+            def generate(output_dir, **_kwargs):
+                output_dir.mkdir(parents=True)
+                bundle_path = output_dir / "bundle.json"
+                bundle_path.write_text(json.dumps(bundle_payload()), encoding="utf-8")
+                return SimpleNamespace(bundle_path=bundle_path)
+
+            with patch(
+                "eagle.generation.groq_framework.generate_framework_bundle",
+                side_effect=generate,
+            ) as mocked:
+                frozen = freeze_framework_bundle(run_dir, config)
+
+            self.assertEqual(mocked.call_args.kwargs["max_attempts"], 3)
+            self.assertEqual(frozen.framework_bootstrap_scope, "experiment")
+            self.assertEqual(frozen.framework_bootstrap_max_attempts, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

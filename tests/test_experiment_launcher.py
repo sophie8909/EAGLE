@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -17,6 +18,9 @@ from eagle.experiment import (
     _load_experiment_run_index, resolve_experiment_configs,
 )
 from eagle.evolution.loop import SearchResult
+from eagle.artifacts import write_run_config
+from eagle.run_artifacts import initialize_run_manifest
+from tests.test_framework_slots_artifacts import bundle_payload
 
 
 class ExperimentLauncherTests(unittest.TestCase):
@@ -231,6 +235,141 @@ class ExperimentLauncherTests(unittest.TestCase):
             ).run(config_path=path, mock=True)
 
             self.assertEqual(seeds, [40, 40, 41, 41, 42, 42])
+
+    def test_experiment_scoped_framework_bootstrap_is_reused_for_all_seeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "shared-framework.yaml"
+            payload = {
+                "schema_version": "experiment-v2",
+                "experiment_name": "shared-framework",
+                "java_materialization_mode": "framework_slots",
+                "candidate_java_mode": "generated_phenotype",
+                "parent_evaluation_mode": "reuse_cached",
+                "reflection_operator_mode": "static",
+                "framework": {
+                    "bootstrap_scope": "experiment",
+                    "bootstrap_max_attempts": 3,
+                    "design_brief": "Build a test framework.",
+                },
+                "random_seeds": [8, 9, 10, 11, 12, 13],
+                "evaluation": {"mode": "self_play"},
+            }
+            config_path.write_text(
+                yaml.safe_dump(payload, sort_keys=False), encoding="utf-8"
+            )
+            calls: list[ExperimentConfig] = []
+            run_dirs: list[Path] = []
+            bundle_bytes = json.dumps(bundle_payload()).encode("utf-8")
+            bundle_hash = hashlib.sha256(bundle_bytes).hexdigest()
+
+            def search(config, **_kwargs):
+                calls.append(config)
+                run_dir = root / "runs" / f"seed-{config.random_seed}"
+                target = run_dir / "framework" / "bundle.json"
+                target.parent.mkdir(parents=True)
+                if config.framework_bundle_path is None:
+                    target.write_bytes(bundle_bytes)
+                else:
+                    target.write_bytes(config.framework_bundle_path.read_bytes())
+                frozen = replace(
+                    config,
+                    framework_bundle_path=target.resolve(),
+                    framework_bundle_version="eagle-framework-bundle-v1",
+                    framework_bundle_sha256=bundle_hash,
+                )
+                write_run_config(run_dir, frozen, mock=True)
+                initialize_run_manifest(run_dir, config=frozen)
+                run_dirs.append(run_dir)
+                return SearchResult(run_dir, [], None)
+
+            ExperimentOrchestrator(search_runner=search).run(
+                config_path=config_path,
+                mock=True,
+                skip_final_test=True,
+            )
+
+            self.assertEqual(
+                [call.random_seed for call in calls], [8, 9, 10, 11, 12, 13]
+            )
+            self.assertIsNone(calls[0].framework_bundle_path)
+            first_bundle = (run_dirs[0] / "framework" / "bundle.json").resolve()
+            self.assertTrue(
+                all(call.framework_bundle_path == first_bundle for call in calls[1:])
+            )
+            self.assertEqual(
+                {
+                    hashlib.sha256(
+                        (run_dir / "framework" / "bundle.json").read_bytes()
+                    ).hexdigest()
+                    for run_dir in run_dirs
+                },
+                {bundle_hash},
+            )
+
+    def test_folder_resume_binds_missing_seed_to_seed_zero_framework(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "shared-framework.yaml"
+            config_path.write_text(
+                yaml.safe_dump({
+                    "schema_version": "experiment-v2",
+                    "experiment_name": "shared-framework",
+                    "java_materialization_mode": "framework_slots",
+                    "candidate_java_mode": "generated_phenotype",
+                    "parent_evaluation_mode": "reuse_cached",
+                    "reflection_operator_mode": "static",
+                    "framework": {
+                        "bootstrap_scope": "experiment",
+                        "design_brief": "Build a test framework.",
+                    },
+                    "random_seeds": [8, 9],
+                    "evaluation": {"mode": "self_play"},
+                }, sort_keys=False),
+                encoding="utf-8",
+            )
+            source = ExperimentConfig.from_file(config_path)
+            run_zero = root / "runs" / "seed-8"
+            bundle_path = run_zero / "framework" / "bundle.json"
+            bundle_path.parent.mkdir(parents=True)
+            bundle_path.write_text(json.dumps(bundle_payload()), encoding="utf-8")
+            frozen = replace(
+                source,
+                random_seed=8,
+                framework_bundle_path=bundle_path.resolve(),
+                framework_bundle_version="eagle-framework-bundle-v1",
+                framework_bundle_sha256=hashlib.sha256(bundle_path.read_bytes()).hexdigest(),
+            )
+            write_run_config(run_zero, frozen, mock=True)
+            initialize_run_manifest(run_zero, config=frozen)
+            manifest_path = run_zero / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update(status="complete", latest_generation=1)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "experiment.yaml").write_text(yaml.safe_dump({
+                "schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION,
+                "runs": {config_path.name: [str(run_zero.resolve())]},
+            }), encoding="utf-8")
+            received: list[ExperimentConfig] = []
+
+            def search(config, **_kwargs):
+                received.append(config)
+                return SearchResult(root / "runs" / "seed-9", [], None)
+
+            ExperimentOrchestrator(search_runner=search).run(
+                config_path=None,
+                resume_dir=root,
+                mock=True,
+                skip_final_test=True,
+            )
+
+            self.assertEqual(len(received), 1)
+            self.assertEqual(received[0].random_seed, 9)
+            self.assertEqual(received[0].framework_bundle_path, bundle_path.resolve())
+            self.assertEqual(
+                received[0].framework_bundle_sha256,
+                frozen.framework_bundle_sha256,
+            )
 
     def test_direct_replicates_restart_runtime_between_seeds(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -187,6 +187,8 @@ class ExperimentConfig:
     framework_evolution_mode: str = "local"
     framework_coach_offspring_probability: float | None = None
     framework_bootstrap_backend: str = "groq"
+    framework_bootstrap_scope: str = "run"
+    framework_bootstrap_max_attempts: int = 3
     framework_design_brief: str | None = None
     framework_model: str = "openai/gpt-oss-120b"
     # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
@@ -492,6 +494,12 @@ class ExperimentConfig:
                 else float(payload["framework"]["coach_offspring_probability"])
             ),
             framework_bootstrap_backend=str((payload.get("framework") or {}).get("bootstrap_backend", "groq")),
+            framework_bootstrap_scope=str(
+                (payload.get("framework") or {}).get("bootstrap_scope", "run")
+            ),
+            framework_bootstrap_max_attempts=int(
+                (payload.get("framework") or {}).get("bootstrap_max_attempts", 3)
+            ),
             framework_design_brief=(payload.get("framework") or {}).get("design_brief"),
             framework_model=(payload.get("framework") or {}).get("model", "openai/gpt-oss-120b"),
             seed_prompts=seed_prompts,
@@ -619,6 +627,10 @@ class ExperimentConfig:
             raise ValueError(
                 "framework.bootstrap_backend must be groq, mistral, gpt, codex, or local."
             )
+        if self.framework_bootstrap_scope not in {"run", "experiment"}:
+            raise ValueError("framework.bootstrap_scope must be run or experiment.")
+        if self.framework_bootstrap_max_attempts <= 0:
+            raise ValueError("framework.bootstrap_max_attempts must be positive.")
         if self.framework_evolution_mode != "local" and self.java_materialization_mode != "framework_slots":
             raise ValueError("framework.evolution_mode requires framework_slots materialization.")
         if self.java_materialization_mode == "framework_slots":
@@ -1025,6 +1037,11 @@ class ExperimentConfig:
                 mapping["framework"]["coach_offspring_probability"] = self.framework_coach_offspring_probability
             if self.framework_bootstrap_backend != "groq":
                 mapping["framework"]["bootstrap_backend"] = self.framework_bootstrap_backend
+            if self.framework_bootstrap_scope != "run":
+                mapping["framework"]["bootstrap_scope"] = self.framework_bootstrap_scope
+                mapping["framework"]["bootstrap_max_attempts"] = self.framework_bootstrap_max_attempts
+            elif self.framework_bootstrap_max_attempts != 3:
+                mapping["framework"]["bootstrap_max_attempts"] = self.framework_bootstrap_max_attempts
             if self.framework_design_brief is not None:
                 mapping["framework"].update(
                     design_brief=self.framework_design_brief,
@@ -1191,7 +1208,11 @@ def _parse_framework_bundle(
             "framework_slots requires a framework mapping with design_brief or bundle_path."
         )
     unknown = sorted(
-        set(value).difference({"bundle_path", "bundle_version", "bundle_sha256", "evolution_mode", "coach_offspring_probability", "bootstrap_backend", "design_brief", "model"})
+        set(value).difference({
+            "bundle_path", "bundle_version", "bundle_sha256", "evolution_mode",
+            "coach_offspring_probability", "bootstrap_backend",
+            "bootstrap_scope", "bootstrap_max_attempts", "design_brief", "model",
+        })
     )
     if unknown:
         raise ValueError(

@@ -225,6 +225,29 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
         self.assertFalse(config.match_commentator_enabled)
         self.assertIsNone(config.framework_coach_offspring_probability)
 
+    def test_shared_framework_experiment_declares_six_seed_bootstrap_contract(self) -> None:
+        config = ExperimentConfig.from_file(
+            Path("configs/experiments/1027_rich_framework_reflection_50x10_seed8_13_shared_framework_1run")
+            / "qwen3_5_9b_rich_framework_reflection_50x10_seed8_13_shared_framework_1run.yaml"
+        )
+        config.validate()
+        self.assertEqual(config.random_seeds, (8, 9, 10, 11, 12, 13))
+        self.assertEqual(config.generations, 50)
+        self.assertEqual(config.population_size, 10)
+        self.assertEqual(config.framework_bootstrap_scope, "experiment")
+        self.assertEqual(config.framework_bootstrap_max_attempts, 3)
+        resolved = config.to_mapping()
+        self.assertEqual(resolved["framework"]["bootstrap_scope"], "experiment")
+        self.assertEqual(resolved["framework"]["bootstrap_max_attempts"], 3)
+        for invalid, message in (
+            (replace(config, framework_bootstrap_scope="batch"), "bootstrap_scope"),
+            (replace(config, framework_bootstrap_max_attempts=0), "bootstrap_max_attempts"),
+        ):
+            with self.subTest(message=message), self.assertRaisesRegex(
+                ValueError, message
+            ):
+                invalid.validate()
+
     def test_bundle_is_required_hashed_and_written_to_resolved_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bundle = self.write_bundle(directory, suffix="\n")

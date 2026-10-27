@@ -142,6 +142,18 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
                 raise ValueError("Resume config/manifest framework evolution mode mismatch.")
             if manifest.get("framework_coach_offspring_probability") != framework.get("coach_offspring_probability"):
                 raise ValueError("Resume config/manifest framework Coach offspring probability mismatch.")
+            if manifest.get("framework_bootstrap_scope", "run") != framework.get(
+                "bootstrap_scope", "run"
+            ):
+                raise ValueError(
+                    "Resume config/manifest framework bootstrap scope mismatch."
+                )
+            if manifest.get("framework_bootstrap_max_attempts", 3) != framework.get(
+                "bootstrap_max_attempts", 3
+            ):
+                raise ValueError(
+                    "Resume config/manifest framework bootstrap attempt limit mismatch."
+                )
             framework_fences = (
                 ("java_compiler_version", payload.get("java_compiler_version")),
                 ("framework_bundle_version", framework.get("bundle_version")),

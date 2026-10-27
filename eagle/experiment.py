@@ -234,6 +234,36 @@ def _restart_runtime_for_run(
     _ensure_primary_runtime(manager, config)
 
 
+def _shares_framework_bootstrap(config: ExperimentConfig) -> bool:
+    """Return whether inline framework generation is shared by this batch."""
+
+    return (
+        config.java_materialization_mode == "framework_slots"
+        and config.framework_bootstrap_scope == "experiment"
+    )
+
+
+def _load_shared_framework_source(run_dir: Path) -> ExperimentConfig:
+    frozen = load_resume_config(run_dir)
+    if frozen.framework_bundle_path is None or frozen.framework_bundle_sha256 is None:
+        raise RuntimeError("Shared framework bootstrap did not produce a frozen bundle.")
+    return frozen
+
+
+def _bind_shared_framework(
+    config: ExperimentConfig,
+    source: ExperimentConfig,
+) -> ExperimentConfig:
+    """Bind one run to the exact frozen initial bundle from the first seed."""
+
+    return replace(
+        config,
+        framework_bundle_path=source.framework_bundle_path,
+        framework_bundle_version=source.framework_bundle_version,
+        framework_bundle_sha256=source.framework_bundle_sha256,
+    )
+
+
 def _print_batch_header(selected: Path, total: int) -> None:
     print(f"Experiment batch: {selected}")
     print(f"Configs: {total}")
@@ -327,6 +357,7 @@ class ExperimentOrchestrator:
                 print(f"Survivor selection: {config.survivor_selection} lexicase")
                 print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
                 config.validate()
+                shared_framework: ExperimentConfig | None = None
                 for replicate_index, effective_seed in enumerate(config.seed_schedule):
                     record_run = (
                         None
@@ -339,6 +370,8 @@ class ExperimentOrchestrator:
                         config,
                         random_seed=effective_seed,
                     )
+                    if shared_framework is not None:
+                        run_config = _bind_shared_framework(run_config, shared_framework)
                     if config.total_runs > 1:
                         print(
                             f"Run [{replicate_index + 1}/{config.total_runs}] "
@@ -353,6 +386,8 @@ class ExperimentOrchestrator:
                         )
                         if record_run is not None:
                             record_run(result.run_dir)
+                        if _shares_framework_bootstrap(config) and shared_framework is None:
+                            shared_framework = _load_shared_framework_source(result.run_dir)
                         last_result = result
                         continue
 
@@ -370,6 +405,8 @@ class ExperimentOrchestrator:
                     )
                     if record_run is not None:
                         record_run(result.run_dir)
+                    if _shares_framework_bootstrap(config) and shared_framework is None:
+                        shared_framework = _load_shared_framework_source(result.run_dir)
                     last_result = result
                     _run_final_test_if_eligible(
                         self.final_test_runner,
@@ -400,6 +437,7 @@ class ExperimentOrchestrator:
         run_index_path = config_dir / "experiment.yaml"
         indexed_runs = _load_experiment_run_index(config_dir)
         jobs: list[tuple[Path, int, ExperimentConfig, Path | None]] = []
+        shared_frameworks: dict[Path, ExperimentConfig] = {}
         for path in discovered_paths:
             config = ExperimentConfig.from_file(path)
             config.validate()
@@ -415,6 +453,12 @@ class ExperimentOrchestrator:
                         requested, persisted, mock=mock, allow_experiment_name_alias=True,
                     )
                     persisted.validate()
+                    if (
+                        replicate_index == 0
+                        and _shares_framework_bootstrap(config)
+                        and has_framework_startup_checkpoint(indexed_run)
+                    ):
+                        shared_frameworks[path.resolve()] = persisted
                 jobs.append((path, replicate_index, requested, indexed_run))
         # Finish interrupted indexed runs before starting any missing replicate.
         jobs.sort(key=lambda job: not (
@@ -490,6 +534,14 @@ class ExperimentOrchestrator:
                         )
                 if indexed_run is None:
                     print("Status: not started; creating a new run")
+                    if _shares_framework_bootstrap(requested) and replicate_index > 0:
+                        shared = shared_frameworks.get(resolved_path.resolve())
+                        if shared is None:
+                            raise RuntimeError(
+                                "Cannot start a later seed before the experiment-scoped "
+                                "framework bootstrap has been frozen by seed 0."
+                            )
+                        requested = _bind_shared_framework(requested, shared)
                     ensure_runtime(requested, new_run=True)
                     result = self.search_runner(
                         requested,
@@ -498,6 +550,15 @@ class ExperimentOrchestrator:
                         on_run_created=record_run,
                     )
                     record_run(result.run_dir)
+
+                if (
+                    replicate_index == 0
+                    and _shares_framework_bootstrap(requested)
+                    and resolved_path.resolve() not in shared_frameworks
+                ):
+                    shared_frameworks[resolved_path.resolve()] = _load_shared_framework_source(
+                        result.run_dir
+                    )
 
                 last_result = result
                 last_known_run = result.run_dir

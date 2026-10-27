@@ -106,6 +106,7 @@ def _publish_codex_bootstrap_bundle(
                 require_https=True,
                 json_object_mode=False,
                 reasoning_effort="low",
+                max_attempts=config.framework_bootstrap_max_attempts,
             )
             selected_provider = "gpt"
             selected_artifact = "gpt_fallback"
@@ -192,6 +193,7 @@ def freeze_framework_bundle(
         bootstrap_kwargs = {
             "model": config.framework_model,
             "design_brief": config.framework_design_brief,
+            "max_attempts": config.framework_bootstrap_max_attempts,
         }
         if config.framework_bootstrap_backend == "local":
             from eagle.evolution.runtime import preflight_llm_endpoint
@@ -361,6 +363,12 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "framework_evolution_mode": config.framework_evolution_mode if config.java_materialization_mode == "framework_slots" else None,
             "framework_coach_offspring_probability": config.framework_coach_offspring_probability if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_backend": config.framework_bootstrap_backend if config.java_materialization_mode == "framework_slots" else None,
+            "framework_bootstrap_scope": config.framework_bootstrap_scope if config.java_materialization_mode == "framework_slots" else None,
+            "framework_bootstrap_max_attempts": (
+                config.framework_bootstrap_max_attempts
+                if config.java_materialization_mode == "framework_slots"
+                else None
+            ),
             "strategy_policy_format": STRATEGY_POLICY_FORMAT,
             "run_id": run_dir.name,
             "created_at": utc_now(),

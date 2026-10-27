@@ -335,6 +335,12 @@ new checkpoint marker, partial generation-zero archival, and exactly one
 bootstrap provider call. Stubbed evaluation covers the complete startup-to-EA
 handoff.
 
+Experiment-scoped bootstrap tests additionally prove that six explicit seeds
+produce one inline bootstrap input followed by five references to the first
+seed's frozen bundle, that every run-owned copy has the same exact-byte hash,
+that the configured value `3` reaches the provider as a total attempt limit,
+and that folder resume binds a missing later seed to seed 0's checkpoint.
+
 For `framework.evolution_mode`, test that omission resolves to `local`,
 `llm_coach` is opt-in, and resume rejects a mode mismatch while keeping the
 materializer version unchanged. Local mode retains seeded sampling/per-slot
