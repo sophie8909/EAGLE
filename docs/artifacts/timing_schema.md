@@ -289,3 +289,12 @@ attempts. Generation-zero description-guided slot filling is initialization
 work; it is separate from boundary strategy revision and subsequent slot filling.
 Mating/mutation Coach and Commentator streams remain empty. Bootstrap timing remains separate
 from framework reflection and candidate work.
+
+For `option_reflection`, each actual strategy-revision request uses operation
+`framework_option_strategy_revision` and each batch genome-selection request
+uses `framework_option_selection`. Both emit run-level LLM timing events with
+no candidate ID. The outer `framework_option_reflection` attempt records UTC
+boundaries, monotonic duration, model/backend, status, and the previous repair
+diagnostic. Compilation-gate time remains inside that outer transition attempt,
+while request events retain request-only durations. No framework-generation
+timing event or candidate mutation LLM envelope is produced.

@@ -86,9 +86,12 @@ def initialize_population(
             config.framework_bundle_path,
             expected_sha256=config.framework_bundle_sha256,
         )
-        if config.framework_evolution_mode == "reflection" and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
+        periodic_reflection = config.framework_evolution_mode in {
+            "reflection", "option_reflection",
+        }
+        if periodic_reflection and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
             raise ValueError("Add distinct framework initial strategies for the requested population size.")
-        if config.framework_evolution_mode == "reflection" and len({
+        if periodic_reflection and len({
             " ".join(description.split()).casefold()
             for description in FRAMEWORK_INITIAL_STRATEGIES[:config.population_size]
         }) != config.population_size:
@@ -115,7 +118,7 @@ def initialize_population(
                 generation_prompt="",
                 strategy_description=(
                     FRAMEWORK_INITIAL_STRATEGIES[index]
-                    if config.framework_evolution_mode == "reflection" else ""
+                    if periodic_reflection else ""
                 ),
                 operator="seed",
                 metadata={

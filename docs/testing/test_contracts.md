@@ -1,5 +1,17 @@
 # Test contracts
 
+## Frozen-framework option reflection (2026-10-28)
+
+`test_framework_slots_candidate_config` covers `option_reflection`
+serialization, self-play/framework-slot/runtime constraints, and the tracked
+50x10 six-seed shared-bootstrap config. `test_framework_reflection` verifies
+the option-specific frozen-bundle prompts, exact-hash schema, repair diagnostic,
+raw response, and operation routing. `test_framework_reflection_workflow`
+verifies that option reflection never calls the framework generator or publishes
+a version, applies revised descriptions and complete legal genomes, recompiles
+the selected transition, and atomically rolls back after four failures.
+`test_framework_versions` fences option runs to the root bundle.
+
 ## Periodic framework reflection (2026-10-24)
 
 `test_framework_slots_candidate_config` covers opt-in `reflection` serialization,

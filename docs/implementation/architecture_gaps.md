@@ -5,6 +5,7 @@
 | ID | Decision | Contract | Status |
 | --- | --- | --- | --- |
 | FWSLOT-03 | Separate whole-framework reflection from candidate evolution | Opt-in `reflection` requires framework slots and self-play; direct GPT API bootstrap for the tracked experiment, local-Qwen revisions at refresh after completed evolutionary intervals, all preceding survivor descriptions/genomes/fitness, complete finite-slot bundle revisions, initial proposal plus three repairs, compilation-gated immutable versions, fallback, distinct authored initial descriptions with WorkerRush and Coach initialization, separate boundary strategy revision then batch Coach-selected complete genomes for every source individual, parent replicas/reevaluation, checkpoint-driven resume; local mating/mutation only | Resolved; tracked by framework reflection contracts |
+| FWSLOT-04 | Add periodic reflection that cannot rewrite the framework | Opt-in `option_reflection` keeps the root exact-byte bundle, template, schema/domains/expressions, report, and hash immutable; at self-play refresh boundaries it revises every survivor description and batch-selects complete legal genomes, compilation-gates the transactional transition with three retries, reevaluates fresh parent replicas, and otherwise retains local mating/mutation | Resolved and implemented; tracked by option-reflection contracts |
 
 ## Nearest-behavior mating decision (2026-10-23)
 

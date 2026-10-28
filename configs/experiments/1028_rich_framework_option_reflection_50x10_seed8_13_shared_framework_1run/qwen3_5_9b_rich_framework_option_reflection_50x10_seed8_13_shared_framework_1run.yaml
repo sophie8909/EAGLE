@@ -1,0 +1,78 @@
+schema_version: experiment-v2
+experiment_name: qwen3_5_9b_rich_framework_option_reflection_50x10_seed8_13_shared_framework_1run
+
+java_materialization_mode: framework_slots
+java_compiler_version: eagle-framework-slots-v1
+candidate_java_mode: generated_phenotype
+parent_evaluation_mode: reuse_cached
+agent_template_path: eagle/java_templates/CandidateAgent.java
+
+model:
+  name: qwen3_5_9b
+  path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
+  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+  port: 18080
+  context_size: 65536
+  batch_size: 512
+  additional_endpoints: []
+
+seed_prompt_files: [seeds/worker_rush_policy.txt]
+max_prompt_chars: 16000
+
+runs: 1
+random_seeds: [8, 9, 10, 11, 12, 13]
+generations: 50
+population_size: 10
+# Parent B chooses the nearest distinct behavior within the top fitness tier.
+
+execution_mode: openai
+mutation_max_attempts: 3
+crossover_rate: 0.75
+mutation_rate: 1.0
+
+reflection_operator_mode: static
+strategy_reflection_probability: 1.0
+prompt_reflection_probability: 0.0
+code_reflection_probability: 0.0
+
+framework:
+  bootstrap_backend: gpt
+  # Seed 8 bootstraps once (up to three total API attempts); seeds 9-13 copy it.
+  bootstrap_scope: experiment
+  bootstrap_max_attempts: 3
+  model: gpt-6.1-sol
+  design_brief: >-
+    Design a complete MicroRTS Java agent framework with rich combinable rules
+    and finite parameter options for economy, production, targeting, combat,
+    retreat, conditions, and priorities.
+  # Keep the bootstrapped framework immutable. At G6/G11/G16/... Qwen revises
+  # strategy descriptions and selects new legal slot values only.
+  evolution_mode: option_reflection
+
+llm:
+  temperature: 0.0
+  match_commentator:
+    enabled: false
+    temperature: 0.0
+  max_tokens: 12288
+
+microrts_dir: third_party/microrts
+match_timeout_seconds: 120
+match_artifact_mode: compact
+stagnation_generations: 25
+
+evaluation:
+  mode: self_play
+  maps:
+    - path: maps/8x8/basesWorkers8x8.xml
+      tick_limit: 1500
+    - path: maps/16x16/basesWorkers16x16.xml
+      tick_limit: 3000
+    - path: maps/24x24/basesWorkers24x24.xml
+      tick_limit: 4000
+  self_play_refresh_interval: 5
+  self_play_opponent_library_capacity: 50
+  self_play_pool_policy: tournament-v1
+  semantic_probes:
+    enabled: true
+    fitness_tie_tolerance: 1.0

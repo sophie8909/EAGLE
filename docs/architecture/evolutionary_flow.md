@@ -12,6 +12,12 @@ Accepted versions create fresh parent replicas and reevaluate them under the new
 ordinary local mating/mutation. Failed reflection keeps the old framework.
 The [framework contract](framework_slots.md) owns the precise activation rules.
 
+Framework `option_reflection` uses the same self-play boundaries, authored
+generation-zero descriptions, separate description revision, batch Coach slot
+selection, parent replicas, and reevaluation. Its bundle is the immutable root
+bundle for the entire run: no template, slot/domain, expression, report, hash,
+or architecture change is allowed, and no version artifact is published.
+
 This document describes the active implementation. Fixed-roster evaluation
 uses ten opponent cases. Self-play uses scalar Game Performance plus exact
 behavior signatures only when scalar fitness is tied.
@@ -239,6 +245,11 @@ to a different member of its finite domain. Integer and number controls stay on
 their declared lattices. Formula controls select a declared `choice_id`; their
 Java expressions are immutable bundle data. No policy, prompt, Java body, or
 free-form formula is generated during evolution.
+
+In `option_reflection`, ordinary offspring retain that local crossover/mutation
+path. Only refresh boundaries invoke the population-wide two-stage Coach, which
+revises supporting descriptions and replaces complete legal slot selections
+under the unchanged bundle hash before same-context reevaluation.
 
 Each child is rendered locally from the run-frozen template and complete
 control genome, then enters the existing validation, one `javac`, Integration,

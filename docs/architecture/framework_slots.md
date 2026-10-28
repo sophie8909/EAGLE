@@ -22,6 +22,18 @@ same bundle schema, exact-byte run freeze, active genotype, renderer, and
 materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
+`option_reflection` is the periodic, population-wide Coach policy with a frozen
+framework. It requires self-play and uses the same G6/G11/G16/... refresh
+barriers and generation-zero authored strategy descriptions as `reflection`,
+but the initial bundle bytes, hash, Java template, slot IDs, domains, expression
+choices, report, and architecture never change. At each boundary Qwen first
+revises every survivor's `strategy_description`, then selects one complete legal
+`control_genome` per source individual against the same bundle hash. The
+transition is transactional and compilation-gated; four exhausted attempts
+retain the old descriptions/genomes and ordinary context refresh proceeds.
+Local offspring between boundaries continue to use seeded per-slot crossover
+and at-most-one-slot mutation. This mode never creates `framework/versions/`.
+
 `reflection` is a separate opt-in policy requiring self-play. Initial framework
 design uses the configured bootstrap backend/model (the new experiment uses
 the OpenAI API with `gpt-6.1-sol`); local Qwen subsequently reflects on the complete
@@ -273,6 +285,9 @@ Integration, semantic probes, and MicroRTS scoring remain enabled.
    Legacy `null` Coach behavior returns a complete genome for each assigned
    Strategy mutation; an explicit numeric setting selects the exclusive Coach
    offspring operator before crossover.
+   In `option_reflection`, the generation-zero Coach follows the ten authored
+   descriptions and later batch option reflections keep the root framework hash
+   fixed while replacing only complete legal genomes at refresh boundaries.
 6. Rendered Java follows the existing validation, one-attempt `javac`,
    Integration, semantic-probe, and evaluation pipeline. Fixed-roster evaluation
    remains ten opponents x three maps x three rounds x two sides (180 matches
@@ -405,6 +420,11 @@ slot filling and boundary strategy-revision/slot-filling stages, while mating
 and mutation remain local. Whole-framework reflection uses its independent bounded
 repair before version activation. A candidate render, validation, or compilation failure remains at
 its actual stage with hashes and diagnostics; it never falls back to an LLM.
+`option_reflection` uses the same description-guided initialization and boundary
+two-stage population reflection, but both prompts and response schemas pin the
+original bundle and permit only legal `control_genome` values. Its bounded
+transition attempts are stored below `framework/option_reflections/`; it never
+publishes a framework version.
 
 ## Bootstrap artifacts and security
 

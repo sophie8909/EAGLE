@@ -114,6 +114,19 @@ Mock 跳過反思。新設定位於
 [artifact schema](artifacts/artifact_schema.md)、[timing schema](artifacts/timing_schema.md)
 與 [test contracts](testing/test_contracts.md) 管理。
 
+若只需要反思既有選項而不改 framework，可使用 opt-in
+`framework.evolution_mode: option_reflection`（必須搭配 self-play）。它與完整
+reflection 共用 Gen 0 的策略描述初始化及 G6、G11、G16… 邊界，但永久凍結啟動時
+framework 的 exact bytes、template、slot schema、domains、expressions、report 與
+bundle hash。每個邊界只會批次改寫所有來源個體的 `strategy_description`，再依描述
+為每個來源選出一份涵蓋所有 slots 的合法 `control_genome`；不會呼叫 framework
+產生器，也不會建立 `framework/versions/`。選項反思共允許四次嘗試（首次加三次
+修復），後續嘗試會收到前次錯誤；選值必須通過 schema 與 compilation gate，否則
+整個轉換 rollback。原始請求、回應與錯誤保存於
+`framework/option_reflections/generation_N/invocation_N/`。六個 seeds 共用一次初始
+framework、之後各自演化的範例位於
+`configs/experiments/1028_rich_framework_option_reflection_50x10_seed8_13_shared_framework_1run/`。
+
 Repository 另提供固定初始 framework 範例：
 `configs/framework_coach_mock.yaml` 搭配
 `configs/framework_bundles/fixed_worker_combat/bundle.json`。這個 bundle 是可

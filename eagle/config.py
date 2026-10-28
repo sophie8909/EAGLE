@@ -614,10 +614,21 @@ class ExperimentConfig:
                 raise ValueError("deterministic_dsl requires candidate_java_mode=generated_phenotype.")
             if self.parent_evaluation_mode != "reuse_cached":
                 raise ValueError("deterministic_dsl requires parent_evaluation_mode=reuse_cached.")
-        if self.framework_evolution_mode not in {"local", "llm_coach", "reflection"}:
-            raise ValueError("framework.evolution_mode must be local, llm_coach, or reflection.")
-        if self.framework_evolution_mode == "reflection" and self.evaluation_mode != "self_play":
-            raise ValueError("framework.evolution_mode=reflection requires evaluation.mode=self_play.")
+        if self.framework_evolution_mode not in {
+            "local", "llm_coach", "reflection", "option_reflection",
+        }:
+            raise ValueError(
+                "framework.evolution_mode must be local, llm_coach, reflection, "
+                "or option_reflection."
+            )
+        if (
+            self.framework_evolution_mode in {"reflection", "option_reflection"}
+            and self.evaluation_mode != "self_play"
+        ):
+            raise ValueError(
+                f"framework.evolution_mode={self.framework_evolution_mode} requires "
+                "evaluation.mode=self_play."
+            )
         if self.framework_coach_offspring_probability is not None:
             if not 0.0 <= self.framework_coach_offspring_probability <= 1.0:
                 raise ValueError("framework.coach_offspring_probability must be in [0, 1].")
@@ -1094,7 +1105,9 @@ class ExperimentConfig:
     def needs_llm_runtime(self) -> bool:
         if self.java_materialization_mode == "framework_slots":
             return (
-                self.framework_evolution_mode in {"llm_coach", "reflection"}
+                self.framework_evolution_mode in {
+                    "llm_coach", "reflection", "option_reflection",
+                }
                 or (
                     self.framework_bundle_path is None
                     and self.framework_bootstrap_backend == "local"

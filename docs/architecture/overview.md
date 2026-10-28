@@ -5,6 +5,9 @@ Framework-slot self-play additionally supports opt-in
 initial framework and the configured local model revises whole finite-slot bundle versions at opponent
 refresh boundaries. Candidate mating/mutation stay local. See the canonical
 [framework contract](framework_slots.md) for repair, migration, and resume rules.
+The separate `option_reflection` policy uses those same periodic population
+boundaries while freezing the initial framework permanently; only complete
+legal slot selections and their supporting strategy descriptions may change.
 
 EAGLE evolves one complete Java MicroRTS agent. Candidate state mode and Java
 materialization mode are independent settings. `candidate_java_mode` controls
@@ -67,6 +70,7 @@ flowchart TD
     CG -->|framework_slots| FM{"Framework evolution mode"}
     FM -->|local| XFS["Local per-slot crossover/mutation"]
     FM -->|llm_coach| XFC["Complete-genome selection/Coach mutation"]
+    FM -->|option_reflection| XFS
     XDSL --> M
     XFS --> SW
     XFC --> SW

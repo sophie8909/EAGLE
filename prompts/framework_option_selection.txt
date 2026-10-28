@@ -1,0 +1,17 @@
+ROLE: framework_coach
+Frozen-Framework Option Reflection: slot-selection stage. The framework is immutable: do not edit its Java template, slot IDs, slot domains, expression choices, architecture, or bundle hash. Select one complete new control_genome for EVERY source individual using the complete previous generation's slot values and fitness. You may choose fresh legal values for existing slots, but every value must belong to the SAME frozen slot domain. Follow EACH individual's current strategy_description; previous_strategy_description is historical evidence only. Do not revise descriptions in this stage. Return exactly one complete JSON object matching the supplied schema, covering every source candidate_id and every existing slot exactly once. Do not return Java, prose, or framework edits.
+
+Frozen exact-byte bundle SHA-256:
+$framework_bundle_sha256
+
+Frozen framework strategy/slot evidence:
+$framework_bundle
+
+ALL previous-generation individuals and fitness:
+$population_evidence
+
+Previous failed option-transition diagnostic, if any:
+$previous_transition_error
+
+Response schema:
+$response_schema

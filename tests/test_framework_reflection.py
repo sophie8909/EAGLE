@@ -341,6 +341,53 @@ class FrameworkReflectionTests(unittest.TestCase):
         self.assertIn("Strategies may converge", backend.generate.call_args.args[0])
         backend.generate.assert_called_once()
 
+    def test_option_reflection_prompts_freeze_framework_and_include_repair_error(self):
+        repair_error = "Selected horizon did not compile."
+        revision_backend = self.backend([json.dumps(self.revision_payload())])
+        selection_backend = self.backend([json.dumps(self.coach_payload())])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.object(LLMClient, "prompt_backend", return_value=revision_backend) as revision_factory:
+                revise_strategy_descriptions(
+                    bundle=self.previous,
+                    previous_bundle=self.previous,
+                    population_evidence=self.evidence,
+                    client=self.client,
+                    config=self.config,
+                    artifact_dir=root / "revision",
+                    option_only=True,
+                    repair_error=repair_error,
+                )
+            self.assertEqual(
+                revision_factory.call_args.kwargs["operation"],
+                "framework_option_strategy_revision",
+            )
+            revision_prompt = revision_backend.generate.call_args.args[0]
+            self.assertIn("framework is immutable", revision_prompt)
+            self.assertIn("SAME frozen framework", revision_prompt)
+            self.assertIn(repair_error, revision_prompt)
+
+            with patch.object(LLMClient, "prompt_backend", return_value=selection_backend) as selection_factory:
+                select_reflected_genomes(
+                    bundle=self.previous,
+                    framework_bundle_sha256="f" * 64,
+                    previous_bundle=self.previous,
+                    population_evidence=self.evidence,
+                    client=self.client,
+                    config=self.config,
+                    artifact_dir=root / "selection",
+                    option_only=True,
+                    repair_error=repair_error,
+                )
+            self.assertEqual(
+                selection_factory.call_args.kwargs["operation"],
+                "framework_option_selection",
+            )
+            selection_prompt = selection_backend.generate.call_args.args[0]
+            self.assertIn("framework is immutable", selection_prompt)
+            self.assertIn("SAME frozen slot domain", selection_prompt)
+            self.assertIn(repair_error, selection_prompt)
+
     def test_strategy_revision_rejects_incomplete_blank_duplicate_json_and_slot_outputs(self):
         cases = []
         missing = self.revision_payload()

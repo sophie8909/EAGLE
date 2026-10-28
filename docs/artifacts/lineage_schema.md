@@ -92,3 +92,10 @@ description, and boundary replicas record their source parent's old description
 and the separately revised one in transition evidence. Older candidates without
 the field remain readable. This adds no local strategy-description mutation or
 LLM request to mating/mutation.
+
+Framework `option_reflection` uses the same one-source boundary-replica lineage,
+with operator `framework_option_reflection` and metadata scope
+`control_genome`. Every old and new slot ID is identical, `removed_slot_ids` is
+empty, and every candidate remains pinned to the root bundle hash. Coach-changed
+values do not rewrite the pre-transition slot provenance to claim inheritance
+from another individual.

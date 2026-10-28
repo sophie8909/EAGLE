@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,10 @@ from eagle.generation.framework_slots import (
 from eagle.generation.java_agent_generator import validate_generated_java_source
 from eagle.llm import LLMCallLogger
 from eagle.run_artifacts import atomic_json
+from eagle.timing import utc_now
+
+
+OPTION_REFLECTION_SCHEMA_VERSION = "eagle-framework-option-reflection-v1"
 
 
 def initialize_framework_strategies(
@@ -111,16 +116,19 @@ def reflect_population_framework(
     client: Any,
     mock: bool,
 ) -> tuple[ExperimentConfig, list[Candidate] | None]:
-    """Return a validated version and unevaluated replicas, or retain old state."""
+    """Return validated boundary replicas, optionally with a new framework version."""
 
     from eagle.generation.framework_reflection import (
-        reflect_framework, revise_strategy_descriptions, select_reflected_genomes,
+        MAX_REPAIR_RETRIES, reflect_framework, revise_strategy_descriptions,
+        select_reflected_genomes,
     )
 
     previous = load_framework_bundle(
         config.framework_bundle_path, expected_sha256=config.framework_bundle_sha256,
     )
-    root = run_dir / "framework" / "reflections" / f"generation_{generation:04d}"
+    option_only = config.framework_evolution_mode == "option_reflection"
+    reflection_dir = "option_reflections" if option_only else "reflections"
+    root = run_dir / "framework" / reflection_dir / f"generation_{generation:04d}"
     # Replayed unfinished generations retain their original LLM evidence.
     invocation = 1
     while (root / f"invocation_{invocation:03d}").exists():
@@ -150,7 +158,9 @@ def reflect_population_framework(
         timing_path=run_dir / "timing.jsonl",
     )
 
-    def validate_bundle(bundle: FrameworkBundle) -> None:
+    def validate_bundle(
+        bundle: FrameworkBundle, *, repair_error: str | None = None,
+    ) -> None:
         nonlocal check_index, selected_genomes, revised_strategies
         check_index += 1
         proposed_digest = (
@@ -163,6 +173,7 @@ def reflect_population_framework(
             client=client, config=config,
             artifact_dir=artifact_dir / "strategy_revision" / f"attempt_{check_index:03d}",
             timing_logger=timing_logger, generation=generation,
+            option_only=option_only, repair_error=repair_error,
         )
         selected_genomes = select_reflected_genomes(
             bundle=bundle, framework_bundle_sha256=proposed_digest,
@@ -174,6 +185,7 @@ def reflect_population_framework(
             client=client, config=config,
             artifact_dir=artifact_dir / "coach" / f"attempt_{check_index:03d}",
             timing_logger=timing_logger, generation=generation,
+            option_only=option_only, repair_error=repair_error,
         )
         validate_framework_compilation(
             bundle, genomes=list(selected_genomes.values()), config=config, mock=mock,
@@ -184,17 +196,69 @@ def reflect_population_framework(
         # Mock search never contacts an external model, including at a refresh.
         artifact_dir.mkdir(parents=True)
         atomic_json(artifact_dir / "result.json", {
-            "schema_version": "eagle-framework-reflection-v1",
+            "schema_version": (
+                OPTION_REFLECTION_SCHEMA_VERSION
+                if option_only else "eagle-framework-reflection-v1"
+            ),
             "status": "skipped_mock", "generation": generation,
         })
         return config, None
-    proposed = reflect_framework(
-        previous_bundle=previous, population_evidence=population_evidence,
-        client=client, config=config, artifact_dir=artifact_dir,
-        validate_bundle=validate_bundle,
-        timing_logger=timing_logger,
-        generation=generation,
-    )
+    if option_only:
+        artifact_dir.mkdir(parents=True)
+        atomic_json(artifact_dir / "previous_bundle.json", previous.to_json_dict())
+        atomic_json(artifact_dir / "population_evidence.json", population_evidence)
+        option_attempts = []
+        last_error = None
+        proposed = None
+        for attempt in range(1, MAX_REPAIR_RETRIES + 2):
+            started_at, started = utc_now(), time.monotonic()
+            try:
+                validate_bundle(previous, repair_error=last_error)
+                proposed = previous
+                option_attempts.append({
+                    "schema_version": OPTION_REFLECTION_SCHEMA_VERSION,
+                    "attempt": attempt,
+                    "status": "success",
+                    "error": None,
+                    "model": config.llm_model,
+                    "backend": config.execution_mode,
+                    "operation": "framework_option_reflection",
+                    "started_at": started_at,
+                    "finished_at": utc_now(),
+                    "duration_seconds": max(0.0, time.monotonic() - started),
+                })
+                break
+            except (ValueError, TypeError, RuntimeError, OSError) as exc:
+                last_error = str(exc)
+                option_attempts.append({
+                    "schema_version": OPTION_REFLECTION_SCHEMA_VERSION,
+                    "attempt": attempt,
+                    "status": "failed",
+                    "error": last_error,
+                    "model": config.llm_model,
+                    "backend": config.execution_mode,
+                    "operation": "framework_option_reflection",
+                    "started_at": started_at,
+                    "finished_at": utc_now(),
+                    "duration_seconds": max(0.0, time.monotonic() - started),
+                })
+        atomic_json(artifact_dir / "result.json", {
+            "schema_version": OPTION_REFLECTION_SCHEMA_VERSION,
+            "status": "success" if proposed is not None else "rollback",
+            "generation": generation,
+            "framework_bundle_sha256": config.framework_bundle_sha256,
+            "selected_attempt": len(option_attempts) if proposed is not None else None,
+            "attempts": option_attempts,
+            "error": last_error if proposed is None else None,
+        })
+    else:
+        proposed = reflect_framework(
+            previous_bundle=previous, population_evidence=population_evidence,
+            client=client, config=config, artifact_dir=artifact_dir,
+            validate_bundle=validate_bundle,
+            timing_logger=timing_logger,
+            generation=generation,
+        )
     if proposed is None:
         return config, None
     data = (canonical_json(proposed.to_json_dict()) + "\n").encode("utf-8")
@@ -226,12 +290,15 @@ def reflect_population_framework(
         )
     updated.validate()
     replicas = []
+    replica_role = (
+        "framework_option_reflection" if option_only else "framework_reflection"
+    )
     for index, parent in enumerate(population):
         genome = validate_genome(proposed, selected_genomes[parent.id])
         replicas.append(Candidate(
             id=derive_candidate_id(
                 config.random_seed, generation=generation, index=index,
-                role="framework_reflection", parent_ids=(parent.id,),
+                role=replica_role, parent_ids=(parent.id,),
             ),
             generation=generation, parent_ids=(parent.id,),
             java_materialization_mode="framework_slots",
@@ -240,8 +307,9 @@ def reflect_population_framework(
             strategy_description=revised_strategies[parent.id],
             slot_parent_ids={slot_id: parent.id for slot_id in proposed.slot_ids},
             source_candidate_ids=(parent.id,), framework_bundle_sha256=digest,
-            generation_prompt="", operator="framework_reflection",
+            generation_prompt="", operator=replica_role,
             metadata={"framework_reflection": {
+                "scope": "control_genome" if option_only else "framework_bundle",
                 "source_parent_id": parent.id,
                 "previous_bundle_sha256": config.framework_bundle_sha256,
                 "slot_value_source": "framework_coach",
@@ -254,6 +322,7 @@ def reflect_population_framework(
         ))
     atomic_json(artifact_dir / "migration.json", {
         "schema_version": "eagle-framework-migration-v1", "generation": generation,
+        "reflection_scope": "control_genome" if option_only else "framework_bundle",
         "previous_bundle_sha256": config.framework_bundle_sha256,
         "bundle_sha256": digest,
         "records": [

@@ -117,6 +117,25 @@ class FrameworkVersionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "bundle hash mismatch"):
             framework_bundle_artifact(self.run_dir, self.config.framework_bundle_sha256)
 
+    def test_option_reflection_accepts_only_the_root_frozen_bundle(self) -> None:
+        digest = self.version(self.config.framework_bundle_sha256)
+        manifest_path = self.run_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["framework_evolution_mode"] = "option_reflection"
+        manifest_path.write_text(json.dumps(manifest))
+        option_config = replace(self.config, framework_evolution_mode="option_reflection")
+        root_candidate = self.fixtures.write_seed_candidate(self.run_dir, option_config)
+        active = config_for_population(option_config, self.run_dir, [root_candidate])
+        self.assertEqual(active.framework_bundle_sha256, option_config.framework_bundle_sha256)
+        with self.assertRaisesRegex(ValueError, "reflection evolution mode"):
+            framework_bundle_artifact(self.run_dir, digest)
+        with self.assertRaisesRegex(ValueError, "reflection evolution mode"):
+            config_for_population(
+                option_config,
+                self.run_dir,
+                [replace(root_candidate, framework_bundle_sha256=digest)],
+            )
+
     def test_resolver_rejects_bundle_schema_and_symlink_escape(self) -> None:
         payload = fixtures.bundle_payload()
         payload["schema_version"] = "unknown-framework-schema"

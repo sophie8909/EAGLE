@@ -211,6 +211,18 @@ role = "coach"
 stages = ["framework_strategy_revision"]
 required_variables = ["previous_framework_bundle", "framework_bundle", "population_evidence", "response_schema"]
 
+[prompts.framework_option_strategy_revision]
+file = "framework_option_strategy_revision.txt"
+role = "coach"
+stages = ["framework_strategy_revision"]
+required_variables = ["framework_bundle", "population_evidence", "previous_transition_error", "response_schema"]
+
+[prompts.framework_option_selection]
+file = "framework_option_selection.txt"
+role = "coach"
+stages = ["framework_coach_migration"]
+required_variables = ["framework_bundle_sha256", "framework_bundle", "population_evidence", "previous_transition_error", "response_schema"]
+
 [prompts.strategy_dsl_reference]
 file = "strategy_dsl_reference.txt"
 role = "reference"

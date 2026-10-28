@@ -267,6 +267,74 @@ class FrameworkReflectionWorkflowTests(unittest.TestCase):
             self.assertEqual([p.control_genome for p in replicas], list(selected.values()))
             self.assertEqual([p.strategy_description for p in replicas], list(self.revised_strategies(parents).values()))
 
+    def test_option_reflection_never_requests_or_versions_a_framework(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir, config, bundle, parents = self.setup_run(Path(temp))
+            config = replace(config, framework_evolution_mode="option_reflection")
+            selected = {
+                p.id: {"horizon": 4, "aggression": 1.0, "early_return": "always"}
+                for p in parents
+            }
+            with patch("eagle.generation.framework_reflection.reflect_framework") as reflect, \
+                    patch("eagle.generation.framework_reflection.revise_strategy_descriptions",
+                          return_value=self.revised_strategies(parents)) as revise, \
+                    patch("eagle.generation.framework_reflection.select_reflected_genomes",
+                          return_value=selected) as coach, \
+                    patch("eagle.evolution.framework_reflection.validate_framework_compilation") as compile_check:
+                updated, replicas = reflect_population_framework(
+                    population=parents, config=config, run_dir=run_dir,
+                    generation=6, client=object(), mock=False,
+                )
+            reflect.assert_not_called()
+            revise.assert_called_once()
+            coach.assert_called_once()
+            compile_check.assert_called_once()
+            self.assertIs(updated, config)
+            self.assertEqual(updated.framework_bundle_sha256, config.framework_bundle_sha256)
+            self.assertEqual(
+                coach.call_args.kwargs["framework_bundle_sha256"],
+                config.framework_bundle_sha256,
+            )
+            self.assertEqual(coach.call_args.kwargs["bundle"].to_json_dict(), bundle.to_json_dict())
+            self.assertEqual(coach.call_args.kwargs["previous_bundle"].to_json_dict(), bundle.to_json_dict())
+            self.assertFalse((run_dir / "framework" / "versions").exists())
+            self.assertEqual([p.control_genome for p in replicas], list(selected.values()))
+            self.assertTrue(all(p.framework_bundle_sha256 == config.framework_bundle_sha256 for p in replicas))
+            self.assertTrue(all(p.operator == "framework_option_reflection" for p in replicas))
+            result = json.loads((
+                run_dir / "framework" / "option_reflections" / "generation_0006"
+                / "invocation_001" / "result.json"
+            ).read_text(encoding="utf-8"))
+            self.assertEqual(result["schema_version"], "eagle-framework-option-reflection-v1")
+            self.assertEqual(result["status"], "success")
+
+    def test_option_reflection_rolls_back_options_after_bounded_failures(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir, config, _, parents = self.setup_run(Path(temp))
+            config = replace(config, framework_evolution_mode="option_reflection")
+            with patch("eagle.generation.framework_reflection.reflect_framework") as reflect, \
+                    patch("eagle.generation.framework_reflection.revise_strategy_descriptions",
+                          side_effect=ValueError("invalid option reflection")) as revise:
+                updated, replicas = reflect_population_framework(
+                    population=parents, config=config, run_dir=run_dir,
+                    generation=6, client=object(), mock=False,
+                )
+            reflect.assert_not_called()
+            self.assertEqual(revise.call_count, 4)
+            self.assertIsNone(revise.call_args_list[0].kwargs["repair_error"])
+            self.assertIn(
+                "invalid option reflection",
+                revise.call_args_list[1].kwargs["repair_error"],
+            )
+            self.assertIs(updated, config)
+            self.assertIsNone(replicas)
+            result = json.loads((
+                run_dir / "framework" / "option_reflections" / "generation_0006"
+                / "invocation_001" / "result.json"
+            ).read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "rollback")
+            self.assertEqual(len(result["attempts"]), 4)
+
     def test_initial_selection_exhaustion_fails_instead_of_using_random_slots(self):
         with tempfile.TemporaryDirectory() as temp:
             run_dir, config, _, _ = self.setup_run(Path(temp))

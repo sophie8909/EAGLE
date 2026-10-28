@@ -7,6 +7,9 @@ reflection revises the description before a separate slot-filling stage.
 Local offspring inherit parent A's description. The executable active genotype
 remains `control_genome`; description prose is supporting strategy intent and is
 not rendered as Java or used as an extra local mutation component.
+This state is shared by whole-framework `reflection` and frozen-framework
+`option_reflection`; the latter keeps every candidate pinned to the initial
+bundle hash for the full run.
 
 ## Genotype and phenotype modes
 

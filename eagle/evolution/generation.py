@@ -111,7 +111,11 @@ def run_generation_step(
             config=config,
         )
     framework_replicas = None
-    if snapshot_refreshed and generation > 1 and config.framework_evolution_mode == "reflection":
+    if (
+        snapshot_refreshed
+        and generation > 1
+        and config.framework_evolution_mode in {"reflection", "option_reflection"}
+    ):
         config, framework_replicas = reflect_population_framework(
             population=source_parents, config=config, run_dir=run_dir,
             generation=generation, client=shared_client, mock=mock,

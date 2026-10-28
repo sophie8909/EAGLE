@@ -197,3 +197,11 @@ partial fallback. Initial genome selection follows the same fixed response
 schema. These are the only candidate-time LLM requests in this mode; Java
 rendering remains local. Per-slot provenance is defined by [framework
 slots](framework_slots.md) and the [lineage schema](../artifacts/lineage_schema.md).
+
+With `framework.evolution_mode: option_reflection`, candidate-time mutation
+remains the same local per-slot crossover/one-slot mutation as `local`.
+Population-wide reflection runs only at self-play refresh boundaries: it revises
+supporting strategy descriptions and batch-selects complete legal genomes while
+pinning the original exact-byte bundle. It cannot edit Java, prompts, slot
+schema/domains, expressions, or the bundle hash, and it produces no framework
+version.

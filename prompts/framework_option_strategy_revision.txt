@@ -1,0 +1,14 @@
+ROLE: framework_coach
+Frozen-Framework Option Reflection: strategy revision stage. The framework is immutable: do not propose or imply changes to its Java template, slot IDs, slot domains, expression choices, architecture, or bundle hash. Reflect on EVERY individual's previous natural-language strategy_description using the complete prior population's descriptions, current slot values, and fitness evidence. Revise each individual's intended economy, production, targeting, combat, priorities, and conditions while remaining expressible by the SAME frozen framework. Strategies may converge when supported by evidence; assess every individual. A later separate stage will select legal values for the existing slots. Return only the supplied JSON schema with exactly EVERY source candidate_id. Do not return slot values, Java, or framework edits.
+
+Frozen framework evidence (unchanged before and after this transition):
+$framework_bundle
+
+ALL previous-generation descriptions, slot values, and fitness:
+$population_evidence
+
+Previous failed option-transition diagnostic, if any:
+$previous_transition_error
+
+Response schema:
+$response_schema

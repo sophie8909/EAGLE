@@ -1,5 +1,20 @@
 # Current implementation status
 
+## Frozen-framework option reflection (2026-10-28)
+
+`framework.evolution_mode: option_reflection` is implemented for self-play
+framework-slot runs. It reuses the authored generation-zero strategies and the
+G6/G11/G16/... refresh schedule, but permanently pins the initial exact-byte
+bundle. Each boundary performs a separate population strategy-description
+revision followed by batch complete-genome selection under the same bundle
+hash, then compilation-gates and reevaluates fresh parent replicas. Four failed
+attempts roll back descriptions and genomes atomically. Ordinary offspring keep
+local per-slot crossover and one-slot mutation; no per-offspring Coach path,
+framework generator, framework version, Java LLM, or compile repair is enabled.
+Option-specific prompts explicitly forbid template/schema/domain/expression
+changes and carry the preceding transition diagnostic into retries. The tracked
+50x10 config shares one bounded GPT bootstrap across seeds 8–13.
+
 ## Periodic framework reflection (2026-10-24)
 
 `framework.evolution_mode: reflection` separates initial GPT framework design

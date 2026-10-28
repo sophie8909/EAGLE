@@ -891,6 +891,20 @@ Successful description/genome transitions are retained even if the proposed
 framework bundle itself is unchanged. Mock initialization retains sampled
 genomes and the authored descriptions without external calls.
 
+`framework.evolution_mode: option_reflection` is the frozen-bundle counterpart
+to that periodic population transition. It requires self-play, uses the same
+authored generation-zero descriptions and G6/G11/G16/... refresh barriers, and
+keeps ordinary offspring crossover/mutation local. At each boundary the model
+may revise every supporting `strategy_description` and must return one complete
+legal `control_genome` for every source survivor under the original exact-byte
+bundle hash. The Java template, framework/report architecture, slot IDs,
+numeric lattices, expression choices, and bundle hash cannot change. The
+two-stage transition is compilation-gated and bounded to four attempts; failure
+retains the previous descriptions/genomes. Successful replicas are reevaluated
+against the refreshed opponent context before reproduction. No framework
+version is created, and resume rejects any population that is not pinned to the
+root bundle.
+
 `GROQ_API_KEY`, the Mistral key, and the GPT key are accepted only from their provider-specific
 credential sources and are never written to prompt, request, config, bootstrap,
 run, candidate, or failure artifacts. Raw provider output and structured report

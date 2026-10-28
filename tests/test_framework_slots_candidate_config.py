@@ -206,6 +206,29 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                 with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                     invalid.validate()
 
+    def test_option_reflection_requires_self_play_and_round_trips(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = self.config(self.write_bundle(directory))
+            payload = base.to_mapping()
+            payload.pop("algorithm", None)
+            payload["framework"]["evolution_mode"] = "option_reflection"
+            payload["evaluation"]["mode"] = "self_play"
+            payload["evaluation"]["semantic_probes"]["enabled"] = True
+            config = ExperimentConfig.from_mapping(payload)
+            config.validate()
+            reloaded = ExperimentConfig.from_mapping(config.to_mapping())
+            reloaded.validate()
+            self.assertEqual(reloaded.framework_evolution_mode, "option_reflection")
+            self.assertTrue(reloaded.needs_llm_runtime)
+            self.assertIsNone(reloaded.framework_coach_offspring_probability)
+            for invalid, message in (
+                (replace(config, evaluation_mode="fixed_roster"), "evaluation.mode=self_play"),
+                (replace(config, java_materialization_mode="llm"), "framework_slots"),
+                (replace(config, framework_coach_offspring_probability=0.5), "coach_offspring_probability"),
+            ):
+                with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                    invalid.validate()
+
     def test_reflection_experiment_uses_gpt_api_bootstrap_and_local_qwen(self) -> None:
         config = ExperimentConfig.from_file(
             Path("configs/experiments/1024_rich_framework_reflection_20x10_seed8_13_1run")
@@ -247,6 +270,21 @@ class FrameworkSlotsConfigTests(unittest.TestCase):
                 ValueError, message
             ):
                 invalid.validate()
+
+    def test_option_reflection_experiment_freezes_shared_framework(self) -> None:
+        config = ExperimentConfig.from_file(
+            Path("configs/experiments/1028_rich_framework_option_reflection_50x10_seed8_13_shared_framework_1run")
+            / "qwen3_5_9b_rich_framework_option_reflection_50x10_seed8_13_shared_framework_1run.yaml"
+        )
+        config.validate()
+        self.assertEqual(config.random_seeds, (8, 9, 10, 11, 12, 13))
+        self.assertEqual(config.generations, 50)
+        self.assertEqual(config.population_size, 10)
+        self.assertEqual(config.framework_evolution_mode, "option_reflection")
+        self.assertEqual(config.framework_bootstrap_scope, "experiment")
+        self.assertEqual(config.framework_bootstrap_max_attempts, 3)
+        self.assertTrue(config.needs_llm_runtime)
+        self.assertIsNone(config.framework_bundle_path)
 
     def test_bundle_is_required_hashed_and_written_to_resolved_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

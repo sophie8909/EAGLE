@@ -60,7 +60,9 @@ def form_options() -> dict:
         "parent_evaluation_mode": list(PARENT_EVALUATION_MODES),
         "reflection_operator_mode": [item.value for item in ReflectionOperatorMode],
         "evaluation.mode": list(EVALUATION_MODES),
-        "framework.evolution_mode": ["local", "llm_coach"],
+        "framework.evolution_mode": [
+            "local", "llm_coach", "option_reflection", "reflection",
+        ],
         "execution_mode": ["openai", "mock"],
         "match_artifact_mode": ["compact", "full"],
         "algorithm": ["lexicase", "game_performance_semantic_tiebreak"],

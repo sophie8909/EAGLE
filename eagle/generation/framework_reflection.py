@@ -177,6 +177,8 @@ def select_reflected_genomes(
     artifact_dir: Path,
     timing_logger: LLMCallLogger | None = None,
     generation: int | None = None,
+    option_only: bool = False,
+    repair_error: str | None = None,
 ) -> dict[str, dict]:
     """Ask Coach once to fill every new genome; outer framework repair owns retries."""
 
@@ -207,17 +209,19 @@ def select_reflected_genomes(
         "required": ["schema_version", "framework_bundle_sha256", "selections"],
     }
     prompt = render_prompt(
-        "framework_coach_migration",
+        "framework_option_selection" if option_only else "framework_coach_migration",
         {
             "framework_bundle_sha256": framework_bundle_sha256,
             "previous_framework_bundle": json.dumps(framework_bundle_evidence(previous_bundle), ensure_ascii=False),
             "framework_bundle": json.dumps(framework_bundle_evidence(bundle), ensure_ascii=False),
             "population_evidence": json.dumps(population_evidence, ensure_ascii=False, allow_nan=False),
             "response_schema": json.dumps(schema, ensure_ascii=False),
+            "previous_transition_error": repair_error or "None; this is the first attempt.",
         },
     )
+    operation = "framework_option_selection" if option_only else "framework_coach_migration"
     backend = client.prompt_backend(
-        operation="framework_coach_migration",
+        operation=operation,
         response_schema=schema,
         response_schema_name="eagle_framework_coach_migration",
         max_prompt_chars=None,
@@ -241,10 +245,10 @@ def select_reflected_genomes(
     if timing_logger is not None:
         timing_logger.write_timing_event(
             request_correlation_id=(
-                f"{timing_logger.run_id}:framework_coach_migration:{generation}:"
+                f"{timing_logger.run_id}:{operation}:{generation}:"
                 f"{artifact_dir.as_posix()}"
             ),
-            stage="framework_coach_migration",
+            stage=operation,
             status="success" if error is None else "failed",
             model=backend.model,
             candidate_id=None,
@@ -253,7 +257,7 @@ def select_reflected_genomes(
             finished_at=request_finished_at,
             duration_seconds=request_duration,
             metadata={
-                "operation_type": "framework_coach_migration",
+                "operation_type": operation,
                 "endpoint": client.selected_endpoint.base_url,
                 "failure_category": "llm_transport_error" if error is not None else None,
                 "transport_attempt": 1,
@@ -298,7 +302,7 @@ def select_reflected_genomes(
         "schema_version": FRAMEWORK_COACH_MIGRATION_SCHEMA_VERSION,
         "status": "success" if error is None else "failed",
         "framework_bundle_sha256": framework_bundle_sha256,
-        "operation": "framework_coach_migration",
+        "operation": operation,
         "model": backend.model,
         "backend": config.execution_mode,
         "candidate_ids": candidate_ids,
@@ -323,6 +327,8 @@ def revise_strategy_descriptions(
     artifact_dir: Path,
     timing_logger: LLMCallLogger | None = None,
     generation: int | None = None,
+    option_only: bool = False,
+    repair_error: str | None = None,
 ) -> dict[str, str]:
     """Revise every strategy before slot filling; outer framework repair owns retries."""
 
@@ -348,16 +354,21 @@ def revise_strategy_descriptions(
         "required": ["schema_version", "strategy_descriptions"],
     }
     prompt = render_prompt(
-        "framework_strategy_revision",
+        "framework_option_strategy_revision" if option_only else "framework_strategy_revision",
         {
             "previous_framework_bundle": json.dumps(framework_bundle_evidence(previous_bundle), ensure_ascii=False),
             "framework_bundle": json.dumps(framework_bundle_evidence(bundle), ensure_ascii=False),
             "population_evidence": json.dumps(population_evidence, ensure_ascii=False, allow_nan=False),
             "response_schema": json.dumps(schema, ensure_ascii=False),
+            "previous_transition_error": repair_error or "None; this is the first attempt.",
         },
     )
+    operation = (
+        "framework_option_strategy_revision"
+        if option_only else "framework_strategy_revision"
+    )
     backend = client.prompt_backend(
-        operation="framework_strategy_revision",
+        operation=operation,
         response_schema=schema,
         response_schema_name="eagle_framework_strategy_revision",
         max_prompt_chars=None,
@@ -381,10 +392,10 @@ def revise_strategy_descriptions(
     if timing_logger is not None:
         timing_logger.write_timing_event(
             request_correlation_id=(
-                f"{timing_logger.run_id}:framework_strategy_revision:{generation}:"
+                f"{timing_logger.run_id}:{operation}:{generation}:"
                 f"{artifact_dir.as_posix()}"
             ),
-            stage="framework_strategy_revision",
+            stage=operation,
             status="success" if error is None else "failed",
             model=backend.model,
             candidate_id=None,
@@ -393,7 +404,7 @@ def revise_strategy_descriptions(
             finished_at=request_finished_at,
             duration_seconds=request_duration,
             metadata={
-                "operation_type": "framework_strategy_revision",
+                "operation_type": operation,
                 "endpoint": client.selected_endpoint.base_url,
                 "failure_category": "llm_transport_error" if error is not None else None,
                 "transport_attempt": 1,
@@ -426,7 +437,7 @@ def revise_strategy_descriptions(
     _write_json(artifact_dir / "result.json", {
         "schema_version": FRAMEWORK_STRATEGY_REVISION_SCHEMA_VERSION,
         "status": "success" if error is None else "failed",
-        "operation": "framework_strategy_revision",
+        "operation": operation,
         "model": backend.model,
         "backend": config.execution_mode,
         "candidate_ids": candidate_ids,

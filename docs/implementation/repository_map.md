@@ -37,7 +37,7 @@ kept as documentation entries.
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, Java materialization and candidate Java modes, framework evolution policy, EA/model/evaluation validation |
-| `eagle/evolution/framework_reflection.py` | Refresh-boundary whole-framework reflection, batch Coach transition, compilation probes, immutable version publication, and parent replicas |
+| `eagle/evolution/framework_reflection.py` | Refresh-boundary whole-framework or frozen-framework option reflection, batch Coach transition, compilation probes, optional immutable version publication, and parent replicas |
 | `eagle/evolution/runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/evolution/search.py` | Fresh run creation plus shared fresh/startup-checkpoint generation-zero initialization/evaluation and failure/interruption marking |
 | `eagle/evolution/loop.py` | Shared fresh/resume generation loop, state propagation, finalization, and `SearchResult` |

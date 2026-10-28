@@ -172,6 +172,19 @@ outer proposal repair budget, and exhaustion keeps old descriptions, genomes,
 and framework together. Local offspring inherit parent A's description.
 Successful transitions persist revised descriptions/genomes even if the bundle
 bytes remain unchanged.
+
+In `option_reflection`, the root `framework/bundle.json` is the only legal
+bundle for every candidate. Invocations live under
+`framework/option_reflections/generation_<nnnn>/invocation_<nnn>/` and use
+outer result schema `eagle-framework-option-reflection-v1`. They retain the
+frozen bundle, complete survivor evidence, numbered strategy-revision and Coach
+selection attempts, compilation probes, bounded attempt diagnostics, and
+`eagle-framework-migration-v1` records with
+`reflection_scope: control_genome`. Candidate operator
+`framework_option_reflection` creates one-source replicas pinned to the same
+root hash; removed slots are always empty. Exhaustion records `rollback` and
+ordinary self-play context refresh preserves the old descriptions/genomes.
+No `framework/versions/` or accepted-version `reflection.json` is written.
 ## Generation snapshot
 
 `generations/generation_<nnnn>.json` contains:
