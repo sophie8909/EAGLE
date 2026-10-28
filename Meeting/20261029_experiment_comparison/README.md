@@ -2,26 +2,28 @@
 
 ## Deliverable
 
-`deliverables/EAGLE_20261029_experiment_comparison_combined.pptx` appends seven editable Traditional Chinese slides (48–54) to the latest cloud-edited 47-slide `EAGLE_20261028_weekly_update_combined.pptx`. The cloud source has fewer pages than the previous repository version, so the actual cloud file is authoritative. It remains unchanged.
+`deliverables/EAGLE_20261029_experiment_comparison_combined.pptx` is the existing deliverable, updated in place. A byte-identical copy at the same existing cloud filename is maintained in `J:\我的雲端硬碟\Lab\Meeting\`.
 
-A byte-identical output copy is saved as `J:\我的雲端硬碟\Lab\Meeting\EAGLE_20261029_experiment_comparison_combined.pptx`.
+The deck contains the cloud-edited original 47 pages, the seven three-version comparison pages (48–54), and four nearest-versus-farthest pages (55–58). No new deliverable filename was created for the latter comparison. Original page contents remain unchanged; page-number denominators now show 58.
 
-## Content and evidence
+## Evidence
 
-`source_report.md` preserves the supplied experiment summary, numeric precision, remote configuration locators and comparison limits. The appendix covers completion status, paired 20-generation fitness, fixed-roster final tests, 50-generation results and reported timing, incomplete runs, and the next controlled comparison.
+`source_report.md` records the supplied three-version snapshot, the historical farthest cohorts, exact run IDs, full-precision fitness and final-test calculations, source paths and comparison limits.
 
-This is the user-provided 2026-10-29 snapshot. No remote run artifacts or current process states were independently fetched. Reported hours have no supplied accounting boundary or per-generation breakdown. Existing historical claims are retained with a visible snapshot distinction.
+The farthest comparison uses both complete six-seed cohorts from `Meeting/20261021_current_workflow/stability_report_data.json` (2026-10-22 historical snapshot), with pre-28ea6606 selector code establishing the maximum-distance rule. Nearest full precision and run IDs come from the read-only remote chat “整理三版實驗數據”. Raw remote run files were not fetched anew.
+
+Nearest mean final fitness 10.687600 exceeds farthest A 5.883962 and B 5.375332. Final-test win rates are 34.75%, 32.33% and 31.17%, respectively. Historical runs are cross-date observations; other code/runtime differences have not been isolated. Nearest timing on the same boundary is missing.
 
 ## Validation
 
-- Opened the combined candidate and exported final file in native PowerPoint; 54 slides. Inspected every appended page rendered by PowerPoint, including the original artwork.
-- Appendix: 5 native tables and 4 native charts with embedded data workbooks; package, geometry, reference-font, first-party import and chart/workbook gates pass.
-- Combined package: 54 slides, 13 native charts, zero structural findings. Exactly one native slide-number field per slide.
-- Verified all original 47 slide text payloads except page-number shapes, plus historical chart numeric caches, remain unchanged. Page-count denominators now show 54.
-- Checked match totals and aggregated 20-generation win rates. Preserved supplied fitness differences rather than recomputing them from rounded display values.
-- Historical chart/workbook consistency was not revalidated; previous-deck documentation records pre-existing inconsistencies. Source code tests and experiments were not run for this presentation update.
+- Opened and rendered the 58-slide candidate in native PowerPoint; visually inspected all four added pages and repaired crowded chart labels. Template artwork and editable tables/charts remain present.
+- Added four-page section: 3 native tables, 2 native charts with embedded workbooks; package, geometry, reference-font, first-party import and chart/workbook checks pass.
+- Whole deck: 58 slides, 15 native charts, zero package-integrity findings. Exactly one native slide-number field per slide.
+- All prior 54 slide text payloads except slide-number shapes and prior chart numeric caches match the preceding deliverable.
+- Verified match totals, percentages, means and differences. The 12 farthest runs are shown as two repeated six-seed cohorts, not twelve independent seeds.
+- Existing historical chart/workbook consistency was not revalidated. No code tests or experiments were run for this presentation edit.
 
-Source SHA-256: `a9281db6cd7b6cbb177d51b58a52db203eaf625987aef1913cc1563f331aaa4d`.
-Final SHA-256: `92749f39531ab356266d09eb37f9752fec848cdddf04319da9f9c85e96d8accd`.
+Before-edit SHA-256: `92749f39531ab356266d09eb37f9752fec848cdddf04319da9f9c85e96d8accd`.
+Current SHA-256: `a009e03fd7b62d3e6bcd0787bdf9fcf40358fd7df7df8f3c14e30970c732d9df`.
 
-Private build scripts, rendered previews and detailed validation receipts remain under ignored `build/`.
+Private build scripts, backups, previews and validation receipts remain under ignored `build/`.
