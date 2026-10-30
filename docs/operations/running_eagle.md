@@ -191,7 +191,15 @@ Failed attempts and a failed manifest remain; the pending config cannot resume
 until a valid frozen bundle exists.
 
 The `local` default samples finite slot values and uses seeded per-slot
-crossover and one-slot mutation without candidate-time LLM requests.
+crossover and one-slot mutation without candidate-time LLM requests. The sole
+bounded exception is `framework.gpt_initial_candidates`: when positive, and
+only with `framework_slots` plus `evolution_mode: local`, direct GPT reads
+`api_key/gpt` and `framework.model` to select exactly the first N complete Gen-0
+genomes. The remaining Gen-0 slots and all offspring stay local; the count
+defaults to zero and is resume-fenced. Invalid GPT responses fail
+initialization rather than falling back to random/default genomes. A bounded
+Gen-0-only treatment may set `generations: 0`; other modes require at least one
+evolutionary generation.
 `llm_coach` asks the experiment model for initial complete genomes and uses the
 existing one-worst-match Commentator/Coach path for Strategy mutation. Neither
 mode calls a Java Generator or repair model; rendering, validation, javac,
@@ -449,6 +457,15 @@ Mock mode does not adapt or start llama.cpp, inspect the configured port, valida
 python -m eagle.fixed_evaluation --run-dir runs/<run>
 python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 0 5 10 15 20 --seed 42
 ```
+
+For the 1030 slot ablation, treatments 2 and 3 use one combined evaluation:
+
+```bash
+python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 20 30 40 50 75 100
+```
+
+Treatment 1 is Gen-0-only and uses `--generations 0`. The combined command
+does not create separate evolutionary runs.
 
 The defaults are generations `0 5 10 15 20` and the run-config seed. The run must be complete and every requested snapshot must exist; missing generations fail without substitution. Frozen protocol and results go to a separate `fixed_evaluation/` directory by default. An explicit output directory must be new or empty; use another directory for each rerun to preserve prior evidence. Combined outputs are `fixed_evaluation_summary.json`, `fixed_evaluation_results.csv`, and `fixed_evaluation_results.md`. `mean_match_score` is the unweighted benchmark mean, separate from canonical search fitness. If a matrix is incomplete or has errors, its aggregate score and win rate are null and the command exits nonzero. This command leaves ordinary `eagle.final_test` behavior and search artifacts unchanged; see the evaluation and artifact contracts for selection and output details.
 

@@ -5,6 +5,7 @@ import json
 import random
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -54,9 +55,12 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
             "semantic_probes_enabled": False,
         }
         coach_probability = overrides.pop("framework_coach_offspring_probability", None)
+        gpt_initial_candidates = overrides.pop("framework_gpt_initial_candidates", None)
         payload.update(overrides)
         if coach_probability is not None:
             payload["framework"]["coach_offspring_probability"] = coach_probability
+        if gpt_initial_candidates is not None:
+            payload["framework"]["gpt_initial_candidates"] = gpt_initial_candidates
         config = ExperimentConfig.from_mapping(payload)
         config.validate()
         return config
@@ -99,6 +103,195 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
             self.assertEqual(set(candidate.control_genome), set(bundle.slot_ids))
             self.assertEqual(candidate.framework_bundle_sha256, exact_hash)
             self.assertEqual(candidate.slot_parent_ids, {})
+
+    def test_direct_gpt_selects_only_configured_gen0_prefix_and_keeps_offspring_local(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = self.config(
+                root,
+                mode="local",
+                population_size=3,
+                framework_gpt_initial_candidates=1,
+            )
+            runtime = self.runtime(config, root)
+            population = initialize_population(
+                config,
+                policy_backend=runtime.initial_policy_backend,
+                candidates_dir=root / "run" / "candidates",
+                timing_logger=runtime.llm_logger,
+            )
+
+        self.assertFalse(config.needs_llm_runtime)
+        self.assertEqual(runtime.mutations, {})
+        self.assertEqual(len(population), 3)
+        first_selection = population[0].metadata["framework_coach_selection"]
+        self.assertEqual(first_selection["provider"], "direct_openai_gpt")
+        self.assertEqual(first_selection["model"], config.framework_model)
+        self.assertNotIn("framework_coach_selection", population[1].metadata)
+        self.assertNotIn("framework_coach_selection", population[2].metadata)
+        persisted = population[0].to_json_dict()["metadata"]["framework_coach_selection"]
+        self.assertEqual(persisted["provider"], "direct_openai_gpt")
+
+    def test_gpt_initial_count_round_trips_validates_and_allows_zero_generations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = self.config(
+                root,
+                mode="local",
+                population_size=3,
+                generations=0,
+                framework_gpt_initial_candidates=1,
+            )
+            reloaded = ExperimentConfig.from_mapping(config.to_mapping())
+            reloaded.validate()
+            self.assertEqual(reloaded.framework_gpt_initial_candidates, 1)
+            self.assertEqual(reloaded.generations, 0)
+            for invalid, message in (
+                (
+                    replace(config, framework_gpt_initial_candidates=4),
+                    "gpt_initial_candidates",
+                ),
+                (
+                    replace(config, framework_evolution_mode="llm_coach"),
+                    "evolution_mode=local",
+                ),
+            ):
+                with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                    invalid.validate()
+
+    def test_direct_gpt_transport_authenticates_and_uses_strict_schema(self) -> None:
+        from io import BytesIO
+        from eagle.operators.framework_coach import (
+            DirectGPTFrameworkSelectionBackend,
+            framework_selection_response_schema,
+        )
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = self.config(root, mode="local")
+            bundle = load_framework_bundle(
+                config.framework_bundle_path,
+                expected_sha256=config.framework_bundle_sha256,
+            )
+            schema = framework_selection_response_schema(bundle, config.framework_bundle_sha256)
+            key_path = root / "gpt-key"
+            key_path.write_text("secret-test-key\n", encoding="utf-8")
+            content = json.dumps({
+                "schema_version": "eagle-framework-selection-v1",
+                "framework_bundle_sha256": config.framework_bundle_sha256,
+                "control_genome": {slot.slot_id: slot.default for slot in bundle.slots},
+            })
+            response = BytesIO(json.dumps({
+                "choices": [{"finish_reason": "stop", "message": {"content": content}}],
+            }).encode("utf-8"))
+            with patch("eagle.operators.framework_coach.GPT_API_KEY_PATH", key_path), patch(
+                "eagle.operators.framework_coach.urllib.request.urlopen",
+                return_value=response,
+            ) as urlopen:
+                backend = DirectGPTFrameworkSelectionBackend(
+                    model="gpt-6.1-sol",
+                    response_schema=schema,
+                )
+                self.assertEqual(backend.generate("choose slots"), content)
+
+            request = urlopen.call_args.args[0]
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(request.get_header("Authorization"), "Bearer secret-test-key")
+            self.assertEqual(payload["model"], "gpt-6.1-sol")
+            self.assertTrue(payload["response_format"]["json_schema"]["strict"])
+            self.assertNotIn("temperature", payload)
+            self.assertNotIn("seed", payload)
+
+            truncated = BytesIO(json.dumps({
+                "choices": [{"finish_reason": "length", "message": {"content": content}}],
+            }).encode("utf-8"))
+            with patch("eagle.operators.framework_coach.GPT_API_KEY_PATH", key_path), patch(
+                "eagle.operators.framework_coach.urllib.request.urlopen",
+                return_value=truncated,
+            ):
+                backend = DirectGPTFrameworkSelectionBackend(
+                    model="gpt-6.1-sol",
+                    response_schema=schema,
+                )
+                with self.assertRaisesRegex(RuntimeError, "finish with stop"):
+                    backend.generate("choose slots")
+
+    def test_gpt_initial_count_is_manifest_fenced_on_resume(self) -> None:
+        from eagle.artifacts import write_run_config
+        from eagle.evolution.resume import load_resume_config
+        from eagle.run_artifacts import freeze_framework_bundle, initialize_run_manifest
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = self.config(
+                root,
+                mode="local",
+                population_size=3,
+                framework_gpt_initial_candidates=1,
+            )
+            run_dir = root / "run"
+            run_dir.mkdir()
+            frozen = freeze_framework_bundle(run_dir, source)
+            initialize_run_manifest(run_dir, config=frozen)
+            write_run_config(run_dir, frozen, mock=True)
+            self.assertEqual(load_resume_config(run_dir).framework_gpt_initial_candidates, 1)
+
+            manifest_path = run_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["framework_gpt_initial_candidates"] = 0
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "GPT initial candidate count"):
+                load_resume_config(run_dir)
+
+    def test_1030_ablation_configs_load_with_expected_treatments(self) -> None:
+        root = Path("configs/experiments/1030_gpt_framework_slot_ablation_seed8_10")
+        configs = [
+            ExperimentConfig.from_file(root / "01_gpt_framework_gpt_slot_once.yaml"),
+            ExperimentConfig.from_file(root / "02_gpt_framework_local_evolution.yaml"),
+            ExperimentConfig.from_file(root / "03_gpt_framework_gpt_seed_local_evolution.yaml"),
+        ]
+        for config in configs:
+            config.validate()
+        self.assertEqual(configs[0].generations, 0)
+        self.assertEqual(configs[0].population_size, 1)
+        self.assertEqual(configs[0].framework_gpt_initial_candidates, 1)
+        self.assertEqual(configs[0].initial_policy_max_attempts, 1)
+        self.assertEqual(configs[1].random_seeds, (8, 9, 10))
+        self.assertEqual(configs[1].generations, 100)
+        self.assertEqual(configs[1].framework_gpt_initial_candidates, 0)
+        self.assertEqual(configs[2].random_seeds, (8, 9, 10))
+        self.assertEqual(configs[2].generations, 100)
+        self.assertEqual(configs[2].framework_gpt_initial_candidates, 1)
+        self.assertEqual(configs[2].initial_policy_max_attempts, 1)
+        self.assertEqual(
+            {config.framework_bundle_sha256 for config in configs},
+            {"f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b"},
+        )
+
+    def test_zero_generation_search_completes_after_gpt_seed_initialization(self) -> None:
+        from eagle.evolution.search import run_search
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = replace(
+                self.config(
+                    root,
+                    mode="local",
+                    generations=0,
+                    framework_gpt_initial_candidates=1,
+                ),
+                runs_dir=root / "runs",
+            )
+            result = run_search(config, mock=True, run_id="gpt_gen0_only")
+            manifest = json.loads((result.run_dir / "manifest.json").read_text(encoding="utf-8"))
+            generation_one_exists = (
+                result.run_dir / "generations" / "generation_0001.json"
+            ).exists()
+
+        self.assertEqual(result.completed_generation, 0)
+        self.assertEqual(manifest["status"], "complete")
+        self.assertEqual(manifest["latest_generation"], 0)
+        self.assertFalse(generation_one_exists)
 
     def test_offspring_selects_strategy_coach_with_evaluated_parent_a_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

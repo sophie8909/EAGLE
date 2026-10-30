@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +14,7 @@ from eagle.run_artifacts import RUN_SCHEMA_VERSION
 
 
 _CANONICAL_GENERATION_RE = re.compile(r"generation_(\d{4})\.json$")
+_SEMANTIC_DISTANCE_RE = re.compile(r"generation_(\d{4})_semantic_distances\.jsonl$")
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class RunData:
     final_population: dict[str, Any] | None
     timing: list[dict[str, Any]]
     errors: list[dict[str, Any]]
+    semantic_distances: list[dict[str, Any]] = field(default_factory=list)
 
 
 def resolve_latest_run(run_root: Path) -> Path:
@@ -84,6 +86,14 @@ def load_run(run_dir: Path) -> RunData:
             key=lambda path: int(_CANONICAL_GENERATION_RE.fullmatch(path.name).group(1))
         )
     generations = [_read_json(path) or {} for path in generation_paths]
+    semantic_distance_paths = sorted(
+        (
+            path
+            for path in generations_dir.glob("generation_*_semantic_distances.jsonl")
+            if _SEMANTIC_DISTANCE_RE.fullmatch(path.name)
+        ),
+        key=lambda path: int(_SEMANTIC_DISTANCE_RE.fullmatch(path.name).group(1)),
+    ) if generations_dir.is_dir() else []
     config = _read_yaml(run_dir / "config.yaml")
     generations = [_materialize_generation(run_dir, item) for item in generations]
     metrics = [
@@ -104,6 +114,11 @@ def load_run(run_dir: Path) -> RunData:
         final_population=final_population,
         timing=_read_jsonl(run_dir / "timing.jsonl"),
         errors=errors,
+        semantic_distances=[
+            record
+            for path in semantic_distance_paths
+            for record in _read_jsonl(path)
+        ],
     )
 
 

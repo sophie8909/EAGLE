@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -14,11 +16,106 @@ from eagle.generation.framework_slots import (
     validate_genome,
 )
 from eagle.llm import LLMCallLogger
+from eagle.llm import json_schema_response_format, llm_request_progress
 from eagle.prompts import render_prompt
+from eagle.generation.groq_framework import (
+    DEFAULT_GPT_API_ROOT,
+    GPT_API_KEY_PATH,
+)
 
 
 FRAMEWORK_SELECTION_SCHEMA_VERSION = "eagle-framework-selection-v1"
 FRAMEWORK_SELECTION_SCHEMA_NAME = "eagle_framework_selection"
+DIRECT_GPT_SELECTION_MAX_COMPLETION_TOKENS = 4_096
+
+
+class DirectGPTFrameworkSelectionBackend:
+    """Authenticated direct GPT transport for a bounded gen-zero selection prefix.
+
+    This deliberately bypasses the experiment's managed local model.  The
+    normal ``StrategyReflectionPipeline`` remains the owner of retries,
+    validation, timing, and candidate-owned artifacts.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        response_schema: dict[str, object],
+        timeout_seconds: float = 300.0,
+    ) -> None:
+        try:
+            api_key = GPT_API_KEY_PATH.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError("GPT API key is required in api_key/gpt.") from exc
+        if not api_key:
+            raise ValueError("GPT API key is required in api_key/gpt.")
+        self._api_key = api_key
+        self.model = model
+        self.response_schema = response_schema
+        self.timeout_seconds = timeout_seconds
+        self.base_url = DEFAULT_GPT_API_ROOT
+        self.operation = "framework_initial_gpt_selection"
+
+    @property
+    def chat_completions_url(self) -> str:
+        return f"{self.base_url}/chat/completions"
+
+    def generate(self, prompt: str) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": json_schema_response_format(
+                self.response_schema,
+                name=FRAMEWORK_SELECTION_SCHEMA_NAME,
+                strict=True,
+            ),
+            "max_completion_tokens": DIRECT_GPT_SELECTION_MAX_COMPLETION_TOKENS,
+            "reasoning_effort": "low",
+        }
+        request = urllib.request.Request(
+            self.chat_completions_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with llm_request_progress(
+                stage=self.operation,
+                endpoint=self.chat_completions_url,
+                model=self.model,
+            ):
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    envelope = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            response_body = exc.read().decode("utf-8", errors="replace")[:300]
+            raise RuntimeError(
+                f"direct GPT framework selection HTTP {exc.code}: {exc.reason}; "
+                f"response_body_start={response_body!r}"
+            ) from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise RuntimeError(f"direct GPT framework selection request failed: {exc}") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"direct GPT framework selection returned invalid JSON: {exc}") from exc
+
+        if not isinstance(envelope, dict):
+            raise RuntimeError("direct GPT framework selection response must be an object")
+        choices = envelope.get("choices")
+        if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+            raise RuntimeError("direct GPT framework selection response must contain one choice")
+        choice = choices[0]
+        if choice.get("finish_reason") != "stop":
+            raise RuntimeError("direct GPT framework selection must finish with stop")
+        message = choice.get("message")
+        if not isinstance(message, dict) or message.get("refusal"):
+            raise RuntimeError("direct GPT framework selection was refused")
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("direct GPT framework selection response has no JSON content")
+        return content
 
 
 def framework_selection_response_schema(
@@ -236,6 +333,7 @@ class MockFrameworkRoleBackend:
 
 
 __all__ = [
+    "DirectGPTFrameworkSelectionBackend",
     "FRAMEWORK_SELECTION_SCHEMA_NAME",
     "FRAMEWORK_SELECTION_SCHEMA_VERSION",
     "MockFrameworkRoleBackend",

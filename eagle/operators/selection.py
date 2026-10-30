@@ -3,21 +3,21 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Mapping
 from typing import Any, Literal
 
 from eagle.candidate import Candidate, has_completed_evaluation
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE, LEXICASE_CASES
+from eagle.semantic_distances import (
+    SemanticSummary,
+    semantic_distance as _semantic_distance,
+    semantic_summary as _semantic_summary,
+)
 
 
 LEXICASE_SELECTION = "lexicase"
 GAME_PERFORMANCE_SELECTION = "game_performance_semantic_tiebreak"
 GAME_PERFORMANCE_TIE_TOLERANCE = 1.0
 SelectionMode = Literal["lexicase", "game_performance_semantic_tiebreak"]
-
-# dataset ID, ordered probe IDs, ordered action hashes, global hash
-SemanticSummary = tuple[str, tuple[str, ...], tuple[str, ...], str]
-
 
 def lexicase_select(
     population: list[Candidate],
@@ -286,44 +286,6 @@ def _choose_by_semantic_distance(
     # Missing/incompatible summaries are fallback only.
     complete = [candidate for candidate in candidates if _semantic_summary(candidate) is not None]
     return rng.choice(complete or candidates)
-
-
-def _semantic_summary(candidate: Candidate) -> SemanticSummary | None:
-    value = getattr(candidate, "semantic_signature", None)
-    if not isinstance(value, Mapping) or value.get("status") != "complete":
-        return None
-    dataset_id = value.get("dataset_id")
-    probe_ids = value.get("probe_ids")
-    action_hashes = value.get("action_hashes")
-    global_hash = value.get("global_hash")
-    if not isinstance(dataset_id, str) or not dataset_id:
-        return None
-    if not isinstance(global_hash, str) or not global_hash:
-        return None
-    if not isinstance(probe_ids, (list, tuple)) or not isinstance(action_hashes, (list, tuple)):
-        return None
-    if not probe_ids or len(probe_ids) != len(action_hashes):
-        return None
-    if any(not isinstance(item, str) or not item for item in probe_ids):
-        return None
-    if any(not isinstance(item, str) or not item for item in action_hashes):
-        return None
-    ordered_probes = tuple(probe_ids)
-    if len(set(ordered_probes)) != len(ordered_probes):
-        return None
-    return dataset_id, ordered_probes, tuple(action_hashes), global_hash
-
-
-def _semantic_distance(
-    left: SemanticSummary,
-    right: SemanticSummary,
-) -> float | None:
-    left_dataset, left_probes, left_actions, _ = left
-    right_dataset, right_probes, right_actions, _ = right
-    if left_dataset != right_dataset or left_probes != right_probes:
-        return None
-    mismatches = sum(a != b for a, b in zip(left_actions, right_actions, strict=True))
-    return mismatches / len(left_actions)
 
 
 def _semantic_global_hash(candidate: Candidate) -> str:

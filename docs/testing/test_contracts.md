@@ -362,6 +362,25 @@ expression choices, duplicate-key and non-JSON-wrapper rejection, raw-before-par
 timing, one-worst-match Commentator→Coach context, parent-genome retention on
 failed mutation, and absence of Java Generation/repair requests.
 
+The `framework.gpt_initial_candidates` contract additionally proves
+that a positive count is accepted only for `framework_slots` plus
+`evolution_mode: local`, defaults to zero, and is resume-fenced. Direct GPT
+must read only `api_key/gpt`, use `framework.model`, select exactly the first N
+complete Gen-0 genomes, and validate every response against
+`eagle-framework-selection-v1` plus the exact frozen bundle hash. Raw response,
+request, timing, genome, and validation artifacts are retained before parsing;
+invalid or exhausted selection fails initialization without random/default
+fallback. Remaining Gen-0 slots and every offspring must use local seeded
+operators, with no later GPT request. The 1030 ablation configs must validate
+one shared bundle and the three treatment shapes; fixed evaluation must accept
+one invocation with generations `20 30 40 50 75 100`.
+
+Generation persistence tests also require one semantic-distance row per
+unordered survivor pair, explicit unavailable rows for incompatible evidence,
+and null rather than zero statistics when no pair is comparable. Canonical
+analysis must export pair CSV evidence and a maximum/mean/minimum distance plot
+over generations.
+
 Tests must prove the bootstrap sends user-message content, model, temperature,
 and `max_completion_tokens` to the Groq Chat Completions endpoint; requests
 `response_format` JSON Schema named `eagle_framework` with `strict: false`; and

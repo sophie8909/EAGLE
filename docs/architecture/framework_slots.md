@@ -22,6 +22,20 @@ same bundle schema, exact-byte run freeze, active genotype, renderer, and
 materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
+The local policy has one bounded Gen-0 initialization extension:
+`framework.gpt_initial_candidates` defaults to `0`. When it is a positive
+integer, it is allowed only with `java_materialization_mode: framework_slots`
+and `framework.evolution_mode: local`; direct GPT reads `api_key/gpt`, uses
+`framework.model`, and selects exactly the first N complete generation-zero
+genomes. Each response must satisfy the strict
+`eagle-framework-selection-v1` schema and the exact SHA-256 of the frozen
+`framework/bundle.json`. The remaining generation-zero candidates use seeded
+local sampling, and every offspring uses the unchanged local crossover and
+single-slot mutation path. This is a one-time initialization treatment, not
+`llm_coach`, and it does not call GPT after Gen 0. The resolved count is part of
+run identity; resume rejects a changed value, and credentials never enter
+config or artifacts.
+
 `option_reflection` is the periodic, population-wide Coach policy with a frozen
 framework. It requires self-play and uses the same G6/G11/G16/... refresh
 barriers and generation-zero authored strategy descriptions as `reflection`,
@@ -174,6 +188,16 @@ repair, or compile-repair request. Its only candidate-time LLM work is initial
 genome selection and the existing Commentator/Coach Strategy path. Rendering
 and Java validation remain local and deterministic.
 
+The direct-GPT Gen-0 extension uses the same complete finite-genome shape but
+only for the configured first N local-initialization slots. Selection evidence
+is candidate-owned and retains response content, request metadata, attempt
+timing, exact bundle hash, complete genome, and validation outcome. Invalid or
+exhausted GPT selection fails initialization; it never falls back to a random
+or default genome. The local remainder and all later offspring do not create
+GPT evidence. Such a treatment may set `generations: 0` to stop immediately
+after the fully evaluated generation-zero checkpoint; other experiment modes
+still require at least one evolutionary generation.
+
 
 ## Minimal use
 
@@ -218,6 +242,18 @@ framework bootstrap; `execution_mode: openai` and
 `framework.evolution_mode: llm_coach` retain normal EA LLM calls through the
 managed local primary plus the configured additional endpoint. Java compilation,
 Integration, semantic probes, and MicroRTS scoring remain enabled.
+
+## Gen-0 GPT slot ablation
+
+The checked-in `configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/`
+folder compares three treatments against the same immutable
+`configs/framework_bundles/gpt_finite_rule_market_v1/bundle.json`: one GPT
+selected Gen-0 candidate only, pure local initialization/evolution, and one GPT
+selected candidate plus local initialization/evolution. Treatments 2 and 3 use
+seeds 8, 9, and 10 and run through generation 100. After each completed run,
+one fixed-evaluation invocation can evaluate generations `20 30 40 50 75 100`;
+this creates six benchmark checkpoints without six evolutionary runs. Treatment
+1 is a Gen-0-only benchmark and requests generation `0`.
 
 ## Startup and evolution boundary
 
@@ -410,7 +446,8 @@ This mode requires:
 - active genotype metadata `['control_genome']`.
 
 With `framework.evolution_mode: local`, the EA performs no candidate-time
-provider or other LLM request. Strategy Reflection, Prompt Reflection, Code
+provider or other LLM request by default; `gpt_initial_candidates` is the sole
+bounded Gen-0 exception. Strategy Reflection, Prompt Reflection, Code
 Reflection/source gating, Java Generation, and compile-guided repair are all
 disabled. Under `llm_coach`, only initial genome selection and the
 Commentator/Coach Strategy path make candidate-time requests; Prompt Reflection,

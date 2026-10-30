@@ -129,24 +129,57 @@ def initialize_population(
             )
             for index in range(config.population_size)
         ]
-        if config.framework_evolution_mode == "llm_coach":
+        direct_gpt_count = config.framework_gpt_initial_candidates
+        if config.framework_evolution_mode == "llm_coach" or direct_gpt_count:
             from eagle.operators.framework_coach import select_initial_framework_genome
 
             if policy_backend is None or candidates_dir is None:
-                raise ValueError("framework llm_coach initialization requires a backend and artifact directory.")
+                raise ValueError(
+                    "framework initial GPT/Coach selection requires a backend and artifact directory."
+                )
+
+            selection_count = (
+                config.population_size
+                if config.framework_evolution_mode == "llm_coach"
+                else direct_gpt_count
+            )
+            selection_model = (
+                config.llm_model
+                if config.framework_evolution_mode == "llm_coach"
+                else config.framework_model
+            )
 
             def select_genome(candidate: Candidate) -> Candidate:
                 write_candidate_inputs(candidates_dir, candidate)
-                return select_initial_framework_genome(
+                selected = select_initial_framework_genome(
                     candidate, bundle, policy_backend,
                     artifact_dir=candidates_dir / candidate.id,
                     timing_logger=timing_logger,
                     max_attempts=config.initial_policy_max_attempts,
-                    model_identity=config.llm_model,
+                    model_identity=selection_model,
                     selection_seed=config.random_seed,
                 )
+                if config.framework_evolution_mode == "local":
+                    selection_metadata = dict(
+                        selected.metadata.get("framework_coach_selection", {})
+                    )
+                    return replace(
+                        selected,
+                        metadata={
+                            **selected.metadata,
+                            "framework_coach_selection": {
+                                **selection_metadata,
+                                "provider": "direct_openai_gpt",
+                                "model": config.framework_model,
+                            },
+                        },
+                    )
+                return selected
 
-            population = parallel_map(select_genome, population)
+            population = (
+                parallel_map(select_genome, population[:selection_count])
+                + population[selection_count:]
+            )
         return population
 
     inherited_java = (

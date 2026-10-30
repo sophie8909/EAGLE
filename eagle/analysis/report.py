@@ -23,6 +23,7 @@ OUTPUT_FILES = (
     "match_game_performance.csv", "opponent_game_performance.csv",
     "aos_operator_statistics.csv",
     "strategy_diversity.csv", "strategy_niches.csv",
+    "semantic_distance_pairs.csv",
     "objective_statistics.csv", "operator_statistics.csv",
     "timing_statistics.csv", "error_statistics.csv", "opponent_representatives.json",
 )
@@ -55,6 +56,7 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     _write_csv(output / "aos_operator_statistics.csv", aos_rows)
     _write_csv(output / "strategy_diversity.csv", diversity_rows)
     _write_csv(output / "strategy_niches.csv", niche_rows)
+    _write_csv(output / "semantic_distance_pairs.csv", data.semantic_distances)
     _write_csv(output / "objective_statistics.csv", objective_rows)
     _write_csv(output / "operator_statistics.csv", operator_rows)
     _write_csv(output / "timing_statistics.csv", timing_rows)
@@ -80,6 +82,7 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         "opponent_game_performance_count": len(opponent_game_rows),
         "aos_operator_statistics_count": len(aos_rows),
         "strategy_diversity_count": len(diversity_rows),
+        "semantic_distance_pair_count": len(data.semantic_distances),
         "failure_count": sum(bool(row["failed"]) for row in candidates),
         "objectives": sorted({row["objective_id"] for row in objective_rows}),
     }
@@ -95,6 +98,7 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         f"- Single-match Game Performance rows: {summary['match_game_performance_count']}\n"
         f"- Per-opponent Game Performance rows: {summary['opponent_game_performance_count']}\n"
         f"- AOS operator statistics rows: {summary['aos_operator_statistics_count']}\n"
+        f"- Pairwise semantic-distance rows: {summary['semantic_distance_pair_count']}\n"
         f"- Failures: {summary['failure_count']}\n",
         encoding="utf-8",
     )
@@ -139,6 +143,16 @@ def _generation_rows(data: RunData) -> list[dict[str, Any]]:
                 "new_niches": diversity.get("new_niches"),
                 "revisited_niches": diversity.get("revisited_niches"),
                 "niche_change_rate": diversity.get("niche_change_rate"),
+            })
+        semantic_distance = item.get("semantic_distance") or {}
+        if isinstance(semantic_distance, dict):
+            base.update({
+                "semantic_distance_pair_count": semantic_distance.get("pair_count"),
+                "semantic_distance_comparable_pair_count": semantic_distance.get("comparable_pair_count"),
+                "semantic_distance_unavailable_pair_count": semantic_distance.get("unavailable_pair_count"),
+                "semantic_distance_minimum": semantic_distance.get("minimum"),
+                "semantic_distance_mean": semantic_distance.get("mean"),
+                "semantic_distance_maximum": semantic_distance.get("maximum"),
             })
         for objective_id, values in item.get("objectives", {}).items():
             for metric in ("best", "mean", "median", "worst"):
@@ -479,6 +493,17 @@ def _plots(path: Path, generation_rows, candidates, agent_game_rows, opponent_ga
     for old_plot in path.glob("*.png"):
         old_plot.unlink()
     _line_plot(path / "code_quality_by_generation.png", generation_rows, "generation", ("code_quality_best", "code_quality_mean", "code_quality_median", "code_quality_worst"), "Code Quality diagnostic by generation")
+    _line_plot(
+        path / "semantic_distance_by_generation.png",
+        generation_rows,
+        "generation",
+        (
+            "semantic_distance_maximum",
+            "semantic_distance_mean",
+            "semantic_distance_minimum",
+        ),
+        "Pairwise semantic distance by generation",
+    )
     _line_plot(
         path / "game_performance_by_generation.png", generation_rows, "generation",
         ("game_performance_best", "game_performance_mean", "game_performance_median", "game_performance_worst"),

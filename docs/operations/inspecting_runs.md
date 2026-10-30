@@ -54,6 +54,14 @@ duplicate `opponent_results.match_scores`.
 The single-match rows also retain `birth_generation`, but violin distributions
 are positioned at the survivor snapshot generation.
 
+Each generation also records every unordered pair of surviving candidates in
+`generations/generation_NNNN_semantic_distances.jsonl`. Pairs whose signatures
+are missing or incompatible remain explicit `unavailable` rows rather than
+being treated as distance zero. `./analyze.sh` combines these rows into
+`analysis/semantic_distance_pairs.csv`; the corresponding
+`analysis/plots/semantic_distance_by_generation.png` plots the maximum, mean,
+and minimum comparable pairwise distance for every generation.
+
 `analysis/aos_operator_statistics.csv` and
 `analysis/plots/aos_operator_probabilities.png` contain operator usage, rewards,
 credits, probabilities, mode, and reward source. Plot titles distinguish

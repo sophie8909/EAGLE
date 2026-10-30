@@ -36,6 +36,10 @@ from eagle.generation.framework_slots import (
     validate_framework_bundle,
     validate_genome,
 )
+from eagle.semantic_distances import (
+    pairwise_semantic_distance_records,
+    semantic_distance_statistics,
+)
 
 RUN_SCHEMA_VERSION = "eagle-run-v2"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
@@ -362,6 +366,7 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "framework_bundle_artifact": FRAMEWORK_BUNDLE_ARTIFACT if config.java_materialization_mode == "framework_slots" else None,
             "framework_evolution_mode": config.framework_evolution_mode if config.java_materialization_mode == "framework_slots" else None,
             "framework_coach_offspring_probability": config.framework_coach_offspring_probability if config.java_materialization_mode == "framework_slots" else None,
+            "framework_gpt_initial_candidates": config.framework_gpt_initial_candidates if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_backend": config.framework_bootstrap_backend if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_scope": config.framework_bootstrap_scope if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_max_attempts": (
@@ -527,6 +532,12 @@ def record_generation(
 ) -> None:
     """Record the surviving population after selection exactly once."""
     metrics = generation_metrics(generation, population, diversity=diversity)
+    semantic_distance_records = pairwise_semantic_distance_records(
+        population,
+        generation=generation,
+    )
+    semantic_distance_summary = semantic_distance_statistics(semantic_distance_records)
+    semantic_distance_filename = f"generation_{generation:04d}_semantic_distances.jsonl"
     snapshot = {
         "schema_version": GENERATION_SCHEMA_VERSION,
         "generation": generation,
@@ -547,6 +558,10 @@ def record_generation(
         ],
         "best_candidate_id": _best_candidate_id(population),
         "metrics": metrics,
+        "semantic_distances": {
+            "artifact": semantic_distance_filename,
+            **semantic_distance_summary,
+        },
         "aos": None if aos is None else dict(aos),
         "timing": {
             "artifact": "../timing.jsonl",
@@ -560,6 +575,10 @@ def record_generation(
     atomic_jsonl(
         policy_index_path,
         generation_policy_records(run_dir, generation, population),
+    )
+    atomic_jsonl(
+        generations_dir / semantic_distance_filename,
+        semantic_distance_records,
     )
     snapshot_path = generations_dir / f"generation_{generation:04d}.json"
     atomic_json(snapshot_path, snapshot)
@@ -775,6 +794,9 @@ def generation_metrics(
     light_rush_wins = sum(_candidate_beats_opponent(candidate, "lightrush") for candidate in population)
     heavy_rush_wins = sum(_candidate_beats_opponent(candidate, "heavyrush") for candidate in population)
     population_size = len(population)
+    semantic_distance = semantic_distance_statistics(
+        pairwise_semantic_distance_records(population, generation=generation)
+    )
 
     payload = {
         "schema_version": "eagle-generation-metrics-v1",
@@ -799,6 +821,7 @@ def generation_metrics(
             "by_opponent": opponent_summary,
         },
         "semantic_library": _semantic_library_metrics(population),
+        "semantic_distance": semantic_distance,
     }
     if diversity is not None:
         payload["strategy_diversity"] = dict(diversity)

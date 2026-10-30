@@ -555,6 +555,12 @@ excluding parent A when another tier member exists. A singleton tier reuses its
 only member. Equal distances use seeded choice in candidate-ID order. Survivor
 boundary selection retains seeded farthest-first max-min diversity.
 
+After each surviving population is fixed, every unordered pair is persisted
+with this same compatible normalized Hamming distance. Generation metrics store
+comparable/unavailable counts and minimum, mean, and maximum; incompatible or
+missing evidence stays unavailable. Static analysis plots the three statistics
+over generation without changing selection or fitness.
+
 Code Quality is a diagnostic and mutation-evidence signal, not a selection
 objective. Successful Code Quality is:
 
@@ -838,7 +844,9 @@ and reconstructible hashes.
 Framework-slot mode uses `candidate_java_mode: generated_phenotype`,
 `parent_evaluation_mode: reuse_cached`, `reflection_operator_mode: static`, and
 protocol/materializer version `eagle-framework-slots-v1`. The default
-`framework.evolution_mode: local` performs no candidate-time LLM request. The
+`framework.evolution_mode: local` performs no candidate-time LLM request by
+default; the bounded `gpt_initial_candidates` Gen-0 extension is the sole
+exception. The
 opt-in `llm_coach` mode uses the configured experiment model for initial
 complete-genome selection. With legacy `coach_offspring_probability: null`, it
 also uses the existing one-worst-match Commentator/Coach Strategy path after
@@ -853,6 +861,19 @@ frozen in `local` and `llm_coach`; resume also compares the resolved
 `framework.evolution_mode` and effective Coach offspring probability. The
 latter defaults to `null` for older manifests; a numeric value requires
 `llm_coach` and is rejected in the other modes.
+
+The local policy also permits the bounded `framework.gpt_initial_candidates`
+initialization extension. Its default is `0`; a positive integer is valid only
+for `framework_slots` with `framework.evolution_mode: local`. Direct GPT reads
+the authenticated key from `api_key/gpt`, uses `framework.model`, and selects
+exactly the first N complete Gen-0 `control_genome` values. Each response is
+validated as `eagle-framework-selection-v1` against the exact frozen bundle
+SHA-256 before materialization. Remaining Gen-0 slots use seeded local sampling
+and all offspring use local per-slot crossover/mutation; no GPT request occurs
+after initialization. The resolved count is persisted and resume-fenced. Raw
+request/response, timing, complete genome, bundle hash, and validation outcome
+are retained under the candidate initialization owner; invalid or exhausted
+selection fails initialization without random/default fallback.
 
 With `framework.evolution_mode: reflection`, initial design uses the configured
 bootstrap backend/model, while the local experiment model reflects on the whole

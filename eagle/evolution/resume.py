@@ -142,6 +142,12 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
                 raise ValueError("Resume config/manifest framework evolution mode mismatch.")
             if manifest.get("framework_coach_offspring_probability") != framework.get("coach_offspring_probability"):
                 raise ValueError("Resume config/manifest framework Coach offspring probability mismatch.")
+            if manifest.get("framework_gpt_initial_candidates", 0) != framework.get(
+                "gpt_initial_candidates", 0
+            ):
+                raise ValueError(
+                    "Resume config/manifest framework GPT initial candidate count mismatch."
+                )
             if manifest.get("framework_bootstrap_scope", "run") != framework.get(
                 "bootstrap_scope", "run"
             ):

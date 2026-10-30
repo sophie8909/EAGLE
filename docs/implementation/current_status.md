@@ -1,5 +1,24 @@
 # Current implementation status
 
+## Gen-0 GPT slot-selection ablation (2026-10-30)
+
+The implemented `framework.gpt_initial_candidates` extension is deliberately
+narrow: under `framework_slots` with `framework.evolution_mode: local`, direct
+GPT reads `api_key/gpt` and `framework.model` to choose exactly the first N
+complete generation-zero genomes. The response must match the complete
+`eagle-framework-selection-v1` schema and the frozen bundle SHA-256. Remaining
+Gen-0 genomes and all offspring remain seeded local EA; the default count is
+zero and the resolved count is resume-fenced. The treatment configs and shared
+bundle are staged under
+`configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/` and
+`configs/framework_bundles/gpt_finite_rule_market_v1/`. Treatments 2 and 3
+use seeds 8–10 through generation 100; one fixed-evaluation call then requests
+generations 20, 30, 40, 50, 75, and 100.
+
+Generation persistence now also writes all unordered survivor semantic-distance
+pairs and comparable min/mean/max summaries. Canonical analysis exports the
+pair rows and plots maximum, mean, and minimum distance by generation.
+
 ## Frozen-framework option reflection (2026-10-28)
 
 `framework.evolution_mode: option_reflection` is implemented for self-play

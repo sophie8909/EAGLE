@@ -66,6 +66,12 @@ probes, exact semantic caching/equivalence, and offline semantic analysis are
 implemented and covered.
 Historical gap rows remain available in Git history.
 
+## Gen-0 GPT slot-selection ablation decision (2026-10-30)
+
+| ID | Question | Decision | Verification | Status |
+| --- | --- | --- | --- | --- |
+| FWSLOT-05 | How can a GPT-selected initial genome be compared with local finite-slot evolution without turning the run into `llm_coach`? | Add `framework.gpt_initial_candidates`, default `0`, valid only for `framework_slots` plus `evolution_mode: local`. Direct authenticated GPT selects exactly the first N complete Gen-0 genomes under the frozen bundle hash; remaining Gen-0 slots and all offspring stay local. Persist strict selection evidence and resume-fence the resolved count. | 1030 three-treatment configs share `gpt_finite_rule_market_v1`; config, strict schema/hash artifact, local-boundary, zero-generation, provider transport, and resume tests cover the feature. Treatments 2/3 use one fixed-evaluation call for generations 20/30/40/50/75/100. | Implemented; focused validation passed |
+
 ## Dependency-driven execution (2026-10-21)
 
 | ID | Decision | Verification | Status |

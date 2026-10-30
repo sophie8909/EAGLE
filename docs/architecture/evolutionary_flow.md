@@ -55,6 +55,13 @@ are specified in their own sections.
    phenotype. Later children in both modes independently inherit policy,
    generation prompt, and Java provenance before the same final Generator
    boundary.
+   In `framework_slots`, local Gen-0 initialization samples complete finite
+   genomes. If `framework.gpt_initial_candidates` is positive, direct GPT
+   replaces exactly the first N of those initial selections after strict
+   run-bundle-hash validation; the remaining Gen-0 slots are local. This
+   extension is legal only with `framework.evolution_mode: local`, and every
+   generation-one-and-later offspring remains on the local slot crossover and
+   mutation path.
 3. In default `fixed_roster` evaluation, store one score for each opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.

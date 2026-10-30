@@ -61,6 +61,13 @@ repair 或 compile repair。Resume 僅讀 run-owned frozen bundle，驗證 hash 
 傳統路徑，`1.0` 表示全走 Coach；Gen 0
 仍一律由 Coach 選完整 genome。Resume 會比較有效設定；舊 manifest 缺少欄位時
 視為 `null`。`local` 模式設定數值會被拒絕。
+另外，`framework.gpt_initial_candidates` 預設為 `0`；只有在
+`framework_slots` 且 `evolution_mode: local` 時，正整數值才有效。它讓 direct
+GPT（從 `api_key/gpt` 讀取 key、使用 `framework.model`）只選擇 Gen 0 最前面的
+N 份完整 genome；每份回應都必須符合 `eagle-framework-selection-v1` 並綁定
+run-owned frozen bundle 的 exact SHA-256。其餘 Gen 0 與所有 offspring 仍走
+seeded local sampling/crossover/mutation，不會在 Gen 0 之後呼叫 GPT。數值寫入
+resolved config/manifest 並受 resume fence 保護；失敗不會偷換 random/default。
 Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
 bundle 建立前不可 resume；bundle、resolved config 與 manifest 完成 exact-byte
 freeze 後即形成 generation zero 前的 startup checkpoint。此時中斷可在同一 run
@@ -69,9 +76,14 @@ freeze 後即形成 generation zero 前的 startup checkpoint。此時中斷可�
 `bundle_path` 會拒絕執行，確保不呼叫 API。Groq 的 `GROQ_API_KEY` 從
 process environment 讀取，Mistral 的 key 從 `api_key/mistral` 讀取，GPT 的
 key 從 `api_key/gpt` 讀取，三者都絕不寫入 config 或 artifact。GPT API
-只用於初始 framework bootstrap；後續 framework reflection、策略描述修訂與
+用於初始 framework bootstrap；若啟用上述 Gen-0 extension，也只會額外
+用於指定的前 N 個初始 slot selection。後續 framework reflection、策略描述修訂與
 slot 填寫仍使用 top-level 本地 model。完整契約見
 [framework slots](architecture/framework_slots.md)。
+每代 survivor 決定後，系統會用相同的九 probes normalized Hamming 定義記錄
+所有不重複個體 pair；缺 signature、dataset 不同或 probe 順序不相容都保留為
+unavailable，不補成 0。generation metrics 保存 comparable/unavailable 數量與
+最低、平均、最高距離，標準 analysis 另輸出 pair CSV 及三條跨世代曲線圖。
 Bootstrap 期間 stdout 會以 `flush=True` 顯示 backend/model、每次 request attempt、
 驗證結果、bundle freeze 與進入 Gen 0 的進度；不輸出 credential、完整 prompt 或 response。
 
@@ -551,6 +563,15 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 ```bash
 python -m eagle.fixed_evaluation --run-dir runs/<run> [--generations 0 5 10 15 20] [--seed <int>] [--output-dir <dir>]
 ```
+
+1030 ablation 的 treatments 2/3 使用一次命令評估所有指定 checkpoint：
+
+```bash
+python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 20 30 40 50 75 100
+```
+
+這不會建立六次 evolutionary run；treatment 1 只對 Gen 0 使用
+`--generations 0`。
 
 預設世代為 0、5、10、15、20；未指定 seed 時讀取 run config。run 必須完成，每個指定 snapshot 都必須存在，不會替換世代。每代從 runnable survivors 選擇 generation-local、有限且最高的 Game Performance，同分以 candidate ID 穩定排序。所有代表共用凍結 protocol 與同一 seed stream，分別重新編譯及 Integration，並各跑 600 場；不呼叫 LLM，也不修改 search artifacts。protocol、逐代證據、彙總與部分進度寫入獨立 `fixed_evaluation/`。指定的 output directory 必須是新建或空目錄；重跑請使用另一個目錄以保留舊證據。彙總檔名為 `fixed_evaluation_summary.json`、`fixed_evaluation_results.csv`、`fixed_evaluation_results.md`。`mean_match_score` 是 benchmark 的未加權平均，與 canonical search fitness 分開；矩陣不完整或含錯誤時 aggregate score 和 win rate 為 null，命令以非零狀態結束。
 

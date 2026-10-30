@@ -41,6 +41,11 @@ changing the active component. Each candidate pins `framework_bundle_sha256`,
 uses `candidate_java_mode: generated_phenotype`, and records
 `active_genotype_components: ["control_genome"]`. See
 [framework slots](framework_slots.md) for the exact bundle and domain schema.
+With `framework.evolution_mode: local`, the optional positive
+`framework.gpt_initial_candidates` count changes only the first N Gen-0
+initialization slots: direct GPT returns complete hash-pinned genomes, while
+the remaining Gen-0 slots and all offspring stay local. It is not a second
+genotype or a Coach mode; the count defaults to zero and is fenced by resume.
 
 ## Policy contract
 

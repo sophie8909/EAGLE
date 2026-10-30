@@ -70,6 +70,7 @@ kept as documentation entries.
 | `eagle/operators/reflection_prompts.py` | Prompt Reflection reviewer rendering |
 | `eagle/prompts.py` | Prompt manifest loading, rendering, and bounds |
 | `eagle/strategy_diversity.py` | Strategy signature/niche/archive diagnostics |
+| `eagle/semantic_distances.py` | Canonical compatible semantic distance, all-pairs generation records, and summary statistics |
 
 ## Generation and evaluation
 

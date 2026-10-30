@@ -40,6 +40,7 @@ runs/<run_id>/
 ├── summary.json
 ├── timing.jsonl
 ├── generations/
+│   └── generation_NNNN_semantic_distances.jsonl
 ├── candidates/
 ├── generated_agents/
 ├── classes/
@@ -313,7 +314,27 @@ mutation retains its Commentator and Coach attempts under the candidate's
 records validation outcome and timing. A failed initial selection has
 `failure_stage: initialization`; a failed Coach child retains its pre-Coach
 complete `control_genome`, records `failure_stage: reflection`, and is not
-silently replaced by random values. Local mode has no such LLM artifacts.
+silently replaced by random values. Local mode has no such LLM artifacts unless
+`framework.gpt_initial_candidates` is positive.
+
+For that local Gen-0 extension, each of the first N candidate initialization
+owners reuses `initialization/framework_coach/` and retains GPT response content
+before semantic parsing, request metadata, attempt timing, the exact
+`framework_bundle_sha256`, complete `control_genome`, and validation result.
+The response schema is still `eagle-framework-selection-v1`; no partial genome
+is persisted as a successful candidate and an exhausted/invalid selection is a
+failed initialization with no random/default fallback. Local Gen-0 remainder
+and offspring have no GPT selection artifact. The resolved count is persisted
+in resolved config/manifest and is checked during resume; a changed count is
+incompatible even when the frozen bundle is unchanged.
+
+Each canonical generation snapshot references
+`generation_NNNN_semantic_distances.jsonl`. The sidecar has one
+`eagle-semantic-distance-pair-v1` row for every unordered survivor pair, with
+candidate IDs, comparable/unavailable status, nullable normalized Hamming
+distance, and a bounded unavailability reason. The generation metrics and
+snapshot reference repeat only pair counts and minimum/mean/maximum comparable
+distance. No comparable pairs yields null statistics, never fabricated zeros.
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, active-mode fitness, aggregate Game Performance, compact executable semantic summary, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Full canonical probe actions remain in the run-local cache rather than the index. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 

@@ -50,3 +50,13 @@ selection. Missing/incompatible evidence is fallback.
 writes `semantic_candidates.csv`, `semantic_probe_signatures.csv`,
 `semantic_uniqueness.csv`, and `semantic_library.json`, including global,
 per-map, and per-phase exact-equivalence statistics.
+
+Normal generation persistence also records every unordered survivor pair in
+`generations/generation_NNNN_semantic_distances.jsonl`. Compatible pairs use
+the same normalized Hamming distance as selection; missing signatures, dataset
+mismatches, and probe-order mismatches remain explicit unavailable rows rather
+than becoming zero. Generation metrics retain comparable/unavailable pair
+counts plus minimum, mean, and maximum distance. The standard analysis report
+writes `semantic_distance_pairs.csv` and
+`plots/semantic_distance_by_generation.png` with maximum, mean, and minimum
+curves.

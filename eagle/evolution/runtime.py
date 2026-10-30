@@ -82,9 +82,15 @@ def build_search_runtime(
     )
     framework_slots = config.java_materialization_mode == "framework_slots"
     framework_coach = framework_slots and config.framework_evolution_mode == "llm_coach"
+    framework_direct_gpt = (
+        framework_slots
+        and config.framework_evolution_mode == "local"
+        and config.framework_gpt_initial_candidates > 0
+    )
     framework_options = {}
     framework_selection_schema = None
-    if framework_coach:
+    bundle = None
+    if framework_coach or framework_direct_gpt:
         from eagle.operators.framework_coach import (
             FRAMEWORK_SELECTION_SCHEMA_NAME,
             framework_selection_response_schema,
@@ -107,10 +113,23 @@ def build_search_runtime(
         if mock or config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
         else generation_client.generation_backend(logger=logger)
     )
-    initial_policy_backend = (
-        MockInitialPolicyBackend()
-        if mock or (framework_slots and not framework_coach)
-        else client.prompt_backend(
+    if mock and (framework_coach or framework_direct_gpt):
+        from eagle.operators.framework_coach import MockFrameworkRoleBackend
+
+        assert bundle is not None
+        initial_policy_backend = MockFrameworkRoleBackend(bundle, config.framework_bundle_sha256)
+    elif framework_direct_gpt:
+        from eagle.operators.framework_coach import DirectGPTFrameworkSelectionBackend
+
+        assert framework_selection_schema is not None
+        initial_policy_backend = DirectGPTFrameworkSelectionBackend(
+            model=config.framework_model,
+            response_schema=framework_selection_schema,
+        )
+    elif mock or (framework_slots and not framework_coach):
+        initial_policy_backend = MockInitialPolicyBackend()
+    else:
+        initial_policy_backend = client.prompt_backend(
             operation=(
                 "framework_initial_selection"
                 if framework_coach
@@ -128,7 +147,6 @@ def build_search_runtime(
                 else "eagle_initial_policy"
             ),
         )
-    )
     # The mock and production generator must render the same configured
     # immutable scaffold, including inherited-Java requests.
     generation_backend.agent_template_path = config.agent_template_path
@@ -156,6 +174,7 @@ def build_search_runtime(
     if framework_coach:
         from eagle.operators.framework_coach import MockFrameworkRoleBackend
         if mock:
+            assert bundle is not None
             strategy_role_backend = MockFrameworkRoleBackend(bundle, config.framework_bundle_sha256)
             initial_policy_backend = strategy_role_backend
     enabled_roles = {"coach"}

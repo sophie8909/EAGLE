@@ -186,6 +186,9 @@ class ExperimentConfig:
     framework_bundle_sha256: str | None = None
     framework_evolution_mode: str = "local"
     framework_coach_offspring_probability: float | None = None
+    # A bounded prefix of generation zero can be selected by the direct GPT
+    # API while all later framework-slot evolution remains seeded local EA.
+    framework_gpt_initial_candidates: int = 0
     framework_bootstrap_backend: str = "groq"
     framework_bootstrap_scope: str = "run"
     framework_bootstrap_max_attempts: int = 3
@@ -493,6 +496,9 @@ class ExperimentConfig:
                 None if (payload.get("framework") or {}).get("coach_offspring_probability") is None
                 else float(payload["framework"]["coach_offspring_probability"])
             ),
+            framework_gpt_initial_candidates=_parse_framework_gpt_initial_candidates(
+                (payload.get("framework") or {}).get("gpt_initial_candidates", 0)
+            ),
             framework_bootstrap_backend=str((payload.get("framework") or {}).get("bootstrap_backend", "groq")),
             framework_bootstrap_scope=str(
                 (payload.get("framework") or {}).get("bootstrap_scope", "run")
@@ -634,6 +640,25 @@ class ExperimentConfig:
                 raise ValueError("framework.coach_offspring_probability must be in [0, 1].")
             if self.framework_evolution_mode != "llm_coach":
                 raise ValueError("framework.coach_offspring_probability requires framework.evolution_mode=llm_coach.")
+        if (
+            not isinstance(self.framework_gpt_initial_candidates, int)
+            or isinstance(self.framework_gpt_initial_candidates, bool)
+            or self.framework_gpt_initial_candidates < 0
+            or self.framework_gpt_initial_candidates > self.population_size
+        ):
+            raise ValueError(
+                "framework.gpt_initial_candidates must be an integer in "
+                "[0, population_size]."
+            )
+        if self.framework_gpt_initial_candidates and (
+            self.java_materialization_mode != "framework_slots"
+            or self.framework_evolution_mode != "local"
+        ):
+            raise ValueError(
+                "framework.gpt_initial_candidates requires "
+                "java_materialization_mode=framework_slots and "
+                "framework.evolution_mode=local."
+            )
         if self.framework_bootstrap_backend not in {"groq", "mistral", "gpt", "codex", "local"}:
             raise ValueError(
                 "framework.bootstrap_backend must be groq, mistral, gpt, codex, or local."
@@ -691,8 +716,17 @@ class ExperimentConfig:
             raise ValueError("runs must be at least 1.")
         if self.random_seeds and len(set(self.random_seeds)) != len(self.random_seeds):
             raise ValueError("random_seeds must not contain duplicates.")
-        if self.generations < 1:
-            raise ValueError("generations must be at least 1.")
+        gen_zero_only = (
+            self.generations == 0
+            and self.java_materialization_mode == "framework_slots"
+            and self.framework_evolution_mode == "local"
+            and self.framework_gpt_initial_candidates > 0
+        )
+        if self.generations < 1 and not gen_zero_only:
+            raise ValueError(
+                "generations must be at least 1, except for direct-GPT "
+                "framework-slot Gen-0-only treatments."
+            )
         if self.population_size < 1:
             raise ValueError("population_size must be at least 1.")
         if self.initial_population_mode not in INITIAL_POPULATION_MODES:
@@ -1046,6 +1080,8 @@ class ExperimentConfig:
             mapping["framework"] = {"evolution_mode": self.framework_evolution_mode}
             if self.framework_coach_offspring_probability is not None:
                 mapping["framework"]["coach_offspring_probability"] = self.framework_coach_offspring_probability
+            if self.framework_gpt_initial_candidates:
+                mapping["framework"]["gpt_initial_candidates"] = self.framework_gpt_initial_candidates
             if self.framework_bootstrap_backend != "groq":
                 mapping["framework"]["bootstrap_backend"] = self.framework_bootstrap_backend
             if self.framework_bootstrap_scope != "run":
@@ -1054,10 +1090,9 @@ class ExperimentConfig:
             elif self.framework_bootstrap_max_attempts != 3:
                 mapping["framework"]["bootstrap_max_attempts"] = self.framework_bootstrap_max_attempts
             if self.framework_design_brief is not None:
-                mapping["framework"].update(
-                    design_brief=self.framework_design_brief,
-                    model=self.framework_model,
-                )
+                mapping["framework"]["design_brief"] = self.framework_design_brief
+            if self.framework_design_brief is not None or self.framework_gpt_initial_candidates:
+                mapping["framework"]["model"] = self.framework_model
             if self.framework_bundle_path is not None:
                 mapping["framework"].update(
                     bundle_path=str(self.framework_bundle_path.resolve()),
@@ -1203,6 +1238,14 @@ def _parse_prompt_files(
     return tuple(paths)
 
 
+def _parse_framework_gpt_initial_candidates(value: object) -> int:
+    """Parse the strictly integral direct-GPT initialization count."""
+
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("framework.gpt_initial_candidates must be an integer.")
+    return value
+
+
 def _parse_framework_bundle(
     value: object,
     base_dir: Path,
@@ -1223,7 +1266,7 @@ def _parse_framework_bundle(
     unknown = sorted(
         set(value).difference({
             "bundle_path", "bundle_version", "bundle_sha256", "evolution_mode",
-            "coach_offspring_probability", "bootstrap_backend",
+            "coach_offspring_probability", "gpt_initial_candidates", "bootstrap_backend",
             "bootstrap_scope", "bootstrap_max_attempts", "design_brief", "model",
         })
     )

@@ -1,0 +1,473 @@
+{
+  "schema_version": "eagle-framework-bundle-v1",
+  "framework_id": "finite_rule_market_v1",
+  "java_template": "package ai.generated;\n\nimport ai.core.AI;\nimport ai.core.ParameterSpecification;\nimport ai.abstraction.AbstractionLayerAI;\nimport ai.abstraction.pathfinding.AStarPathFinding;\nimport rts.*;\nimport rts.units.*;\nimport java.util.*;\n\npublic final class CandidateAgent extends AbstractionLayerAI {\n private final UnitTypeTable table;\n private final UnitType resourceType,workerType,lightType,heavyType,rangedType,baseType,barracksType;\n public CandidateAgent(UnitTypeTable utt){this(utt,new AStarPathFinding());}\n public CandidateAgent(UnitTypeTable utt,AStarPathFinding pathFinding){super(pathFinding);table=utt;resourceType=utt.getUnitType(\"Resource\");workerType=utt.getUnitType(\"Worker\");lightType=utt.getUnitType(\"Light\");heavyType=utt.getUnitType(\"Heavy\");rangedType=utt.getUnitType(\"Ranged\");baseType=utt.getUnitType(\"Base\");barracksType=utt.getUnitType(\"Barracks\");}\n public void reset(){}\n public AI clone(){return new CandidateAgent(table,new AStarPathFinding());}\n public List<ParameterSpecification> getParameters(){return Collections.emptyList();}\n private static final class AgentContext {\n  final int player; final GameState gs; final List<Unit> units; final ResourceUsage reservations; final PlayerAction output=new PlayerAction();\n  AgentContext(int p,GameState g){player=p;gs=g;units=new ArrayList<Unit>(g.getUnits());units.sort(Comparator.comparingLong(Unit::getID));reservations=g.getResourceUsage();}\n }\n public PlayerAction getAction(int player,GameState gs){AgentContext c=new AgentContext(player,gs);decide(c);return c.output;}\n private boolean isIdleAlly(Unit u,AgentContext c){return u.getPlayer()==c.player&&c.gs.getUnitAction(u)==null;}\n private Unit nearestEnemy(Unit u,AgentContext c){Unit best=null;int d=Integer.MAX_VALUE;for(Unit v:c.units)if(v.getPlayer()>=0&&v.getPlayer()!=c.player){int n=Math.abs(u.getX()-v.getX())+Math.abs(u.getY()-v.getY());if(n<d){d=n;best=v;}}return best;}\n private Unit nearestResource(Unit u,AgentContext c){Unit best=null;int d=Integer.MAX_VALUE;for(Unit v:c.units)if(v.getType()==resourceType){int n=Math.abs(u.getX()-v.getX())+Math.abs(u.getY()-v.getY());if(n<d){d=n;best=v;}}return best;}\n private Unit ownBase(AgentContext c){for(Unit u:c.units)if(u.getPlayer()==c.player&&u.getType()==baseType)return u;return null;}\n private boolean isFreeCell(AgentContext c,int x,int y){PhysicalGameState p=c.gs.getPhysicalGameState();if(x<0||y<0||x>=p.getWidth()||y>=p.getHeight())return false;return p.getTerrain(x,y)==PhysicalGameState.TERRAIN_NONE&&p.getUnitAt(x,y)==null;}\n private boolean legal(Unit u,UnitAction a,AgentContext c){return isIdleAlly(u,c)&&u.canExecuteAction(a,c.gs)&&c.gs.isUnitActionAllowed(u,a)&&a.resourceUsage(u,c.gs.getPhysicalGameState()).consistentWith(c.reservations,c.gs);}\n private void commandPlannedAction(Unit u,UnitAction a,AgentContext c){if(legal(u,a,c)){c.reservations.merge(a.resourceUsage(u,c.gs.getPhysicalGameState()));c.output.addUnitAction(u,a);}}\n private void commandReturn(Unit u,Unit b,AgentContext c,UnitAction prepared){if(u.getType()==workerType&&u.getResources()>0&&b!=null&&b.getPlayer()==c.player&&b.getType()==baseType)commandPlannedAction(u,prepared,c);}\n private void commandReturn(Unit u,Unit b,AgentContext c){UnitAction a=primitiveToward(u,b,1,UnitAction.TYPE_RETURN,c);if(a!=null)commandReturn(u,b,c,a);}\n private void commandMove(Unit u,int x,int y){move(u,x,y);}\n private void commandHarvest(Unit u,Unit r,Unit b){if(r!=null&&b!=null)harvest(u,r,b);}\n private void commandTrain(Unit u,UnitType t){train(u,t);}\n private void commandBuild(Unit u,UnitType t,int x,int y){build(u,t,x,y);}\n private void commandAttack(Unit u,Unit v){attack(u,v);}\n private void commandIdle(Unit u){}\n // EAGLE_AGENT_STRATEGY_START\n private final int harvestMode={{EAGLE_SLOT:harvest_mode}},buildMode={{EAGLE_SLOT:build_mode}},mixMode={{EAGLE_SLOT:mix_mode}},targetMode={{EAGLE_SLOT:target_mode}},moveMode={{EAGLE_SLOT:move_mode}},conditionMode={{EAGLE_SLOT:condition_mode}};\n private final int workerCap={{EAGLE_SLOT:worker_cap}},harvesterCap={{EAGLE_SLOT:harvester_cap}},baseCap={{EAGLE_SLOT:base_cap}},barracksCap={{EAGLE_SLOT:barracks_cap}},buildTime={{EAGLE_SLOT:build_time}},reserve={{EAGLE_SLOT:reserve}},threatRadius={{EAGLE_SLOT:threat_radius}},retreatHP={{EAGLE_SLOT:retreat_hp}},retreatDistance={{EAGLE_SLOT:retreat_distance}},attackPriority={{EAGLE_SLOT:attack_priority}},economyPriority={{EAGLE_SLOT:economy_priority}},buildPriority={{EAGLE_SLOT:build_priority}},trainPriority={{EAGLE_SLOT:train_priority}},retreatPriority={{EAGLE_SLOT:retreat_priority}},rallyRadius={{EAGLE_SLOT:rally_radius}},advancePriority={{EAGLE_SLOT:advance_priority}},heavyWeight={{EAGLE_SLOT:heavy_weight}},rangedWeight={{EAGLE_SLOT:ranged_weight}};\n private static final int[] DX={0,1,0,-1},DY={-1,0,1,0};\n private int distance(Unit a,Unit b){return Math.abs(a.getX()-b.getX())+Math.abs(a.getY()-b.getY());}\n private int count(AgentContext context,UnitType t,int owner){int n=0;for(Unit u:context.units)if(u.getPlayer()==owner&&u.getType()==t)n++;return n;}\n private int danger(AgentContext context,int x,int y){int n=0;for(Unit v:context.units)if(v.getPlayer()>=0&&v.getPlayer()!=context.player&&v.getType().canAttack&&Math.abs(x-v.getX())+Math.abs(y-v.getY())<=threatRadius)n++;return n;}\n private int direction(Unit a,Unit b){for(int d=0;d<4;d++)if(a.getX()+DX[d]==b.getX()&&a.getY()+DY[d]==b.getY())return d;return -1;}\n private UnitAction primitiveToward(Unit u,Unit target,int range,int adjacentType,AgentContext context){\n  if(target==null)return null;\n  int dx=u.getX()-target.getX(),dy=u.getY()-target.getY();\n  if(adjacentType==UnitAction.TYPE_ATTACK_LOCATION&&dx*dx+dy*dy<=range*range)return new UnitAction(UnitAction.TYPE_ATTACK_LOCATION,target.getX(),target.getY());\n  if(adjacentType!=UnitAction.TYPE_ATTACK_LOCATION&&distance(u,target)==1)return new UnitAction(adjacentType,direction(u,target));\n  if(!u.getType().canMove)return null;\n  int w=context.gs.getPhysicalGameState().getWidth(),h=context.gs.getPhysicalGameState().getHeight();\n  int[] first=new int[w*h];Arrays.fill(first,-2);ArrayDeque<Integer> queue=new ArrayDeque<Integer>();int start=u.getX()+u.getY()*w;first[start]=-1;queue.add(start);\n  while(!queue.isEmpty()){int p=queue.remove(),x=p%w,y=p/w;int ax=x-target.getX(),ay=y-target.getY();boolean reached=adjacentType==UnitAction.TYPE_ATTACK_LOCATION?ax*ax+ay*ay<=range*range:Math.abs(ax)+Math.abs(ay)==1;if(reached&&first[p]>=0)return new UnitAction(UnitAction.TYPE_MOVE,first[p]);\n   for(int d=0;d<4;d++){int nx=x+DX[d],ny=y+DY[d];if(!isFreeCell(context,nx,ny))continue;int q=nx+ny*w;if(first[q]!=-2)continue;int fd=first[p]<0?d:first[p];if(first[p]<0&&!legal(u,new UnitAction(UnitAction.TYPE_MOVE,fd),context))continue;first[q]=fd;queue.add(q);}\n  }return null;\n }\n private static final class Offer {UnitAction action;Unit base;double score=-Double.MAX_VALUE;}\n private void offer(Offer best,Unit u,UnitAction a,Unit base,double score,AgentContext context){if(a!=null&&score>best.score&&legal(u,a,context)){best.action=a;best.base=base;best.score=score;}}\n private void decide(AgentContext context){\n  int workers=count(context,workerType,context.player),bases=count(context,baseType,context.player),barracks=count(context,barracksType,context.player),lights=count(context,lightType,context.player),heavies=count(context,heavyType,context.player),ranged=count(context,rangedType,context.player);\n  int enemyCombat=0;for(Unit v:context.units)if(v.getPlayer()>=0&&v.getPlayer()!=context.player&&v.getType().canAttack)enemyCombat++;\n  int workerOrdinal=0;\n  for(Unit u:context.units){if(u.getPlayer()!=context.player)continue;boolean economic=u.getType()==workerType&&workerOrdinal++<harvesterCap;if(!isIdleAlly(u,context))continue;Offer best=new Offer();Unit anchor=ownBase(context);int nearby=danger(context,u.getX(),u.getY());boolean enabled=conditionMode==0||conditionMode==1&&context.gs.getTime()>=buildTime||conditionMode==2&&lights+heavies+ranged>=enemyCombat||conditionMode==3&&nearby==0;\n   if(u.getType().canAttack){for(Unit v:context.units)if(v.getPlayer()>=0&&v.getPlayer()!=context.player){double value=targetMode==0?-distance(u,v):targetMode==1?-v.getHitPoints()*3-distance(u,v):targetMode==2?(v.getType()==workerType?30:0)-distance(u,v):(v.getType()==baseType||v.getType()==barracksType?30:0)-distance(u,v);UnitAction a=primitiveToward(u,v,u.getType().attackRange,UnitAction.TYPE_ATTACK_LOCATION,context);if(a!=null)offer(best,u,a,null,(a.getType()==UnitAction.TYPE_ATTACK_LOCATION?attackPriority:advancePriority)+value,context);}}\n   if(u.getType().canMove){for(int d=0;d<4;d++){int x=u.getX()+DX[d],y=u.getY()+DY[d];if(!isFreeCell(context,x,y))continue;int after=danger(context,x,y);Unit enemy=nearestEnemy(u,context);int ed=enemy==null?0:Math.abs(x-enemy.getX())+Math.abs(y-enemy.getY());if(nearby>0&&u.getHitPoints()<=retreatHP&&ed>=Math.min(retreatDistance,enemy==null?0:distance(u,enemy)+1))offer(best,u,new UnitAction(UnitAction.TYPE_MOVE,d),null,retreatPriority+10*(nearby-after)+ed,context);if(anchor!=null&&distance(u,anchor)>rallyRadius&&(!enabled||moveMode==3))offer(best,u,new UnitAction(UnitAction.TYPE_MOVE,d),null,advancePriority+(distance(u,anchor)-Math.abs(x-anchor.getX())-Math.abs(y-anchor.getY()))*5,context);if(enemy!=null&&enabled&&moveMode!=3){double s=moveMode==0?-ed:moveMode==1?-after*10-ed:-(Math.abs(ed-u.getType().attackRange))*4;offer(best,u,new UnitAction(UnitAction.TYPE_MOVE,d),null,advancePriority+s,context);}}}\n   if(u.getType()==workerType){\n    if(u.getResources()>0){for(Unit b:context.units)if(b.getPlayer()==context.player&&b.getType()==baseType)offer(best,u,primitiveToward(u,b,1,UnitAction.TYPE_RETURN,context),b,economyPriority+20-distance(u,b),context);}\n    if(u.getResources()==0&&economic){for(Unit r:context.units)if(r.getType()==resourceType){Unit b=anchor;if(b==null)continue;double s=harvestMode==0?-distance(u,r):harvestMode==1?-distance(b,r):harvestMode==2?-danger(context,r.getX(),r.getY())*15-distance(u,r):r.getResources()-distance(u,r);offer(best,u,primitiveToward(u,r,1,UnitAction.TYPE_HARVEST,context),null,economyPriority+s,context);}}\n    if(u.getResources()==0&&context.gs.getTime()>=buildTime&&enabled){for(UnitType t:new UnitType[]{baseType,barracksType}){if(t==baseType?bases>=baseCap:barracks>=barracksCap)continue;if(context.gs.getPlayer(context.player).getResources()<t.cost+reserve)continue;for(int d=0;d<4;d++){int x=u.getX()+DX[d],y=u.getY()+DY[d];if(!isFreeCell(context,x,y))continue;Unit r=nearestResource(u,context),e=nearestEnemy(u,context);double s=buildMode==0?-(anchor==null?0:Math.abs(x-anchor.getX())+Math.abs(y-anchor.getY())):buildMode==1?-(r==null?0:Math.abs(x-r.getX())+Math.abs(y-r.getY())):buildMode==2?-(e==null?0:Math.abs(x-e.getX())+Math.abs(y-e.getY())):-10*danger(context,x,y);offer(best,u,new UnitAction(UnitAction.TYPE_PRODUCE,d,t),null,buildPriority+s,context);}}}\n   }\n   if(u.getType()==baseType&&workers<workerCap){for(int d=0;d<4;d++)if(isFreeCell(context,u.getX()+DX[d],u.getY()+DY[d]))offer(best,u,new UnitAction(UnitAction.TYPE_PRODUCE,d,workerType),null,trainPriority+workerCap-workers,context);}\n   if(u.getType()==barracksType&&context.gs.getPlayer(context.player).getResources()>=2+reserve){for(UnitType t:new UnitType[]{lightType,heavyType,rangedType}){double s=t==lightType?1:t==heavyType?heavyWeight:rangedWeight;int n=t==lightType?lights:t==heavyType?heavies:ranged;s=mixMode==0?s/(n+1.0):mixMode==1?s+(t==lightType?10:0):mixMode==2?s+(t==heavyType?enemyCombat:0):s+(t==rangedType?nearby*3:0);for(int d=0;d<4;d++)if(isFreeCell(context,u.getX()+DX[d],u.getY()+DY[d]))offer(best,u,new UnitAction(UnitAction.TYPE_PRODUCE,d,t),null,trainPriority+s,context);}}\n   if(best.action!=null){if(best.base!=null)commandReturn(u,best.base,context,best.action);else commandPlannedAction(u,best.action,context);}else commandIdle(u);\n  }\n }\n // EAGLE_AGENT_STRATEGY_END\n}\n",
+  "slots": [
+    {
+      "slot_id": "harvest_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:harvest_mode}}",
+      "default": "nearest_worker",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "nearest_worker",
+          "java_expression": "0",
+          "description": "Prefer resources nearest the worker."
+        },
+        {
+          "choice_id": "nearest_base",
+          "java_expression": "1",
+          "description": "Prefer resources nearest the current first friendly Base."
+        },
+        {
+          "choice_id": "low_danger",
+          "java_expression": "2",
+          "description": "Penalize resources near enemy attackers."
+        },
+        {
+          "choice_id": "rich_deposit",
+          "java_expression": "3",
+          "description": "Prefer deposits with more remaining resources."
+        }
+      ],
+      "purpose": "Harvest destination scoring."
+    },
+    {
+      "slot_id": "build_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:build_mode}}",
+      "default": "resource_side",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "compact",
+          "java_expression": "0",
+          "description": "Prefer cells near the first friendly Base."
+        },
+        {
+          "choice_id": "resource_side",
+          "java_expression": "1",
+          "description": "Prefer cells near the nearest Resource."
+        },
+        {
+          "choice_id": "forward",
+          "java_expression": "2",
+          "description": "Prefer cells near the nearest enemy."
+        },
+        {
+          "choice_id": "low_danger",
+          "java_expression": "3",
+          "description": "Prefer cells with fewer nearby enemy attackers."
+        }
+      ],
+      "purpose": "Adjacent construction placement scoring."
+    },
+    {
+      "slot_id": "mix_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:mix_mode}}",
+      "default": "weighted_balance",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "weighted_balance",
+          "java_expression": "0",
+          "description": "Divide composition weights by current count plus one."
+        },
+        {
+          "choice_id": "light_bias",
+          "java_expression": "1",
+          "description": "Add a fixed Light preference."
+        },
+        {
+          "choice_id": "heavy_response",
+          "java_expression": "2",
+          "description": "Increase Heavy preference with current enemy attacker count."
+        },
+        {
+          "choice_id": "ranged_response",
+          "java_expression": "3",
+          "description": "Increase Ranged preference with nearby enemy attacker count."
+        }
+      ],
+      "purpose": "Combat production selection."
+    },
+    {
+      "slot_id": "target_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:target_mode}}",
+      "default": "nearest",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "nearest",
+          "java_expression": "0",
+          "description": "Prefer nearest enemies."
+        },
+        {
+          "choice_id": "low_hp",
+          "java_expression": "1",
+          "description": "Prefer low current HP with distance penalty."
+        },
+        {
+          "choice_id": "workers",
+          "java_expression": "2",
+          "description": "Bonus for enemy Workers."
+        },
+        {
+          "choice_id": "buildings",
+          "java_expression": "3",
+          "description": "Bonus for enemy Bases and Barracks."
+        }
+      ],
+      "purpose": "Enemy target scoring."
+    },
+    {
+      "slot_id": "move_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:move_mode}}",
+      "default": "approach",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "approach",
+          "java_expression": "0",
+          "description": "Prefer steps closer to nearest enemy."
+        },
+        {
+          "choice_id": "avoid_density",
+          "java_expression": "1",
+          "description": "Penalize steps near enemy attackers."
+        },
+        {
+          "choice_id": "range_spacing",
+          "java_expression": "2",
+          "description": "Prefer Manhattan separation near own attack range."
+        },
+        {
+          "choice_id": "base_rally",
+          "java_expression": "3",
+          "description": "Offer movement toward friendly Base outside rally radius."
+        }
+      ],
+      "purpose": "Additional movement offers; target pursuit remains independently available."
+    },
+    {
+      "slot_id": "condition_mode",
+      "kind": "expression_choice",
+      "marker": "{{EAGLE_SLOT:condition_mode}}",
+      "default": "always",
+      "minimum": null,
+      "maximum": null,
+      "step": null,
+      "choices": [
+        {
+          "choice_id": "always",
+          "java_expression": "0",
+          "description": "Enable construction and discretionary advance."
+        },
+        {
+          "choice_id": "cycle_gate",
+          "java_expression": "1",
+          "description": "Enable after configured construction cycle."
+        },
+        {
+          "choice_id": "count_gate",
+          "java_expression": "2",
+          "description": "Enable when own combat count meets enemy attacker count."
+        },
+        {
+          "choice_id": "local_gate",
+          "java_expression": "3",
+          "description": "Enable when actor has no nearby enemy attacker."
+        }
+      ],
+      "purpose": "Observable condition gating; immediate attacks and target pursuit remain available."
+    },
+    {
+      "slot_id": "worker_cap",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:worker_cap}}",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 12,
+      "step": 1,
+      "choices": [],
+      "purpose": "Current Worker count limit for training."
+    },
+    {
+      "slot_id": "harvester_cap",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:harvester_cap}}",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 12,
+      "step": 1,
+      "choices": [],
+      "purpose": "Lowest-ID Workers eligible for harvesting."
+    },
+    {
+      "slot_id": "base_cap",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:base_cap}}",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 4,
+      "step": 1,
+      "choices": [],
+      "purpose": "Current Base count construction ceiling."
+    },
+    {
+      "slot_id": "barracks_cap",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:barracks_cap}}",
+      "default": 2,
+      "minimum": 1,
+      "maximum": 6,
+      "step": 1,
+      "choices": [],
+      "purpose": "Current Barracks count construction ceiling."
+    },
+    {
+      "slot_id": "build_time",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:build_time}}",
+      "default": 200,
+      "minimum": 0,
+      "maximum": 2000,
+      "step": 100,
+      "choices": [],
+      "purpose": "Earliest construction cycle and optional advance gate."
+    },
+    {
+      "slot_id": "reserve",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:reserve}}",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 10,
+      "step": 1,
+      "choices": [],
+      "purpose": "Stockpile cushion required before construction or combat production."
+    },
+    {
+      "slot_id": "threat_radius",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:threat_radius}}",
+      "default": 4,
+      "minimum": 1,
+      "maximum": 10,
+      "step": 1,
+      "choices": [],
+      "purpose": "Manhattan radius for nearby enemy attacker counts."
+    },
+    {
+      "slot_id": "retreat_hp",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:retreat_hp}}",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 4,
+      "step": 1,
+      "choices": [],
+      "purpose": "Maximum current HP eligible for retreat offers."
+    },
+    {
+      "slot_id": "retreat_distance",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:retreat_distance}}",
+      "default": 4,
+      "minimum": 1,
+      "maximum": 8,
+      "step": 1,
+      "choices": [],
+      "purpose": "Desired minimum separation for a retreat step, capped at achievable current distance plus one."
+    },
+    {
+      "slot_id": "attack_priority",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:attack_priority}}",
+      "default": 100,
+      "minimum": 0,
+      "maximum": 200,
+      "step": 5,
+      "choices": [],
+      "purpose": "Immediate legal in-range attack offer score."
+    },
+    {
+      "slot_id": "economy_priority",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:economy_priority}}",
+      "default": 80,
+      "minimum": 0,
+      "maximum": 200,
+      "step": 5,
+      "choices": [],
+      "purpose": "Harvest and return offer baseline."
+    },
+    {
+      "slot_id": "build_priority",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:build_priority}}",
+      "default": 90,
+      "minimum": 0,
+      "maximum": 200,
+      "step": 5,
+      "choices": [],
+      "purpose": "Construction offer baseline."
+    },
+    {
+      "slot_id": "train_priority",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:train_priority}}",
+      "default": 80,
+      "minimum": 0,
+      "maximum": 200,
+      "step": 5,
+      "choices": [],
+      "purpose": "Worker and combat production offer baseline."
+    },
+    {
+      "slot_id": "retreat_priority",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:retreat_priority}}",
+      "default": 120,
+      "minimum": 0,
+      "maximum": 200,
+      "step": 5,
+      "choices": [],
+      "purpose": "Retreat offer baseline."
+    },
+    {
+      "slot_id": "rally_radius",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:rally_radius}}",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 15,
+      "step": 1,
+      "choices": [],
+      "purpose": "Distance beyond which gated or rally movement is offered."
+    },
+    {
+      "slot_id": "advance_priority",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:advance_priority}}",
+      "default": 40,
+      "minimum": 0,
+      "maximum": 200,
+      "step": 5,
+      "choices": [],
+      "purpose": "Pursuit and discretionary movement baseline."
+    },
+    {
+      "slot_id": "heavy_weight",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:heavy_weight}}",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 12,
+      "step": 1,
+      "choices": [],
+      "purpose": "Heavy composition weight."
+    },
+    {
+      "slot_id": "ranged_weight",
+      "kind": "integer",
+      "marker": "{{EAGLE_SLOT:ranged_weight}}",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 12,
+      "step": 1,
+      "choices": [],
+      "purpose": "Ranged composition weight."
+    }
+  ],
+  "slot_generation_prompt": "Select a finite control genome for this immutable MicroRTS framework. Return only the exact JSON selection envelope supplied by the experiment, preserving its supplied exact-byte bundle hash and envelope structure. Populate control_genome with every slot_id below, each mapped to an integer or a declared choice_id. Do not invent a hash, add explanatory fields, emit Java, change helpers, rewrite the framework, or add slots. Integer ranges are inclusive; values must align to the stated step from the minimum. Choices: harvest_mode = nearest_worker (worker travel), nearest_base (Base proximity), low_danger (avoid nearby enemy attackers), rich_deposit (remaining deposit amount); build_mode = compact (Base proximity), resource_side (Resource proximity), forward (enemy proximity), low_danger (few nearby attackers); mix_mode = weighted_balance (weight divided by existing count plus one), light_bias (Light bonus), heavy_response (Heavy bonus from enemy attacker count), ranged_response (Ranged bonus from nearby attackers); target_mode = nearest, low_hp (HP penalty plus distance), workers (Worker bonus), buildings (Base/Barracks bonus); move_mode = approach, avoid_density, range_spacing, base_rally; condition_mode = always, cycle_gate (cycle at least build_time), count_gate (own combat count at least enemy attacker count), local_gate (no nearby enemy attacker). Numeric slots: worker_cap 1..12 step 1 limits Worker training; harvester_cap 1..12 step 1 selects lowest-ID harvesting Workers; base_cap 1..4 step 1 and barracks_cap 1..6 step 1 limit current building counts; build_time 0..2000 step 100 delays construction; reserve 0..10 step 1 adds a stockpile cushion for building and combat training; threat_radius 1..10 step 1 counts nearby enemy attackers by Manhattan distance; retreat_hp 1..4 step 1 enables retreat at or below current HP; retreat_distance 1..8 step 1 sets retreat separation capped at current distance plus one; attack_priority, economy_priority, build_priority, train_priority, retreat_priority, advance_priority each 0..200 step 5 are competing action score baselines; rally_radius 1..15 step 1 controls Base return positioning; heavy_weight and ranged_weight each 1..12 step 1 control composition with Light baseline weight one. Legal actions compete by score, not sequential completion. Immediate attacks, target pursuit, and resource return are independently available even when the optional condition gate is false. Construction also requires build_time. Resource return receives a bonus of twenty. Actor processing and ties are deterministic. Select compatible economic, combat, retreat and production priorities using only the listed observations and mechanics. Output the supplied envelope only.",
+  "report": {
+    "architecture_summary": "A deterministic legal-action market with 24 finite controls, including six four-way expression choices. Each idle actor generates complete independently guarded primitive offers; the highest scoring currently legal offer commits through reservation-aware fixed helpers. The immutable shell supplies MicroRTS integration, legality checks and action commitment; only declared literals vary within a version.",
+    "decision_flow": [
+      "Snapshot current entities in stable ID order and initialize reservations with ongoing actions.",
+      "Count current friendly composition and enemy attackers; assign harvesting eligibility to the lowest-ID Workers.",
+      "For each idle friendly movable attacker with an enemy-owned target, offer an attack only inside its own Euclidean attack range or a legal first movement step along a breadth-first path toward that range.",
+      "For each idle friendly movable unit meeting current HP, nearby-enemy and separation conditions, offer a legal retreat step.",
+      "For each idle friendly movable unit satisfying the relevant current-position and condition gates, offer legal approach, spacing, density-avoidance or Base-rally movement.",
+      "For each idle friendly Worker carrying resources with a reachable friendly Base, offer a return primitive or a legal first step toward adjacency to that Base.",
+      "For each eligible idle friendly Worker carrying no resources with a friendly Base and reachable Resource, offer a harvest primitive or legal movement toward Resource adjacency.",
+      "For each idle empty-handed friendly Worker meeting cycle, condition, current building-count and stockpile requirements with a legal adjacent free cell, offer construction of the named Base or Barracks into that cell.",
+      "For each idle friendly Base below the Worker count cap with sufficient resources and a legal adjacent free cell, offer Worker production into that cell.",
+      "For each idle friendly Barracks with sufficient resources and a legal adjacent free cell, offer production of each named combat type into that cell with composition-dependent scores.",
+      "Commit the highest-scoring preflighted primitive with resource and destination reservations; leave the actor idle when no legal offer exists."
+    ],
+    "invariants": [
+      "Only declared marker replacements constitute evolutionary variation.",
+      "All 24 markers occur once inside the single editable region; every expression choice is a side-effect-free integer expression.",
+      "All strategy state reads use the allowlisted observations; engine-only legality reads occur in fixed preflight and free-cell helpers.",
+      "Resources are used only as guarded harvest destinations, never enemy attack targets.",
+      "Return has a dedicated prepared-action commit path and never calls Harvest with a null Resource.",
+      "Training and construction commit TYPE_PRODUCE at the exact selected adjacent cell.",
+      "Every offer is independently legal-checked and the selected offer is checked again before commitment.",
+      "Current actor attack range governs attack legality; stationary buildings never receive movement or attack offers.",
+      "No randomness, hidden opponent state, action-history inference or wall-clock timing is used.",
+      "All added state-reading strategy helpers explicitly receive AgentContext.",
+      "Fixed helper implementations are outside the strategy region and must not be mutated."
+    ],
+    "slot_rationale": {
+      "harvest_mode": "Changes Resource ranking without changing harvest legality.",
+      "build_mode": "Changes scores of legal adjacent construction cells.",
+      "mix_mode": "Changes the marginal preference for each producible combat type.",
+      "target_mode": "Changes enemy ranking for both pursuit and attacks.",
+      "move_mode": "Adds independent positioning offers competing with pursuit.",
+      "condition_mode": "Combines observable global or local conditions with construction and discretionary movement.",
+      "worker_cap": "Trades resource conversion into Workers against other spending.",
+      "harvester_cap": "Separates harvesting eligibility from Worker population.",
+      "base_cap": "Allows restoration and optional expansion using current Base counts.",
+      "barracks_cap": "Controls parallel military infrastructure.",
+      "build_time": "Provides cycle-based construction timing and an optional movement gate.",
+      "reserve": "Makes construction and military spending more conservative without disabling Worker recovery.",
+      "threat_radius": "Changes the spatial scale of danger-sensitive choices and retreat.",
+      "retreat_hp": "Selects which damaged or fragile units receive retreat offers.",
+      "retreat_distance": "Changes which adjacent steps satisfy retreat separation.",
+      "attack_priority": "Controls immediate attacks versus competing Worker or retreat actions.",
+      "economy_priority": "Controls harvesting and return versus combat and construction.",
+      "build_priority": "Controls when eligible Workers construct rather than perform competing tasks.",
+      "train_priority": "Sets production scores, combined with unit-specific deficits or composition scores.",
+      "retreat_priority": "Controls withdrawal versus attacks and economic work.",
+      "rally_radius": "Controls the activation distance of Base-directed positioning.",
+      "advance_priority": "Controls pursuit and movement versus immediate work and combat.",
+      "heavy_weight": "Provides independent Heavy preference across composition modes.",
+      "ranged_weight": "Provides independent Ranged preference across composition modes."
+    },
+    "assumptions": [
+      "The vendored engine provides the conventional ai.abstraction and rts APIs named by the contract, including primitive preflight facilities.",
+      "Unsubstituted marker text is a template; a legal complete genome must be substituted before Java compilation.",
+      "PhysicalGameState terrain and occupancy reads are confined to the fixed isFreeCell implementation outside the editable strategy region.",
+      "Resource amounts on Resource entities are represented by Unit.getResources().",
+      "The supplied selection envelope and exact-byte hash are provided externally by the experiment.",
+      "Periodic reflection may replace this complete version but ordinary evolution may replace only declared markers."
+    ],
+    "risks": [
+      "Breadth-first path searches are repeated per actor and target and can be expensive on large maps.",
+      "Building counts exclude pending construction; multiple Workers may start buildings beyond the desired completed-count ceiling when resources allow.",
+      "Composition counts exclude production in progress, and scores do not update completed-unit counts within the action batch.",
+      "Reserve is an admission cushion against the observed stockpile, not an absolute post-batch resource floor; reservations enforce affordability.",
+      "Low priorities or adverse combinations can cause oscillation, overproduction, delayed resource return, or draws.",
+      "Range spacing uses Manhattan distance as a heuristic while immediate attack legality uses squared Euclidean distance and engine preflight.",
+      "Building placement is adjacent to the current Worker; the framework does not separately move Workers to globally optimized construction sites.",
+      "The condition gate controls construction and discretionary movement, not independently offered enemy pursuit; it is not a global cease-fire switch.",
+      "The fixed convenience abstraction helpers exist for API compatibility but executable decisions use prepared primitive commitment exclusively.",
+      "Some controls can be conditionally inactive in individual states or combinations, such as composition weights when no Barracks exists."
+    ]
+  }
+}
