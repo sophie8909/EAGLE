@@ -62,6 +62,11 @@ are specified in their own sections.
    extension is legal only with `framework.evolution_mode: local`, and every
    generation-one-and-later offspring remains on the local slot crossover and
    mutation path.
+   A configured `framework.initial_genomes` list is the provider-free variant:
+   it is mutually exclusive with `gpt_initial_candidates`, occupies the exact
+   first-N prefix value-for-value, and lets a previously validated GPT genome be
+   reused on another machine. The remaining Gen-0 slots and all offspring stay
+   seeded local.
 3. In default `fixed_roster` evaluation, store one score for each opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.

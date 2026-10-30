@@ -15,7 +15,12 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.execution import llm_worker_slot, parallel_map
 from eagle.evaluation.determinism import derive_candidate_id, derive_seed
-from eagle.generation.framework_slots import load_framework_bundle, sample_initial_genome
+from eagle.generation.framework_slots import (
+    genome_sha256,
+    load_framework_bundle,
+    sample_initial_genome,
+    validate_genome,
+)
 from eagle.llm import LLMCallLogger, generate_seeded, parse_json_object_response, truncate_prompt
 from eagle.prompts import load_prompt
 from eagle.timing import utc_now
@@ -96,8 +101,29 @@ def initialize_population(
             for description in FRAMEWORK_INITIAL_STRATEGIES[:config.population_size]
         }) != config.population_size:
             raise ValueError("Initial framework strategy descriptions must be distinct.")
-        population = [
-            Candidate(
+        configured_initial_genomes = tuple(
+            validate_genome(bundle, dict(genome))
+            for genome in config.framework_initial_genomes
+        )
+
+        def initial_genome(index: int) -> tuple[dict[str, object], dict[str, object]]:
+            if index < len(configured_initial_genomes):
+                genome = configured_initial_genomes[index]
+                return genome, {
+                    "initial_genome_source": "configured_frozen",
+                    "initial_genome_config_index": index,
+                    "initial_genome_sha256": genome_sha256(bundle, genome),
+                }
+            return sample_initial_genome(
+                bundle,
+                random_seed=config.random_seed,
+                sample_index=index,
+            ), {"initial_genome_sample_index": index}
+
+        population: list[Candidate] = []
+        for index in range(config.population_size):
+            control_genome, genome_metadata = initial_genome(index)
+            population.append(Candidate(
                 id=derive_candidate_id(
                     config.random_seed,
                     generation=0,
@@ -108,11 +134,7 @@ def initialize_population(
                 candidate_java_mode=config.candidate_java_mode,
                 java_materialization_mode="framework_slots",
                 java_compiler_version=config.java_compiler_version,
-                control_genome=sample_initial_genome(
-                    bundle,
-                    random_seed=config.random_seed,
-                    sample_index=index,
-                ),
+                control_genome=control_genome,
                 slot_parent_ids={},
                 framework_bundle_sha256=config.framework_bundle_sha256,
                 generation_prompt="",
@@ -124,11 +146,9 @@ def initialize_population(
                 metadata={
                     "seed_index": index,
                     "framework_id": bundle.framework_id,
-                    "initial_genome_sample_index": index,
+                    **genome_metadata,
                 },
-            )
-            for index in range(config.population_size)
-        ]
+            ))
         direct_gpt_count = config.framework_gpt_initial_candidates
         if config.framework_evolution_mode == "llm_coach" or direct_gpt_count:
             from eagle.operators.framework_coach import select_initial_framework_genome

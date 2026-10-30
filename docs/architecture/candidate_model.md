@@ -46,6 +46,11 @@ With `framework.evolution_mode: local`, the optional positive
 initialization slots: direct GPT returns complete hash-pinned genomes, while
 the remaining Gen-0 slots and all offspring stay local. It is not a second
 genotype or a Coach mode; the count defaults to zero and is fenced by resume.
+Alternatively, `framework.initial_genomes` supplies a validated list of
+complete mappings for the same first-N Gen-0 prefix. It is local-only,
+mutually exclusive with `gpt_initial_candidates`, and its resolved list plus
+manifest hash/count are resume-fenced; the list does not add a genotype
+component or affect offspring variation.
 
 ## Policy contract
 

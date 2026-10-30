@@ -36,6 +36,18 @@ single-slot mutation path. This is a one-time initialization treatment, not
 run identity; resume rejects a changed value, and credentials never enter
 config or artifacts.
 
+The same local policy also accepts an optional `framework.initial_genomes`
+list of complete `control_genome` mappings. It is valid only with
+`java_materialization_mode: framework_slots` and `framework.evolution_mode:
+local`, and is mutually exclusive with `framework.gpt_initial_candidates`.
+The list is an exact prefix: its N entries occupy the first N Gen-0 slots in
+order, while the remaining slots use seeded local sampling and all offspring
+use local variation. Each mapping must contain every frozen bundle slot exactly
+once and use only declared domain values. The resolved config stores the list;
+its canonical hash and count are stored in the manifest and resume-fenced. This permits
+the GPT result from treatment 1 to be copied into treatment 3 and reused
+value-for-value on another computer without another GPT request.
+
 `option_reflection` is the periodic, population-wide Coach policy with a frozen
 framework. It requires self-play and uses the same G6/G11/G16/... refresh
 barriers and generation-zero authored strategy descriptions as `reflection`,
@@ -198,6 +210,12 @@ GPT evidence. Such a treatment may set `generations: 0` to stop immediately
 after the fully evaluated generation-zero checkpoint; other experiment modes
 still require at least one evolutionary generation.
 
+Configured `framework.initial_genomes` uses no provider and therefore creates
+no GPT-selection evidence. Its validated mappings are recorded as the frozen
+Gen-0 prefix identity; malformed, incomplete, out-of-domain, or
+hash-inconsistent entries fail configuration/initialization rather than
+falling back to sampling.
+
 
 ## Minimal use
 
@@ -253,7 +271,10 @@ selected candidate plus local initialization/evolution. Treatments 2 and 3 use
 seeds 8, 9, and 10 and run through generation 100. After each completed run,
 one fixed-evaluation invocation can evaluate generations `20 30 40 50 75 100`;
 this creates six benchmark checkpoints without six evolutionary runs. Treatment
-1 is a Gen-0-only benchmark and requests generation `0`.
+1 is a Gen-0-only benchmark and requests generation `0`. To make treatment 3
+independent of GPT availability, copy its validated first genome into
+`framework.initial_genomes` and rerun with the same frozen bundle; the configured
+prefix is deterministic and does not call GPT.
 
 ## Startup and evolution boundary
 

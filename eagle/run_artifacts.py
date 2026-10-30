@@ -367,6 +367,8 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "framework_evolution_mode": config.framework_evolution_mode if config.java_materialization_mode == "framework_slots" else None,
             "framework_coach_offspring_probability": config.framework_coach_offspring_probability if config.java_materialization_mode == "framework_slots" else None,
             "framework_gpt_initial_candidates": config.framework_gpt_initial_candidates if config.java_materialization_mode == "framework_slots" else None,
+            "framework_initial_genome_count": config.framework_initial_genome_count if config.java_materialization_mode == "framework_slots" else None,
+            "framework_initial_genomes_sha256": config.framework_initial_genomes_sha256 if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_backend": config.framework_bootstrap_backend if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_scope": config.framework_bootstrap_scope if config.java_materialization_mode == "framework_slots" else None,
             "framework_bootstrap_max_attempts": (

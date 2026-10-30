@@ -14,6 +14,23 @@ bundle are staged under
 `configs/framework_bundles/gpt_finite_rule_market_v1/`. Treatments 2 and 3
 use seeds 8–10 through generation 100; one fixed-evaluation call then requests
 generations 20, 30, 40, 50, 75, and 100.
+The provider-free companion `framework.initial_genomes` accepts an ordered
+list of complete mappings for the same local-only first-N prefix. It is
+mutually exclusive with `gpt_initial_candidates`; its resolved list and
+manifest canonical hash/count are resume-fenced. This allows
+treatment 1's validated GPT genome to be embedded in treatment 3 and reused
+value-for-value on another computer without another GPT call.
+
+Treatment 1 completed on this machine as run `20261030_120346_658325`.
+Its single GPT request selected candidate `gen_0000_d1bf70074e31` under bundle
+SHA-256 `f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b`.
+Treatment 3 embeds that candidate's validated 24-slot control genome directly;
+treatments 2 and 3 consequently use identical local samples at population
+indices 1 through 9 for each of seeds 8, 9, and 10, with only index 0 differing
+by design.
+Its generation-zero fixed evaluation also completed all 600 matches without
+errors: 265 wins, 325 losses, 10 draws, win rate 0.441667, and mean match score
+-9.505160.
 
 Generation persistence now also writes all unordered survivor semantic-distance
 pairs and comparable min/mean/max summaries. Canonical analysis exports the

@@ -123,6 +123,10 @@ attempts and a failed manifest; pending config cannot resume without a usable
 frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
 The resolved `framework.evolution_mode` defaults to `local` and must match on
 resume; it does not alter the bundle or materializer version.
+When `framework.initial_genomes` is present, the resolved config records the
+list while the manifest records its canonical ordered-list hash and count;
+these values are part of the startup/resume identity and are mutually exclusive with
+`framework_gpt_initial_candidates`.
 In `llm_coach` mode, `framework.coach_offspring_probability` is resume-fenced
 and recorded as manifest field
 `framework_coach_offspring_probability`. A missing field in an older manifest
@@ -327,6 +331,16 @@ failed initialization with no random/default fallback. Local Gen-0 remainder
 and offspring have no GPT selection artifact. The resolved count is persisted
 in resolved config/manifest and is checked during resume; a changed count is
 incompatible even when the frozen bundle is unchanged.
+
+When `framework.initial_genomes` is configured, the resolved config persists
+the list and the manifest persists its canonical ordered-list hash and count. The
+list must be a complete legal mapping for the same run-frozen bundle and is
+mutually exclusive with `framework.gpt_initial_candidates`; its entries occupy
+the first Gen-0 candidate prefix exactly as configured. Resume rejects any
+change to the list, canonical hash, count, bundle hash, or mode. Because this
+path is already validated configuration, it writes no GPT request artifact and
+does not contact a provider; it is the portable handoff for reusing a GPT
+selected genome value-for-value.
 
 Each canonical generation snapshot references
 `generation_NNNN_semantic_distances.jsonl`. The sidecar has one

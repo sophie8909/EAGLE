@@ -200,6 +200,11 @@ defaults to zero and is resume-fenced. Invalid GPT responses fail
 initialization rather than falling back to random/default genomes. A bounded
 Gen-0-only treatment may set `generations: 0`; other modes require at least one
 evolutionary generation.
+For a provider-free replay, set `framework.initial_genomes` to the ordered
+list of complete mappings exported from treatment 1. It is mutually exclusive
+with `gpt_initial_candidates`, uses the exact first-N prefix, and persists its
+resolved list and manifest canonical hash/count. Reusing that list with
+the same frozen bundle performs no GPT call and is portable across machines.
 `llm_coach` asks the experiment model for initial complete genomes and uses the
 existing one-worst-match Commentator/Coach path for Strategy mutation. Neither
 mode calls a Java Generator or repair model; rendering, validation, javac,

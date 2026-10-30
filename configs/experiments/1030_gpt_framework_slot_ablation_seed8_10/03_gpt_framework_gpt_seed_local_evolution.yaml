@@ -7,8 +7,9 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 agent_template_path: eagle/java_templates/CandidateAgent.java
 
-# Only the first Gen-0 genome uses direct GPT. The other nine initial genomes
-# and every offspring generation use the unchanged local finite-slot EA.
+# The first Gen-0 genome is the exact frozen result of treatment 1. It makes no
+# GPT request on this machine. The other nine initial genomes and every
+# offspring generation use the unchanged seeded local finite-slot EA.
 model:
   name: qwen3_5_9b
   path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
@@ -27,8 +28,6 @@ generations: 100
 population_size: 10
 
 execution_mode: openai
-# Exactly one direct-GPT selection request per seed; all later work is local.
-initial_policy_max_attempts: 1
 crossover_rate: 0.75
 mutation_rate: 1.0
 
@@ -42,8 +41,33 @@ framework:
   bundle_version: eagle-framework-bundle-v1
   bundle_sha256: f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b
   evolution_mode: local
-  gpt_initial_candidates: 1
-  model: gpt-6.1-sol
+  gpt_initial_candidates: 0
+  # Frozen from run 20261030_120346_658325, candidate gen_0000_d1bf70074e31.
+  initial_genomes:
+    - advance_priority: 55
+      attack_priority: 170
+      barracks_cap: 1
+      base_cap: 1
+      build_mode: low_danger
+      build_priority: 145
+      build_time: 100
+      condition_mode: always
+      economy_priority: 120
+      harvest_mode: low_danger
+      harvester_cap: 3
+      heavy_weight: 3
+      mix_mode: weighted_balance
+      move_mode: range_spacing
+      rally_radius: 6
+      ranged_weight: 5
+      reserve: 0
+      retreat_distance: 3
+      retreat_hp: 1
+      retreat_priority: 90
+      target_mode: workers
+      threat_radius: 4
+      train_priority: 100
+      worker_cap: 6
 
 llm:
   temperature: 0.0

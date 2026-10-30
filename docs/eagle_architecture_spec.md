@@ -875,6 +875,16 @@ request/response, timing, complete genome, bundle hash, and validation outcome
 are retained under the candidate initialization owner; invalid or exhausted
 selection fails initialization without random/default fallback.
 
+For a provider-free replay, `framework.initial_genomes` may instead provide an
+ordered list of complete frozen-bundle genome mappings. It is valid only with
+`framework_slots` plus `framework.evolution_mode: local`, is mutually exclusive
+with `gpt_initial_candidates`, and occupies exactly the first N Gen-0 slots;
+the remaining slots and all offspring stay local. The canonical ordered-list
+list is persisted in the resolved config, while its canonical hash and count
+are persisted in the manifest; all are resume-fenced. This permits a validated
+GPT result to be embedded in treatment 3 and reused value-for-value on another
+computer without any GPT request.
+
 With `framework.evolution_mode: reflection`, initial design uses the configured
 bootstrap backend/model, while the local experiment model reflects on the whole
 framework and every preceding survivor's complete slot list and fitness at

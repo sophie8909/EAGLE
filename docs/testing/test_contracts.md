@@ -375,6 +375,15 @@ operators, with no later GPT request. The 1030 ablation configs must validate
 one shared bundle and the three treatment shapes; fixed evaluation must accept
 one invocation with generations `20 30 40 50 75 100`.
 
+Configured-prefix tests must prove that `framework.initial_genomes` accepts
+only complete legal mappings under `framework_slots` plus `evolution_mode:
+local`, is mutually exclusive with `gpt_initial_candidates`, occupies the
+exact first-N Gen-0 prefix, and leaves the remainder and every offspring on
+seeded local operators. The canonical ordered-list hash and count must be
+persisted in resolved config/manifest and reject resume tampering. A validated
+GPT genome supplied through this list must be reusable value-for-value on another
+machine without reading `api_key/gpt` or issuing a provider request.
+
 Generation persistence tests also require one semantic-distance row per
 unordered survivor pair, explicit unavailable rows for incompatible evidence,
 and null rather than zero statistics when no pair is comparable. Canonical

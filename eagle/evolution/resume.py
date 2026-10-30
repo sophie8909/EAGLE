@@ -122,6 +122,7 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
     manifest_path = run_dir / "manifest.json"
     if mode == "framework_slots" and not manifest_path.is_file():
         raise ValueError("Resume framework_slots run has no canonical manifest.json.")
+    persisted_config = ExperimentConfig.from_file(run_config_path)
     if manifest_path.is_file():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest_protocol = manifest.get("evolution_protocol")
@@ -148,6 +149,24 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
                 raise ValueError(
                     "Resume config/manifest framework GPT initial candidate count mismatch."
                 )
+            if manifest.get("framework_initial_genome_count", 0) != persisted_config.framework_initial_genome_count:
+                raise ValueError(
+                    "Resume config/manifest framework initial genome count mismatch."
+                )
+            manifest_initial_genomes_sha256 = manifest.get(
+                "framework_initial_genomes_sha256"
+            )
+            if (
+                manifest_initial_genomes_sha256 is None
+                and persisted_config.framework_initial_genome_count
+            ) or (
+                manifest_initial_genomes_sha256 is not None
+                and manifest_initial_genomes_sha256
+                != persisted_config.framework_initial_genomes_sha256
+            ):
+                raise ValueError(
+                    "Resume config/manifest framework initial genome hash mismatch."
+                )
             if manifest.get("framework_bootstrap_scope", "run") != framework.get(
                 "bootstrap_scope", "run"
             ):
@@ -171,7 +190,7 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
                     raise ValueError(
                         f"Resume config/manifest framework bundle mismatch: {key}."
                     )
-    return ExperimentConfig.from_file(run_config_path)
+    return persisted_config
 
 
 def _resume_search_impl(

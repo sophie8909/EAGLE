@@ -7,10 +7,15 @@ This isolates slot initialization/evolution from framework-design variance.
    zero from one provider request; benchmark generation 0 only.
 2. `02_gpt_framework_local_evolution.yaml`: ten locally sampled generation-zero
    genomes and ordinary local evolution, with seeds 8, 9, and 10.
-3. `03_gpt_framework_gpt_seed_local_evolution.yaml`: one direct-GPT genome plus
-   nine locally sampled genomes in generation zero, followed by the same local
-   evolution, with seeds 8, 9, and 10. Each seed makes exactly one direct-GPT
-   selection request.
+3. `03_gpt_framework_gpt_seed_local_evolution.yaml`: the exact GPT genome
+   selected once by treatment 1 plus nine locally sampled genomes in generation
+   zero, followed by the same local evolution, with seeds 8, 9, and 10. It
+   makes no GPT request: the complete genome is frozen inline in the config.
+
+Treatments 2 and 3 therefore share the same frozen framework and, for every
+seed, the same seeded local genomes at indices 1 through 9. Their deliberate
+Gen-0 difference is index 0: treatment 2 keeps its local sample while treatment
+3 substitutes the one frozen GPT-selected genome.
 
 Start the folder batch without the automatic terminal-generation final test:
 
@@ -33,5 +38,5 @@ conda run --no-capture-output -n eagle python -m eagle.fixed_evaluation \
 
 Each six-checkpoint command writes one combined comparison under the run's
 `fixed_evaluation/` directory; it does not create six evolutionary runs.
-Direct GPT calls read `api_key/gpt`; credentials are not stored in configs or
-run artifacts.
+Only treatment 1 reads `api_key/gpt`; credentials are not stored in configs or
+run artifacts. Treatment 3 can run on a second computer without a GPT key.

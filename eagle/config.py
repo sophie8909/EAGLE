@@ -20,7 +20,11 @@ from eagle.generation.agent_template import (
     DEFAULT_AGENT_TEMPLATE_PATH,
     DEFAULT_INITIAL_JAVA_SEED_PATH,
 )
-from eagle.generation.framework_slots import validate_framework_bundle
+from eagle.generation.framework_slots import (
+    load_framework_bundle,
+    validate_framework_bundle,
+    validate_genome,
+)
 
 from eagle.candidate import (
     DEFAULT_GENERATION_PROMPT,
@@ -189,6 +193,9 @@ class ExperimentConfig:
     # A bounded prefix of generation zero can be selected by the direct GPT
     # API while all later framework-slot evolution remains seeded local EA.
     framework_gpt_initial_candidates: int = 0
+    # Explicit complete generation-zero genomes, represented as immutable
+    # key/value pairs for frozen-config and resume comparisons.
+    framework_initial_genomes: tuple[tuple[tuple[str, Any], ...], ...] = ()
     framework_bootstrap_backend: str = "groq"
     framework_bootstrap_scope: str = "run"
     framework_bootstrap_max_attempts: int = 3
@@ -499,6 +506,9 @@ class ExperimentConfig:
             framework_gpt_initial_candidates=_parse_framework_gpt_initial_candidates(
                 (payload.get("framework") or {}).get("gpt_initial_candidates", 0)
             ),
+            framework_initial_genomes=_parse_framework_initial_genomes(
+                (payload.get("framework") or {}).get("initial_genomes", ())
+            ),
             framework_bootstrap_backend=str((payload.get("framework") or {}).get("bootstrap_backend", "groq")),
             framework_bootstrap_scope=str(
                 (payload.get("framework") or {}).get("bootstrap_scope", "run")
@@ -659,6 +669,24 @@ class ExperimentConfig:
                 "java_materialization_mode=framework_slots and "
                 "framework.evolution_mode=local."
             )
+        if len(self.framework_initial_genomes) > self.population_size:
+            raise ValueError(
+                "framework.initial_genomes may contain at most population_size genomes."
+            )
+        if self.framework_initial_genomes and (
+            self.java_materialization_mode != "framework_slots"
+            or self.framework_evolution_mode != "local"
+        ):
+            raise ValueError(
+                "framework.initial_genomes requires "
+                "java_materialization_mode=framework_slots and "
+                "framework.evolution_mode=local."
+            )
+        if self.framework_initial_genomes and self.framework_gpt_initial_candidates:
+            raise ValueError(
+                "framework.initial_genomes is mutually exclusive with "
+                "framework.gpt_initial_candidates."
+            )
         if self.framework_bootstrap_backend not in {"groq", "mistral", "gpt", "codex", "local"}:
             raise ValueError(
                 "framework.bootstrap_backend must be groq, mistral, gpt, codex, or local."
@@ -705,6 +733,17 @@ class ExperimentConfig:
                     expected_version=self.framework_bundle_version,
                     expected_sha256=self.framework_bundle_sha256,
                 )
+                bundle = load_framework_bundle(
+                    self.framework_bundle_path,
+                    expected_sha256=self.framework_bundle_sha256,
+                )
+                for index, genome in enumerate(self.framework_initial_genomes):
+                    try:
+                        validate_genome(bundle, dict(genome))
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"framework.initial_genomes[{index}] is invalid: {exc}"
+                        ) from exc
         for policy in self.seed_prompts:
             normalize_strategy_dsl(policy, max_chars=self.max_prompt_chars)
         if not self.experiment_name.strip():
@@ -1082,6 +1121,10 @@ class ExperimentConfig:
                 mapping["framework"]["coach_offspring_probability"] = self.framework_coach_offspring_probability
             if self.framework_gpt_initial_candidates:
                 mapping["framework"]["gpt_initial_candidates"] = self.framework_gpt_initial_candidates
+            if self.framework_initial_genomes:
+                mapping["framework"]["initial_genomes"] = [
+                    dict(genome) for genome in self.framework_initial_genomes
+                ]
             if self.framework_bootstrap_backend != "groq":
                 mapping["framework"]["bootstrap_backend"] = self.framework_bootstrap_backend
             if self.framework_bootstrap_scope != "run":
@@ -1135,6 +1178,26 @@ class ExperimentConfig:
         if self.java_materialization_mode == "framework_slots":
             return FRAMEWORK_SLOTS_EVOLUTION_PROTOCOL
         return EVOLUTION_PROTOCOL
+
+    @property
+    def framework_initial_genome_count(self) -> int:
+        """Return the configured frozen generation-zero genome prefix length."""
+
+        return len(self.framework_initial_genomes)
+
+    @property
+    def framework_initial_genomes_sha256(self) -> str:
+        """Return the canonical resume fence for configured initial genomes."""
+
+        payload = [dict(genome) for genome in self.framework_initial_genomes]
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     @property
     def needs_llm_runtime(self) -> bool:
@@ -1246,6 +1309,30 @@ def _parse_framework_gpt_initial_candidates(value: object) -> int:
     return value
 
 
+def _parse_framework_initial_genomes(
+    value: object,
+) -> tuple[tuple[tuple[str, Any], ...], ...]:
+    """Parse immutable complete genomes; slot-domain validation needs the bundle."""
+
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("framework.initial_genomes must be a list of mappings.")
+    genomes: list[tuple[tuple[str, Any], ...]] = []
+    for index, genome in enumerate(value):
+        if not isinstance(genome, dict) or any(not isinstance(key, str) for key in genome):
+            raise ValueError(
+                f"framework.initial_genomes[{index}] must be a mapping with string slot IDs."
+            )
+        try:
+            ordered = tuple(sorted(genome.items()))
+            json.dumps(dict(ordered), ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"framework.initial_genomes[{index}] must contain JSON scalar values."
+            ) from exc
+        genomes.append(ordered)
+    return tuple(genomes)
+
+
 def _parse_framework_bundle(
     value: object,
     base_dir: Path,
@@ -1266,7 +1353,7 @@ def _parse_framework_bundle(
     unknown = sorted(
         set(value).difference({
             "bundle_path", "bundle_version", "bundle_sha256", "evolution_mode",
-            "coach_offspring_probability", "gpt_initial_candidates", "bootstrap_backend",
+            "coach_offspring_probability", "gpt_initial_candidates", "initial_genomes", "bootstrap_backend",
             "bootstrap_scope", "bootstrap_max_attempts", "design_brief", "model",
         })
     )

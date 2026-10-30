@@ -68,6 +68,14 @@ N 份完整 genome；每份回應都必須符合 `eagle-framework-selection-v1` 
 run-owned frozen bundle 的 exact SHA-256。其餘 Gen 0 與所有 offspring 仍走
 seeded local sampling/crossover/mutation，不會在 Gen 0 之後呼叫 GPT。數值寫入
 resolved config/manifest 並受 resume fence 保護；失敗不會偷換 random/default。
+若要在沒有 GPT credential 的另一台電腦重播，可改用
+`framework.initial_genomes` 提供已驗證的完整 `control_genome` mapping list。
+它同樣只允許 `framework_slots` + `evolution_mode: local`，與
+`gpt_initial_candidates` 互斥，並按 list 順序佔用 Gen 0 最前面的 N 個位置；
+其餘 Gen 0 與所有 offspring 仍使用 seeded local EA。resolved config 保存原始
+list，manifest 保存 ordered-list canonical hash/count，兩者受 resume fence
+保護。因此 treatment 1 的 GPT 結果可以原樣嵌入 treatment 3，在另一台電腦逐值重用且不再
+呼叫 GPT。
 Bootstrap 失敗會保留 attempts 與 failed manifest，pending config 在可用 frozen
 bundle 建立前不可 resume；bundle、resolved config 與 manifest 完成 exact-byte
 freeze 後即形成 generation zero 前的 startup checkpoint。此時中斷可在同一 run

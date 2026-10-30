@@ -56,11 +56,14 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
         }
         coach_probability = overrides.pop("framework_coach_offspring_probability", None)
         gpt_initial_candidates = overrides.pop("framework_gpt_initial_candidates", None)
+        initial_genomes = overrides.pop("framework_initial_genomes", None)
         payload.update(overrides)
         if coach_probability is not None:
             payload["framework"]["coach_offspring_probability"] = coach_probability
         if gpt_initial_candidates is not None:
             payload["framework"]["gpt_initial_candidates"] = gpt_initial_candidates
+        if initial_genomes is not None:
+            payload["framework"]["initial_genomes"] = initial_genomes
         config = ExperimentConfig.from_mapping(payload)
         config.validate()
         return config
@@ -131,6 +134,82 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
         self.assertNotIn("framework_coach_selection", population[2].metadata)
         persisted = population[0].to_json_dict()["metadata"]["framework_coach_selection"]
         self.assertEqual(persisted["provider"], "direct_openai_gpt")
+
+    def test_configured_initial_genomes_seed_exact_local_prefix_without_llm(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            configured_genome = {"horizon": 3, "policy": "aggressive"}
+            config = self.config(
+                root,
+                mode="local",
+                population_size=3,
+                framework_initial_genomes=[configured_genome],
+            )
+            runtime = self.runtime(config, root)
+            population = initialize_population(
+                config,
+                policy_backend=runtime.initial_policy_backend,
+                candidates_dir=root / "run" / "candidates",
+                timing_logger=runtime.llm_logger,
+            )
+            reloaded = ExperimentConfig.from_mapping(config.to_mapping())
+            reloaded.validate()
+
+        self.assertFalse(config.needs_llm_runtime)
+        self.assertEqual(runtime.mutations, {})
+        self.assertEqual(reloaded.framework_initial_genomes, config.framework_initial_genomes)
+        self.assertEqual(population[0].control_genome, configured_genome)
+        self.assertEqual(population[0].metadata["initial_genome_source"], "configured_frozen")
+        self.assertEqual(population[0].metadata["initial_genome_config_index"], 0)
+        self.assertNotIn("initial_genome_sample_index", population[0].metadata)
+        self.assertEqual(population[1].metadata["initial_genome_sample_index"], 1)
+        self.assertEqual(population[2].metadata["initial_genome_sample_index"], 2)
+
+    def test_configured_initial_genomes_validate_mode_and_gpt_exclusivity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            genome = [{"horizon": 2, "policy": "balanced"}]
+            with self.assertRaisesRegex(ValueError, "initial_genomes.*gpt_initial_candidates"):
+                self.config(
+                    root,
+                    mode="local",
+                    framework_gpt_initial_candidates=1,
+                    framework_initial_genomes=genome,
+                )
+            with self.assertRaisesRegex(ValueError, "initial_genomes.*evolution_mode=local"):
+                self.config(root, mode="llm_coach", framework_initial_genomes=genome)
+            with self.assertRaisesRegex(ValueError, "initial_genomes\\[0\\].*invalid"):
+                self.config(
+                    root,
+                    mode="local",
+                    framework_initial_genomes=[{"horizon": 99, "policy": "balanced"}],
+                )
+
+    def test_configured_initial_genome_hash_is_manifest_fenced_on_resume(self) -> None:
+        from eagle.artifacts import write_run_config
+        from eagle.evolution.resume import load_resume_config
+        from eagle.run_artifacts import freeze_framework_bundle, initialize_run_manifest
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = self.config(
+                root,
+                mode="local",
+                framework_initial_genomes=[{"horizon": 2, "policy": "balanced"}],
+            )
+            run_dir = root / "run"
+            run_dir.mkdir()
+            frozen = freeze_framework_bundle(run_dir, source)
+            initialize_run_manifest(run_dir, config=frozen)
+            write_run_config(run_dir, frozen, mock=True)
+            self.assertEqual(load_resume_config(run_dir).framework_initial_genome_count, 1)
+
+            manifest_path = run_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["framework_initial_genomes_sha256"] = "0" * 64
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "initial genome hash"):
+                load_resume_config(run_dir)
 
     def test_gpt_initial_count_round_trips_validates_and_allows_zero_generations(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -261,12 +340,37 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
         self.assertEqual(configs[1].framework_gpt_initial_candidates, 0)
         self.assertEqual(configs[2].random_seeds, (8, 9, 10))
         self.assertEqual(configs[2].generations, 100)
-        self.assertEqual(configs[2].framework_gpt_initial_candidates, 1)
-        self.assertEqual(configs[2].initial_policy_max_attempts, 1)
+        self.assertEqual(configs[2].framework_gpt_initial_candidates, 0)
+        self.assertEqual(configs[2].framework_initial_genome_count, 1)
+        self.assertEqual(
+            dict(configs[2].framework_initial_genomes[0])["attack_priority"],
+            170,
+        )
+        self.assertFalse(configs[2].needs_llm_runtime)
         self.assertEqual(
             {config.framework_bundle_sha256 for config in configs},
             {"f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b"},
         )
+
+        for random_seed in configs[1].random_seeds:
+            local_population = initialize_population(
+                replace(configs[1], random_seed=random_seed)
+            )
+            frozen_gpt_population = initialize_population(
+                replace(configs[2], random_seed=random_seed)
+            )
+            self.assertEqual(
+                [candidate.control_genome for candidate in local_population[1:]],
+                [candidate.control_genome for candidate in frozen_gpt_population[1:]],
+            )
+            self.assertEqual(
+                frozen_gpt_population[0].control_genome,
+                dict(configs[2].framework_initial_genomes[0]),
+            )
+            self.assertEqual(
+                [candidate.id for candidate in local_population],
+                [candidate.id for candidate in frozen_gpt_population],
+            )
 
     def test_zero_generation_search_completes_after_gpt_seed_initialization(self) -> None:
         from eagle.evolution.search import run_search
