@@ -287,10 +287,15 @@ correctness 包含真正 compilation、runtime、control-flow 缺陷與 game／A
 兩階段不接收勝負、fitness、match 或 trace 作為優化依據。Strategy Reflection
 仍使用恰好一場最差 completed match，Coach 的新 policy 必須通過 DSL 驗證。
 
-設定中的 `model` 負責 initial policy、reflection 與 prompt rewrite。可選的
+設定中的 primary profile 負責 initial policy、reflection 與 prompt rewrite。
+`use_remote_llm: false`（預設）選擇可由 EAGLE 管理的 `model`；設為 `true`
+時選擇必須已在另一台機器啟動、且不得包含本機 runtime path 的
+`remote_model`。兩份 profile 都保留在 resolved config，因此同一份 YAML 只需切換
+這個 boolean。remote 模式不檢查或啟動 inactive 的本機 GGUF/llama-server，但會
+對 remote endpoint 做 fail-closed preflight。可選的
 `generation_model` 固定負責 Java generation、Code revision 與 compile repair，
 直接呼叫已啟動的 server。不同 model 必須設定不同 host／port，由操作者啟動；
-EAGLE 不再依 phase 切換模型。省略時所有功能共用 `model` 並行呼叫。
+EAGLE 不再依 phase 切換模型。省略時所有功能共用目前選定的 primary 並行呼叫。
 primary 省略 `model.path` 與 `model.llama_server` 時直接使用外部 server；
 兩者皆提供才管理本機 runtime，僅提供其一屬設定錯誤。generation 與 additional
 endpoints 一律由外部管理。

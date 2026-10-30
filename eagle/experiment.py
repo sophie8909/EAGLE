@@ -190,9 +190,9 @@ def _print_non_batch_output(
 ) -> None:
     print("EAGLE experiment")
     print(f"Experiment: {config.experiment_name}")
-    print(f"Reflection model: {config.model.name}")
+    print(f"Reflection model: {config.active_primary_model.name}")
     print(f"Generation model: {config.resolved_generation_model.name}")
-    print(f"Endpoint: {config.model.base_url}")
+    print(f"Endpoint: {config.active_primary_model.base_url}")
     print(f"Survivor selection: {config.survivor_selection} lexicase")
     kind = "initial" if config.reflection_operator_mode.adaptive else "fixed"
     print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
@@ -352,7 +352,7 @@ class ExperimentOrchestrator:
             for index, resolved_path in enumerate(config_paths, start=1):
                 print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
                 config = ExperimentConfig.from_file(resolved_path)
-                print(f"Reflection model: {config.model.name}")
+                print(f"Reflection model: {config.active_primary_model.name}")
                 print(f"Generation model: {config.resolved_generation_model.name}")
                 print(f"Survivor selection: {config.survivor_selection} lexicase")
                 print(f"Reflection operator mode: {config.reflection_operator_mode.value}")

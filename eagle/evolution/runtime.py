@@ -57,7 +57,7 @@ def build_search_runtime(
         temperature=config.llm_temperature,
         max_output_tokens=config.llm_max_tokens,
         seed=config.random_seed,
-        additional_endpoints=config.model.additional_endpoints,
+        additional_endpoints=config.active_primary_model.additional_endpoints,
     )
     generation_model = config.resolved_generation_model
     generation_client = LLMClient(

@@ -155,6 +155,8 @@ class ExperimentConfig:
     initial_policy_max_attempts: int = 3
     experiment_name: str = "eagle_experiment"
     model: ModelConfig = field(default_factory=ModelConfig)
+    use_remote_llm: bool = False
+    remote_model: ModelConfig | None = None
     generation_model: ModelConfig | None = None
     runs: int = 1
     generations: int = 1
@@ -344,6 +346,19 @@ class ExperimentConfig:
             else ""
         )
         model = _parse_model(payload.get("model"), repository_root, field_name="model")
+        use_remote_llm = payload.get("use_remote_llm", False)
+        if not isinstance(use_remote_llm, bool):
+            raise ValueError("use_remote_llm must be a boolean.")
+        remote_model_payload = payload.get("remote_model")
+        remote_model = (
+            None
+            if remote_model_payload is None
+            else _parse_model(
+                remote_model_payload,
+                repository_root,
+                field_name="remote_model",
+            )
+        )
         generation_model_payload = payload.get("generation_model")
         generation_model = (
             None
@@ -528,6 +543,8 @@ class ExperimentConfig:
             initial_policy_max_attempts=int(payload.get("initial_policy_max_attempts", 3)),
             experiment_name=str(payload.get("experiment_name", "eagle_experiment")),
             model=model,
+            use_remote_llm=use_remote_llm,
+            remote_model=remote_model,
             generation_model=generation_model,
             runs=int(payload.get("runs", 1)),
             generations=int(payload.get("generations", 1)),
@@ -749,6 +766,17 @@ class ExperimentConfig:
         if not self.experiment_name.strip():
             raise ValueError("experiment_name must not be empty.")
         self.model.validate()
+        if not isinstance(self.use_remote_llm, bool):
+            raise ValueError("use_remote_llm must be a boolean.")
+        if self.use_remote_llm and self.remote_model is None:
+            raise ValueError("use_remote_llm=true requires remote_model.")
+        if self.remote_model is not None:
+            self.remote_model.validate()
+            if self.remote_model.manages_runtime:
+                raise ValueError(
+                    "remote_model must be an already-running endpoint; omit "
+                    "remote_model.path and remote_model.llama_server."
+                )
         if self.generation_model is not None:
             self.generation_model.validate()
         if self.runs < 1:
@@ -960,7 +988,7 @@ class ExperimentConfig:
 
         if not self.needs_managed_runtime:
             return
-        self.model.validate(require_files=True)
+        self.active_primary_model.validate(require_files=True)
 
     def validate_runtime_routing(self) -> None:
         """Reject endpoint layouts that cannot be used by an active search."""
@@ -968,8 +996,9 @@ class ExperimentConfig:
         if (
             self.java_materialization_mode == "llm"
             and self.generation_model is not None
-            and self.generation_model.base_url.lower() == self.model.base_url.lower()
-            and self.generation_model.name != self.model.name
+            and self.generation_model.base_url.lower()
+            == self.active_primary_model.base_url.lower()
+            and self.generation_model.name != self.active_primary_model.name
         ):
             raise ValueError(
                 "model and generation_model use the same LLM endpoint with "
@@ -1144,29 +1173,45 @@ class ExperimentConfig:
                 )
         if self.generation_model is not None:
             mapping["generation_model"] = _model_mapping(self.generation_model)
+        if self.remote_model is not None:
+            mapping["use_remote_llm"] = self.use_remote_llm
+            mapping["remote_model"] = _model_mapping(self.remote_model)
+        elif self.use_remote_llm:
+            mapping["use_remote_llm"] = True
         return mapping
 
     @property
+    def active_primary_model(self) -> ModelConfig:
+        """Return the selected reflection/initialization LLM profile."""
+
+        if self.use_remote_llm:
+            if self.remote_model is None:
+                raise ValueError("use_remote_llm=true requires remote_model.")
+            return self.remote_model
+        return self.model
+
+    @property
     def llm_base_url(self) -> str:
-        return self.model.base_url
+        return self.active_primary_model.base_url
 
     @property
     def llm_model(self) -> str:
-        return self.model.name
+        return self.active_primary_model.name
 
     @property
     def llm_model_path(self) -> str | None:
-        return None if self.model.path is None else str(self.model.path)
+        model = self.active_primary_model
+        return None if model.path is None else str(model.path)
 
     @property
     def resolved_generation_model(self) -> ModelConfig:
         """Return the final Java materialization model for this experiment."""
 
-        return self.generation_model or self.model
+        return self.generation_model or self.active_primary_model
 
     def model_for_phase(self, phase: str) -> ModelConfig:
         if phase == "reflection":
-            return self.model
+            return self.active_primary_model
         if phase == "generation":
             return self.resolved_generation_model
         raise ValueError(f"Unknown LLM model phase: {phase!r}.")
@@ -1215,7 +1260,7 @@ class ExperimentConfig:
 
     @property
     def needs_managed_runtime(self) -> bool:
-        return self.needs_llm_runtime and self.model.manages_runtime
+        return self.needs_llm_runtime and self.active_primary_model.manages_runtime
 
     @property
     def reflection_operator_settings(self) -> ReflectionOperatorSettings:

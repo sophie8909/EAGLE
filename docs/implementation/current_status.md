@@ -118,9 +118,21 @@ Compilation, experiment/gui CLI help and staged/working diff checks pass. Wheel
 building is unavailable in the existing venv because `setuptools.build_meta` is
 missing. No live LLM evolutionary experiment was run.
 
+## Remote LLM selector (2026-10-31)
+
+The primary LLM definition now supports an explicit portable selector:
+`use_remote_llm: false` uses the normal `model` profile and its managed local
+runtime, while `true` uses the required unmanaged `remote_model` profile. Both
+profiles remain in the resolved config, so moving the same YAML between two
+computers requires changing only the boolean. The inactive local GGUF and
+llama-server paths are not validated or started when remote is selected;
+the active remote endpoint is still fail-closed preflighted. Omitting
+`generation_model` shares whichever primary is selected. Existing
+`additional_endpoints` behavior remains concurrent routing, not selection.
+
 ## Fixed server routing and streaming candidates (2026-10-21)
 
-Functional clients stay bound to `model` and optional `generation_model`; no
+Functional clients stay bound to the selected primary and optional `generation_model`; no
 phase-switch callback remains. Omit both primary runtime paths to call an
 externally started primary. Generation servers are always external. A managed
 primary is stopped before a batch transitions to an external profile.

@@ -673,6 +673,42 @@ class ExperimentLauncherTests(unittest.TestCase):
 
             self.assertEqual(observed, ["http://llm.example.test:1234"])
 
+    def test_remote_selector_skips_inactive_managed_local_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(
+                root,
+                "remote-selected.yaml",
+                model_name="local-model",
+                model_path=root / "missing-local.gguf",
+                port=18080,
+            )
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["use_remote_llm"] = True
+            payload["remote_model"] = {
+                "name": "remote-model",
+                "host": "llm.example.test",
+                "port": 1234,
+            }
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            observed: list[tuple[str, str]] = []
+
+            def search(config, **_kwargs):
+                observed.append((config.llm_model, config.llm_base_url))
+                return SearchResult(root / "run", [], None)
+
+            ExperimentOrchestrator(
+                runtime_factory=lambda: (_ for _ in ()).throw(
+                    AssertionError("remote selection constructed a runtime manager")
+                ),
+                search_runner=search,
+            ).run(config_path=path, skip_final_test=True)
+
+            self.assertEqual(
+                observed,
+                [("remote-model", "http://llm.example.test:1234")],
+            )
+
     def test_managed_runtime_stops_before_external_config(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

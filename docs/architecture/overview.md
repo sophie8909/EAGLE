@@ -153,12 +153,14 @@ flowchart TD
   Reflection, source gating, Java Generation, and Java repair are disabled.
 - LLM-mode Code diagnosis has only strategy fidelity and code correctness; cosmetic
   simplification is forbidden and ambiguous/correct Java needs no revision.
-- `model` handles initialization and mode-allowed reflection/rewrite work. In
+- The selected primary handles initialization and mode-allowed reflection/rewrite
+  work. `use_remote_llm: false` selects `model`; `true` selects the required
+  unmanaged `remote_model` profile without deleting the local definition. In
   LLM mode, optional `generation_model` handles final Java generation, Code
   Reflection revision, and compile-guided generation repair; when omitted,
-  `model` handles both roles concurrently. Different models use independently
+  the selected primary handles both roles concurrently. Different models use independently
   running servers. Deterministic DSL has no generation-model requests.
-- `model.additional_endpoints` and the same field under `generation_model` may
+- `additional_endpoints` under `model`, `remote_model`, or `generation_model` may
   contain at most one `{base_url, model}` entry. The primary is managed locally
   when both runtime paths are present; omit both for an external primary.
   Generation and additional endpoints are externally managed.

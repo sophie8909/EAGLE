@@ -210,8 +210,12 @@ existing one-worst-match Commentator/Coach path for Strategy mutation. Neither
 mode calls a Java Generator or repair model; rendering, validation, javac,
 Integration, semantic probing, and the configured fixed-roster matrix remain
 unchanged. See [framework slots](../architecture/framework_slots.md).
-The resolved `model` section selects the model name, host/port, optional managed
+The resolved `model` section defines the local/default model name, host/port, optional managed
 GGUF/llama-server paths, per-request context size, batch size and timeouts. An
+optional unmanaged `remote_model` section has the same endpoint shape but must
+omit `path` and `llama_server`. Set `use_remote_llm: true` to select it, or
+`false` (the default) to use `model`; the inactive definition is retained in
+the resolved config. An
 optional `generation_model` section has the same shape and selects the model for
 final Java generation, deferred Code Reflection revision, and compile-guided
 repair. Each section may contain `additional_endpoints`, an ordered list with at
@@ -241,14 +245,20 @@ model:
   path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
   llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
   port: 8080
-  additional_endpoints:       # optional; zero or one entry
-    - base_url: http://192.168.1.136:1234
-      model: ministral3_8b     # exact model id accepted by that service
-generation_model:            # omit to share model concurrently
-  name: qwen3.5_9b
-  host: 192.168.1.137         # independently started generation server
+  additional_endpoints: []    # keep empty when the toggle should be exclusive
+use_remote_llm: false          # change only this value to select remote_model
+remote_model:
+  name: ministral3_8b          # exact model id accepted by the remote service
+  host: 192.168.1.136
   port: 1234
 ```
+
+With this layout, `false` starts and uses the managed local `model`; `true`
+does not start or validate the local GGUF/llama-server and instead preflights
+and calls `remote_model`. The remote service must already be running and expose
+an OpenAI-compatible chat-completions endpoint. `additional_endpoints` keeps its
+existing meaning: every listed route is active alongside whichever profile owns
+the list; it is not the local/remote selector.
 
 For a primary server you start on another machine, omit both `model.path` and
 `model.llama_server`; only `name`, `host` and `port` are needed. EAGLE

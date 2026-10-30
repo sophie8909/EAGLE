@@ -385,7 +385,7 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             ),
             "resumable": bool(framework_checkpoint),
             "experiment_name": config.experiment_name,
-            "model_name": config.model.name,
+            "model_name": config.active_primary_model.name,
             "generation_model_name": config.resolved_generation_model.name,
             "reflection_operator_mode": config.reflection_operator_mode.value,
             "experiment_pid": os.getpid(),

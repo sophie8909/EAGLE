@@ -141,17 +141,20 @@ semantic probes and matches while later children continue source gating, crossov
 or preparation. Results retain canonical candidate order and original ordinals/seeds;
 bounded completed-work buffering applies backpressure.
 
-Role clients permanently bind initialization/reflection/rewrite to `model` and
+Role clients permanently bind initialization/reflection/rewrite to the selected
+primary profile and
 Java generation/corrective revision/compile repair to optional `generation_model`.
 Different models use separately running server hosts/ports; EAGLE never switches
-models between phases. Omit `generation_model` to share the model concurrently.
+models between phases. Omit `generation_model` to share the selected primary concurrently.
 Each profile retains zero or one ordered unmanaged `additional_endpoints`.
 Canonical task index selects the route; retries stay sticky with no failover.
 All roles share two active requests per normalized server origin; different
 origins can proceed independently.
 
 Every endpoint passes fail-closed bounded chat preflight before candidate work.
-A primary with both local runtime paths is managed; omitting both paths uses
+`use_remote_llm: false` selects `model`; `true` selects the required unmanaged
+`remote_model` profile while preserving both definitions in the resolved config.
+A selected primary with both local runtime paths is managed; omitting both paths uses
 an externally started primary without lifecycle ownership; a distinct generation server
 is externally started and unmanaged. GPU preflight and full offload checks remain.
 Failure/interruption cancels queued work and drains active producers/workers.
@@ -344,9 +347,12 @@ enters this boundary with the complete source returned by the operator. It
 never receives game logs. Raw response, extracted source, normalized source,
 attempts, actual endpoint/model identity, errors, and timing are persisted.
 
-The required `model` section owns initialization, reflection, and prompt rewrite.
-Its ordinary fields define the primary endpoint. Both local runtime paths
-enable managed startup; omit both to call an external primary directly. It may additionally
+The required `model` section defines the local/default primary profile. Optional
+`remote_model` defines an already-running alternate primary and must omit local
+runtime paths. `use_remote_llm` defaults to false and selects between them for
+initialization, reflection, and prompt rewrite. The selected profile is also
+reused for generation when `generation_model` is absent. Both local runtime paths
+on `model` enable managed startup; omit both to call an external primary directly. Each profile may additionally
 contain an ordered `additional_endpoints` list with zero or one entry of the
 form `{base_url, model}`. The additional endpoint is an unmanaged
 OpenAI-compatible service: it has no local GGUF or llama-server path, is never
@@ -355,8 +361,8 @@ preflight.
 
 Optional `generation_model` routes Java generation, corrective revision and
 compile repair to its own already running server. Different model identities
-require distinct hosts/ports. Omitting it reuses `model` concurrently. Only the
-primary runtime with both local paths is managed; generation and additional servers remain
+require distinct hosts/ports. Omitting it reuses the selected primary concurrently. Only the
+selected primary with both local paths is managed; remote, generation, and additional servers remain
 unmanaged. No runtime model switching occurs.
 
 The extracted response must itself satisfy the complete-file external envelope:
