@@ -1,5 +1,5 @@
 schema_version: experiment-v2
-experiment_name: gpt_framework_gpt_seed_local_evolution_100x10_seed8_10
+experiment_name: gpt_framework_gpt_seed_local_evolution_100x10_seed8_9
 
 java_materialization_mode: framework_slots
 java_compiler_version: eagle-framework-slots-v1
@@ -23,7 +23,7 @@ seed_prompt_files: [seeds/worker_rush_policy.txt]
 max_prompt_chars: 16000
 
 runs: 1
-random_seeds: [8, 9, 10]
+random_seeds: [8, 9]
 generations: 100
 population_size: 10
 

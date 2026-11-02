@@ -9,8 +9,10 @@ This isolates slot initialization/evolution from framework-design variance.
    genomes and ordinary local evolution, with seeds 8, 9, and 10.
 3. `03_gpt_framework_gpt_seed_local_evolution.yaml`: the exact GPT genome
    selected once by treatment 1 plus nine locally sampled genomes in generation
-   zero, followed by the same local evolution, with seeds 8, 9, and 10. It
-   makes no GPT request: the complete genome is frozen inline in the config.
+   zero, followed by the same local evolution, with seeds 8 and 9. It makes no
+   GPT request: the complete genome is frozen inline in the config.
+4. `03_gpt_framework_gpt_seed_local_evolution_seed10.yaml`: the same treatment
+   3 setup isolated to seed 10 so it can be launched independently.
 
 Treatments 2 and 3 therefore share the same frozen framework and, for every
 seed, the same seeded local genomes at indices 1 through 9. Their deliberate
