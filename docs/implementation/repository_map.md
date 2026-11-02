@@ -25,13 +25,14 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/__main__.py` | Dispatches `experiment`, `analyze`, read-only `monitor`, and standalone compatibility Groq framework bootstrap |
+| `eagle/__main__.py` | Dispatches `server`, `experiment`, `analyze`, read-only `monitor`, and standalone compatibility Groq framework bootstrap |
 | `eagle/cli/framework.py` | Standalone compatibility Groq framework-bootstrap arguments and exit codes |
 | `eagle/cli/monitor.py` | Local experiment monitor arguments and server lifecycle |
 | `eagle/monitoring.py` | Canonical run status collection and read-only HTTP API |
+| `eagle/cli/server.py` | Independent foreground local LLM server startup, health monitoring and owned cleanup |
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
 | `eagle/cli/analyze.py` | Run selection and report dispatch |
-| `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, experiment-scoped shared framework bootstrap binding, owned runtime, search/resume, final test, cleanup |
+| `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, experiment-scoped shared framework bootstrap binding, search/resume and final test using independently started endpoints |
 | `eagle/experiment_index.py` | Shared index recognition/schema validation for batch execution and GUI config protection; no execution dependencies |
 | `eagle/execution.py` | Fixed concurrency, canonical worker routing, and shared per-server request budgets |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |

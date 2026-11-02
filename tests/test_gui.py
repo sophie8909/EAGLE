@@ -42,6 +42,47 @@ class GuiAppTests(unittest.TestCase):
         self.assertEqual(options["choices"]["survivor_selection"], ["mu_plus_lambda"])
         self.assertTrue(options["defaults"]["evaluation.swap_player_sides"])
 
+    def test_server_start_uses_separate_job_and_snapshot(self):
+        text = "model: {name: local, path: model.gguf, llama_server: llama-server}\n"
+        with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start:
+            self.app.post("/api/start-server", {"text": text})
+        command = start.call_args.args[0]
+        self.assertEqual(command[:6], [sys.executable, "-u", "-m", "eagle", "server", "--config"])
+        self.assertEqual(Path(command[6]).read_text(encoding="utf-8"), text)
+        self.assertIsNone(self.app.experiment.process)
+        self.assertTrue(self.app.get("/api/status", {})["server"]["running"])
+        self.app.post("/api/stop-experiment", {})
+        self.process.send_signal.assert_not_called()
+        with patch("eagle.cli.gui.IS_WINDOWS", False):
+            self.app.post("/api/stop-server", {})
+        self.process.send_signal.assert_called_once_with(signal.SIGTERM)
+
+    def test_server_controls_reject_changes_during_experiment(self):
+        self.app.experiment.process = self.process
+        text = "model: {name: local, path: model.gguf, llama_server: llama-server}\n"
+        with patch("eagle.cli.gui.subprocess.Popen") as start:
+            for route in ("/api/start-server", "/api/stop-server"):
+                with self.subTest(route=route), self.assertRaises(ValueError):
+                    self.app.post(route, {"text": text})
+        start.assert_not_called()
+
+    def test_server_start_rejects_external_endpoint(self):
+        with patch("eagle.cli.gui.subprocess.Popen") as start:
+            with self.assertRaisesRegex(ValueError, "endpoint"):
+                self.app.post("/api/start-server", {"text": "model: {name: remote, host: example.test, port: 1234}"})
+        start.assert_not_called()
+
+    def test_server_start_rejects_selected_remote_endpoint_with_retained_local_profile(self):
+        text = """\
+model: {name: local, path: model.gguf, llama_server: llama-server}
+remote_model: {name: remote, host: example.test, port: 1234}
+use_remote_llm: true
+"""
+        with patch("eagle.cli.gui.subprocess.Popen") as start:
+            with self.assertRaisesRegex(ValueError, "endpoint"):
+                self.app.post("/api/start-server", {"text": text})
+        start.assert_not_called()
+
     def test_start_uses_immutable_snapshot_and_canonical_experiment_flags(self):
         config_dir = self.root / "configs"
         config_dir.mkdir()

@@ -22,8 +22,15 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
  <div id="form"></div><textarea id="yaml" aria-label="完整 config YAML" spellcheck="false" hidden></textarea>
  <div class="row"><label>儲存路徑（可另存新檔，限 configs/ 下）<input id="save-path" placeholder="configs/experiments/my_experiment.yaml"></label></div>
  <div class="toolbar"><button id="validate">驗證設定</button><button id="save">儲存 Config</button></div>
- <details open><summary>啟動實驗</summary>
+ <details open><summary>步驟 1：啟動 LLM server</summary>
+  <p class="hint">使用目前設定啟動本機模型，等日誌顯示 LLM server ready 後再啟動實驗。外部 endpoint 請在服務所在主機啟動。Mock 或純本地演化可略過。</p>
+  <div class="toolbar"><button id="start-server">啟動 LLM server</button><button id="stop-server" class="danger" disabled>停止 LLM server</button></div>
+  <div id="server-status" class="status">尚未啟動 LLM server</div>
+  <pre id="server-log" aria-label="LLM server 輸出"></pre><p id="server-file" class="logfile"></p>
+ </details>
+ <details open><summary>步驟 2：啟動實驗</summary>
   <p class="hint">以目前編輯內容建立獨立快照後啟動，日後編輯不會改到執行中的實驗。一次執行一個實驗，可包含多個 runs。</p>
+  <p class="hint">實驗只連線至設定的模型端點；停止或結束實驗後，LLM server 會繼續運行，可供下一次實驗或續跑使用。</p>
   <div class="toolbar"><label><input type="checkbox" id="mock">Mock（不呼叫模型）</label><label><input type="checkbox" id="skip-final">略過 Final Test</label></div>
   <div class="toolbar"><button id="start" class="primary">啟動目前設定</button><button id="stop-experiment" class="danger" disabled>停止實驗</button></div>
   <div id="experiment-status" class="status">尚未啟動實驗</div>
@@ -56,7 +63,7 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
 'use strict';
 const $=id=>document.getElementById(id);
 const csrf='__CSRF_TOKEN__';
-let meta, payload={}, originalText='', editing='form', dirty=false, loaded=false, runData={generations:[],pending:[]}, jobRunning=false, matchRunning=false, refreshing=false;
+let meta, payload={}, originalText='', editing='form', dirty=false, loaded=false, runData={generations:[],pending:[]}, jobRunning=false, serverRunning=false, matchRunning=false, refreshing=false;
 async function api(path,body){
  const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Eagle-Token':csrf},body:JSON.stringify(body)});
  const data=await response.json();if(!response.ok)throw new Error(data.error||response.statusText);return data;
@@ -126,6 +133,7 @@ function updateButtons(){
  const selected=candidates().find(item=>item.candidate_id===$('candidates').value);
  $('watch').disabled=matchRunning||!selected?.watchable||!$('opponent').value||!$('map').value;
  $('candidate-status').textContent=selected?(selected.watchable?'Java 原始碼已備妥，可編譯觀戰。':'此個體尚無完整 Java 原始碼，或來源不一致，暫時無法觀戰。'):'';
+ $('start-server').disabled=serverRunning||jobRunning||!loaded;$('stop-server').disabled=!serverRunning||jobRunning;
  $('start').disabled=jobRunning||!loaded;$('resume').disabled=jobRunning||!$('runs').value;
  $('stop-experiment').disabled=!jobRunning;$('stop-match').disabled=!matchRunning;
 }
@@ -135,13 +143,13 @@ async function refreshRun(){
  setOptions($('generations'),[...runData.generations.map(item=>({value:String(item.generation),label:'第 '+item.generation+' 代 · '+item.population.length+' 個存活個體'})),...(runData.pending.length?[{value:'pending',label:'其他個體／尚未完成（含淘汰）'}]:[])],'等待個體產生');renderCandidates();
 }
 function renderJob(kind,job){
- const name=kind==='experiment'?'實驗':'對戰';
+ const name=kind==='server'?'LLM server':kind==='experiment'?'實驗':'對戰';
  $(kind+'-status').textContent=job.pid===null?'尚未啟動'+name:job.running?(job.stopping?'正在停止，等待清理…':name+'執行中 · PID '+job.pid):name+(job.returncode===0?'已完成':'已結束 · exit '+job.returncode);
  const log=$(kind+'-log');const follow=log.scrollTop+log.clientHeight>=log.scrollHeight-30;log.textContent=job.output;if(follow)log.scrollTop=log.scrollHeight;$(kind+'-file').textContent=job.log||'';
 }
 async function refresh(){
  if(refreshing)return;refreshing=true;
- try{const data=await api('/api/status');jobRunning=data.experiment.running;matchRunning=data.match.running;renderJob('experiment',data.experiment);renderJob('match',data.match);
+ try{const data=await api('/api/status');serverRunning=data.server.running;renderJob('server',data.server);jobRunning=data.experiment.running;matchRunning=data.match.running;renderJob('experiment',data.experiment);renderJob('match',data.match);
  setOptions($('runs'),data.runs.map(run=>({value:run.path,label:run.name+' · '+run.status})),'尚無 Run');
  const selected=data.runs.find(run=>run.path===$('runs').value);if(selected)$('run-status').textContent=selected.status+' · 最新完成世代 '+(selected.latest_generation??'尚無')+'\n'+selected.path;
  await refreshRun();updateButtons();}finally{refreshing=false;}
@@ -151,6 +159,8 @@ action('reload',async()=>{meta=await api('/api/meta');setOptions($('configs'),me
 action('form-tab',()=>switchEditor('form'));action('yaml-tab',()=>switchEditor('yaml'));$('yaml').oninput=markDirty;
 action('validate',async()=>{message((await api('/api/validate',await bodyConfig())).message);});
 action('save',async()=>{const data=await api('/api/save',{...await bodyConfig(),path:$('save-path').value});originalText=data.text;payload=data.payload;$('yaml').value=data.text;dirty=false;$('dirty').textContent='已儲存';message('已儲存：'+data.path);});
+action('start-server',async()=>{await api('/api/start-server',await bodyConfig());message('LLM server 啟動中，請等日誌顯示 ready。');await refresh();});
+action('stop-server',async()=>{await api('/api/stop-server',{});await refresh();});
 action('start',async()=>{await api('/api/start',{...await bodyConfig(),...flags()});message('實驗已啟動。');await refresh();});
 action('stop-experiment',async()=>{await api('/api/stop-experiment',{});await refresh();});
 action('stop-match',async()=>{await api('/api/stop-match',{});await refresh();});

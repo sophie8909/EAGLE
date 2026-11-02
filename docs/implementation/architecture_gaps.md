@@ -1,5 +1,10 @@
 # Architecture gaps
 
+Independent server startup (2026-11-02): resolved by separating the foreground
+`server` command and GUI server job from experiment/search/resume. Local model
+paths remain launch settings; experiments only connect and preflight endpoints.
+See OPS-01 and the [operations guide](../operations/running_eagle.md).
+
 ## Framework reflection decision (2026-10-24)
 
 | ID | Decision | Contract | Status |

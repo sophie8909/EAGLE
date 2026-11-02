@@ -154,9 +154,12 @@ origins can proceed independently.
 Every endpoint passes fail-closed bounded chat preflight before candidate work.
 `use_remote_llm: false` selects `model`; `true` selects the required unmanaged
 `remote_model` profile while preserving both definitions in the resolved config.
-A selected primary with both local runtime paths is managed; omitting both paths uses
-an externally started primary without lifecycle ownership; a distinct generation server
-is externally started and unmanaged. GPU preflight and full offload checks remain.
+All experiment endpoints are independently started. When `model` is selected,
+both local runtime paths enable the separate `python -m eagle server` launcher;
+omitting both uses an external primary. The selected `remote_model`, a distinct
+generation server, and additional endpoints are externally started and unmanaged.
+The server launcher retains GPU preflight and full offload checks; experiments
+have no server lifecycle ownership.
 Failure/interruption cancels queued work and drains active producers/workers.
 One candidate match matrix runs at a time, using ten match workers by default.
 An explicitly configured `evaluation.match_execution: serial` runs the same
@@ -352,7 +355,8 @@ The required `model` section defines the local/default primary profile. Optional
 runtime paths. `use_remote_llm` defaults to false and selects between them for
 initialization, reflection, and prompt rewrite. The selected profile is also
 reused for generation when `generation_model` is absent. Both local runtime paths
-on `model` enable managed startup; omit both to call an external primary directly. Each profile may additionally
+on the selected `model` enable startup through the independent server command;
+omit both to call an external primary directly. Each profile may additionally
 contain an ordered `additional_endpoints` list with zero or one entry of the
 form `{base_url, model}`. The additional endpoint is an unmanaged
 OpenAI-compatible service: it has no local GGUF or llama-server path, is never
@@ -361,9 +365,11 @@ preflight.
 
 Optional `generation_model` routes Java generation, corrective revision and
 compile repair to its own already running server. Different model identities
-require distinct hosts/ports. Omitting it reuses the selected primary concurrently. Only the
-selected primary with both local paths is managed; remote, generation, and additional servers remain
-unmanaged. No runtime model switching occurs.
+require distinct hosts/ports. Omitting it reuses the selected primary concurrently.
+Only a selected `model` profile with both local paths can be launched by the
+separate server command; experiments never manage any server lifecycle. Remote,
+generation, and additional servers remain unmanaged. No runtime model switching
+occurs.
 
 The extracted response must itself satisfy the complete-file external envelope:
 package/class/superclass, constructors, lifecycle methods, security restrictions,
@@ -665,13 +671,15 @@ The production entrypoint is:
 ```
 
 It delegates to `python -m eagle experiment`. Python owns sorted config
-discovery, validation of `model` and optional `generation_model`, managed-local
-llama.cpp start/health checks, all-endpoint chat preflight, per-run restart,
-dependency-driven scheduling, search, resume, final test, and owned-process
-cleanup. `RuntimeManager` owns only the primary local llama.cpp process.
-An additional endpoint is always external and unmanaged; it is never adopted,
-restarted, switched, signalled, or killed. Mock mode does not construct a runtime
-manager.
+discovery, validation of `model` and optional `generation_model`, all-endpoint
+chat preflight, dependency-driven scheduling, search, resume and final test.
+Start the primary separately with `python -m eagle server --config CONFIG.yaml`
+when local runtime paths are supplied, or start the service externally. The
+foreground server command uses `RuntimeManager` for file, port, GPU/offload and
+health checks and owns cleanup on failure or interruption. Experiments never
+construct a runtime manager or start, restart, adopt, signal or stop servers.
+Servers persist across replicates, failure, completion and resume. Generation
+and additional endpoints remain externally started. Mock mode skips endpoint preflight.
 
 For a directory batch, the selected config directory owns `experiment.yaml`
 with `schema_version: eagle-experiment-index-v1` and a `runs` mapping from each

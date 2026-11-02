@@ -37,7 +37,7 @@ In scope:
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
-- one resolved experiment config and optional owned local llama.cpp lifecycle; each
+- one resolved experiment config and an independent local llama.cpp launcher; each
   functional profile may add one ordered unmanaged OpenAI-compatible endpoint.
   The optional generation model uses an already running independent server;
   clients remain bound throughout the run without model switching.
@@ -52,7 +52,7 @@ flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
     L --> Z["Generation 0: configured policy, sampled genome, or LLM selection"]
-    L -->|LLM roles enabled| RT["Primary server: managed or external"]
+    L -->|LLM roles enabled| RT["Independently started primary server"]
     L -->|optional generation_model| GS["Externally started generation server"]
     L -->|optional per profile| EXT["Unmanaged additional endpoint"]
     RT --> PF["Fail-closed chat preflight for all endpoints"]
@@ -110,7 +110,7 @@ flowchart TD
     F --> N["Parent + offspring mode-specific survivor selection"]
     A --> N --> P
     N --> FT["Final test"]
-    FT --> CL["Finalize artifacts; stop owned runtime if any"]
+    FT --> CL["Finalize artifacts; leave endpoints running"]
 ```
 
 ## Invariants
@@ -161,8 +161,8 @@ flowchart TD
   the selected primary handles both roles concurrently. Different models use independently
   running servers. Deterministic DSL has no generation-model requests.
 - `additional_endpoints` under `model`, `remote_model`, or `generation_model` may
-  contain at most one `{base_url, model}` entry. The primary is managed locally
-  when both runtime paths are present; omit both for an external primary.
+  contain at most one `{base_url, model}` entry. A selected `model` with both
+  runtime paths can be started by the separate server command; omit both for an external primary.
   Generation and additional endpoints are externally managed.
   Canonical input index selects the ordered endpoint slot, retries remain sticky,
   and there is no cross-endpoint failover. Results remain candidate ordered and

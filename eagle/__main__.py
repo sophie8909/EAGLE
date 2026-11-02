@@ -7,9 +7,12 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        print("Usage: python -m eagle {experiment|analyze|monitor|framework|gui} ...")
+        print("Usage: python -m eagle {server|experiment|analyze|monitor|framework|gui} ...")
         return 2
     command, rest = args[0], args[1:]
+    if command == "server":
+        from eagle.cli.server import main as server_main
+        return server_main(rest)
     if command == "gui":
         from eagle.cli.gui import main as gui_main
         return gui_main(rest)

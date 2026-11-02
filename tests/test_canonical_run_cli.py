@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import os
 import subprocess
+import shutil
 from pathlib import Path
 
 import yaml
@@ -53,7 +54,8 @@ class CanonicalRunCliTests(unittest.TestCase):
         self.assertNotIn("llama-server", script)
         self.assertNotIn("read -r -p", script)
         self.assertIn("python -m eagle experiment", script)
-        self.assertIn("exec conda run --no-capture-output -n eagle", script)
+        self.assertIn("--no-capture-output -n eagle", script)
+        self.assertIn("-m eagle experiment", script)
         self.assertNotIn("find", script)
         self.assertNotIn("mapfile -t CONFIG_PATHS", script)
 
@@ -63,6 +65,7 @@ class CanonicalRunCliTests(unittest.TestCase):
         self.assertNotIn("for config_path in", script)
         self.assertNotIn("mapfile -t CONFIG_PATHS", script)
 
+    @unittest.skipUnless(shutil.which("bash"), "Bash is required")
     def test_experiment_shell_maps_positional_target_to_python_config_dir(self):
         repository = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
@@ -73,9 +76,9 @@ class CanonicalRunCliTests(unittest.TestCase):
             conda.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
             conda.chmod(0o755)
             environment = dict(os.environ)
-            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["PATH"] = os.pathsep.join((str(fake_bin), environment["PATH"]))
             completed = subprocess.run(
-                [str(repository / "experiment.sh"), "folder", "--mock", "--skip-final-test"],
+                [shutil.which("bash"), str(repository / "experiment.sh"), "folder", "--mock", "--skip-final-test"],
                 cwd=repository,
                 env=environment,
                 capture_output=True,
@@ -88,6 +91,7 @@ class CanonicalRunCliTests(unittest.TestCase):
             "experiment", "--config-dir", "folder", "--mock", "--skip-final-test",
         ])
 
+    @unittest.skipUnless(shutil.which("bash"), "Bash is required")
     def test_experiment_shell_passes_folder_resume_to_python(self):
         repository = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
@@ -98,9 +102,9 @@ class CanonicalRunCliTests(unittest.TestCase):
             conda.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
             conda.chmod(0o755)
             environment = dict(os.environ)
-            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["PATH"] = os.pathsep.join((str(fake_bin), environment["PATH"]))
             completed = subprocess.run(
-                [str(repository / "experiment.sh"), "--resume", "folder", "--skip-final-test"],
+                [shutil.which("bash"), str(repository / "experiment.sh"), "--resume", "folder", "--skip-final-test"],
                 cwd=repository,
                 env=environment,
                 capture_output=True,

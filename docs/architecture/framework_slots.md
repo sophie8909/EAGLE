@@ -237,14 +237,14 @@ For `groq`, set `GROQ_API_KEY` in the environment. For `mistral`, EAGLE reads
 the key from `api_key/mistral`; for direct `gpt`, it reads `api_key/gpt`. The
 `codex` route uses the current Codex login first and reads `api_key/gpt` lazily
 only if Codex cannot return a valid framework. For `local`,
-the top-level experiment `model` profile supplies the already managed llama-server
+the top-level experiment `model` profile supplies the independently running llama-server
 and no API key is read. Provider keys are bootstrap-only. In `reflection` mode,
 all later framework, strategy-description, and genome reflection calls use the
 top-level local experiment model. Start
 the ordinary experiment with
 `python -m eagle experiment --config-dir configs/experiments/framework.yaml` or
 `./experiment.sh configs/experiments/framework.yaml`. The top-level experiment
-`model` still configures the experiment runtime. Omit `evolution_mode` for the
+`model` still configures the experiment endpoint and local server launch settings. Omit `evolution_mode` for the
 local EA. For mock/offline runs, provide an existing `framework.bundle_path`;
 mock mode rejects an inline brief without that bundle. An explicit shared bundle
 path also holds the framework constant across replicate seeds. The standalone

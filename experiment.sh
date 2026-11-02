@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Wrapper for python -m eagle experiment; start LLM services separately with
+# python -m eagle server --config CONFIG.yaml before a production experiment.
+
 if [[ $# -lt 1 ]]; then
   echo "Usage: ./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test] | ./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test]" >&2
   exit 2

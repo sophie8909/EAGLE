@@ -150,9 +150,11 @@ All roles share two active requests per normalized server origin; different
 origins can proceed independently.
 
 Every endpoint passes fail-closed bounded chat preflight before candidate work.
-A primary with both local runtime paths is managed; omitting both paths uses
-an externally started primary without lifecycle ownership; a distinct generation server
-is externally started and unmanaged. GPU preflight and full offload checks remain.
+A selected `model` with both local runtime paths can be started by the separate
+server command; omitting both paths uses an externally started primary. Remote,
+generation, and additional endpoints are externally started and unmanaged.
+Experiments own no server lifecycle. GPU preflight and full offload checks remain
+with the local server launcher.
 Failure/interruption cancels queued work and drains active producers/workers.
 One candidate match matrix runs at a time, retaining ten match workers. Self-play
 opponents remain immutable; an actual dependency on this batch's unprepared

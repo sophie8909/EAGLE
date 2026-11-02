@@ -1,5 +1,13 @@
 # Migration plan
 
+## Independent LLM server startup (2026-11-02)
+
+Start local models with `python -m eagle server --config CONFIG.yaml` before
+launching experiments. The GUI exposes the same separate server job. Existing
+model launch settings and saved run configs remain valid; experiment startup,
+replicates and resume only preflight/call endpoints and never restart or stop them.
+GPU/offload and owned-process cleanup stay with the independent launcher.
+
 ## Framework reflection (2026-10-24)
 
 The additive `framework.evolution_mode: reflection` policy leaves existing

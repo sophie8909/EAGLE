@@ -256,5 +256,6 @@ def preflight_llm_endpoint(client: LLMClient) -> None:
         except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
             raise LLMServerError(
                 f"Configured LLM endpoint preflight failed at {url} "
-                f"for model {endpoint.model}: {exc}"
+                f"for model {endpoint.model}: {exc}. "
+                "Start the configured LLM server separately before launching or resuming the experiment."
             ) from exc
