@@ -164,10 +164,11 @@ Java render、validation、`javac`、Integration、semantic probe 與 MicroRTS
 `java_materialization_mode: llm`；deterministic 模式見上方說明。
 
 每個功能 profile 都以 `model`（或 `generation_model`）的一組本機欄位定義唯一
-managed primary endpoint，並可在同一區段加入最多一筆有序的
+primary endpoint（實驗只連線，啟動由獨立 server 步驟負責），並可加入最多一筆有序的
 `additional_endpoints`。Additional endpoint 的格式嚴格為
 `{base_url, model}`，代表 EAGLE 不擁有的 OpenAI-compatible service；整個 profile
-因此最多兩個 endpoint。`RuntimeManager` 只在 primary 提供兩個本機 runtime 路徑時啟停 llama.cpp，絕不
+因此最多兩個 endpoint。獨立的 `python -m eagle server --config CONFIG.yaml`
+在 primary 提供兩個本機 runtime 路徑時透過 `RuntimeManager` 啟停 llama.cpp，絕不
 adopt、restart、signal 或 stop additional endpoint。每個 endpoint 在 candidate 工作前
 都必須完成 chat-completion preflight，任何一個失敗都 fail closed，不會開始
 candidate request。
@@ -257,9 +258,9 @@ raw request/response hash 與 match seed 是追查差異的證據。時間戳、
 並重新啟動 llama-server，再測下一個 seed，並保存每個 seed 的 raw response、hash
 與 server lifecycle。
 
-正式 experiment 也採用相同的 run 邊界：每個 run（包含 `runs` replicate）開始前
-會停止上一個 EAGLE-owned llama-server，再依該 run 的 resolved config 啟動新的
-server；同一個 run 內所有角色固定綁定各自 server，不再切換模型。
+正式 experiment 與 LLM server 分開啟動。先執行 `python -m eagle server --config CONFIG.yaml`，
+等 ready 後再於另一個終端啟動實驗。所有 run、replicate 與 resume 都使用已運行的 endpoint，
+不自動重啟或關閉 server；同一個 run 內所有角色固定綁定各自 server，不切換模型。
 
 ## Reflection 與 Prompt
 
@@ -292,7 +293,7 @@ correctness 包含真正 compilation、runtime、control-flow 缺陷與 game／A
 直接呼叫已啟動的 server。不同 model 必須設定不同 host／port，由操作者啟動；
 EAGLE 不再依 phase 切換模型。省略時所有功能共用 `model` 並行呼叫。
 primary 省略 `model.path` 與 `model.llama_server` 時直接使用外部 server；
-兩者皆提供才管理本機 runtime，僅提供其一屬設定錯誤。generation 與 additional
+兩者皆提供才可使用獨立 server 指令啟動本機 runtime，僅提供其一屬設定錯誤。generation 與 additional
 endpoints 一律由外部管理。
 
 
@@ -603,10 +604,11 @@ canonical manifest 與最新 atomic generation snapshot；詳細端點另回傳 
 讀取。若不使用 token，仍應限制防火牆只允許信任的區網電腦；完整端點與防火牆建議見
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
-`experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、
-optional managed-local llama.cpp start/reuse、全部 endpoint 的 chat preflight、EA、
-resume、final test 與 owned-process cleanup。它只管理 primary local process；
-additional endpoint 永遠是 unmanaged。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
+`experiment.sh`／`python -m eagle experiment` 管理 config discovery、全部 endpoint 的
+chat preflight、EA、resume 與 final test，不啟停任何 LLM server。獨立的
+`python -m eagle server --config CONFIG.yaml` 負責本機 primary 的 GPU、offload、health
+檢查與 owned-process cleanup；GUI 也提供分開的 server 與實驗啟停按鈕。
+additional endpoint 永遠由外部服務管理。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 `python -m eagle runtime` 已移除。
 
 以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，格式為 `schema_version: eagle-experiment-index-v1`，以 `runs` 將精確 config 檔名對應至絕對 run folder 的有序清單；清單位置是從零開始的 replicate index。索引在每個 run 建立時立即原子更新。舊版「檔名 → 單一路徑」格式仍會讀取為一項清單，並在下次記錄 run 時原子升級，不會在下次執行時被當成 config。既有的 `experiment-v2` 同名設定檔不會被覆寫，該資料夾也不會產生批次索引。

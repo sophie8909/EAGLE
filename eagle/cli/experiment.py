@@ -1,4 +1,4 @@
-"""CLI for the canonical self-contained EAGLE experiment lifecycle."""
+"""CLI for EAGLE experiments using independently started LLM servers."""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +10,13 @@ from eagle.interrupts import install_interrupt_handlers
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m eagle experiment")
+    parser = argparse.ArgumentParser(
+        prog="python -m eagle experiment",
+        description=(
+            "Run or resume experiments using already running LLM endpoints. "
+            "Start local models separately with: python -m eagle server --config CONFIG.yaml"
+        ),
+    )
     parser.add_argument(
         "--config-dir",
         help="Directory of top-level YAML configs, or one direct YAML path.",

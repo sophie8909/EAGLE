@@ -44,11 +44,15 @@ a run, generation, candidate, opponent, map, and side for a visual match. See
 Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and llama.cpp launch settings:
 
 ```bash
+# Terminal 1: start the LLM server and leave it running.
+python -m eagle server --config configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml
+
+# Terminal 2: start the experiment after the server reports ready.
 ./experiment.sh configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml
 ./analyze.sh --latest
 ```
 
-`experiment.sh` is a thin wrapper for `python -m eagle experiment`. The Python orchestrator validates the selected GGUF and llama-server, checks port ownership, starts the configured model, waits for health and a chat-completion preflight, runs the EA and production final test, then stops only the process it started. Cleanup also runs after EA/final-test failure and Ctrl+C.
+`experiment.sh` is a thin wrapper for `python -m eagle experiment`. Start the local model separately with `python -m eagle server --config CONFIG.yaml`, or start an external service yourself. The server command validates the GGUF, executable, port ownership, GPU offload and health, and stops only its owned process on Ctrl+C. Experiments preflight the configured endpoints, run the EA and final test, and leave the server running across runs and resume. The GUI exposes separate server and experiment controls.
 
 Offspring creation reports mutation progress as `[gen G cand I/N]`, including started, completed, failed, and skipped states. Blocking LLM requests also print start/completion messages and a waiting heartbeat every 30 seconds. Set `EAGLE_LLM_PROGRESS=0` to suppress successful-request LLM progress while retaining candidate progress and failure messages.
 

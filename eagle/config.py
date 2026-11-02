@@ -98,7 +98,7 @@ class ModelConfig:
 
     @property
     def manages_runtime(self) -> bool:
-        """Return whether EAGLE owns this endpoint's local llama-server."""
+        """Return whether this profile supplies local server launch settings."""
 
         return self.path is not None or self.llama_server is not None
 

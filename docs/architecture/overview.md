@@ -37,7 +37,7 @@ In scope:
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - fixed-roster opponent-wise lexicase or self-play scalar Game Performance
   selection with semantic tie-breaking, artifacts, and analysis.
-- one resolved experiment config and optional owned local llama.cpp lifecycle; each
+- one resolved experiment config and an independent local llama.cpp launcher; each
   functional profile may add one ordered unmanaged OpenAI-compatible endpoint.
   The optional generation model uses an already running independent server;
   clients remain bound throughout the run without model switching.
@@ -52,7 +52,7 @@ flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
     L --> Z["Generation 0: configured policy, sampled genome, or LLM selection"]
-    L -->|LLM roles enabled| RT["Primary server: managed or external"]
+    L -->|LLM roles enabled| RT["Independently started primary server"]
     L -->|optional generation_model| GS["Externally started generation server"]
     L -->|optional per profile| EXT["Unmanaged additional endpoint"]
     RT --> PF["Fail-closed chat preflight for all endpoints"]

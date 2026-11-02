@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import yaml
@@ -24,6 +23,16 @@ from tests.test_framework_slots_artifacts import bundle_payload
 
 
 class ExperimentLauncherTests(unittest.TestCase):
+    def setUp(self):
+        # Fresh runs, folder batches, resume, failures, and mock runs must all
+        # leave the independently started server untouched.
+        guard = patch(
+            "eagle.runtime.processes.RuntimeManager",
+            side_effect=AssertionError("experiment touched server lifecycle"),
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def config(
         self,
         root: Path,
@@ -98,30 +107,6 @@ class ExperimentLauncherTests(unittest.TestCase):
         fail_on_ea_call: int | None = None,
         final_status: int = 0,
     ) -> ExperimentOrchestrator:
-        class Manager:
-            def __init__(self):
-                self.runtime = None
-                self.current_spec = None
-                events.append("manager:init")
-
-            def ensure(self, runtime):
-                model = runtime.llm.model_path.name
-                if self.current_spec is None:
-                    events.append(f"start:{model}")
-                elif self.current_spec == runtime.spec:
-                    events.append(f"reuse:{model}")
-                else:
-                    events.append(f"stop:{self.runtime.llm.model_path.name}")
-                    events.append(f"start:{model}")
-                self.runtime = runtime
-                self.current_spec = runtime.spec
-                events.append(f"health:{model}")
-                return SimpleNamespace(state="healthy", detail="ok")
-
-            def stop_owned(self):
-                if self.runtime is not None:
-                    events.append(f"stop:{self.runtime.llm.model_path.name}")
-                self.current_spec = None
 
         ea_calls = [0]
 
@@ -137,7 +122,6 @@ class ExperimentLauncherTests(unittest.TestCase):
             return final_status
 
         return ExperimentOrchestrator(
-            runtime_factory=Manager,
             search_runner=search,
             final_test_runner=final,
         )
@@ -187,7 +171,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             )
             self.assertEqual(events.count("ea:one"), 1)
             self.assertFalse(any(item.startswith("final:") for item in events))
-            self.assertEqual(events[-1], "stop:model.gguf")
+            self.assertEqual(events[-1], "ea:one")
 
     def test_direct_config_runs_requested_replicates_with_incremented_seeds(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -371,7 +355,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 frozen.framework_bundle_sha256,
             )
 
-    def test_direct_replicates_restart_runtime_between_seeds(self):
+    def test_direct_replicates_leave_server_running_between_seeds(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "model.gguf"
@@ -391,14 +375,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 item for item in events
                 if item.startswith(("start:", "reuse:", "stop:"))
             ]
-            self.assertEqual(
-                lifecycle,
-                [
-                    "start:model.gguf", "stop:model.gguf",
-                    "start:model.gguf", "stop:model.gguf",
-                    "start:model.gguf", "stop:model.gguf",
-                ],
-            )
+            self.assertEqual(lifecycle, [])
 
     def test_folder_batch_records_each_replicate_with_the_same_explicit_seed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -563,7 +540,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 return 0
 
             ExperimentOrchestrator(
-                runtime_factory=forbidden, search_runner=forbidden,
+                 search_runner=forbidden,
                 resume_runner=lambda _config, run_dir, **_kwargs: SearchResult(run_dir, [], None),
                 final_test_runner=final,
             ).run(config_path=None, resume_dir=root)
@@ -584,11 +561,10 @@ class ExperimentLauncherTests(unittest.TestCase):
             events: list[str] = []
             self.orchestrator(events, root / "run").run(config_path=path)
             self.assertEqual(events, [
-                "manager:init", "start:model.gguf", "health:model.gguf",
-                "ea:model-a", f"final:{root / 'run'}", "stop:model.gguf",
+                "ea:model-a", f"final:{root / 'run'}",
             ])
 
-    def test_same_runtime_restarts_for_each_run(self):
+    def test_batch_does_not_restart_server_for_each_run(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "shared.gguf"
@@ -600,10 +576,10 @@ class ExperimentLauncherTests(unittest.TestCase):
                 config_path=root,
                 skip_final_test=True,
             )
-            self.assertEqual(events.count("manager:init"), 1)
-            self.assertEqual(events.count("start:shared.gguf"), 3)
+            self.assertEqual(events.count("manager:init"), 0)
+            self.assertEqual(events.count("start:shared.gguf"), 0)
             self.assertEqual(events.count("reuse:shared.gguf"), 0)
-            self.assertEqual(events.count("stop:shared.gguf"), 3)
+            self.assertEqual(events.count("stop:shared.gguf"), 0)
             self.assertEqual(events.count("ea:shared"), 3)
 
     def test_distinct_generation_model_does_not_switch_primary_runtime(self):
@@ -638,10 +614,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 item for item in events
                 if item.startswith(("start:", "reuse:", "stop:"))
             ]
-            self.assertEqual(lifecycle, [
-                "start:ministral.gguf",
-                "stop:ministral.gguf",
-            ])
+            self.assertEqual(lifecycle, [])
 
     def test_external_primary_endpoint_does_not_construct_runtime_manager(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -665,15 +638,12 @@ class ExperimentLauncherTests(unittest.TestCase):
                 return SearchResult(root / "run", [], None)
 
             ExperimentOrchestrator(
-                runtime_factory=lambda: (_ for _ in ()).throw(
-                    AssertionError("external endpoint constructed a runtime manager")
-                ),
                 search_runner=search,
             ).run(config_path=path, skip_final_test=True)
 
             self.assertEqual(observed, ["http://llm.example.test:1234"])
 
-    def test_managed_runtime_stops_before_external_config(self):
+    def test_batch_with_local_and_external_profiles_does_not_manage_servers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             managed_model = root / "managed.gguf"
@@ -707,11 +677,11 @@ class ExperimentLauncherTests(unittest.TestCase):
                 item for item in events
                 if item.startswith(("start:", "reuse:", "stop:"))
             ]
-            self.assertEqual(lifecycle, ["start:managed.gguf", "stop:managed.gguf"])
+            self.assertEqual(lifecycle, [])
             self.assertEqual(events.count("ea:managed"), 1)
             self.assertEqual(events.count("ea:external"), 1)
 
-    def test_runtime_sequence_a_a_b_b_a(self):
+    def test_model_sequence_does_not_switch_servers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model_a = root / "a.gguf"
@@ -732,15 +702,9 @@ class ExperimentLauncherTests(unittest.TestCase):
                 item for item in events
                 if item.startswith(("start:", "reuse:", "stop:"))
             ]
-            self.assertEqual(lifecycle, [
-                "start:a.gguf", "stop:a.gguf",
-                "start:a.gguf", "stop:a.gguf",
-                "start:b.gguf", "stop:b.gguf",
-                "start:b.gguf", "stop:b.gguf",
-                "start:a.gguf", "stop:a.gguf",
-            ])
+            self.assertEqual(lifecycle, [])
 
-    def test_failure_in_second_config_stops_runtime_and_aborts_batch(self):
+    def test_failure_in_second_config_leaves_server_alone_and_aborts_batch(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "shared.gguf"
@@ -754,9 +718,9 @@ class ExperimentLauncherTests(unittest.TestCase):
                     skip_final_test=True,
                 )
             self.assertEqual(events.count("ea:shared"), 2)
-            self.assertEqual(events[-1], "stop:shared.gguf")
+            self.assertEqual(events[-1], "ea:shared")
 
-    def test_final_test_failure_and_keyboard_interrupt_both_cleanup(self):
+    def test_final_test_failure_and_keyboard_interrupt_leave_server_alone(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "model.gguf"
@@ -765,7 +729,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             events: list[str] = []
             with self.assertRaisesRegex(RuntimeError, "Final test failed"):
                 self.orchestrator(events, root / "run", final_status=7).run(config_path=path)
-            self.assertEqual(events[-1], "stop:model.gguf")
+            self.assertEqual(events[-1], f"final:{root / 'run'}")
 
             events.clear()
             orchestrator = self.orchestrator(events, root / "run")
@@ -776,7 +740,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             orchestrator.search_runner = interrupted
             with self.assertRaises(KeyboardInterrupt):
                 orchestrator.run(config_path=path, skip_final_test=True)
-            self.assertEqual(events[-1], "stop:model.gguf")
+            self.assertEqual(events, [])
 
     def test_mock_batch_never_constructs_runtime_or_runs_final_test(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -790,8 +754,6 @@ class ExperimentLauncherTests(unittest.TestCase):
             )
             observed: list[str] = []
 
-            def forbidden_runtime():
-                raise AssertionError("mock mode touched runtime or port ownership")
 
             def search(config, **kwargs):
                 observed.append(config.model.name)
@@ -804,7 +766,6 @@ class ExperimentLauncherTests(unittest.TestCase):
                 "eagle.runtime.processes.port_occupied", return_value=True
             ) as port_check:
                 result = ExperimentOrchestrator(
-                    runtime_factory=forbidden_runtime,
                     search_runner=search,
                     final_test_runner=forbidden_final,
                 ).run(config_path=root, mock=True, skip_final_test=True)
@@ -858,7 +819,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             )
             self.assertEqual(config_path.read_text(encoding="utf-8"), original)
 
-    def test_experiment_state_is_fresh_while_runtime_is_reused(self):
+    def test_experiment_state_is_fresh_with_shared_endpoint(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "shared.gguf"
@@ -896,28 +857,15 @@ class ExperimentLauncherTests(unittest.TestCase):
             (run_dir / "config.yaml").write_text(yaml.safe_dump(ExperimentConfig.from_file(source).to_mapping()), encoding="utf-8")
             observed: list[str] = []
 
-            class Manager:
-                def __init__(self):
-                    self.current_spec = None
-
-                def ensure(self, runtime):
-                    self.current_spec = runtime.spec
-                    observed.append(runtime.llm.model_path.name)
-                    return SimpleNamespace(state="healthy", detail="ok")
-
-                def stop_owned(self):
-                    observed.append("stopped")
-
             def resume(config, **kwargs):
                 self.assertIsNone(config)
                 observed.append("resumed")
                 return SearchResult(run_dir, [], None)
 
             ExperimentOrchestrator(
-                runtime_factory=Manager,
                 resume_runner=resume,
             ).run(config_path=None, resume_dir=run_dir, skip_final_test=True)
-            self.assertEqual(observed, ["model.gguf", "resumed", "stopped"])
+            self.assertEqual(observed, ["resumed"])
 
     def test_resume_external_primary_does_not_construct_runtime_manager(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -938,9 +886,6 @@ class ExperimentLauncherTests(unittest.TestCase):
             )
 
             ExperimentOrchestrator(
-                runtime_factory=lambda: (_ for _ in ()).throw(
-                    AssertionError("external endpoint constructed a runtime manager")
-                ),
                 resume_runner=lambda _config, **_kwargs: SearchResult(
                     run_dir, [], None
                 ),
@@ -986,9 +931,6 @@ class ExperimentLauncherTests(unittest.TestCase):
                 return SearchResult(root / "runs" / config.model.name, [], None)
 
             result = ExperimentOrchestrator(
-                runtime_factory=lambda: (_ for _ in ()).throw(
-                    AssertionError("mock folder resume constructed a runtime")
-                ),
                 search_runner=search,
                 resume_runner=resume,
             ).run(
@@ -1035,9 +977,6 @@ class ExperimentLauncherTests(unittest.TestCase):
                 return 0
 
             ExperimentOrchestrator(
-                runtime_factory=lambda: (_ for _ in ()).throw(
-                    AssertionError("final-test-only resume started the LLM runtime")
-                ),
                 resume_runner=resume,
                 final_test_runner=final,
             ).run(config_path=None, resume_dir=root)

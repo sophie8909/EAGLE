@@ -1,4 +1,4 @@
-"""Owned lifecycle management for one batch-local llama.cpp process."""
+"""Owned lifecycle management for one local llama.cpp process."""
 from __future__ import annotations
 
 import json

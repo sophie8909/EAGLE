@@ -1,4 +1,4 @@
-"""One experiment lifecycle from resolved config through runtime cleanup."""
+"""Experiment lifecycle using independently started LLM endpoints."""
 from __future__ import annotations
 
 import json
@@ -20,8 +20,6 @@ from eagle.final_test import (
 )
 from eagle.evolution.resume import load_resume_config, resume_search, validate_resume_config
 from eagle.run_artifacts import has_framework_startup_checkpoint, load_manifest
-from eagle.runtime.config import runtime_config_from_experiment
-from eagle.runtime.processes import RuntimeManager
 from eagle.evolution.loop import SearchResult
 from eagle.evolution.search import run_search
 
@@ -204,36 +202,6 @@ def _print_non_batch_output(
     print(f"completed_generation={completed_generation}")
 
 
-def _ensure_primary_runtime(
-    manager: RuntimeManager,
-    config: ExperimentConfig,
-) -> None:
-    runtime = runtime_config_from_experiment(config)
-    if manager.current_spec is None:
-        print(f"Runtime: starting primary model {runtime.llm.base_url}")
-    elif manager.current_spec == runtime.spec:
-        print("Runtime: reusing primary model server")
-    else:
-        print(f"Runtime: starting primary model {runtime.llm.base_url}")
-    status = manager.ensure(runtime)
-    if status.state != "healthy":
-        raise RuntimeError(
-            f"Configured primary llama.cpp runtime is not healthy: {status.detail}"
-        )
-
-
-def _restart_runtime_for_run(
-    manager: RuntimeManager,
-    config: ExperimentConfig,
-) -> None:
-    """Restart the owned server at a run boundary before the first LLM call."""
-
-    if manager.current_spec is not None:
-        print("Runtime: restarting primary model for new run")
-        manager.stop_owned()
-    _ensure_primary_runtime(manager, config)
-
-
 def _shares_framework_bootstrap(config: ExperimentConfig) -> bool:
     """Return whether inline framework generation is shared by this batch."""
 
@@ -271,9 +239,8 @@ def _print_batch_header(selected: Path, total: int) -> None:
 
 @dataclass
 class ExperimentOrchestrator:
-    """Small owner of runtime/search/final-test ordering."""
+    """Owner of config discovery, search, resume, and final-test ordering."""
 
-    runtime_factory: Callable[[], RuntimeManager] = RuntimeManager
     search_runner: Callable[..., SearchResult] = run_search
     resume_runner: Callable[..., SearchResult] = resume_search
     final_test_runner: Callable[[list[str]], int] = final_test_main
@@ -317,26 +284,18 @@ class ExperimentOrchestrator:
                 config_path=config_path or resume_dir / "config.yaml",
                 completed_generation=0,
             )
-            manager: RuntimeManager | None = None
-            try:
-                if not mock and config.needs_managed_runtime:
-                    manager = self.runtime_factory()
-                    _restart_runtime_for_run(manager, config)
-                result = self.resume_runner(
-                    None,
-                    run_dir=resume_dir,
-                    mock=mock,
-                )
-                _run_final_test_if_eligible(
-                    self.final_test_runner,
-                    result,
-                    mock=mock,
-                    skip_final_test=skip_final_test,
-                )
-                return result
-            finally:
-                if manager is not None and manager.current_spec is not None:
-                    manager.stop_owned()
+            result = self.resume_runner(
+                None,
+                run_dir=resume_dir,
+                mock=mock,
+            )
+            _run_final_test_if_eligible(
+                self.final_test_runner,
+                result,
+                mock=mock,
+                skip_final_test=skip_final_test,
+            )
+            return result
 
         if config_path is None:
             raise ValueError("A config path is required unless --resume is supplied.")
@@ -346,82 +305,55 @@ class ExperimentOrchestrator:
             _initialize_experiment_run_index(run_index_path)
         _print_batch_header(config_path.resolve(), len(config_paths))
 
-        manager: RuntimeManager | None = None
         last_result: SearchResult | None = None
-        try:
-            for index, resolved_path in enumerate(config_paths, start=1):
-                print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
-                config = ExperimentConfig.from_file(resolved_path)
-                print(f"Reflection model: {config.model.name}")
-                print(f"Generation model: {config.resolved_generation_model.name}")
-                print(f"Survivor selection: {config.survivor_selection} lexicase")
-                print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
-                config.validate()
-                shared_framework: ExperimentConfig | None = None
-                for replicate_index, effective_seed in enumerate(config.seed_schedule):
-                    record_run = (
-                        None
-                        if run_index_path is None
-                        else lambda run_dir, name=resolved_path.name, slot=replicate_index: _record_experiment_run(
-                            run_index_path, name, run_dir, slot
-                        )
+        for index, resolved_path in enumerate(config_paths, start=1):
+            print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
+            config = ExperimentConfig.from_file(resolved_path)
+            print(f"Reflection model: {config.model.name}")
+            print(f"Generation model: {config.resolved_generation_model.name}")
+            print(f"Survivor selection: {config.survivor_selection} lexicase")
+            print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
+            config.validate()
+            shared_framework: ExperimentConfig | None = None
+            for replicate_index, effective_seed in enumerate(config.seed_schedule):
+                record_run = (
+                    None
+                    if run_index_path is None
+                    else lambda run_dir, name=resolved_path.name, slot=replicate_index: _record_experiment_run(
+                        run_index_path, name, run_dir, slot
                     )
-                    run_config = replace(
-                        config,
-                        random_seed=effective_seed,
+                )
+                run_config = replace(
+                    config,
+                    random_seed=effective_seed,
+                )
+                if shared_framework is not None:
+                    run_config = _bind_shared_framework(run_config, shared_framework)
+                if config.total_runs > 1:
+                    print(
+                        f"Run [{replicate_index + 1}/{config.total_runs}] "
+                        f"random_seed={run_config.random_seed}"
                     )
-                    if shared_framework is not None:
-                        run_config = _bind_shared_framework(run_config, shared_framework)
-                    if config.total_runs > 1:
-                        print(
-                            f"Run [{replicate_index + 1}/{config.total_runs}] "
-                            f"random_seed={run_config.random_seed}"
-                        )
-                    if mock:
-                        result = self.search_runner(
-                            run_config,
-                            config_path=resolved_path,
-                            mock=mock,
-                            on_run_created=record_run,
-                        )
-                        if record_run is not None:
-                            record_run(result.run_dir)
-                        if _shares_framework_bootstrap(config) and shared_framework is None:
-                            shared_framework = _load_shared_framework_source(result.run_dir)
-                        last_result = result
-                        continue
-
-                    if run_config.needs_managed_runtime:
-                        if manager is None:
-                            manager = self.runtime_factory()
-                        _restart_runtime_for_run(manager, run_config)
-                    elif manager is not None and manager.current_spec is not None:
-                        manager.stop_owned()
-                    result = self.search_runner(
-                        run_config,
-                        config_path=resolved_path,
-                        mock=mock,
-                        on_run_created=record_run,
-                    )
-                    if record_run is not None:
-                        record_run(result.run_dir)
-                    if _shares_framework_bootstrap(config) and shared_framework is None:
-                        shared_framework = _load_shared_framework_source(result.run_dir)
-                    last_result = result
-                    _run_final_test_if_eligible(
-                        self.final_test_runner,
-                        result,
-                        mock=mock,
-                        skip_final_test=skip_final_test,
-                    )
-            if last_result is None:
-                raise RuntimeError("No configs were executed.")
-        finally:
-            if manager is not None and manager.current_spec is not None:
-                manager.stop_owned()
+                result = self.search_runner(
+                    run_config,
+                    config_path=resolved_path,
+                    mock=mock,
+                    on_run_created=record_run,
+                )
+                if record_run is not None:
+                    record_run(result.run_dir)
+                if _shares_framework_bootstrap(config) and shared_framework is None:
+                    shared_framework = _load_shared_framework_source(result.run_dir)
+                last_result = result
+                _run_final_test_if_eligible(
+                    self.final_test_runner,
+                    result,
+                    mock=mock,
+                    skip_final_test=skip_final_test,
+                )
+        if last_result is None:
+            raise RuntimeError("No configs were executed.")
         print("Batch complete")
-        if not mock and manager is not None:
-            print("Runtime: stopped")
         return last_result
 
     def _run_directory_resume(
@@ -467,124 +399,96 @@ class ExperimentOrchestrator:
         ))
         _print_batch_header(config_dir, len(discovered_paths))
 
-        manager: RuntimeManager | None = None
         last_result: SearchResult | None = None
         last_known_run: Path | None = None
 
-        def ensure_runtime(
-            config: ExperimentConfig,
-            *,
-            new_run: bool = False,
-        ) -> None:
-            nonlocal manager
-            if mock:
-                return
-            if not config.needs_managed_runtime:
-                if manager is not None and manager.current_spec is not None:
-                    manager.stop_owned()
-                return
-            if manager is None:
-                manager = self.runtime_factory()
-            if new_run:
-                _restart_runtime_for_run(manager, config)
-            else:
-                _ensure_primary_runtime(manager, config)
 
-        try:
-            for resolved_path, replicate_index, requested, indexed_run in jobs:
-                print(f"\n{resolved_path.name}: Run [{replicate_index + 1}/{requested.total_runs}] "
-                      f"random_seed={requested.random_seed}")
-                record_run = lambda run_dir, name=resolved_path.name, slot=replicate_index: _record_experiment_run(
-                    run_index_path, name, run_dir, slot,
-                )
-                if indexed_run is not None:
-                    persisted = load_resume_config(indexed_run)
-                    last_known_run = indexed_run
-                    if _batch_entry_is_complete(
-                        indexed_run, mock=mock, skip_final_test=skip_final_test,
-                    ):
-                        print(f"Status: complete; skipping {indexed_run}")
-                        continue
-                    manifest = load_manifest(indexed_run)
-                    search_complete = str(manifest.get("status") or "") == "complete"
-                    startup_checkpoint = has_framework_startup_checkpoint(
-                        indexed_run, manifest=manifest,
-                    )
-                    if (
-                        not search_complete
-                        and manifest.get("latest_generation") is None
-                        and not startup_checkpoint
-                    ):
-                        print("Status: interrupted before generation 0; creating a replacement run")
-                        indexed_run = None
-                    else:
-                        if startup_checkpoint and manifest.get("latest_generation") is None:
-                            print(
-                                "Status: resuming frozen framework checkpoint "
-                                f"before generation 0: {indexed_run}"
-                            )
-                        else:
-                            print(f"Status: resuming {indexed_run}")
-                        if not search_complete:
-                            ensure_runtime(persisted, new_run=True)
-                        result = self.resume_runner(
-                            None,
-                            run_dir=indexed_run,
-                            mock=mock,
-                        )
-                if indexed_run is None:
-                    print("Status: not started; creating a new run")
-                    if _shares_framework_bootstrap(requested) and replicate_index > 0:
-                        shared = shared_frameworks.get(resolved_path.resolve())
-                        if shared is None:
-                            raise RuntimeError(
-                                "Cannot start a later seed before the experiment-scoped "
-                                "framework bootstrap has been frozen by seed 0."
-                            )
-                        requested = _bind_shared_framework(requested, shared)
-                    ensure_runtime(requested, new_run=True)
-                    result = self.search_runner(
-                        requested,
-                        config_path=resolved_path,
-                        mock=mock,
-                        on_run_created=record_run,
-                    )
-                    record_run(result.run_dir)
-
-                if (
-                    replicate_index == 0
-                    and _shares_framework_bootstrap(requested)
-                    and resolved_path.resolve() not in shared_frameworks
+        for resolved_path, replicate_index, requested, indexed_run in jobs:
+            print(f"\n{resolved_path.name}: Run [{replicate_index + 1}/{requested.total_runs}] "
+                  f"random_seed={requested.random_seed}")
+            record_run = lambda run_dir, name=resolved_path.name, slot=replicate_index: _record_experiment_run(
+                run_index_path, name, run_dir, slot,
+            )
+            if indexed_run is not None:
+                persisted = load_resume_config(indexed_run)
+                last_known_run = indexed_run
+                if _batch_entry_is_complete(
+                    indexed_run, mock=mock, skip_final_test=skip_final_test,
                 ):
-                    shared_frameworks[resolved_path.resolve()] = _load_shared_framework_source(
-                        result.run_dir
+                    print(f"Status: complete; skipping {indexed_run}")
+                    continue
+                manifest = load_manifest(indexed_run)
+                search_complete = str(manifest.get("status") or "") == "complete"
+                startup_checkpoint = has_framework_startup_checkpoint(
+                    indexed_run, manifest=manifest,
+                )
+                if (
+                    not search_complete
+                    and manifest.get("latest_generation") is None
+                    and not startup_checkpoint
+                ):
+                    print("Status: interrupted before generation 0; creating a replacement run")
+                    indexed_run = None
+                else:
+                    if startup_checkpoint and manifest.get("latest_generation") is None:
+                        print(
+                            "Status: resuming frozen framework checkpoint "
+                            f"before generation 0: {indexed_run}"
+                        )
+                    else:
+                        print(f"Status: resuming {indexed_run}")
+                    result = self.resume_runner(
+                        None,
+                        run_dir=indexed_run,
+                        mock=mock,
                     )
-
-                last_result = result
-                last_known_run = result.run_dir
-                _run_final_test_if_eligible(
-                    self.final_test_runner,
-                    result,
+            if indexed_run is None:
+                print("Status: not started; creating a new run")
+                if _shares_framework_bootstrap(requested) and replicate_index > 0:
+                    shared = shared_frameworks.get(resolved_path.resolve())
+                    if shared is None:
+                        raise RuntimeError(
+                            "Cannot start a later seed before the experiment-scoped "
+                            "framework bootstrap has been frozen by seed 0."
+                        )
+                    requested = _bind_shared_framework(requested, shared)
+                result = self.search_runner(
+                    requested,
+                    config_path=resolved_path,
                     mock=mock,
-                    skip_final_test=skip_final_test,
+                    on_run_created=record_run,
+                )
+                record_run(result.run_dir)
+
+            if (
+                replicate_index == 0
+                and _shares_framework_bootstrap(requested)
+                and resolved_path.resolve() not in shared_frameworks
+            ):
+                shared_frameworks[resolved_path.resolve()] = _load_shared_framework_source(
+                    result.run_dir
                 )
 
-            if last_result is None:
-                if last_known_run is None:
-                    raise RuntimeError("No configs were executed or indexed.")
-                manifest = load_manifest(last_known_run)
-                last_result = SearchResult(
-                    last_known_run,
-                    [],
-                    None,
-                    int(manifest.get("latest_generation") or 0),
-                    manifest.get("stop_reason"),
-                )
-        finally:
-            if manager is not None and manager.current_spec is not None:
-                manager.stop_owned()
+            last_result = result
+            last_known_run = result.run_dir
+            _run_final_test_if_eligible(
+                self.final_test_runner,
+                result,
+                mock=mock,
+                skip_final_test=skip_final_test,
+            )
+
+        if last_result is None:
+            if last_known_run is None:
+                raise RuntimeError("No configs were executed or indexed.")
+            manifest = load_manifest(last_known_run)
+            last_result = SearchResult(
+                last_known_run,
+                [],
+                None,
+                int(manifest.get("latest_generation") or 0),
+                manifest.get("stop_reason"),
+            )
 
         print("Batch complete")
-        if not mock and manager is not None:
-            print("Runtime: stopped")
         return last_result

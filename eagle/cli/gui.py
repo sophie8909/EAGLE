@@ -124,8 +124,8 @@ class Job:
                     if IS_WINDOWS:
                         # Each child owns a console group; Ctrl+Break reaches its cleanup handlers.
                         self.process.send_signal(signal.CTRL_BREAK_EVENT)
-                    elif self.kind == "experiment":
-                        # The CLI handles SIGTERM and releases its owned llama.cpp runtime.
+                    elif self.kind in {"experiment", "server"}:
+                        # CLI handlers interrupt work and run their own cleanup.
                         self.process.send_signal(signal.SIGTERM)
                     else:
                         os.killpg(self.process.pid, signal.SIGTERM)
@@ -156,6 +156,7 @@ class GuiApp:
         self.runs_roots = {runs_root.resolve()}
         self.token = secrets.token_urlsafe(32)
         self.experiment = Job(self.root, "experiment")
+        self.server = Job(self.root, "server")
         self.match = Job(self.root, "match")
 
     def run_path(self, value: str) -> Path:
@@ -192,7 +193,7 @@ class GuiApp:
             return result
         if path == "/api/status":
             runs = [run for root in sorted(self.runs_roots) for run in list_runs(root)]
-            return {"experiment": self.experiment.status(), "match": self.match.status(), "runs": runs}
+            return {"server": self.server.status(), "experiment": self.experiment.status(), "match": self.match.status(), "runs": runs}
         if path == "/api/run":
             return inspect_run(self.run_path(query["path"][0]))
         raise ValueError("Unknown API route.")
@@ -207,7 +208,7 @@ class GuiApp:
             if not isinstance(body["payload"], dict):
                 raise ValueError("Config must be a mapping.")
             return {"text": yaml.safe_dump(body["payload"], sort_keys=False, allow_unicode=True)}
-        if path in {"/api/save", "/api/validate", "/api/start"}:
+        if path in {"/api/save", "/api/validate", "/api/start", "/api/start-server"}:
             text = body.get("text")
             if text is None:
                 if not isinstance(body.get("payload"), dict):
@@ -215,15 +216,23 @@ class GuiApp:
                 text = yaml.safe_dump(body["payload"], sort_keys=False, allow_unicode=True)
             config = validate_config(self.root, text)
             if path == "/api/validate":
-                return {"message": "Config 驗證通過。模型檔案與對手依賴由實驗啟動檢查。"}
+                return {"message": "Config 驗證通過。模型檔案由 LLM server 啟動檢查，對手依賴由實驗啟動檢查。"}
             if path == "/api/save":
                 result = save_config(self.root, body["path"], text)
                 result["payload"] = form_payload(result["payload"], self.root)
                 return result
+            if path == "/api/start-server":
+                if not config.model.manages_runtime:
+                    raise ValueError("此設定使用外部 LLM endpoint，請在該服務所在主機啟動 server。")
+                if self.experiment.status()["running"]:
+                    raise ValueError("請先停止實驗，再變更或啟動 LLM server。")
             folder = self.root / "logs/gui" / uuid.uuid4().hex
             folder.mkdir(parents=True)
             snapshot = folder / "config.yaml"
             snapshot.write_text(text, encoding="utf-8")
+            if path == "/api/start-server":
+                command = [sys.executable, "-u", "-m", "eagle", "server", "--config", str(snapshot)]
+                return self.server.start(command, folder)
             self.runs_roots.add((self.root / config.runs_dir).resolve())
             command = [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir", str(snapshot)]
             if body.get("mock") is True:
@@ -275,6 +284,10 @@ class GuiApp:
             return self.match.start(command, self.root / "logs/gui" / uuid.uuid4().hex)
         if path == "/api/stop-experiment":
             return self.experiment.stop()
+        if path == "/api/stop-server":
+            if self.experiment.status()["running"]:
+                raise ValueError("請先停止實驗，再停止 LLM server。")
+            return self.server.stop()
         if path == "/api/stop-match":
             return self.match.stop()
         raise ValueError("Unknown API route.")
@@ -374,4 +387,10 @@ def main(argv: list[str] | None = None) -> int:
                 app.experiment.process.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 print("Experiment is still cleaning up; see its GUI log before restarting.", file=sys.stderr)
+        app.server.stop()
+        if app.server.process is not None:
+            try:
+                app.server.process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                print("LLM server is still cleaning up; see its GUI log.", file=sys.stderr)
     return 0
