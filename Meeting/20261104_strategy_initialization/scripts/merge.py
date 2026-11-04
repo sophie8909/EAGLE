@@ -3,7 +3,7 @@ from lxml import etree as E
 import zipfile,posixpath,copy,uuid,json,hashlib,re
 root=Path(__file__).resolve().parents[1]
 base=root.parent/'20261104_genotype/deliverables/EAGLE_1105_with_genotype.pptx'
-addition=root/'build/validated/genotype.pptx';out=root/'deliverables/EAGLE_1105_with_strategy_initialization.pptx'
+addition=root/'build/validated/strategy-v2.pptx';out=root/'deliverables/EAGLE_1105_strategy_initialization_implemented.pptx'
 P='http://schemas.openxmlformats.org/presentationml/2006/main';A='http://schemas.openxmlformats.org/drawingml/2006/main';R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';PR='http://schemas.openxmlformats.org/package/2006/relationships';CT='http://schemas.openxmlformats.org/package/2006/content-types';P14='http://schemas.microsoft.com/office/powerpoint/2010/main'
 ns={'p':P,'a':A,'r':R,'p14':P14}
 xml=E.fromstring
@@ -68,4 +68,4 @@ with zipfile.ZipFile(base) as b,zipfile.ZipFile(addition) as z:
  untouched=[n for n in b.namelist() if n not in sourcepaths and n not in {'ppt/presentation.xml','ppt/_rels/presentation.xml.rels','[Content_Types].xml'}]
  assert all(b.read(n)==data[n] for n in untouched)
  report={'totalSlides':76,'insertedSlides':[66,67],'originalSlideContentPreservedExceptPageNumbers':True,'originalNonSlidePartsPreserved':len(untouched),'nativeTablesAdded':2,'sourceSha256':hashlib.sha256(base.read_bytes()).hexdigest(),'finalSha256':hashlib.sha256(out.read_bytes()).hexdigest()}
- (root/'build/preservation.json').write_text(json.dumps(report,indent=2),'utf8');print(json.dumps(report))
+ (root/'build/preservation-v2.json').write_text(json.dumps(report,indent=2),'utf8');print(json.dumps(report))
