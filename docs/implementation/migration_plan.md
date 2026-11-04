@@ -1,5 +1,13 @@
 # Migration plan
 
+## Description-guided initialization (2026-11-04)
+
+New runs opt into `framework.initial_strategy_mode: llm_plus_authored`; no old
+candidate or run is converted. Missing legacy mode values resolve to `authored`.
+The mode is persisted in resolved config/manifest and cannot change during
+resume. Description generation precedes the existing batch slot-fill boundary;
+local evolution continues unchanged after initialization.
+
 ## Independent LLM server startup (2026-11-02)
 
 Start local models with `python -m eagle server --config CONFIG.yaml` before

@@ -34,6 +34,12 @@ def initialize_framework_strategies(
 
     from eagle.generation.framework_reflection import MAX_REPAIR_RETRIES, select_reflected_genomes
 
+    if config.framework_initial_strategy_mode == "llm_plus_authored":
+        if mock:
+            description = "Mock generated strategy: balance scouting and adaptive defense."
+        else:
+            description = generate_initial_strategy(population=population, config=config, run_dir=run_dir, client=client)
+        population = [replace(population[0], strategy_description=description), *population[1:]]
     if mock:
         return population
     bundle = load_framework_bundle(
@@ -61,6 +67,74 @@ def initialize_framework_strategies(
         except (ValueError, TypeError, RuntimeError, OSError) as exc:
             last_error = str(exc)
     raise ValueError(f"Initial strategy-guided framework slot selection failed: {last_error}")
+
+
+def generate_initial_strategy(*, population: list[Candidate], config: ExperimentConfig, run_dir: Path, client: Any) -> str:
+    """Generate one distinct narrative and persist each bounded attempt."""
+    from eagle.generation.framework_reflection import MAX_REPAIR_RETRIES
+    from eagle.operators.framework_coach import framework_bundle_evidence
+    from eagle.prompts import load_prompt, render_prompt
+
+    bundle = load_framework_bundle(config.framework_bundle_path, expected_sha256=config.framework_bundle_sha256)
+    existing = [candidate.strategy_description for candidate in population[1:]]
+    normalized = {" ".join(value.split()).casefold() for value in existing}
+    schema = {"type": "object", "additionalProperties": False,
+              "properties": {"strategy_description": {"type": "string"}},
+              "required": ["strategy_description"]}
+    backend = client.prompt_backend(operation="framework_initial_strategy", response_schema=schema,
+                                    response_schema_name="eagle_initial_strategy", max_prompt_chars=None)
+    logger = LLMCallLogger(run_dir / "llm_logs", run_id=run_dir.name, timing_path=run_dir / "timing.jsonl")
+    prompt = render_prompt("framework_initial_strategy", {
+        "gameplay_contract": load_prompt("microrts_gameplay_contract"),
+        "framework_bundle": json.dumps(framework_bundle_evidence(bundle), ensure_ascii=False),
+        "existing_strategies": json.dumps(existing, ensure_ascii=False),
+    })
+    error = None
+    for attempt in range(1, MAX_REPAIR_RETRIES + 2):
+        attempt_dir = run_dir / "initialization" / "framework_initial_strategy" / f"attempt_{attempt:03d}"
+        attempt_dir.mkdir(parents=True, exist_ok=True)
+        request = prompt + ("\nPrevious error: " + error if error else "")
+        (attempt_dir / "request.txt").write_text(request, encoding="utf-8")
+        raw = ""
+        started_at, started = utc_now(), time.monotonic()
+        error = None
+        try:
+            raw = backend.generate(request)
+        except (ValueError, TypeError, RuntimeError, OSError) as exc:
+            error = str(exc)
+        finished_at = utc_now()
+        duration = max(0.0, time.monotonic() - started)
+        (attempt_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
+        logger.write_timing_event(request_correlation_id=f"{logger.run_id}:framework_initial_strategy:0:{attempt}",
+            stage="framework_initial_strategy", status="success" if error is None else "failed",
+            model=backend.model, candidate_id=None, generation=0, started_at=started_at,
+            finished_at=finished_at, duration_seconds=duration,
+            metadata={"operation_type": "framework_initial_strategy", "endpoint": client.selected_endpoint.base_url,
+                      "transport_attempt": 1, "attempt": attempt})
+        description = None
+        if error is None:
+            try:
+                def unique_object(pairs):
+                    result = {}
+                    for key, value in pairs:
+                        if key in result:
+                            raise ValueError(f"Duplicate JSON key: {key}")
+                        result[key] = value
+                    return result
+                payload = json.loads(raw, object_pairs_hook=unique_object)
+                if not isinstance(payload, dict) or set(payload) != {"strategy_description"} or not isinstance(payload["strategy_description"], str):
+                    raise ValueError("Expected exactly one string strategy_description.")
+                description = payload["strategy_description"].strip()
+                if not description or " ".join(description.split()).casefold() in normalized:
+                    raise ValueError("Strategy description must be nonempty and distinct from authored strategies.")
+            except (ValueError, TypeError) as exc:
+                error = str(exc)
+        atomic_json(attempt_dir / "result.json", {"status": "failed" if error else "success", "error": error,
+                    "strategy_description": description if error is None else None,
+                    "started_at": started_at, "finished_at": finished_at, "duration_seconds": duration})
+        if error is None:
+            return description
+    raise ValueError(f"Initial strategy generation failed: {error}")
 
 
 def validate_framework_compilation(

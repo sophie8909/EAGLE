@@ -1,5 +1,14 @@
 # Artifact schema
 
+## Initial framework strategy descriptions (2026-11-04)
+
+The effective `framework.initial_strategy_mode` is persisted in resolved config
+and `framework_initial_strategy_mode` in the run manifest; missing legacy values
+mean `authored`. Opt-in `llm_plus_authored` preserves generated-description
+request/raw-response/validation evidence before complete-genome selection.
+Candidate descriptions use the existing `strategy_description` snapshot and
+text artifact; active genotype and lineage schema versions remain unchanged.
+
 ## DSL and pre-crossover source contract (LLM materialization mode)
 
 New `strategy_prompt` payloads are canonical `eagle-strategy-dsl-v1` JSON;

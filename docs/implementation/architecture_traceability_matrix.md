@@ -1,5 +1,15 @@
 # Architecture traceability matrix
 
+## Description-guided initialization (2026-11-04)
+
+FWSLOT-05 is owned by [framework slots](../architecture/framework_slots.md).
+`eagle/config.py`, `eagle/operators/initialization.py`, and
+`eagle/evolution/framework_reflection.py` own opt-in 1+9 initialization and
+complete-genome filling; Coach prompts carry descriptions. Run manifests and
+`eagle/evolution/resume.py` fence the mode. Verification covers configuration,
+mock/production initialization, malformed descriptions, description-conditioned
+slot selection, persistence and resume compatibility.
+
 Local GUI operation (`python -m eagle gui`) is an additive control surface over
 the existing experiment and observation commands; `tests/test_gui*.py` cover
 editing, launch isolation, browsing, request guards, and temporary opponent

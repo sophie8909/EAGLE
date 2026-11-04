@@ -468,6 +468,7 @@ class StrategyReflectionPipeline:
                 bundle,
                 framework_bundle_sha256=bundle_hash,
                 current_control_genome=current_genome,
+                strategy_description=candidate.strategy_description,
             )
             if len(request) > self.max_prompt_chars:
                 raise ValueError(
@@ -483,6 +484,7 @@ class StrategyReflectionPipeline:
                     "framework_bundle_sha256": bundle_hash,
                     "framework_bundle": framework_bundle_evidence(bundle),
                     "current_control_genome": current_genome,
+                    "strategy_description": candidate.strategy_description,
                 },
             )
             _, validated = self._call_role(
@@ -717,6 +719,7 @@ class StrategyReflectionPipeline:
                 evaluated_parent_control_genome=parent_genome,
                 current_child_control_genome=current_genome,
                 coach_evidence=coach_evidence,
+                strategy_description=candidate.strategy_description,
             )
             if len(request) > self.max_prompt_chars:
                 raise ValueError(
@@ -731,6 +734,7 @@ class StrategyReflectionPipeline:
                     "semantic_payload": {
                         "framework_bundle_sha256": bundle_hash,
                         "framework_bundle": framework_bundle_evidence(bundle),
+                        "strategy_description": candidate.strategy_description,
                         "evaluated_parent_control_genome": parent_genome,
                         "current_child_control_genome": current_genome,
                         "commentator_diagnoses_and_evaluation_metadata": coach_evidence,

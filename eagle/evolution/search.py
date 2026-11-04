@@ -167,7 +167,8 @@ def run_generation_zero(
     )
     if (
         config.java_materialization_mode == "framework_slots"
-        and config.framework_evolution_mode in {"reflection", "option_reflection"}
+        and (config.framework_evolution_mode in {"reflection", "option_reflection"}
+             or config.framework_initial_strategy_mode == "llm_plus_authored")
     ):
         from eagle.evolution.framework_reflection import initialize_framework_strategies
 

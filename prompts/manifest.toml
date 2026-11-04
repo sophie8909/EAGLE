@@ -179,13 +179,13 @@ required_variables = []
 file = "framework_initial_selection.txt"
 role = "coach"
 stages = ["population_initialization"]
-required_variables = ["framework_bundle_sha256", "framework_bundle", "current_control_genome"]
+required_variables = ["strategy_description", "framework_bundle_sha256", "framework_bundle", "current_control_genome"]
 
 [prompts.framework_coach_selection]
 file = "framework_coach_selection.txt"
 role = "coach"
 stages = ["strategy_reflection"]
-required_variables = ["framework_bundle_sha256", "framework_bundle", "evaluated_parent_control_genome", "current_child_control_genome", "commentator_diagnoses_and_evaluation_metadata"]
+required_variables = ["strategy_description", "framework_bundle_sha256", "framework_bundle", "evaluated_parent_control_genome", "current_child_control_genome", "commentator_diagnoses_and_evaluation_metadata"]
 
 [prompts.groq_framework_design]
 file = "groq_framework_design.txt"
@@ -228,3 +228,9 @@ file = "strategy_dsl_reference.txt"
 role = "reference"
 stages = ["population_initialization", "strategy_reflection", "code_reflection", "seed_generation", "mutation_generation", "crossover_generation"]
 required_variables = []
+
+[prompts.framework_initial_strategy]
+file = "framework_initial_strategy.txt"
+role = "seed"
+stages = ["population_initialization"]
+required_variables = ["gameplay_contract", "framework_bundle", "existing_strategies"]

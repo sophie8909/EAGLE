@@ -1,5 +1,20 @@
 # Current implementation status
 
+## Description-guided 1+9 initialization (2026-11-04)
+
+Framework slots support opt-in `framework.initial_strategy_mode:
+llm_plus_authored`: one experiment-LLM strategy plus the previous nine
+non-WorkerRush descriptions, followed by separate complete-genome Coach filling.
+Default `authored` leaves historical runs unchanged. The mode is resume-fenced;
+mock is provider-free. See the [framework contract](../architecture/framework_slots.md)
+and [test contracts](../testing/test_contracts.md). Live strategy quality and
+battle performance require a separate real experiment.
+Native Python regression: 69/70 related checks passed; the remaining check
+loads the unchanged historical 1030 bundle whose Windows checkout has CRLF
+instead of the SHA-pinned LF bytes. The new config freezes the original bytes.
+One-generation mock CLI search, persisted descriptions/genomes, parent-A
+inheritance and completed-run resume passed. WSL was unavailable.
+
 ## Independent LLM server startup (2026-11-02)
 
 The foreground `python -m eagle server --config CONFIG.yaml` command and the

@@ -1,5 +1,28 @@
 # Framework bootstrap and finite-slot evolution
 
+## Description-guided 1+9 initialization (2026-11-04)
+
+`framework.initial_strategy_mode: llm_plus_authored` opts a new framework-slot
+run into exactly ten initial descriptions. The configured experiment LLM first
+writes one new nonempty description for index 0, distinct from the nine authored
+profiles at indices 1–9 (`framework_initial_strategies.txt` entries 2–10).
+WorkerRush is replaced only in this opt-in mode. A separate batch Coach stage
+then selects every individual's complete legal genome following its description.
+Generation and slot filling each have bounded attempts, preserve raw responses
+before validation, and fail initialization on exhaustion without fallback.
+
+The setting requires population 10 and rejects `gpt_initial_candidates` and
+`initial_genomes`. Its default `authored` preserves existing mode-specific
+initialization, including historical local sampling. The effective mode is
+persisted and resume-fenced; missing legacy values mean `authored`.
+Even with `evolution_mode: local`, the opt-in needs the experiment LLM at Gen 0;
+all later local offspring retain the existing crossover/mutation path and inherit
+parent A's description. Initial/offspring Coach prompts include descriptions
+when present. `control_genome` remains the only active genotype; description
+uniqueness does not guarantee distinct genomes or executable behavior.
+Mock mode uses a deterministic new description plus the nine authored profiles
+and sampled genomes, with no provider calls.
+
 `java_materialization_mode: framework_slots` uses a configurable fresh-run
 bootstrap when no external bundle is configured, then evolves only typed slot
 values. Startup
@@ -22,7 +45,7 @@ same bundle schema, exact-byte run freeze, active genotype, renderer, and
 materializer/protocol version (`eagle-framework-slots-v1`). The resolved mode is
 part of run identity; resume rejects a mode mismatch.
 
-The local policy has one bounded Gen-0 initialization extension:
+The local policy also supports a bounded direct-GPT Gen-0 initialization extension:
 `framework.gpt_initial_candidates` defaults to `0`. When it is a positive
 integer, it is allowed only with `java_materialization_mode: framework_slots`
 and `framework.evolution_mode: local`; direct GPT reads `api_key/gpt`, uses
@@ -467,8 +490,9 @@ This mode requires:
 - active genotype metadata `['control_genome']`.
 
 With `framework.evolution_mode: local`, the EA performs no candidate-time
-provider or other LLM request by default; `gpt_initial_candidates` is the sole
-bounded Gen-0 exception. Strategy Reflection, Prompt Reflection, Code
+provider or other LLM request by default. The mutually exclusive
+`gpt_initial_candidates` prefix and `initial_strategy_mode: llm_plus_authored`
+are bounded Gen-0 exceptions. Strategy Reflection, Prompt Reflection, Code
 Reflection/source gating, Java Generation, and compile-guided repair are all
 disabled. Under `llm_coach`, only initial genome selection and the
 Commentator/Coach Strategy path make candidate-time requests; Prompt Reflection,

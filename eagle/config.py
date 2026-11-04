@@ -190,6 +190,7 @@ class ExperimentConfig:
     framework_bundle_path: Path | None = None
     framework_bundle_version: str | None = None
     framework_bundle_sha256: str | None = None
+    framework_initial_strategy_mode: str = "authored"
     framework_evolution_mode: str = "local"
     framework_coach_offspring_probability: float | None = None
     # A bounded prefix of generation zero can be selected by the direct GPT
@@ -513,6 +514,7 @@ class ExperimentConfig:
             framework_bundle_path=framework_bundle_path,
             framework_bundle_version=framework_bundle_version,
             framework_bundle_sha256=framework_bundle_sha256,
+            framework_initial_strategy_mode=str((payload.get("framework") or {}).get("initial_strategy_mode", "authored")),
             framework_evolution_mode=str((payload.get("framework") or {}).get("evolution_mode", "local")),
             framework_coach_offspring_probability=(
                 None if (payload.get("framework") or {}).get("coach_offspring_probability") is None
@@ -662,6 +664,13 @@ class ExperimentConfig:
                 f"framework.evolution_mode={self.framework_evolution_mode} requires "
                 "evaluation.mode=self_play."
             )
+        if self.framework_initial_strategy_mode not in {"authored", "llm_plus_authored"}:
+            raise ValueError("framework.initial_strategy_mode must be authored or llm_plus_authored.")
+        if self.framework_initial_strategy_mode == "llm_plus_authored" and (
+            self.java_materialization_mode != "framework_slots" or self.population_size != 10
+            or self.framework_gpt_initial_candidates or self.framework_initial_genomes
+        ):
+            raise ValueError("framework.initial_strategy_mode=llm_plus_authored requires framework_slots population_size=10 and no initial genomes or GPT initial candidates.")
         if self.framework_coach_offspring_probability is not None:
             if not 0.0 <= self.framework_coach_offspring_probability <= 1.0:
                 raise ValueError("framework.coach_offspring_probability must be in [0, 1].")
@@ -1146,6 +1155,8 @@ class ExperimentConfig:
         if self.java_materialization_mode == "framework_slots":
             mapping.pop("strategy_policy_format", None)
             mapping["framework"] = {"evolution_mode": self.framework_evolution_mode}
+            if self.framework_initial_strategy_mode != "authored":
+                mapping["framework"]["initial_strategy_mode"] = self.framework_initial_strategy_mode
             if self.framework_coach_offspring_probability is not None:
                 mapping["framework"]["coach_offspring_probability"] = self.framework_coach_offspring_probability
             if self.framework_gpt_initial_candidates:
@@ -1251,6 +1262,7 @@ class ExperimentConfig:
                 self.framework_evolution_mode in {
                     "llm_coach", "reflection", "option_reflection",
                 }
+                or self.framework_initial_strategy_mode == "llm_plus_authored"
                 or (
                     self.framework_bundle_path is None
                     and self.framework_bootstrap_backend == "local"
@@ -1398,7 +1410,7 @@ def _parse_framework_bundle(
     unknown = sorted(
         set(value).difference({
             "bundle_path", "bundle_version", "bundle_sha256", "evolution_mode",
-            "coach_offspring_probability", "gpt_initial_candidates", "initial_genomes", "bootstrap_backend",
+            "coach_offspring_probability", "gpt_initial_candidates", "initial_genomes", "bootstrap_backend", "initial_strategy_mode",
             "bootstrap_scope", "bootstrap_max_attempts", "design_brief", "model",
         })
     )

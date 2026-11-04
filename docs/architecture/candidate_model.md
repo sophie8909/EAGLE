@@ -1,5 +1,14 @@
 # Candidate model
 
+## Opt-in initial strategy descriptions (2026-11-04)
+
+`framework.initial_strategy_mode: llm_plus_authored` gives a ten-candidate
+population one LLM-generated description and the nine existing non-WorkerRush
+profiles. A separate LLM stage fills all genomes from their descriptions.
+The default `authored` retains prior initialization behavior. Descriptions remain
+supporting intent; only `control_genome` is active, and local offspring inherit
+parent A's description. See [framework slots](framework_slots.md).
+
 Framework reflection candidates additionally preserve optional natural-language
 `strategy_description`, with old snapshots omitting it remaining readable.
 Generation-zero Coach fills slots from the authored description; boundary Coach

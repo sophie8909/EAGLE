@@ -197,6 +197,7 @@ def framework_initial_selection_prompt(
     *,
     framework_bundle_sha256: str,
     current_control_genome: dict[str, Any],
+    strategy_description: str = "",
 ) -> str:
     return render_prompt(
         "framework_initial_selection",
@@ -205,6 +206,7 @@ def framework_initial_selection_prompt(
                 framework_bundle_evidence(bundle), ensure_ascii=False, sort_keys=True
             ),
             "framework_bundle_sha256": framework_bundle_sha256,
+            "strategy_description": strategy_description,
             "current_control_genome": json.dumps(
                 current_control_genome, ensure_ascii=False, sort_keys=True
             ),
@@ -219,6 +221,7 @@ def framework_coach_selection_prompt(
     evaluated_parent_control_genome: dict[str, Any],
     current_child_control_genome: dict[str, Any],
     coach_evidence: dict[str, Any],
+    strategy_description: str = "",
 ) -> str:
     return render_prompt(
         "framework_coach_selection",
@@ -227,6 +230,7 @@ def framework_coach_selection_prompt(
                 framework_bundle_evidence(bundle), ensure_ascii=False, sort_keys=True
             ),
             "framework_bundle_sha256": framework_bundle_sha256,
+            "strategy_description": strategy_description,
             "evaluated_parent_control_genome": json.dumps(
                 evaluated_parent_control_genome, ensure_ascii=False, sort_keys=True
             ),

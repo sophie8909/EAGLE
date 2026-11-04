@@ -94,9 +94,10 @@ def initialize_population(
         periodic_reflection = config.framework_evolution_mode in {
             "reflection", "option_reflection",
         }
-        if periodic_reflection and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
+        uses_descriptions = periodic_reflection or config.framework_initial_strategy_mode == "llm_plus_authored"
+        if uses_descriptions and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
             raise ValueError("Add distinct framework initial strategies for the requested population size.")
-        if periodic_reflection and len({
+        if uses_descriptions and len({
             " ".join(description.split()).casefold()
             for description in FRAMEWORK_INITIAL_STRATEGIES[:config.population_size]
         }) != config.population_size:
@@ -140,7 +141,7 @@ def initialize_population(
                 generation_prompt="",
                 strategy_description=(
                     FRAMEWORK_INITIAL_STRATEGIES[index]
-                    if periodic_reflection else ""
+                    if uses_descriptions else ""
                 ),
                 operator="seed",
                 metadata={
@@ -150,7 +151,7 @@ def initialize_population(
                 },
             ))
         direct_gpt_count = config.framework_gpt_initial_candidates
-        if config.framework_evolution_mode == "llm_coach" or direct_gpt_count:
+        if config.framework_initial_strategy_mode != "llm_plus_authored" and (config.framework_evolution_mode == "llm_coach" or direct_gpt_count):
             from eagle.operators.framework_coach import select_initial_framework_genome
 
             if policy_backend is None or candidates_dir is None:

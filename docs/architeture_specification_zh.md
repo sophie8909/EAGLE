@@ -1,5 +1,18 @@
 # EAGLE 架構說明（中文摘要）
 
+## 自然語言策略引導初始化（2026-11-04）
+
+新實驗可設定 `framework.initial_strategy_mode: llm_plus_authored`，要求
+`framework_slots` 與初始族群 10：由實驗使用的 LLM 先產生 1 個新的策略描述，
+其餘 9 個沿用舊清單第 2–10 項。原 WorkerRush 位置由新策略取代。
+接著以另一階段讓 Coach 參考各個體描述、框架資訊與合法 slot 值域，填入完整
+`control_genome`。兩階段分別限制嘗試次數，失敗則中止初始化，不偷偷退回預設值。
+策略描述保存於 `strategy_description`，仍是策略意圖；執行基因只有 slot 選值。
+描述不同不保證基因組或行為不同。一般初始與後代 Coach 選值也會收到已有描述。
+預設 `authored` 保留既有模式的初始化行為；新設定與預存 genome／GPT prefix
+互斥並納入續跑檢查。local 模式只在這個新初始化階段使用 LLM，後續維持本地
+交配與突變，描述繼承父代 A。mock 使用確定性描述與抽樣基因，不呼叫模型。
+
 狀態：2026-10-24 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 

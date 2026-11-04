@@ -1,5 +1,16 @@
 # EAGLE evolutionary flow
 
+## Description-guided initialization override (2026-11-04)
+
+For framework slots, `initial_strategy_mode: llm_plus_authored` overrides the
+initialization described below: sample ten starting genomes, generate one new
+strategy description, retain the prior nine non-WorkerRush descriptions, then
+ask Coach to fill all ten complete genomes using those descriptions before
+ordinary evaluation. Description generation and slot filling are separate
+bounded stages. No partial population or default-genome fallback enters evaluation.
+This initialization choice is independent of `evolution_mode`; later reproduction
+is unchanged. Default `authored` retains the existing mode-specific initialization.
+
 In framework `reflection` self-play, completed interval boundaries trigger whole
 framework reflection alongside opponent refresh (interval 5: G6 uses G5, then
 G11 uses G10). G1 only initializes the opponent snapshot. Every preceding

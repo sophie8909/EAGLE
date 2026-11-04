@@ -6,6 +6,9 @@ Choose exactly one legal value for every declared slot. Numeric values must lie 
 Preserve successful behavior, address recurring weaknesses, and change only values justified by the supplied evidence.
 Do not write Java, strategy DSL, explanations, or extra fields.
 
+Use the candidate strategy_description to guide slot choices when provided.
+strategy_description: $strategy_description
+
 framework_bundle_sha256: $framework_bundle_sha256
 framework_bundle: $framework_bundle
 evaluated_parent_control_genome: $evaluated_parent_control_genome

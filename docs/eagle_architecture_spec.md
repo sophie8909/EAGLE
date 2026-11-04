@@ -1,5 +1,21 @@
 # EAGLE architecture specification
 
+## Framework description-guided initialization (2026-11-04)
+
+The additive `framework.initial_strategy_mode: llm_plus_authored` setting requires
+`framework_slots`, population 10, and no configured initial genomes or direct-GPT
+initial-candidate prefix. The experiment LLM generates exactly one nonempty
+initial strategy description distinct from the existing nine non-WorkerRush
+profiles, then a separate Coach stage fills all ten complete genomes following
+their descriptions. Both stages retain bounded-attempt evidence and fail
+initialization on exhaustion. The only active genotype remains `control_genome`.
+Mock uses deterministic descriptions/sampled genomes without provider calls.
+The default `authored` preserves all prior mode-specific initialization below.
+The setting is persisted and resume-fenced with `authored` as the legacy default.
+In opt-in local runs LLM use occurs during initialization; later local variation
+and parent-A description inheritance remain unchanged. Initial and offspring
+Coach selection includes the candidate's supporting description when present.
+
 Status: authoritative current contract, 2026-10-21.
 
 This document describes executable EAGLE behavior. Unless stated otherwise, sections 2-14 describe `java_materialization_mode: llm`; section 15 specifies the deterministic override. Historical NSGA-II,

@@ -13,6 +13,9 @@ worker-combat framework, prefer an early economy-to-combat transition and a
 large enough combat target limit when choosing among otherwise comparable legal
 values.
 
+Use the candidate strategy_description to guide slot choices when provided.
+strategy_description: $strategy_description
+
 framework_bundle_sha256: $framework_bundle_sha256
 framework_bundle: $framework_bundle
 current_control_genome: $current_control_genome

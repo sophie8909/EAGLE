@@ -1,5 +1,16 @@
 # Test contracts
 
+## Description-guided 1+9 initialization (2026-11-04)
+
+Contracts cover the opt-in mode's strict ten-candidate requirement and conflicts,
+config round-trip and legacy-default resume fencing, one new distinct description
+plus the exact nine authored profiles, per-candidate description evidence during
+complete-genome filling, bounded malformed/duplicate response handling without
+fallback, and deterministic provider-free mock initialization. Existing authored
+initialization, Coach selection, description persistence and parent-A inheritance
+remain regression requirements. Live LLM quality and match performance are not
+certified by mock/unit checks.
+
 ## Frozen-framework option reflection (2026-10-28)
 
 `test_framework_slots_candidate_config` covers `option_reflection`

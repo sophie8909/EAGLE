@@ -1,0 +1,10 @@
+Generate one distinct, actionable natural-language MicroRTS strategy description. Return only a JSON object with strategy_description. Avoid repeating any existing strategy.
+
+Gameplay contract:
+$gameplay_contract
+
+Framework:
+$framework_bundle
+
+Existing strategies:
+$existing_strategies

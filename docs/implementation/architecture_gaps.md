@@ -1,5 +1,15 @@
 # Architecture gaps
 
+## Description-guided initialization decision (2026-11-04)
+
+FWSLOT-05: the user requested one LLM-generated initial description plus the
+previous nine authored non-WorkerRush strategies, with descriptions guiding slot
+selection. Implemented as opt-in `framework.initial_strategy_mode:
+llm_plus_authored`, preserving default initialization and fencing resume. This
+adds no runtime genotype component or framework rewrite. Behavioral diversity
+and performance remain experiment questions, not guarantees of the description
+or finite-slot schema.
+
 Independent server startup (2026-11-02): resolved by separating the foreground
 `server` command and GUI server job from experiment/search/resume. Local model
 paths remain launch settings; experiments only connect and preflight endpoints.
