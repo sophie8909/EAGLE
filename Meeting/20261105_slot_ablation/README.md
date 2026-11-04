@@ -2,26 +2,34 @@
 
 ## Standing workflow
 
-Keep updating `J:\我的雲端硬碟\Lab\Meeting\EAGLE.pptx`. Add each weekly update as a new section at the end, and edit only the current week's section. Preserve older sections and the user's manual edits. The versioned repository copy is `Meeting/deliverables/EAGLE.pptx`.
+Keep updating `J:\我的雲端硬碟\Lab\Meeting\EAGLE.pptx`. Add new weekly sections at the end, edit only the current week, and preserve the user's manual changes. The versioned repository copy is `Meeting/deliverables/EAGLE.pptx`.
 
-## Current 1105 section
+## 1105 section: completed fixed evaluations
 
-The latest user-saved source has 68 slides, with 10 slides in 1105 (59–68). The user removed the local-evolution flow slide after the previous delivery; this is retained.
+The deck retains the user's 68-slide version and 10-slide 1105 section (59–68). The removed algorithm-flow page remains removed. The source is the 2026-11-04 experiment `RESULTS.md`, copied unchanged to `source_report.md`.
 
-The chapter uses the 2026-11-03 `RESULTS.md` snapshot retained in `source_report.md`. Twelve editable charts, a signed-difference grid and the treatment diagram cover initialization, final self-play scores, fixed-opponent averages, diversity, best-candidate W/D/L and completed search matches. Method 3 seeds 8, 9 and 10 all complete G100. Average permanent-opponent results improve, but seed 9 regresses on several metrics. Symmetric ten-opponent checkpoints and measured timing remain unavailable.
+The updated result pages now show the completed frozen ten-opponent benchmark: G0–G100 at five-generation intervals, 21 checkpoints, three seeds per method, 600 matches per representative candidate. Six runs give 126 evaluated representatives and 75,600 fixed-evaluation matches. There are zero match errors; 54 AllInBot upstream faults were safely isolated and neutralized under the protocol, not attributed to candidate runtime failure. All representatives passed compilation, seven integration checks and matrix validation.
 
-## Method 1 reference line, 2026-11-04
+Method 3's three-seed mean win rate and match score exceed method 2 at all 21 checkpoints. G100 win rates are 67.50% versus 58.83% (+8.67 percentage points). G100 mean scores are 39.862 versus 21.459. Method 3 peaks at G40 (71.22%, score 46.339) and later declines. Seed 9 remains a counterexample: 56.67% versus method 2's 65.67% at G100. Gains against COAC, AllInBot and TMA are visible in the opponent comparison.
 
-Slides 61 and 62 now include a native gold dashed line in each Best/Population Mean chart. All three seed positions repeat method 1's single G0 Search Game Performance, -9.001. This is one GPT candidate, not three independent measurements. Method 1 did not evolve to G100; its G0 score is retained there only as a reference across different search contexts. The fixed-evaluation mean (-9.505) is not mixed into search-score charts.
+Slides 63/64 now show native checkpoint win-rate and mean-score curves; 66 shows G100 seed comparisons; 67 shows ten-opponent G100 win rates including method 1; 68 shows the 58/63 paired-score advantage and evaluation limits. Slide 59 only updates the snapshot date. Unchanged pages 60/61/62/65 retain their existing valid results. There are 13 editable charts in 1105, 28 in the whole deck.
 
-The line is an editable series linked to the chart's embedded workbook. G100 axes extend to -10. Footnotes and speaker notes state the interpretation limits. Existing chart cache floating-point tails from PowerPoint saving were synchronized to unchanged numeric workbook values; displayed source scores remain the same.
+The fixed benchmark evaluates only each checkpoint's highest-search-score runnable survivor, not the population mean. Three seeds provide descriptive evidence for this frozen protocol; no inferential statistics or broader generalization is claimed. Checkpoints within a run reuse the fixed seed scheme and are not independent evolution repeats. Measured timing remains unavailable.
+
+## Method 1 baselines
+
+The four search-score comparison charts on slides 61/62 preserve their editable gold dashed reference at G0 Search Game Performance -9.001. Method 1 did not evolve to G100, and the repeated seed positions are one reference value rather than three runs.
+
+The new fixed-evaluation curves use the matching fixed-evaluation baselines: 44.17% win rate and -9.505 mean match score from method 1's single 600-match evaluation. These are gold dashed native chart series, separate from the search-score baseline.
 
 ## Validation
 
-- PowerPoint opened the 68-slide result and rendered both affected pages; line position, legend, labels and axis range were visually checked.
-- Package integrity and first-party import pass. All four modified native charts pass embedded-workbook/reference/cache consistency checks.
-- Exactly 12 package parts changed relative to the latest user-saved source: two slides, two notes, four charts and four embedded workbooks. Every other part remains byte-identical, including historical slide content and assets.
-- No experiments were run. Private backups, scripts, renders and verification records remain under ignored `build/`.
+- All five new result pages were rendered and visually inspected in native PowerPoint, including the repaired curve-axis labels. Original background artwork remains visible.
+- Native data checks pass for all six new charts and their embedded workbook/cache references. Package integrity and full-deck first-party import pass (68 slides, 28 charts).
+- Source tables were parsed directly; assertions cover all 21 checkpoints, average superiority at each checkpoint, G40 peak, match totals and six endpoint W/D/L sums. Notes retain detailed provenance and endpoint counts.
+- All first-58-slide contents and assets remain byte-identical to the prior delivery. The original presentation slide list/order is unchanged. Existing method-1 search reference charts and their workbooks remain byte-identical. Superseded result-page chart/note/workbook dependencies were removed without altering shared dependencies.
+- Only 1105 pages 59/63/64/66/67/68 and their corresponding dependencies change. Historical chart data were not revalidated. No experiments were launched or rerun.
+- Private scripts, backups, previews and validation records remain under ignored `build/`.
 
-User-saved source SHA-256: `7ff33a3d0f94251f5afa8fa2616a3a11edd35e39fe49f24085baeb669ad7b723`.
-Current SHA-256: `0bcb657f64a16ba0e253c1c043108ad30db0f12ab45a1437395eb71b22386534`.
+Before SHA-256: `0bcb657f64a16ba0e253c1c043108ad30db0f12ab45a1437395eb71b22386534`.
+Current SHA-256: `75e6c1594f7905cb572380222765cea057315a8c1195ab146054c591876249e8`.
