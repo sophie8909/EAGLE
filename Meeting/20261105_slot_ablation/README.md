@@ -2,25 +2,26 @@
 
 ## Standing workflow
 
-The user-facing presentation is `J:\我的雲端硬碟\Lab\Meeting\EAGLE.pptx`. Keep updating that same file. Add each weekly update as a new section at the end, and edit only the current week's section. Preserve older sections, including their existing page-number text. The versioned repository copy is `Meeting/deliverables/EAGLE.pptx`.
+Keep updating `J:\我的雲端硬碟\Lab\Meeting\EAGLE.pptx`. Add each weekly update as a new section at the end, and edit only the current week's section. Preserve older sections and the user's manual edits. The versioned repository copy is `Meeting/deliverables/EAGLE.pptx`.
 
-## 1105 section
+## Current 1105 section
 
-The 1105 section contains 11 editable slides, pages 59–69 of the cumulative 69-slide deck. Sections 1021 (44 slides) and 1028 (14 slides) are preserved. All 326 original package parts other than the three shared package/slide-list manifests remain byte-identical, including all historical slide XML, charts, workbooks, notes, images, masters and layouts. Only the previously empty 1105 section is populated.
+The latest user-saved source has 68 slides, with 10 slides in 1105 (59–68). The user removed the local-evolution flow slide after the previous delivery; this is retained.
 
-Content source: `configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md`, updated 2026-11-02, copied unchanged to `source_report.md` for provenance. Settings and the local variation flow were checked against the experiment README/YAML and `eagle/evolution/offspring.py` / `eagle/operators/framework_slots.py`.
+The chapter uses the 2026-11-03 `RESULTS.md` snapshot retained in `source_report.md`. Twelve editable charts, a signed-difference grid and the treatment diagram cover initialization, final self-play scores, fixed-opponent averages, diversity, best-candidate W/D/L and completed search matches. Method 3 seeds 8, 9 and 10 all complete G100. Average permanent-opponent results improve, but seed 9 regresses on several metrics. Symmetric ten-opponent checkpoints and measured timing remain unavailable.
 
-Topics: three-treatment design; common framework and local EA flow; treatment-1 fixed evaluation; local baseline seeds 8/9/10; paired seed-8 initialization and G100 comparison; permanent opponents; semantic diversity; final candidate; run status and timing gaps; conclusions and next evaluation.
+## Method 1 reference line, 2026-11-04
 
-The evidence supports a seed-8 result, not a final cross-seed ranking. Treatment 3 has one complete seed in the supplied snapshot. Symmetric ten-opponent checkpoints and measured wall/generation timing are missing. No experiments were launched or resumed, and remote run state was not rechecked.
+Slides 61 and 62 now include a native gold dashed line in each Best/Population Mean chart. All three seed positions repeat method 1's single G0 Search Game Performance, -9.001. This is one GPT candidate, not three independent measurements. Method 1 did not evolve to G100; its G0 score is retained there only as a reference across different search contexts. The fixed-evaluation mean (-9.505) is not mixed into search-score charts.
+
+The line is an editable series linked to the chart's embedded workbook. G100 axes extend to -10. Footnotes and speaker notes state the interpretation limits. Existing chart cache floating-point tails from PowerPoint saving were synchronized to unchanged numeric workbook values; displayed source scores remain the same.
 
 ## Validation
 
-- New 11-slide section: package integrity, geometry, reference font, first-party import, native table checks and five native charts with embedded workbook/cache consistency pass.
-- Combined file: native PowerPoint opened 69 slides and recognized 1021 / 1028 / 1105 with 44 / 14 / 11 slides. All 11 new pages were rendered in PowerPoint and visually inspected, with original background artwork visible.
-- Original 58 slides, their assets and charts remain byte-identical. Historical chart data were preserved rather than revalidated.
-- Match totals and displayed win rate were checked. The deck retains the source snapshot date 2026-11-02 despite delivery on 2026-11-04.
-- Private build scripts, original backup, renders and validation receipts are excluded under `build/`.
+- PowerPoint opened the 68-slide result and rendered both affected pages; line position, legend, labels and axis range were visually checked.
+- Package integrity and first-party import pass. All four modified native charts pass embedded-workbook/reference/cache consistency checks.
+- Exactly 12 package parts changed relative to the latest user-saved source: two slides, two notes, four charts and four embedded workbooks. Every other part remains byte-identical, including historical slide content and assets.
+- No experiments were run. Private backups, scripts, renders and verification records remain under ignored `build/`.
 
-Original SHA-256: `c32044583879aa458c64b8b5622347be6ee7decce69a68853c1684d69f49b522`.
-Final SHA-256: `84dcad0c6b2d9f891ae08042818f3ee288a51fd08453e7c632111539b564b120`.
+User-saved source SHA-256: `7ff33a3d0f94251f5afa8fa2616a3a11edd35e39fe49f24085baeb669ad7b723`.
+Current SHA-256: `0bcb657f64a16ba0e253c1c043108ad30db0f12ab45a1437395eb71b22386534`.
