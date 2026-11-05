@@ -1,5 +1,15 @@
 # EAGLE architecture specification
 
+## Direct-GPT description-guided initialization (2026-11-05)
+
+A positive `framework.gpt_initial_candidates` also assigns the distinct authored
+profiles in `framework_initial_strategies.txt` to the population in index order.
+Direct GPT selects the configured prefix of complete genomes using each
+candidate's description. Setting the count and population size to ten selects
+all ten through GPT. This path uses `framework.model` and `api_key/gpt`, without
+an experiment-model runtime. Later local evolution remains unchanged. The
+existing `llm_plus_authored` path below remains a separate initialization mode.
+
 ## Framework description-guided initialization (2026-11-04)
 
 The additive `framework.initial_strategy_mode: llm_plus_authored` setting requires

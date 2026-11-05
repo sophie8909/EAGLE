@@ -94,7 +94,11 @@ def initialize_population(
         periodic_reflection = config.framework_evolution_mode in {
             "reflection", "option_reflection",
         }
-        uses_descriptions = periodic_reflection or config.framework_initial_strategy_mode == "llm_plus_authored"
+        uses_descriptions = (
+            periodic_reflection
+            or config.framework_initial_strategy_mode == "llm_plus_authored"
+            or config.framework_gpt_initial_candidates > 0
+        )
         if uses_descriptions and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
             raise ValueError("Add distinct framework initial strategies for the requested population size.")
         if uses_descriptions and len({

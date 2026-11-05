@@ -1,5 +1,10 @@
 # Migration plan
 
+All-ten description-guided GPT initialization (2026-11-05) reuses the existing
+local-mode GPT prefix selector with count ten. No artifact schema migration is
+required; existing runs retain frozen configuration and new launches use the
+updated 1104 experiment config.
+
 ## Description-guided initialization (2026-11-04)
 
 New runs opt into `framework.initial_strategy_mode: llm_plus_authored`; no old

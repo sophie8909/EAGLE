@@ -1,5 +1,13 @@
 # EAGLE 架構說明（中文摘要）
 
+## 初始十個個體由 GPT 選擇（2026-11-05）
+
+`1104_description_guided` 新啟動的實驗改為十個初始個體都由 OpenAI GPT
+選擇完整槽位。每個個體使用不同的既有策略描述（包含 WorkerRush），
+設定為 `framework.gpt_initial_candidates: 10` 與 `framework.model: gpt-6.1-sol`。
+需要 `api_key/gpt`，不需要本機模型伺服器；後續仍使用本地交配與突變。
+過去「一個新描述加九個既有描述」的實驗結果屬於舊設定，新設定需重新啟動實驗。
+
 ## 自然語言策略引導初始化（2026-11-04）
 
 新實驗可設定 `framework.initial_strategy_mode: llm_plus_authored`，要求

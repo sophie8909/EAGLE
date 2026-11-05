@@ -1,5 +1,15 @@
 # Framework bootstrap and finite-slot evolution
 
+## All-ten direct-GPT initialization (2026-11-05)
+
+With `evolution_mode: local`, `gpt_initial_candidates: 10` and population 10,
+direct GPT chooses every initial complete genome. The population receives the
+ten distinct authored profiles, including WorkerRush at index 0; each request
+contains the corresponding description. `framework.model` chooses the GPT
+model, with the API key loaded from `api_key/gpt`. Later variation stays local.
+The authored profile count and uniqueness checks also apply to this path.
+Distinct descriptions need not produce different genomes or behavior.
+
 ## Description-guided 1+9 initialization (2026-11-04)
 
 `framework.initial_strategy_mode: llm_plus_authored` opts a new framework-slot

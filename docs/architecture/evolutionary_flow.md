@@ -1,5 +1,14 @@
 # EAGLE evolutionary flow
 
+## Direct-GPT initial selection (2026-11-05)
+
+A positive `framework.gpt_initial_candidates` attaches distinct authored strategy
+descriptions to the initial population before selecting the requested prefix
+through direct GPT. Count 10 with population 10 selects all ten. This local-mode
+path uses `framework.model` and needs no experiment-model server. The tracked
+`1104_description_guided` config now uses this path; its earlier 1+9 run results
+remain historical evidence of the previous configuration.
+
 ## Description-guided initialization override (2026-11-04)
 
 For framework slots, `initial_strategy_mode: llm_plus_authored` overrides the

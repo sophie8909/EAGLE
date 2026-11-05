@@ -1,5 +1,14 @@
 # Architecture gaps
 
+## All-ten direct-GPT initial selection (2026-11-05)
+
+The requested ten description-guided GPT selections reuse the existing local-mode
+`gpt_initial_candidates` contract with count ten. Direct-GPT populations now
+receive distinct authored descriptions before selection. The tracked 1104
+configuration uses all ten existing profiles rather than the prior generated
+1+9 description treatment; the latter remains available through its existing
+opt-in mode. This changes initialization only.
+
 ## Description-guided initialization decision (2026-11-04)
 
 FWSLOT-05: the user requested one LLM-generated initial description plus the

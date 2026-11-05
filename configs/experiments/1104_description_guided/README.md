@@ -2,17 +2,33 @@
 
 Updated: 2026-11-05 (Asia/Taipei)
 
-The opt-in mode `framework.initial_strategy_mode: llm_plus_authored` uses the
-configured experiment LLM to generate one new strategy description for initial
-individual 0, then uses the nine existing non-WorkerRush profiles for
-individuals 1–9. A separate Coach stage fills every individual's complete
-24-slot genome from its description. Local evolution after generation zero
-retains crossover and mutation.
+New launches use direct OpenAI GPT (`framework.model: gpt-6.1-sol`) to select
+all ten initial complete genomes (`framework.gpt_initial_candidates: 10`). Each
+candidate receives a different authored strategy description from
+`prompts/framework_initial_strategies.txt`, including WorkerRush at index 0.
+Each GPT selection request includes that candidate's description and the frozen
+bundle's complete slot domains. Subsequent evolution uses local crossover and
+mutation. Distinct descriptions do not guarantee different selected genomes.
 
-This is a separate experiment (seeds 8–10, population 10, 100 generations), not
-a continuation of the historical 1030 ablation.
+The previous configuration used `initial_strategy_mode: llm_plus_authored`:
+one experiment-LLM-generated description plus nine authored profiles, with
+experiment-LLM batch slot selection. Historical results below describe that
+previous configuration, not the new all-GPT initialization. Existing runs retain
+their frozen resolved configs; launch a fresh run to use the new initialization.
+
+This remains separate from the historical 1030 ablation (seeds 8–10,
+population 10, 100 generations).
 
 ## Current execution status
+
+The new all-GPT initialization has not been run against the live provider.
+It requires a GPT API key in `api_key/gpt`. A local model server is not needed.
+
+```powershell
+python -m eagle experiment --config-dir configs/experiments/1104_description_guided/experiment.yaml
+```
+
+## Historical execution status (previous 1+9 configuration)
 
 | Seed | Run | Status |
 | ---: | --- | --- |
@@ -20,14 +36,7 @@ a continuation of the historical 1030 ablation.
 | 9 | `runs/20261105_093045_996218` | Not started successfully: LLM endpoint preflight failed |
 | 10 | — | Not started |
 
-The seed 9 directory contains no generation result and is not included in the
-analysis below. Start the configured server separately before launching or
-resuming another seed:
-
-```powershell
-python -m eagle server --config configs/experiments/1104_description_guided/experiment.yaml
-python -m eagle experiment --config-dir configs/experiments/1104_description_guided/experiment.yaml
-```
+The old seed 9 directory contains no generation result and is excluded below.
 
 ## Seed 8 result summary
 

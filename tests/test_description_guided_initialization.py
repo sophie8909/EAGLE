@@ -20,9 +20,22 @@ from eagle.generation.framework_slots import load_framework_bundle
 CONFIG = Path("configs/experiments/1104_description_guided/experiment.yaml")
 
 
+def legacy_description_config():
+    return replace(ExperimentConfig.from_file(CONFIG), framework_initial_strategy_mode="llm_plus_authored", framework_gpt_initial_candidates=0)
+
+
 class DescriptionGuidedInitializationTests(unittest.TestCase):
-    def test_mock_initialization_and_config(self):
+    def test_tracked_config_uses_ten_direct_gpt_candidates(self):
         config = ExperimentConfig.from_file(CONFIG)
+        config.validate()
+        assert config.population_size == 10
+        assert config.framework_gpt_initial_candidates == 10
+        assert config.framework_initial_strategy_mode == "authored"
+        assert config.framework_model == "gpt-6.1-sol"
+        assert not config.needs_llm_runtime
+
+    def test_mock_initialization_and_config(self):
+        config = legacy_description_config()
         config.validate()
         assert ExperimentConfig.from_mapping(config.to_mapping()).framework_initial_strategy_mode == "llm_plus_authored"
         legacy = replace(config, framework_initial_strategy_mode="authored")
@@ -44,7 +57,7 @@ class DescriptionGuidedInitializationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         tmp_path = Path(temporary.name)
-        config = ExperimentConfig.from_file(CONFIG)
+        config = legacy_description_config()
         population = initialize_population(config)
         backend = Mock(model="test")
         backend.generate.side_effect = [json.dumps({"strategy_description": population[1].strategy_description.upper()}),
@@ -71,7 +84,7 @@ class DescriptionGuidedInitializationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         tmp_path = Path(temporary.name)
-        config = ExperimentConfig.from_file(CONFIG)
+        config = legacy_description_config()
         population = initialize_population(config)
         bundle = load_framework_bundle(config.framework_bundle_path)
         genome = population[1].control_genome
@@ -87,7 +100,7 @@ class DescriptionGuidedInitializationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         run_dir = Path(temporary.name) / "run"
-        config = freeze_framework_bundle(run_dir, ExperimentConfig.from_file(CONFIG))
+        config = freeze_framework_bundle(run_dir, legacy_description_config())
         write_run_config(run_dir, config, mock=True)
         initialize_run_manifest(run_dir, config=config)
         assert load_resume_config(run_dir).framework_initial_strategy_mode == "llm_plus_authored"

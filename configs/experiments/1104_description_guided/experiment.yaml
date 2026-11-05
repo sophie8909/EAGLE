@@ -1,5 +1,5 @@
 schema_version: experiment-v2
-experiment_name: description_guided_local_evolution_100x10_seed8_10
+experiment_name: gpt_description_guided_local_evolution_100x10_seed8_10
 
 java_materialization_mode: framework_slots
 java_compiler_version: eagle-framework-slots-v1
@@ -7,7 +7,8 @@ candidate_java_mode: generated_phenotype
 parent_evaluation_mode: reuse_cached
 agent_template_path: eagle/java_templates/CandidateAgent.java
 
-# The configured experiment LLM generates the new strategy and selects initial slots.
+# GPT selects all ten initial genomes from ten distinct authored strategy descriptions.
+# Subsequent evolution uses local crossover and mutation without the local model.
 model:
   name: qwen3_5_9b
   path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
@@ -40,7 +41,8 @@ framework:
   bundle_version: eagle-framework-bundle-v1
   bundle_sha256: f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b
   evolution_mode: local
-  initial_strategy_mode: llm_plus_authored
+  gpt_initial_candidates: 10
+  model: gpt-6.1-sol
 
 llm:
   temperature: 0.0

@@ -1,5 +1,9 @@
 # Repository and responsibility map
 
+`eagle/operators/initialization.py` assigns distinct authored descriptions for
+direct-GPT initial selection; `1104_description_guided/experiment.yaml` selects
+all ten initial genomes through this path.
+
 The local experiment control surface lives in `eagle/cli/gui.py` and
 `eagle/cli/gui.html`; `eagle/gui_data.py` owns config editing and read-only
 run/generation browsing. `gui.sh` launches on Ubuntu, `gui.cmd` on native

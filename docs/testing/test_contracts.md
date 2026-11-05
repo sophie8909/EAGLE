@@ -1,5 +1,12 @@
 # Test contracts
 
+## Direct-GPT authored-description initialization (2026-11-05)
+
+`test_framework_coach_integration` covers all ten GPT-selected initial genomes,
+exact authored-description order and uniqueness, description evidence in each
+selection request, full legal genomes and direct-provider metadata. Prefix-only
+selection and local offspring remain regression requirements.
+
 ## Description-guided 1+9 initialization (2026-11-04)
 
 Contracts cover the opt-in mode's strict ten-candidate requirement and conflicts,

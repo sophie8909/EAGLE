@@ -15,7 +15,7 @@ from eagle.evolution.offspring import plan_offspring
 from eagle.evolution.runtime import build_search_runtime
 from eagle.generation.framework_slots import load_framework_bundle, validate_genome
 from eagle.operators.adaptive import build_reflection_operator_controller
-from eagle.operators.initialization import initialize_population
+from eagle.operators.initialization import FRAMEWORK_INITIAL_STRATEGIES, initialize_population
 
 
 def bundle_payload() -> dict:
@@ -106,6 +106,29 @@ class FrameworkCoachIntegrationTests(unittest.TestCase):
             self.assertEqual(set(candidate.control_genome), set(bundle.slot_ids))
             self.assertEqual(candidate.framework_bundle_sha256, exact_hash)
             self.assertEqual(candidate.slot_parent_ids, {})
+
+    def test_direct_gpt_uses_distinct_authored_descriptions_for_all_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = self.config(root, mode="local", population_size=10, framework_gpt_initial_candidates=10)
+            runtime = self.runtime(config, root)
+            candidates_dir = root / "run" / "candidates"
+            population = initialize_population(
+                config, policy_backend=runtime.initial_policy_backend,
+                candidates_dir=candidates_dir, timing_logger=runtime.llm_logger,
+            )
+            bundle = load_framework_bundle(config.framework_bundle_path, expected_sha256=config.framework_bundle_sha256)
+            self.assertEqual([candidate.strategy_description for candidate in population], list(FRAMEWORK_INITIAL_STRATEGIES))
+            self.assertEqual(len(set(candidate.strategy_description for candidate in population)), 10)
+            self.assertEqual(runtime.mutations, {})
+            for candidate in population:
+                self.assertEqual(candidate.metadata["framework_coach_selection"]["provider"], "direct_openai_gpt")
+                self.assertEqual(validate_genome(bundle, candidate.control_genome), candidate.control_genome)
+                self.assertEqual(set(candidate.control_genome), set(bundle.slot_ids))
+                selection_input = json.loads((candidates_dir / candidate.id / "initialization" / "framework_coach" / "input.json").read_text(encoding="utf-8"))
+                self.assertEqual(selection_input["strategy_description"], candidate.strategy_description)
+                request = json.loads((candidates_dir / candidate.id / "initialization" / "framework_coach" / "coach_request_attempt_001.json").read_text(encoding="utf-8"))
+                self.assertIn(candidate.strategy_description, request["prompt"])
 
     def test_direct_gpt_selects_only_configured_gen0_prefix_and_keeps_offspring_local(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

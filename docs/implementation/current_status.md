@@ -1,5 +1,17 @@
 # Current implementation status
 
+## All-ten GPT initialization (2026-11-05)
+
+The tracked `1104_description_guided` config now selects all ten initial genomes
+through direct GPT using ten distinct authored descriptions. Every GPT prefix
+selection receives its candidate's description. No local-model runtime is
+needed; later evolution remains local. Earlier 1+9 results retain their original
+resolved configuration and do not validate this new treatment.
+Native validation: 62 related checks passed, plus a one-generation mock of the
+tracked config with all ten selection artifacts and completed-run resume. One
+existing 1030 ablation config check fails on its SHA-pinned bundle checkout
+bytes (CRLF versus LF). No live GPT call or full experiment was run.
+
 ## Description-guided 1+9 initialization (2026-11-04)
 
 Framework slots support opt-in `framework.initial_strategy_mode:
