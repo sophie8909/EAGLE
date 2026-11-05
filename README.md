@@ -41,18 +41,17 @@ All launchers use the local Python environment and open
 a run, generation, candidate, opponent, map, and side for a visual match. See
 [GUI operation](docs/operations/running_eagle.md#local-experiment-gui).
 
-Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and llama.cpp launch settings:
+Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and optional llama.cpp launch settings. By default, `python -m eagle experiment` starts and owns the configured local primary for the duration of the experiment, including its runs and final test, then cleans up its process. The local endpoint defaults to loopback (`127.0.0.1`); remote selection and additional endpoints are opt-in.
 
 ```bash
-# Terminal 1: start the LLM server and leave it running.
-python -m eagle server --config configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml
-
-# Terminal 2: start the experiment after the server reports ready.
-./experiment.sh configs/experiments/1018_rich_framework_local_20x10_seed8_1run/qwen3_5_9b_rich_framework_local_20x10_seed8_1run.yaml
+# Start the experiment; it starts and cleans up its configured local primary.
+./experiment.sh configs/experiments/1104_description_guided/experiment.yaml
 ./analyze.sh --latest
 ```
 
-`experiment.sh` is a thin wrapper for `python -m eagle experiment`. Start the local model separately with `python -m eagle server --config CONFIG.yaml`, or start an external service yourself. The server command validates the GGUF, executable, port ownership, GPU offload and health, and stops only its owned process on Ctrl+C. Experiments preflight the configured endpoints, run the EA and final test, and leave the server running across runs and resume. The GUI exposes separate server and experiment controls.
+`--connect-only` skips local runtime file checks and lifecycle management, and connects to an already running endpoint. Use it on Windows when the local model service was started separately; the same YAML can retain local launch paths. A config that omits both `model.path` and `model.llama_server` also uses an external primary. The standalone `python -m eagle server --config CONFIG.yaml` command remains available for manual server management. The GUI offers the same connect-only choice.
+
+For seed comparisons across two machines, use separate checkouts and output directories, preserve the same model version, inference settings, framework bundle hash, and other scientific parameters, and give each machine its own seed in `random_seeds` with `runs: 1`. Only the seed differs scientifically; `--connect-only` is an operational choice for the machine using a prestarted server. EAGLE does not coordinate or synchronize the two machines.
 
 Offspring creation reports mutation progress as `[gen G cand I/N]`, including started, completed, failed, and skipped states. Blocking LLM requests also print start/completion messages and a waiting heartbeat every 30 seconds. Set `EAGLE_LLM_PROGRESS=0` to suppress successful-request LLM progress while retaining candidate progress and failure messages.
 

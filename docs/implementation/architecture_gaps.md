@@ -10,10 +10,10 @@ adds no runtime genotype component or framework rewrite. Behavioral diversity
 and performance remain experiment questions, not guarantees of the description
 or finite-slot schema.
 
-Independent server startup (2026-11-02): resolved by separating the foreground
-`server` command and GUI server job from experiment/search/resume. Local model
-paths remain launch settings; experiments only connect and preflight endpoints.
-See OPS-01 and the [operations guide](../operations/running_eagle.md).
+LLM lifecycle (2026-11-05): the 2026-11-02 separation was superseded. The
+experiment now owns configured local-primary startup, reuse and cleanup by
+default; `--connect-only` bypasses lifecycle for a prestarted endpoint while
+retaining preflight. See OPS-01 and the [operations guide](../operations/running_eagle.md).
 
 ## Framework reflection decision (2026-10-24)
 

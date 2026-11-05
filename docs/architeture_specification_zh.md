@@ -176,13 +176,16 @@ Java render、validation、`javac`、Integration、semantic probe 與 MicroRTS
 以下 Candidate、genotype、source gate 與 generation 流程只描述
 `java_materialization_mode: llm`；deterministic 模式見上方說明。
 
-每個功能 profile 都以 `model`（或 `generation_model`）的一組本機欄位定義唯一
-primary endpoint（實驗只連線，啟動由獨立 server 步驟負責），並可加入最多一筆有序的
+每個功能 profile 都以 `model`（或 `generation_model`）的一組欄位定義唯一
+primary endpoint，並可加入最多一筆有序的
 `additional_endpoints`。Additional endpoint 的格式嚴格為
 `{base_url, model}`，代表 EAGLE 不擁有的 OpenAI-compatible service；整個 profile
 因此最多兩個 endpoint。獨立的 `python -m eagle server --config CONFIG.yaml`
-在 primary 提供兩個本機 runtime 路徑時透過 `RuntimeManager` 啟停 llama.cpp，絕不
-adopt、restart、signal 或 stop additional endpoint。每個 endpoint 在 candidate 工作前
+仍可手動管理本機 server。選用本機 `model` 且提供兩個 runtime 路徑時，experiment
+會透過 `RuntimeManager` 啟動、重用相容的 owned server，並在完成、失敗或中斷時清理。
+`--connect-only` 跳過本機 runtime 檔案檢查與所有啟停，連線到已啟動的 endpoint；
+省略兩個 runtime 路徑也代表使用外部 primary。Remote、generation 與 additional endpoint
+仍由外部管理。EAGLE 絕不接管或停止 additional endpoint。每個 endpoint 在 candidate 工作前
 都必須完成 chat-completion preflight，任何一個失敗都 fail closed，不會開始
 candidate request。
 
@@ -271,9 +274,12 @@ raw request/response hash 與 match seed 是追查差異的證據。時間戳、
 並重新啟動 llama-server，再測下一個 seed，並保存每個 seed 的 raw response、hash
 與 server lifecycle。
 
-正式 experiment 與 LLM server 分開啟動。先執行 `python -m eagle server --config CONFIG.yaml`，
-等 ready 後再於另一個終端啟動實驗。所有 run、replicate 與 resume 都使用已運行的 endpoint，
-不自動重啟或關閉 server；同一個 run 內所有角色固定綁定各自 server，不切換模型。
+一般情況直接啟動 experiment，由它管理設定的本機 primary server；相容 server 可跨 seeds
+與 configs 重用。Windows 若 server 由外部軟體啟動，使用 `--connect-only`。兩台機器比較
+不同 seed 時，分開 checkout 與輸出目錄，固定模型版本、inference 設定、framework bundle
+SHA 與其餘科學參數，並以 `runs: 1` 和各自的 `random_seeds` 分配 seed。兩台只在 seed 上有
+科學差異；Windows 的 `--connect-only` 是操作選項。EAGLE 不負責兩台機器的啟動同步。
+同一個 run 內所有角色固定綁定各自 server，不切換模型。
 
 ## Reflection 與 Prompt
 
@@ -623,9 +629,10 @@ canonical manifest 與最新 atomic generation snapshot；詳細端點另回傳 
 [`operations/monitoring_experiment.md`](operations/monitoring_experiment.md)。
 
 `experiment.sh`／`python -m eagle experiment` 管理 config discovery、全部 endpoint 的
-chat preflight、EA、resume 與 final test，不啟停任何 LLM server。獨立的
-`python -m eagle server --config CONFIG.yaml` 負責本機 primary 的 GPU、offload、health
-檢查與 owned-process cleanup；GUI 也提供分開的 server 與實驗啟停按鈕。
+chat preflight、EA、resume 與 final test，並預設啟動、重用和清理本機 primary server，
+保留 GPU、offload 與 health 檢查。Windows 使用外部軟體已開好的服務時，
+CLI 加上 `--connect-only`，或在 GUI 勾選「只連線」，EAGLE 不會重啟或停止該服務。
+獨立的 `python -m eagle server --config CONFIG.yaml` 仍可用於手動管理 server。
 additional endpoint 永遠由外部服務管理。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 `python -m eagle runtime` 已移除。
 

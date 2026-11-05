@@ -24,14 +24,9 @@ from tests.test_framework_slots_artifacts import bundle_payload
 
 class ExperimentLauncherTests(unittest.TestCase):
     def setUp(self):
-        # Fresh runs, folder batches, resume, failures, and mock runs must all
-        # leave the independently started server untouched.
-        guard = patch(
-            "eagle.runtime.processes.RuntimeManager",
-            side_effect=AssertionError("experiment touched server lifecycle"),
-        )
-        guard.start()
-        self.addCleanup(guard.stop)
+        manager = patch("eagle.experiment.RuntimeManager")
+        self.runtime_manager = manager.start()
+        self.addCleanup(manager.stop)
 
     def config(
         self,
@@ -677,7 +672,7 @@ class ExperimentLauncherTests(unittest.TestCase):
                 [("remote-model", "http://llm.example.test:1234")],
             )
 
-    def test_batch_with_local_and_external_profiles_does_not_manage_servers(self):
+    def test_batch_manages_only_local_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             managed_model = root / "managed.gguf"
@@ -714,8 +709,11 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertEqual(lifecycle, [])
             self.assertEqual(events.count("ea:managed"), 1)
             self.assertEqual(events.count("ea:external"), 1)
+            self.runtime_manager.assert_called_once_with()
+            self.assertEqual(self.runtime_manager.return_value.ensure.call_count, 1)
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
 
-    def test_model_sequence_does_not_switch_servers(self):
+    def test_model_sequence_reuses_one_manager(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model_a = root / "a.gguf"
@@ -737,8 +735,11 @@ class ExperimentLauncherTests(unittest.TestCase):
                 if item.startswith(("start:", "reuse:", "stop:"))
             ]
             self.assertEqual(lifecycle, [])
+            self.runtime_manager.assert_called_once_with()
+            self.assertEqual(self.runtime_manager.return_value.ensure.call_count, 5)
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
 
-    def test_failure_in_second_config_leaves_server_alone_and_aborts_batch(self):
+    def test_failure_in_second_config_stops_owned_server_and_aborts_batch(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "shared.gguf"
@@ -753,8 +754,10 @@ class ExperimentLauncherTests(unittest.TestCase):
                 )
             self.assertEqual(events.count("ea:shared"), 2)
             self.assertEqual(events[-1], "ea:shared")
+            self.assertEqual(self.runtime_manager.return_value.ensure.call_count, 2)
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
 
-    def test_final_test_failure_and_keyboard_interrupt_leave_server_alone(self):
+    def test_final_test_failure_and_keyboard_interrupt_stop_owned_server(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model = root / "model.gguf"
@@ -765,6 +768,8 @@ class ExperimentLauncherTests(unittest.TestCase):
                 self.orchestrator(events, root / "run", final_status=7).run(config_path=path)
             self.assertEqual(events[-1], f"final:{root / 'run'}")
 
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
+            self.runtime_manager.reset_mock()
             events.clear()
             orchestrator = self.orchestrator(events, root / "run")
 
@@ -775,6 +780,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 orchestrator.run(config_path=path, skip_final_test=True)
             self.assertEqual(events, [])
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
 
     def test_mock_batch_never_constructs_runtime_or_runs_final_test(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -806,6 +812,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertEqual(observed, ["a", "b"])
             self.assertEqual(result.run_dir, root / "b")
             port_check.assert_not_called()
+            self.runtime_manager.assert_not_called()
 
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
             self.assertEqual(index["schema_version"], EXPERIMENT_INDEX_SCHEMA_VERSION)
@@ -924,6 +931,114 @@ class ExperimentLauncherTests(unittest.TestCase):
                     run_dir, [], None
                 ),
             ).run(config_path=None, resume_dir=run_dir, skip_final_test=True)
+            self.runtime_manager.assert_not_called()
+
+    def test_folder_resume_ensures_persisted_config_before_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "a.yaml", model_name="a", model_path=model)
+            run_dir = self.indexed_run(root / "runs" / "a", path, status="interrupted", mock=False, latest_generation=0)
+            (root / "experiment.yaml").write_text(
+                yaml.safe_dump({"a.yaml": str(run_dir.resolve())}), encoding="utf-8"
+            )
+            def resume(_config, **_kwargs):
+                self.runtime_manager.return_value.ensure.assert_called_once()
+                return SearchResult(run_dir, [], None)
+
+            ExperimentOrchestrator(resume_runner=resume).run(
+                config_path=None, resume_dir=root, skip_final_test=True,
+            )
+            runtime = self.runtime_manager.return_value.ensure.call_args.args[0]
+            self.assertEqual(runtime.llm.model_path, model)
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
+
+    def test_fresh_search_starts_runtime_first_and_cleans_up_startup_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "a.yaml", model_name="a", model_path=model)
+            def search(_config, **_kwargs):
+                self.runtime_manager.return_value.ensure.assert_called_once()
+                return SearchResult(root / "run", [], None)
+
+            orchestrator = ExperimentOrchestrator(search_runner=search)
+            orchestrator.run(config_path=path, skip_final_test=True)
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
+            self.runtime_manager.reset_mock()
+            self.runtime_manager.return_value.ensure.side_effect = RuntimeError("startup failed")
+            orchestrator.search_runner = lambda *_args, **_kwargs: self.fail("search ran after startup failure")
+            with self.assertRaisesRegex(RuntimeError, "startup failed"):
+                orchestrator.run(config_path=path, skip_final_test=True)
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
+
+    def test_single_resume_connect_only_and_completed_search_skip_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(root, "a.yaml", model_name="a", model_path=root / "missing.gguf")
+            run_dir = self.indexed_run(root / "runs" / "a", path, status="interrupted", mock=False)
+            orchestrator = ExperimentOrchestrator(
+                resume_runner=lambda *_args, **_kwargs: SearchResult(run_dir, [], None),
+            )
+            orchestrator.run(config_path=None, resume_dir=run_dir, skip_final_test=True, connect_only=True)
+            self.runtime_manager.assert_not_called()
+            manifest_path = run_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["status"] = "complete"
+            manifest["latest_generation"] = ExperimentConfig.from_file(path).generations
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            orchestrator.run(config_path=None, resume_dir=run_dir, skip_final_test=True)
+            self.runtime_manager.assert_not_called()
+
+    def test_zero_generation_resume_without_checkpoint_ensures_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "a.yaml", model_name="a", model_path=model)
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload.update(
+                generations=0, java_materialization_mode="framework_slots",
+                candidate_java_mode="generated_phenotype", parent_evaluation_mode="reuse_cached",
+                reflection_operator_mode="static",
+                framework={"design_brief": "Test framework", "bootstrap_backend": "local", "gpt_initial_candidates": 1},
+            )
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            run_dir = self.indexed_run(root / "runs" / "a", path, status="interrupted", mock=False, latest_generation=None)
+            with patch("eagle.experiment.load_resume_config", return_value=ExperimentConfig.from_file(path)):
+                ExperimentOrchestrator(
+                    resume_runner=lambda *_args, **_kwargs: SearchResult(run_dir, [], None),
+                ).run(config_path=None, resume_dir=run_dir, skip_final_test=True)
+            self.runtime_manager.return_value.ensure.assert_called_once()
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
+
+    def test_early_completed_single_resume_ensures_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "a.yaml", model_name="a", model_path=model)
+            run_dir = self.indexed_run(root / "runs" / "a", path, status="complete", mock=False, latest_generation=0)
+            config = ExperimentConfig.from_file(path)
+            self.assertGreater(config.generations, 0)
+            def resume(_config, **_kwargs):
+                self.runtime_manager.return_value.ensure.assert_called_once()
+                return SearchResult(run_dir, [], None)
+            ExperimentOrchestrator(resume_runner=resume).run(
+                config_path=None, resume_dir=run_dir, skip_final_test=True,
+            )
+            self.runtime_manager.return_value.stop_owned.assert_called_once_with()
+
+    def test_connect_only_skips_manager_with_local_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(root, "local.yaml", model_name="local", model_path=root / "missing.gguf")
+            ExperimentOrchestrator(
+                search_runner=lambda *_args, **_kwargs: SearchResult(root / "run", [], None),
+            ).run(config_path=path, skip_final_test=True, connect_only=True)
+            self.runtime_manager.assert_not_called()
 
     def test_folder_resume_prioritizes_interrupted_run_then_remaining_configs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -975,6 +1090,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             )
 
             self.assertEqual(events, ["resume:b", "search:c"])
+            self.runtime_manager.assert_not_called()
             self.assertEqual(result.run_dir, root / "runs" / "c")
             index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
             self.assertEqual(index["schema_version"], EXPERIMENT_INDEX_SCHEMA_VERSION)
@@ -1016,6 +1132,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             ).run(config_path=None, resume_dir=root)
 
             self.assertEqual(events, ["resume", "final:a"])
+            self.runtime_manager.assert_not_called()
 
     def test_folder_resume_restarts_indexed_run_without_generation_checkpoint(self):
         with tempfile.TemporaryDirectory() as directory:

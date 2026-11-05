@@ -1,35 +1,30 @@
 # Running EAGLE
 
-## Start the LLM server separately
+## Experiment-owned LLM server
 
-For an experiment that uses a local model, use two terminals with the same
-project Python environment:
+For an experiment that uses a configured local model, the experiment starts,
+health-checks and owns the local primary. It keeps a compatible server across
+that experiment's runs and final test, then cleans up its owned process. Use one
+terminal:
 
 ```bash
-# Terminal 1: keep this running until all experiments have finished.
-python -m eagle server --config configs/framework_coach_single_machine.yaml
-
-# Terminal 2: wait for "LLM server ready", then launch the experiment.
-./experiment.sh configs/framework_coach_single_machine.yaml --skip-final-test
+./experiment.sh configs/experiments/1104_description_guided/experiment.yaml --skip-final-test
 ```
 
-On PowerShell, replace `python` with `.venv/Scripts/python.exe` and launch the
-experiment with `.venv/Scripts/python.exe -m eagle experiment --config-dir CONFIG.yaml`.
-The server command accepts one YAML, including a saved `runs/<id>/config.yaml`.
-It reads `model.path`, `model.llama_server`, host/port and launch settings,
-checks GPU availability and full layer offload, then stays in the foreground.
-Ctrl+C stops only the process it owns. Startup failures retain their runtime log.
-It never starts additional or generation endpoints; start those services on
-their respective hosts. Configs without local runtime paths use an external
-primary and do not need this command. Mock and provider-free local EA runs can
-skip server startup.
+On PowerShell, use `.venv/Scripts/python.exe -m eagle experiment --config-dir CONFIG.yaml`.
+Local startup checks model and executable files, GPU availability, full layer
+offload, port ownership and health. A batch reuses a compatible owned server;
+it switches incompatible local models by stopping the owned process and
+starting the required one. Remote primaries, generation models and additional
+endpoints remain externally managed and undergo chat preflight before work.
 
-Experiments and resume only connect to already running endpoints. They never
-start, restart, adopt or stop an LLM server, even when local launch paths remain
-in the config. A failed endpoint preflight stops the experiment with an error.
-The server continues across replicates and experiments; stop it explicitly
-when finished. A batch requiring different models must have each endpoint
-running before its config is reached; automatic model switching is removed.
+Use `--connect-only` to connect to an already running service, including a
+Windows local model service started outside EAGLE. This skips local runtime file
+checks and all start/stop actions, while retaining endpoint preflight. A config
+that omits both `model.path` and `model.llama_server` also uses an external
+primary. Mock and provider-free local EA runs do not need an LLM server. The
+standalone `python -m eagle server --config CONFIG.yaml` command remains
+available for manual server management.
 
 ## Local experiment GUI
 
@@ -71,11 +66,12 @@ Config files stay under `configs/`; generated batch indices are excluded.
    Unknown fields are retained. Form edits reserialize YAML, so use the YAML
    editor to preserve comments and formatting.
 2. Validate, save, or save as a new config path. Validation uses the existing
-   `ExperimentConfig` rules; model files and GPU availability are checked by
-   the separate server startup, and opponent dependencies by experiment startup.
-3. Start the LLM server with the separate step-1 control and wait for its log
-   to report `LLM server ready`. External endpoints are started on their hosts;
-   mock/provider-free local EA can skip this step. Then start the current editor contents. The GUI writes an independent input
+   `ExperimentConfig` rules; local model files and GPU availability are checked
+   by experiment-owned startup, and opponent dependencies by experiment startup.
+3. Choose whether to connect only to an already running local endpoint, then
+   start the current editor contents. By default the experiment starts and
+   cleans up its configured local primary; remote, generation and additional
+   endpoints remain externally managed. The GUI writes an independent input
    snapshot and log under `logs/gui/<id>/`, then invokes the experiment CLI.
    Further editor changes cannot alter the active experiment. Mock and
    skip-final-test controls use existing CLI flags. One experiment job and
@@ -93,11 +89,10 @@ Config files stay under `configs/`; generated batch indices are excluded.
    scripts; AlliBot runtime LLM remains disabled by default.
 
 Stop requests use SIGTERM on Ubuntu and an owned console group's Ctrl+Break on
-Windows. Stopping an experiment leaves the independent LLM server running.
-Stop the experiment before using the GUI's separate stop-server control. Keep the
-Windows launcher terminal open while using the GUI. Closing
-the browser leaves jobs running; Ctrl+C in the GUI server terminal requests
-job cleanup, including the GUI-owned LLM server, and stops the GUI. The selected Run can resume with its own
+Windows. Stopping an experiment cleans up its owned local server; connect-only
+endpoints are left alone. Keep the Windows launcher terminal open while using
+the GUI. Closing the browser leaves jobs running; Ctrl+C in the GUI server
+terminal requests job cleanup and stops the GUI. The selected Run can resume with its own
 saved config through existing compatibility checks. Historical runtime config
 fields do not prevent observation; they can still prevent resume.
 
@@ -265,12 +260,12 @@ startup must also emit positive full `offloaded N/N layers to GPU` evidence for 
 selected model. Missing, stale, malformed, or partial offload evidence shuts down
 the owned process and fails server startup; EAGLE never continues on CPU. These obsolete
 keys are rejected, not migrated: `gpu_layers`, `threads`,
-`parallel`, and `evaluation.match_workers`. The independent server command validates local runtime files and owns its
-process. The experiment keeps functional clients permanently bound and requires a successful
-bounded chat completion from the primary and every additional endpoint before
-candidate work begins. Any endpoint failure is fail-closed. It runs search and the
-production final test, leaving every server running. Only the separate server
-command stops its owned local process on interruption or failure.
+`parallel`, and `evaluation.match_workers`. Experiment-owned local startup
+validates runtime files and owns cleanup. The experiment keeps functional
+clients permanently bound and requires a successful bounded chat completion
+from the primary and every additional endpoint before candidate work begins.
+Any endpoint failure is fail-closed. Remote, generation and additional servers
+remain externally managed.
 
 ```yaml
 model:
@@ -286,8 +281,8 @@ remote_model:
   port: 1234
 ```
 
-With this layout, `false` selects the local `model`: start it separately with
-`python -m eagle server --config CONFIG.yaml`, then launch the experiment.
+With this layout, `false` selects the local `model`, which the experiment starts
+and cleans up by default.
 `true` selects `remote_model`; the experiment does not validate or launch the
 inactive local GGUF/llama-server. The remote service must already be running and
 expose an OpenAI-compatible chat-completions endpoint. `additional_endpoints`
@@ -310,8 +305,8 @@ generation/compilation and matches without an all-candidate phase barrier.
 One ten-worker match matrix overlaps preparation of later children.
 
 When a folder contains multiple YAML files, they run in filename order. Each
-direct experiment run, including every `runs` replicate, calls the already
-running configured endpoints without restarting them. Within a run, clients stay permanently
+direct experiment run, including every `runs` replicate, uses the configured
+endpoint; a compatible EAGLE-owned local server is reused across runs. Within a run, clients stay permanently
 bound to their configured servers; no phase switching occurs. Canonical task
 index selects the ordered endpoint route, dependent retries stay there, and
 request evidence records the actual endpoint/model. Generation and additional
@@ -328,6 +323,22 @@ repeat count, for example `random_seeds: [7, 8, 9]` with `runs: 2` executes
 `7, 7, 8, 8, 9, 9`. The default is `runs: 1`. Folder batches support
 multiple replicates per config.
 With `random_seeds: [8]` and `runs: 3`, the config receives seeds `8, 8, 8`.
+
+For a two-machine seed comparison, use separate checkouts and output directories,
+keep the model version, inference settings, framework bundle SHA, and all other
+scientific parameters identical, and assign one seed per machine with
+`random_seeds: [8]` or `random_seeds: [9]` and `runs: 1`. The seed is the only
+scientific difference. On Windows, if the model service is already running,
+launch with `--connect-only` (also with `--resume`) so EAGLE uses the software's
+API without starting or stopping its server:
+
+```powershell
+.venv/Scripts/python.exe -m eagle experiment --config-dir CONFIG.yaml --connect-only
+.venv/Scripts/python.exe -m eagle experiment --resume RUN_DIR --connect-only
+```
+
+EAGLE does not coordinate a start barrier or synchronize the machines; start
+both experiments only after each endpoint is ready.
 
 Match execution uses ten bounded workers by default, with canonical results in
 match_index order. `evaluation.match_execution: serial` switches the matrix to
@@ -497,7 +508,7 @@ python -m eagle experiment --config-dir configs/experiments/qwen3_5_9b/ --skip-f
 ```
 
 Mock mode does not inspect the configured port, validate the GGUF for llama.cpp,
-or health-check an endpoint; experiments never start llama.cpp in any mode. It
+or health-check an endpoint, and never starts llama.cpp. It
 skips the production final test. Mock matches retain their canonical match
 artifacts but synthesize only the initial and final round snapshots.
 `--skip-final-test` is also available for focused production diagnostics and
@@ -548,8 +559,9 @@ than silently converting natural-language policies. Controller state is
 `eagle-reflection-operator-v6`.
 
 Every YAML creates fresh population, RNG, operator/AOS state, archives, IDs, and
-run directory; independently started LLM services remain running.
+run directory. A server started by the experiment is cleaned up at the end;
+connect-only and other external services are left running.
 
 There are no separate `run` or `runtime` compatibility entrypoints. The
-experiment orchestrator owns search; `python -m eagle server` separately owns
-the local model process lifecycle.
+experiment orchestrator owns search and the configured local model process
+lifecycle. `python -m eagle server` remains available for manual management.

@@ -257,5 +257,5 @@ def preflight_llm_endpoint(client: LLMClient) -> None:
             raise LLMServerError(
                 f"Configured LLM endpoint preflight failed at {url} "
                 f"for model {endpoint.model}: {exc}. "
-                "Start the configured LLM server separately before launching or resuming the experiment."
+                "Check the configured endpoint and model. For --connect-only or unmanaged profiles, start the service before launching or resuming the experiment."
             ) from exc

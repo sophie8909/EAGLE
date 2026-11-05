@@ -170,12 +170,15 @@ origins can proceed independently.
 Every endpoint passes fail-closed bounded chat preflight before candidate work.
 `use_remote_llm: false` selects `model`; `true` selects the required unmanaged
 `remote_model` profile while preserving both definitions in the resolved config.
-All experiment endpoints are independently started. When `model` is selected,
-both local runtime paths enable the separate `python -m eagle server` launcher;
-omitting both uses an external primary. The selected `remote_model`, a distinct
-generation server, and additional endpoints are externally started and unmanaged.
-The server launcher retains GPU preflight and full offload checks; experiments
-have no server lifecycle ownership.
+When the selected primary is the local `model` and both local runtime paths are
+configured, the experiment lazily starts and owns that server for fresh and
+resumed search. It reuses a compatible owned runtime across seeds/configs and
+cleans up its owned process on completion, failure or interruption. The
+operational `--connect-only` flag bypasses local runtime file checks and all
+server lifecycle actions, while retaining endpoint preflight; omitting both
+runtime paths also selects an external primary. The selected `remote_model`, a
+distinct generation server and additional endpoints are externally managed.
+GPU preflight and full offload checks apply to EAGLE-managed startup.
 Failure/interruption cancels queued work and drains active producers/workers.
 One candidate match matrix runs at a time, using ten match workers by default.
 An explicitly configured `evaluation.match_execution: serial` runs the same
@@ -366,13 +369,16 @@ enters this boundary with the complete source returned by the operator. It
 never receives game logs. Raw response, extracted source, normalized source,
 attempts, actual endpoint/model identity, errors, and timing are persisted.
 
-The required `model` section defines the local/default primary profile. Optional
+The required `model` section defines the local/default primary profile and
+defaults to `host: 127.0.0.1`, `use_remote_llm: false`, and an empty
+`additional_endpoints` list. Optional
 `remote_model` defines an already-running alternate primary and must omit local
-runtime paths. `use_remote_llm` defaults to false and selects between them for
-initialization, reflection, and prompt rewrite. The selected profile is also
+runtime paths. `use_remote_llm` selects between them for initialization,
+reflection, and prompt rewrite. The selected profile is also
 reused for generation when `generation_model` is absent. Both local runtime paths
-on the selected `model` enable startup through the independent server command;
-omit both to call an external primary directly. Each profile may additionally
+on the selected `model` enable experiment-owned startup; omit both to call an
+external primary directly. `--connect-only` connects to a prestarted service,
+including Windows local model software managing its own process. Each profile may additionally
 contain an ordered `additional_endpoints` list with zero or one entry of the
 form `{base_url, model}`. The additional endpoint is an unmanaged
 OpenAI-compatible service: it has no local GGUF or llama-server path, is never
@@ -382,10 +388,9 @@ preflight.
 Optional `generation_model` routes Java generation, corrective revision and
 compile repair to its own already running server. Different model identities
 require distinct hosts/ports. Omitting it reuses the selected primary concurrently.
-Only a selected `model` profile with both local paths can be launched by the
-separate server command; experiments never manage any server lifecycle. Remote,
-generation, and additional servers remain unmanaged. No runtime model switching
-occurs.
+Only a selected `model` profile with both local paths can be launched by EAGLE.
+Remote, generation and additional servers remain unmanaged. No runtime model
+switching occurs within a run.
 
 The extracted response must itself satisfy the complete-file external envelope:
 package/class/superclass, constructors, lifecycle methods, security restrictions,
@@ -682,20 +687,19 @@ supported.
 The production entrypoint is:
 
 ```bash
-./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test]
-./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test]
+./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test] [--connect-only]
+./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test] [--connect-only]
 ```
 
 It delegates to `python -m eagle experiment`. Python owns sorted config
-discovery, validation of `model` and optional `generation_model`, all-endpoint
-chat preflight, dependency-driven scheduling, search, resume and final test.
-Start the primary separately with `python -m eagle server --config CONFIG.yaml`
-when local runtime paths are supplied, or start the service externally. The
-foreground server command uses `RuntimeManager` for file, port, GPU/offload and
-health checks and owns cleanup on failure or interruption. Experiments never
-construct a runtime manager or start, restart, adopt, signal or stop servers.
-Servers persist across replicates, failure, completion and resume. Generation
-and additional endpoints remain externally started. Mock mode skips endpoint preflight.
+discovery, validation, all-endpoint chat preflight, dependency-driven scheduling,
+search, resume and final test. A local primary with runtime paths is started and
+owned by the experiment through `RuntimeManager`; compatible runtimes are reused
+across seeds/configs and owned cleanup runs on completion, failure or
+interruption. `--connect-only` skips runtime file checks and lifecycle actions
+for a prestarted endpoint but keeps endpoint preflight. Omitting both runtime
+paths also uses an external primary. Generation and additional endpoints remain
+externally managed. Mock mode skips endpoint preflight and model work.
 
 For a directory batch, the selected config directory owns `experiment.yaml`
 with `schema_version: eagle-experiment-index-v1` and a `runs` mapping from each

@@ -107,6 +107,16 @@ use_remote_llm: true
         self.assertEqual(start.call_args.kwargs["env"]["PYTHONIOENCODING"], "utf-8")
         self.assertEqual(start.call_args.kwargs["cwd"], self.root)
 
+    def test_connect_only_is_forwarded_for_start_and_resume(self):
+        run, _ = self.run_fixture()
+        for route, body in (
+            ("/api/start", {"text": "{}"}),
+            ("/api/resume", {"run": str(run)}),
+        ):
+            with self.subTest(route=route), patch.object(self.app.experiment, "start") as start:
+                self.app.post(route, {**body, "connect_only": True})
+                self.assertIn("--connect-only", start.call_args.args[0])
+
     def test_duplicate_experiment_is_rejected_without_launching_second_process(self):
         with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start:
             self.app.post("/api/start", {"text": "{}"})
@@ -116,8 +126,9 @@ use_remote_llm: true
 
     def test_flag_values_must_be_actual_booleans(self):
         with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start:
-            self.app.post("/api/start", {"text": "{}", "mock": "true", "skip_final_test": 1})
+            self.app.post("/api/start", {"text": "{}", "mock": "true", "skip_final_test": 1, "connect_only": "true"})
         command = start.call_args.args[0]
+        self.assertNotIn("--connect-only", command)
         self.assertNotIn("--mock", command)
         self.assertNotIn("--skip-final-test", command)
 

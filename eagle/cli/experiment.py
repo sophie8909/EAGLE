@@ -1,4 +1,4 @@
-"""CLI for EAGLE experiments using independently started LLM servers."""
+"""CLI for EAGLE experiments with managed or already-running local LLMs."""
 from __future__ import annotations
 
 import argparse
@@ -13,8 +13,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m eagle experiment",
         description=(
-            "Run or resume experiments using already running LLM endpoints. "
-            "Start local models separately with: python -m eagle server --config CONFIG.yaml"
+            "Run or resume experiments and manage the configured local LLM server. "
+            "Use --connect-only for a server started by another application."
         ),
     )
     parser.add_argument(
@@ -25,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
         "--resume",
         type=Path,
         help="Resume one run, or a config-folder batch using its experiment.yaml index.",
+    )
+    parser.add_argument(
+        "--connect-only", action="store_true",
+        help="Use already-running endpoints; never start, restart or stop an LLM server.",
     )
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--skip-final-test", action="store_true")
@@ -37,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         result = ExperimentOrchestrator().run(
             config_path=config_path,
             resume_dir=None if args.resume is None else args.resume.expanduser().resolve(),
+            connect_only=args.connect_only,
             mock=args.mock,
             skip_final_test=args.skip_final_test,
         )

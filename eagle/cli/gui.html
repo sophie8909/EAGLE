@@ -22,16 +22,16 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
  <div id="form"></div><textarea id="yaml" aria-label="完整 config YAML" spellcheck="false" hidden></textarea>
  <div class="row"><label>儲存路徑（可另存新檔，限 configs/ 下）<input id="save-path" placeholder="configs/experiments/my_experiment.yaml"></label></div>
  <div class="toolbar"><button id="validate">驗證設定</button><button id="save">儲存 Config</button></div>
- <details open><summary>步驟 1：啟動 LLM server</summary>
-  <p class="hint">使用目前設定啟動本機模型，等日誌顯示 LLM server ready 後再啟動實驗。外部 endpoint 請在服務所在主機啟動。Mock 或純本地演化可略過。</p>
+ <details><summary>進階：獨立啟動 LLM server（一般不需要）</summary>
+  <p class="hint">一般直接啟動實驗即可自動管理本機模型。若使用這裡獨立啟動的服務，請在啟動實驗時勾選「只連線」。</p>
   <div class="toolbar"><button id="start-server">啟動 LLM server</button><button id="stop-server" class="danger" disabled>停止 LLM server</button></div>
   <div id="server-status" class="status">尚未啟動 LLM server</div>
   <pre id="server-log" aria-label="LLM server 輸出"></pre><p id="server-file" class="logfile"></p>
  </details>
- <details open><summary>步驟 2：啟動實驗</summary>
+ <details open><summary>啟動實驗</summary>
   <p class="hint">以目前編輯內容建立獨立快照後啟動，日後編輯不會改到執行中的實驗。一次執行一個實驗，可包含多個 runs。</p>
-  <p class="hint">實驗只連線至設定的模型端點；停止或結束實驗後，LLM server 會繼續運行，可供下一次實驗或續跑使用。</p>
-  <div class="toolbar"><label><input type="checkbox" id="mock">Mock（不呼叫模型）</label><label><input type="checkbox" id="skip-final">略過 Final Test</label></div>
+  <p class="hint">預設自動啟動並管理本機 LLM，實驗結束時釋放。Windows 若由其他軟體開好 server，請勾選「只連線」；該服務不會被重啟或關閉。兩台分別設定不同 random_seeds，其他實驗參數保持相同；非空清單會優先於 random_seed。</p>
+  <div class="toolbar"><label><input type="checkbox" id="connect-only">只連線（server 已由其他軟體開啟）</label><label><input type="checkbox" id="mock">Mock（不呼叫模型）</label><label><input type="checkbox" id="skip-final">略過 Final Test</label></div>
   <div class="toolbar"><button id="start" class="primary">啟動目前設定</button><button id="stop-experiment" class="danger" disabled>停止實驗</button></div>
   <div id="experiment-status" class="status">尚未啟動實驗</div>
   <pre id="experiment-log" aria-label="實驗輸出"></pre><p id="experiment-file" class="logfile"></p>
@@ -80,7 +80,7 @@ function setOptions(select,items,placeholder){
 function valueAt(path){let value=payload;for(const key of path.split('.')){if(value===null||typeof value!=='object'||!Object.hasOwn(value,key))return undefined;value=value[key];}return value;}
 function setAt(path,value){const keys=path.split('.');let parent=payload;for(const key of keys.slice(0,-1)){if(parent[key]===null||typeof parent[key]!=='object'||Array.isArray(parent[key]))parent[key]={};parent=parent[key];}parent[keys.at(-1)]=value;}
 function deleteAt(path){const keys=path.split('.');let parent=payload;for(const key of keys.slice(0,-1)){parent=parent?.[key];if(!parent||typeof parent!=='object')return;}delete parent[keys.at(-1)];}
-const labels={experiment_name:'實驗名稱',generations:'演化代數（另含第 0 代）',population_size:'族群大小',runs:'每個 seed 的重複次數',random_seed:'隨機種子',crossover_rate:'交配機率',mutation_rate:'突變機率',stagnation_generations:'停滯代數上限',java_materialization_mode:'Java 產生方式',candidate_java_mode:'Java 繼承方式',initial_population_mode:'初始族群方式',parent_evaluation_mode:'父代評估方式',reflection_operator_mode:'Reflection 選擇方式',execution_mode:'執行模式',tick_limit:'預設 ticks 上限',match_timeout_seconds:'每場逾時（秒）',match_artifact_mode:'對戰證據保存方式','evaluation.mode':'評估方式','evaluation.rounds_per_map':'每張地圖回合數','evaluation.swap_player_sides':'交換陣營','llm.match_commentator.enabled':'啟用 Match Commentator',runs_dir:'實驗輸出根目錄',microrts_dir:'MicroRTS 目錄'};
+const labels={experiment_name:'實驗名稱',generations:'演化代數（另含第 0 代）',population_size:'族群大小',runs:'每個 seed 的重複次數',random_seed:'隨機種子（無清單時使用）',random_seeds:'本機種子清單（優先使用）',use_remote_llm:'使用 remote_model（預設停用）',crossover_rate:'交配機率',mutation_rate:'突變機率',stagnation_generations:'停滯代數上限',java_materialization_mode:'Java 產生方式',candidate_java_mode:'Java 繼承方式',initial_population_mode:'初始族群方式',parent_evaluation_mode:'父代評估方式',reflection_operator_mode:'Reflection 選擇方式',execution_mode:'執行模式',tick_limit:'預設 ticks 上限',match_timeout_seconds:'每場逾時（秒）',match_artifact_mode:'對戰證據保存方式','evaluation.mode':'評估方式','evaluation.rounds_per_map':'每張地圖回合數','evaluation.swap_player_sides':'交換陣營','llm.match_commentator.enabled':'啟用 Match Commentator',runs_dir:'實驗輸出根目錄',microrts_dir:'MicroRTS 目錄'};
 function renderForm(){
  const form=$('form');form.replaceChildren();const groups=new Map();
  const paths=new Set(Object.keys(meta.forms.defaults));
@@ -124,7 +124,7 @@ async function loadConfig(){
  const data=await api('/api/config?path='+encodeURIComponent($('configs').value));
  payload=data.payload;originalText=data.text;$('yaml').value=data.text;$('save-path').value=data.path;loaded=true;dirty=false;$('dirty').textContent='已載入';renderForm();await refresh();
 }
-function flags(){return {mock:$('mock').checked,skip_final_test:$('skip-final').checked};}
+function flags(){return {connect_only:$('connect-only').checked,mock:$('mock').checked,skip_final_test:$('skip-final').checked};}
 function candidates(){return $('generations').value==='pending'?runData.pending:(runData.generations.find(item=>String(item.generation)===$('generations').value)?.population||[]);}
 function renderCandidates(){
  setOptions($('candidates'),candidates().map(item=>({value:item.candidate_id,label:item.candidate_id+' · '+item.status})), '尚無個體');updateButtons();

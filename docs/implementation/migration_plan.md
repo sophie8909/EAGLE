@@ -8,13 +8,14 @@ The mode is persisted in resolved config/manifest and cannot change during
 resume. Description generation precedes the existing batch slot-fill boundary;
 local evolution continues unchanged after initialization.
 
-## Independent LLM server startup (2026-11-02)
+## LLM lifecycle (updated 2026-11-05)
 
-Start local models with `python -m eagle server --config CONFIG.yaml` before
-launching experiments. The GUI exposes the same separate server job. Existing
-model launch settings and saved run configs remain valid; experiment startup,
-replicates and resume only preflight/call endpoints and never restart or stop them.
-GPU/offload and owned-process cleanup stay with the independent launcher.
+Experiments own startup, compatible process reuse and cleanup for a configured
+local primary. The standalone server command remains available for manual
+management. CLI `--connect-only` and the GUI option use a prestarted endpoint,
+skip local runtime file checks and bypass lifecycle while retaining endpoint
+preflight; omitting both local runtime paths also selects an external primary.
+Remote, generation and additional endpoints remain unmanaged.
 
 ## Framework reflection (2026-10-24)
 

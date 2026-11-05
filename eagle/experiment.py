@@ -1,4 +1,4 @@
-"""Experiment lifecycle using independently started LLM endpoints."""
+"""Experiment lifecycle with owned local or already-running LLM endpoints."""
 from __future__ import annotations
 
 import json
@@ -9,6 +9,7 @@ from typing import Callable
 import yaml
 
 from eagle.config import ExperimentConfig
+from eagle.runtime import RuntimeManager, runtime_config_from_experiment
 from eagle.experiment_index import (
     EXPERIMENT_INDEX_SCHEMA_VERSION,
     decode_experiment_run_index,
@@ -252,6 +253,30 @@ class ExperimentOrchestrator:
         resume_dir: Path | None = None,
         mock: bool = False,
         skip_final_test: bool = False,
+        connect_only: bool = False,
+    ) -> SearchResult:
+        manager = None
+
+        def ensure_runtime(config: ExperimentConfig) -> None:
+            nonlocal manager
+            if not mock and not connect_only and config.needs_managed_runtime:
+                if manager is None:
+                    manager = RuntimeManager()
+                manager.ensure(runtime_config_from_experiment(config))
+
+        try:
+            return self._run(
+                config_path=config_path, resume_dir=resume_dir, mock=mock,
+                skip_final_test=skip_final_test, ensure_runtime=ensure_runtime,
+            )
+        finally:
+            if manager is not None:
+                manager.stop_owned()
+
+    def _run(
+        self, *, config_path: Path | None, resume_dir: Path | None,
+        mock: bool, skip_final_test: bool,
+        ensure_runtime: Callable[[ExperimentConfig], None],
     ) -> SearchResult:
         if resume_dir is not None:
             resume_dir = resume_dir.expanduser().resolve()
@@ -271,6 +296,7 @@ class ExperimentOrchestrator:
                     resume_dir,
                     mock=mock,
                     skip_final_test=skip_final_test,
+                    ensure_runtime=ensure_runtime,
                 )
             persisted = load_resume_config(resume_dir)
             if config_path is not None:
@@ -284,6 +310,10 @@ class ExperimentOrchestrator:
                 config_path=config_path or resume_dir / "config.yaml",
                 completed_generation=0,
             )
+            manifest_path = resume_dir / "manifest.json"
+            latest_generation = load_manifest(resume_dir).get("latest_generation") if manifest_path.is_file() else None
+            if latest_generation is None or int(latest_generation) < config.generations:
+                ensure_runtime(config)
             result = self.resume_runner(
                 None,
                 run_dir=resume_dir,
@@ -334,6 +364,7 @@ class ExperimentOrchestrator:
                         f"Run [{replicate_index + 1}/{config.total_runs}] "
                         f"random_seed={run_config.random_seed}"
                     )
+                ensure_runtime(run_config)
                 result = self.search_runner(
                     run_config,
                     config_path=resolved_path,
@@ -362,6 +393,7 @@ class ExperimentOrchestrator:
         *,
         mock: bool,
         skip_final_test: bool,
+        ensure_runtime: Callable[[ExperimentConfig], None],
     ) -> SearchResult:
         """Resume an interrupted folder batch, then run remaining configs."""
 
@@ -437,6 +469,9 @@ class ExperimentOrchestrator:
                         )
                     else:
                         print(f"Status: resuming {indexed_run}")
+                    latest_generation = manifest.get("latest_generation")
+                    if latest_generation is None or int(latest_generation) < persisted.generations:
+                        ensure_runtime(persisted)
                     result = self.resume_runner(
                         None,
                         run_dir=indexed_run,
@@ -452,6 +487,7 @@ class ExperimentOrchestrator:
                             "framework bootstrap has been frozen by seed 0."
                         )
                     requested = _bind_shared_framework(requested, shared)
+                ensure_runtime(requested)
                 result = self.search_runner(
                     requested,
                     config_path=resolved_path,

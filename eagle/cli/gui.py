@@ -72,6 +72,7 @@ def form_options() -> dict:
     }
     common = [
         "experiment_name", "generations", "population_size", "runs", "random_seed",
+        "random_seeds", "use_remote_llm",
         "crossover_rate", "mutation_rate", "stagnation_generations",
         "java_materialization_mode", "candidate_java_mode", "initial_population_mode",
         "parent_evaluation_mode", "reflection_operator_mode", "execution_mode",
@@ -235,6 +236,8 @@ class GuiApp:
                 return self.server.start(command, folder)
             self.runs_roots.add((self.root / config.runs_dir).resolve())
             command = [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir", str(snapshot)]
+            if body.get("connect_only") is True:
+                command.append("--connect-only")
             if body.get("mock") is True:
                 command.append("--mock")
             if body.get("skip_final_test") is True:
@@ -243,6 +246,8 @@ class GuiApp:
         if path == "/api/resume":
             run = self.run_path(body["run"])
             command = [sys.executable, "-u", "-m", "eagle", "experiment", "--resume", str(run)]
+            if body.get("connect_only") is True:
+                command.append("--connect-only")
             if body.get("mock") is True:
                 command.append("--mock")
             if body.get("skip_final_test") is True:

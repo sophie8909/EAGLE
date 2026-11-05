@@ -19,21 +19,24 @@ can use CUDA. Each fresh child startup must also provide positive
 malformed, or partial evidence shuts down the owned process and fails startup;
 there is no CPU fallback.
 
-`python -m eagle server --config CONFIG.yaml` is the foreground lifecycle owner
-for a selected local primary profile. It constructs one `RuntimeManager`, starts
-and health-checks the child, and keeps that server resident across experiment
-runs until interruption or failure. The manager's compatibility key contains
+`python -m eagle experiment` is the default lifecycle owner for a selected local
+primary profile. It constructs a lazy `RuntimeManager`, starts and health-checks
+the child before each fresh or resumed search, reuses a compatible owned server
+across batch configs and seeds, and stops its owned process on completion,
+failure or interruption. The manager's compatibility key contains
 the resolved model path, server executable, host, port, per-request context
 size, batch size, and fixed GPU/thread/parallel settings.
 
-`experiment.sh` delegates only to `python -m eagle experiment`. Fresh, resumed,
-and batch experiments never construct a `RuntimeManager`, start or stop a
-server, or switch endpoint models. They build fixed role clients, preflight
-every selected primary, generation, and additional endpoint, and fail closed if
-any endpoint is unavailable. `LLMClient` uses the resolved endpoint and model;
-different role models therefore require independently running servers. Match
-execution uses the fixed ten-worker pool. Each bounded LLM phase cancels queued
-tasks on failure or interruption and waits for active requests to finish before
+`experiment.sh` delegates to `python -m eagle experiment`. `--connect-only`
+bypasses local runtime file checks and all lifecycle management for a
+prestarted service; omitting both local runtime paths has the same external
+primary behavior. Both modes still build fixed role clients, preflight every
+selected primary, generation and additional endpoint, and fail closed if any
+endpoint is unavailable. Remote primaries, generation and additional endpoints
+remain unmanaged. `LLMClient` uses the resolved endpoint and model; different
+role models therefore require independently running servers. Match execution
+uses the fixed ten-worker pool. Each bounded LLM phase cancels queued tasks on
+failure or interruption and waits for active requests to finish before
 returning.
 
 Ownership is stored per endpoint below `runtime/ownership/`. The record contains
@@ -44,18 +47,19 @@ signalling the PID; a verified orphaned EAGLE record is cleaned; a record with
 a live verified launcher is left alone.
 
 An occupied endpoint without verified ownership is foreign even if its executable
-happens to be named `llama-server`. EAGLE never kills or attaches to it and
-reports host, port, PID, executable, and command. The foreground server command
-calls `stop_owned()` from its cleanup path after startup/health failure, Ctrl+C,
-or CLI-translated SIGTERM. Experiments never signal an endpoint process.
+happens to be named `llama-server`. EAGLE never kills or attaches to it during
+managed startup and reports host, port, PID, executable, and command. The
+experiment's cleanup path calls `stop_owned()` after startup/health failure,
+completion, Ctrl+C, or CLI-translated SIGTERM. Connect-only and external
+endpoints are never signalled.
 
 If Ctrl+C interrupts termination after the owned process has already exited,
 the original manager removes its matching ownership-token record before
 re-raising the interrupt. It retains the record when that exact process is still
 alive, and never removes a record owned by another manager token.
 
-Experiment `--mock` mode bypasses endpoint preflight and model work. The separate
-server command has no mock mode.
+Experiment `--mock` mode bypasses endpoint preflight and model work. The
+standalone server command has no mock mode.
 
 The optional `watchdog.sh` monitors the local network interface; it does not own
 a model process or endpoint.

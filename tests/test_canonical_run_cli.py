@@ -6,6 +6,8 @@ import os
 import subprocess
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import yaml
 
@@ -48,6 +50,23 @@ class CanonicalRunCliTests(unittest.TestCase):
             self.assertEqual(config.model.name, "model-a")
             self.assertEqual(config.llm_base_url, "http://127.0.0.1:9012")
             self.assertEqual(config.model.path, repository / "weights/model.gguf")
+
+    def test_experiment_connect_only_flag_reaches_fresh_and_resume(self):
+        result = SimpleNamespace(run_dir=Path("run"), completed_generation=0)
+        for arguments in (["--config-dir", "config.yaml"], ["--resume", "run"]):
+            with self.subTest(arguments=arguments), patch(
+                "eagle.cli.experiment.ExperimentOrchestrator"
+            ) as orchestrator:
+                orchestrator.return_value.run.return_value = result
+                self.assertEqual(eagle_main(["experiment", *arguments, "--connect-only"]), 0)
+                self.assertTrue(orchestrator.return_value.run.call_args.kwargs["connect_only"])
+
+    def test_default_routing_uses_only_local_primary(self):
+        config = ExperimentConfig.from_mapping({"model": {"name": "local"}})
+        self.assertFalse(config.use_remote_llm)
+        self.assertEqual(config.llm_base_url, "http://127.0.0.1:8080")
+        self.assertEqual(config.active_primary_model.additional_endpoints, ())
+        self.assertIs(config.resolved_generation_model, config.model)
 
     def test_experiment_shell_is_thin_and_noninteractive(self):
         script = (Path(__file__).resolve().parents[1] / "experiment.sh").read_text(encoding="utf-8")

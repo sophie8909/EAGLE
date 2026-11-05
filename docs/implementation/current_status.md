@@ -15,16 +15,18 @@ instead of the SHA-pinned LF bytes. The new config freezes the original bytes.
 One-generation mock CLI search, persisted descriptions/genomes, parent-A
 inheritance and completed-run resume passed. WSL was unavailable.
 
-## Independent LLM server startup (2026-11-02)
+## Experiment-owned local LLM lifecycle (2026-11-05)
 
-The foreground `python -m eagle server --config CONFIG.yaml` command and the
-GUI's separate server job own local model startup, GPU/offload/health checks
-and cleanup. Experiments and resume only connect to the configured endpoints;
-servers remain running across replicate boundaries and experiment completion.
-Existing config and saved-run formats remain unchanged. Focused CLI, GUI,
-launcher, endpoint and runtime tests passed; native Windows process checks
-passed outside the sandbox. Direct Python and Git Bash mock launches completed
-generation 1. No live GPU model was launched for this change.
+By default, fresh and resumed experiments lazily start the selected local
+primary, reuse compatible owned processes across configs/seeds, and clean up
+owned processes on completion, failure or interruption. `--connect-only` skips
+runtime file checks and lifecycle actions for an already running service while
+retaining endpoint preflight; the GUI exposes this option. Omitting both local
+runtime paths continues to select an external primary. Remote, generation and
+additional endpoints remain unmanaged. The six focused suites completed 115
+checks (113 passed, two platform skips). Seed-8 and seed-9 one-generation mock
+CLI runs and connect-only resumes passed, as did GUI script syntax and Python
+compilation checks. No live GPU or two-machine endurance run was performed.
 
 ## Gen-0 GPT slot-selection ablation (2026-10-30)
 
@@ -160,8 +162,9 @@ the active remote endpoint is still fail-closed preflighted. Omitting
 
 Functional clients stay bound to the selected primary and optional `generation_model`; no
 phase-switch callback remains. Omit both primary runtime paths to call an
-externally started primary. Generation servers are always external. Local primary servers are launched
-with the independent server command and remain running across batch profiles.
+externally started primary. Generation servers are always external. Local
+primary servers are owned by experiment startup and reused across compatible
+batch profiles; `--connect-only` leaves an already running service unmanaged.
 Runtime startup rejects different models sharing one endpoint before preflight;
 historical staged configs remain loadable for read-only analysis and final tests.
 
@@ -305,9 +308,10 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   to every OpenAI-compatible LLM request as `seed` and recorded as `sampling_seed` in LLM timing/log metadata.
   `scripts/test_llm_stability.py` repeats one exact prompt and persists raw
   responses plus SHA-256 hashes for backend stability checks.
-- Formal experiment runs use independently started endpoints at every run/replicate
-  boundary. The separate server launcher owns local process startup and cleanup.
-  `RuntimeManager` manages only this primary local process. Every configured
+- Formal experiment runs start and own the selected local primary when runtime
+  paths are present. `--connect-only` or omitted runtime paths use a prestarted
+  endpoint without lifecycle management. `RuntimeManager` manages only this
+  primary local process. Every configured
   endpoint, including an additional external endpoint, must pass a fail-closed
   chat-completion preflight before candidate requests begin; external endpoints are
   never adopted, switched, signalled, or stopped.
@@ -425,11 +429,13 @@ candidate was created.
 
 `./experiment.sh CONFIG_TARGET [OPTIONS...]` translates its positional target
 to Python `--config-dir`. Python discovers sorted top-level YAML files once,
-loads each config once, and runs search/resume/final test against independently
-started endpoints. No run or replicate starts, restarts or stops llama.cpp.
-`python -m eagle server --config CONFIG.yaml` owns the local model process and
-its GPU/offload/health checks. Role clients remain permanently bound within a run.
-Experiments never construct a runtime manager or inspect process ownership. Runtime state records PID plus process start time,
+loads each config once, and runs search/resume/final test. With local runtime
+paths, the experiment starts and owns the primary, reuses compatible processes
+across seeds/configs, and cleans up on exit. `--connect-only` and omitted
+runtime paths connect without lifecycle management. The standalone
+`python -m eagle server --config CONFIG.yaml` remains available for manual
+management. Role clients remain permanently bound within a run. Runtime state
+records PID plus process start time,
 exact executable/command, launcher, owner token, and resolved spec; foreign port
 owners are never killed.
 Separate runtime/run compatibility commands are not part of production. The
@@ -740,7 +746,8 @@ Operators now have separate owners under `eagle/operators`; fresh/resume share `
 Phase barriers and switching below are superseded by dependency-driven execution.
 
 The runtime contract keeps one primary endpoint for each model phase.
-Local startup belongs to the independent server command. Each profile permits
+Local startup now belongs to the experiment by default; the separate server
+command is retained for manual management. Each profile permits
 at most one ordered unmanaged OpenAI-compatible endpoint in
 `additional_endpoints`. The resolved config retains the list and order, resume
 treats both as immutable execution identity, canonical input index controls
