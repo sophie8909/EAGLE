@@ -28,6 +28,39 @@ It requires a GPT API key in `api_key/gpt`. A local model server is not needed.
 python -m eagle experiment --config-dir configs/experiments/1104_description_guided/experiment.yaml
 ```
 
+## Two-machine configs (2026-11-05)
+
+| Machine | Config | Seeds |
+| --- | --- | --- |
+| Ubuntu | `ubuntu_seed8_9.yaml` | 8, 9 |
+| Windows | `windows_seed10.yaml` | 10 |
+
+Both reuse the checked-in `bundle.json`, an exact-byte copy of the original
+1030 ablation framework (SHA-256
+`f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b`).
+No new framework is generated. The local `.gitattributes` preserves those bytes
+on both operating systems. GPT selects all ten initial genomes from distinct
+strategy descriptions; later evolution stays local. The two configs differ only
+in experiment name and seed list, with population 10 and 100 generations each.
+
+Ubuntu (from the repository root):
+
+```bash
+python -m eagle experiment --config-dir configs/experiments/1104_description_guided/ubuntu_seed8_9.yaml
+```
+
+Windows PowerShell (from the repository root):
+
+```powershell
+python -m eagle experiment --config-dir configs/experiments/1104_description_guided/windows_seed10.yaml
+```
+
+In the GUI, refresh the Config list, select the file for that machine, load and
+validate it, then start the current settings with Mock unchecked. Each machine
+needs its own `api_key/gpt` file. No local model server is needed. Select the
+exact YAML file rather than passing this whole directory, which also contains
+the original combined-seed config. Resume uses the chosen run's frozen config.
+
 ## Historical execution status (previous 1+9 configuration)
 
 | Seed | Run | Status |
