@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import json
+import statistics
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -57,6 +58,28 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(records)
 
+    aggregate: list[dict[str, object]] = []
+    for treatment in ("10 GPT initial", "1 GPT + 9 local"):
+        for generation in sorted({int(row["generation"]) for row in records}):
+            values = [
+                float(row["mean_match_score"])
+                for row in records
+                if row["treatment"] == treatment and int(row["generation"]) == generation
+            ]
+            aggregate.append(
+                {
+                    "treatment": treatment,
+                    "generation": generation,
+                    "mean": statistics.mean(values),
+                    "minimum": min(values),
+                    "maximum": max(values),
+                }
+            )
+    with (OUT / "three_seed_mean_min_max.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=aggregate[0].keys(), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(aggregate)
+
     colors = {"10 GPT initial": "#2563eb", "1 GPT + 9 local": "#dc2626"}
     fig, axes = plt.subplots(1, 3, figsize=(19, 5.5), sharey=True, constrained_layout=True)
     for axis, (seed, treatments) in zip(axes, RUNS.items()):
@@ -73,6 +96,25 @@ def main() -> None:
     axes[0].legend(fontsize=9)
     fig.suptitle("Cross-generation convergence: 10 GPT initial vs 1 GPT + 9 local")
     fig.savefig(OUT / "all_gpt_vs_one_gpt_convergence.png", dpi=180)
+    plt.close(fig)
+
+    fig, axis = plt.subplots(figsize=(11, 6), constrained_layout=True)
+    for treatment in ("10 GPT initial", "1 GPT + 9 local"):
+        rows = [row for row in aggregate if row["treatment"] == treatment]
+        x = [int(row["generation"]) for row in rows]
+        mean = [float(row["mean"]) for row in rows]
+        minimum = [float(row["minimum"]) for row in rows]
+        maximum = [float(row["maximum"]) for row in rows]
+        color = colors[treatment]
+        axis.plot(x, mean, linewidth=2.5, color=color, label=f"{treatment} mean")
+        axis.fill_between(x, minimum, maximum, color=color, alpha=0.16, label=f"{treatment} min–max")
+    axis.axhline(0, color="#6b7280", linewidth=0.8, linestyle="--")
+    axis.set_title("Three-seed mean and min–max frozen convergence")
+    axis.set_xlabel("Generation")
+    axis.set_ylabel("Frozen mean match score")
+    axis.grid(alpha=0.2)
+    axis.legend(ncol=2, fontsize=9)
+    fig.savefig(OUT / "three_seed_mean_min_max_convergence.png", dpi=180)
     plt.close(fig)
 
 

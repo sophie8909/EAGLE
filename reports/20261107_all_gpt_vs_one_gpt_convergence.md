@@ -9,6 +9,10 @@
 
 ![All GPT vs one GPT convergence](all_gpt_vs_one_gpt_convergence/all_gpt_vs_one_gpt_convergence.png)
 
+三個 seed 的平均與最大/最小範圍：
+
+![Three-seed mean min max convergence](all_gpt_vs_one_gpt_convergence/three_seed_mean_min_max_convergence.png)
+
 ## Paired 結果
 
 | Seed | Treatment | G0 | G100 | 最高 checkpoint | 最高 score | G100 win rate |
@@ -37,4 +41,5 @@
 - 1 GPT + 9 local seed 9: [`20261102_131719_965893`](../runs/20261102_131719_965893/)
 - 1 GPT + 9 local seed 10: [`20261103_043534_423377`](../runs/20261103_043534_423377/)
 - [Comparison CSV](all_gpt_vs_one_gpt_convergence/comparison.csv)
+- [Three-seed aggregate CSV](all_gpt_vs_one_gpt_convergence/three_seed_mean_min_max.csv)
 - [Reproducible script](../scripts/compare_all_gpt_vs_one_gpt_convergence.py)
