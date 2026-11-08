@@ -20,6 +20,10 @@ RUNS = {
         "10 GPT initial": ROOT / "runs/20261106_072846_805117",
         "1 GPT + 9 local": ROOT / "runs/20261102_131719_965893",
     },
+    10: {
+        "10 GPT initial": ROOT / "runs/20261107_135945_086651",
+        "1 GPT + 9 local": ROOT / "runs/20261103_043534_423377",
+    },
 }
 OUT = ROOT / "reports/all_gpt_vs_one_gpt_convergence"
 
@@ -49,12 +53,12 @@ def main() -> None:
                 records.append({"seed": seed, "treatment": treatment, **row})
 
     with (OUT / "comparison.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=records[0].keys())
+        writer = csv.DictWriter(handle, fieldnames=records[0].keys(), lineterminator="\n")
         writer.writeheader()
         writer.writerows(records)
 
     colors = {"10 GPT initial": "#2563eb", "1 GPT + 9 local": "#dc2626"}
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5.5), sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=(19, 5.5), sharey=True, constrained_layout=True)
     for axis, (seed, treatments) in zip(axes, RUNS.items()):
         for treatment, run_dir in treatments.items():
             rows = load_fixed(run_dir)

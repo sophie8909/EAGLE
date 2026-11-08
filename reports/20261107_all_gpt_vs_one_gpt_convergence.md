@@ -17,20 +17,24 @@
 | 8 | 1 GPT + 9 local | -9.66 | 57.06 | G25 | 60.16 | 76.3% |
 | 9 | 10 GPT initial | -2.44 | 58.19 | G100 | 58.19 | 77.5% |
 | 9 | 1 GPT + 9 local | -9.87 | 19.12 | G40 | 41.18 | 56.7% |
+| 10 | 10 GPT initial | -1.71 | 15.84 | G50 | 31.94 | 56.5% |
+| 10 | 1 GPT + 9 local | -36.78 | 5.84 | G25 | 18.16 | 51.0% |
 
 ## 結論
 
-1. **沒有一致的 seed-level 優勢。** Seed 8 是 1 GPT + 9 local 明顯較好；seed 9 則是 10 GPT initial 明顯較好。
+1. **沒有一致的 seed-level 優勢。** Seed 8 與 seed 10 是 1 GPT + 9 local 明顯較好；只有 seed 9 是 10 GPT initial 明顯較好。
 2. **G0 起點方面，10 GPT initial 兩個 seed 都較高**：seed 8 高 `17.55`，seed 9 高 `7.43` frozen score。
 3. **長期收斂方面，初始化效果受 stochastic trajectory 影響很大**：同一方法在 seed 8 與 seed 9 的最高 checkpoint、G100 表現和波動都不同。
-4. 兩個 seed 合併的 G100 平均：10 GPT initial `46.37`，1 GPT + 9 local `38.09`；但樣本只有兩個 seed，不能宣稱 10 GPT initial 已被嚴格證明優於 baseline。
-5. 比較適合的結論是：**10 GPT initial 改善早期品質與平均 G100 結果，但不保證每個 seed 的最終收斂品質；應保留 frozen benchmark 的最佳 checkpoint，而不是固定使用 G100。**
+4. 三個 seed 的 G100 平均：10 GPT initial `36.20`，1 GPT + 9 local `39.86`；因此加入 seed 10 後，平均結果反而略偏向 1 GPT + 9 local。
+5. 比較適合的結論是：**10 GPT initial 穩定改善 G0 起點，但不保證後續收斂品質；應保留 frozen benchmark 的最佳 checkpoint，而不是固定使用 G100。**
 
 ## Source runs
 
 - 10 GPT initial seed 8: [`20261105_153135_880565`](../runs/20261105_153135_880565/)
 - 10 GPT initial seed 9: [`20261106_072846_805117`](../runs/20261106_072846_805117/)
+- 10 GPT initial seed 10: [`20261107_135945_086651`](../runs/20261107_135945_086651/)
 - 1 GPT + 9 local seed 8: [`20261101_211038_286628`](../runs/20261101_211038_286628/)
 - 1 GPT + 9 local seed 9: [`20261102_131719_965893`](../runs/20261102_131719_965893/)
+- 1 GPT + 9 local seed 10: [`20261103_043534_423377`](../runs/20261103_043534_423377/)
 - [Comparison CSV](all_gpt_vs_one_gpt_convergence/comparison.csv)
 - [Reproducible script](../scripts/compare_all_gpt_vs_one_gpt_convergence.py)
