@@ -109,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--run-dir", str(run_dir),
                 "--generations", *(str(generation) for generation in generations),
                 "--output-dir", str(cross_output_dir),
+                "--all-candidates",
             ]
             if args.seed is not None:
                 delegated.extend(("--seed", str(args.seed)))
@@ -191,7 +192,11 @@ def _cross_generation_output_dir(base: Path) -> Path | None:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             summary = {}
-        if summary.get("status") == "complete":
+        all_candidates = summary.get("selection_mode") == "all_runnable_candidates" or all(
+            row.get("selection_mode") == "all_runnable_candidates"
+            for row in summary.get("rows", [])
+        )
+        if summary.get("status") == "complete" and all_candidates:
             return None
     index = 1
     while True:

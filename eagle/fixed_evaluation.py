@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import os
 import statistics
 import sys
 from dataclasses import replace
@@ -23,7 +24,7 @@ from eagle.run_artifacts import GENERATION_SCHEMA_VERSION
 
 SCHEMA_VERSION = "eagle-fixed-evaluation-v1"
 ROW_FIELDS = (
-    "generation", "candidate_id", "birth_generation", "search_game_performance",
+    "generation", "candidate_id", "birth_generation", "search_game_performance", "selection_mode",
     "status", "expected_matches", "completed_matches", "wins", "losses", "draws",
     "errors", "win_rate", "mean_match_score", "opponent_fault_contained_matches",
     "opponent_fault_recovered_matches", "source_sha256", "summary_path",
@@ -36,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--generations", nargs="+", type=int, default=[0, 5, 10, 15, 20])
     parser.add_argument("--seed", type=int, help="Defaults to the run's random_seed.")
     parser.add_argument("--output-dir", type=Path, help="Must be empty; defaults to <run>/fixed_evaluation.")
+    parser.add_argument(
+        "--all-candidates", action="store_true",
+        help="Evaluate every runnable individual in each requested generation instead of only its representative.",
+    )
     args = parser.parse_args(argv)
     run_dir = args.run_dir.expanduser().resolve()
     output_dir = (args.output_dir or run_dir / "fixed_evaluation").expanduser().resolve()
@@ -56,27 +61,36 @@ def main(argv: list[str] | None = None) -> int:
         config = final_test._load_config(run_dir / "config.yaml", repository_root)
         if args.seed is not None:
             config = replace(config, random_seed=args.seed)
-        candidates = [_select_representative(run_dir, generation) for generation in generations]
+        selected: list[tuple[int, dict[str, Any]]] = []
+        for generation in generations:
+            candidates = (
+                _select_all_representatives(run_dir, generation)
+                if args.all_candidates
+                else [_select_representative(run_dir, generation)]
+            )
+            selected.extend((generation, candidate) for candidate in candidates)
         final_test.preflight_evaluation_opponents(config, mock=False, repository_root=repository_root)
         protocol = _build_protocol(config, repository_root)
         selections = [
             {"generation": generation, "candidate_id": candidate["candidate_id"],
              "birth_generation": candidate.get("generation"),
              "search_game_performance": candidate["_selection"]["search_game_performance"],
+             "selection_mode": "all_runnable_candidates" if args.all_candidates else "generation_representative",
              "source_sha256": hash_file(final_test._candidate_source_path(
                  run_dir / "classes" / candidate["candidate_id"], candidate["candidate_id"],
              ))}
-            for generation, candidate in zip(generations, candidates, strict=True)
+            for generation, candidate in selected
         ]
         output_dir.mkdir(parents=True, exist_ok=True)
         final_test._atomic_json(output_dir / "protocol.json", protocol)
         summary = {
             "schema_version": SCHEMA_VERSION, "run_dir": str(run_dir),
             "status": "running", "active_generation": None,
+            "selection_mode": "all_runnable_candidates" if args.all_candidates else "generation_representative",
             "protocol": protocol, "selections": selections, "rows": [],
         }
         _write_comparison(output_dir, summary)
-        for selection, candidate in zip(selections, candidates, strict=True):
+        for selection, (generation, candidate) in zip(selections, selected, strict=True):
             summary["active_generation"] = selection["generation"]
             _write_comparison(output_dir, summary)
             if _build_protocol(config, repository_root) != protocol:
@@ -87,11 +101,13 @@ def main(argv: list[str] | None = None) -> int:
             if hash_file(source) != selection["source_sha256"]:
                 raise ValueError(f"Saved candidate source changed: {source}")
             generation_dir = output_dir / f"generation_{selection['generation']:04d}"
+            if args.all_candidates:
+                generation_dir /= candidate["candidate_id"]
             result = final_test._evaluate_candidate(
                 config=config, repository_root=repository_root, run_dir=run_dir,
                 candidate=candidate, output_dir=generation_dir, seed_identity=SCHEMA_VERSION,
             )
-            result["fixed_evaluation_protocol"] = "../protocol.json"
+            result["fixed_evaluation_protocol"] = os.path.relpath(output_dir / "protocol.json", generation_dir)
             result["fixed_evaluation_valid"] = False
             try:
                 if _build_protocol(config, repository_root) != protocol or hash_file(source) != selection["source_sha256"]:
@@ -99,7 +115,10 @@ def main(argv: list[str] | None = None) -> int:
                 result["fixed_evaluation_valid"] = True
             finally:
                 final_test._write_outputs(generation_dir, result)
-            row = _comparison_row(selection, result, protocol["matches_per_representative"])
+            row = _comparison_row(
+                selection, result, protocol["matches_per_representative"],
+                summary_path=str(generation_dir.relative_to(output_dir) / "final_test_summary.json"),
+            )
             summary["rows"].append(row)
             _write_comparison(output_dir, summary)
             print(f"generation={selection['generation']} candidate={candidate['candidate_id']} status={row['status']}", flush=True)
@@ -124,18 +143,32 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _select_representative(run_dir: Path, generation: int) -> dict[str, Any]:
+    candidates = _select_all_representatives(run_dir, generation)
+    return sorted(
+        candidates,
+        key=lambda candidate: (-candidate["_selection"]["search_game_performance"], candidate["candidate_id"]),
+    )[0]
+
+
+def _select_all_representatives(run_dir: Path, generation: int) -> list[dict[str, Any]]:
+    """Return every runnable, finite-Game-Performance survivor in snapshot order."""
+
     snapshot = final_test._read_json(run_dir / "generations" / f"generation_{generation:04d}.json")
     if snapshot.get("schema_version") != GENERATION_SCHEMA_VERSION or snapshot.get("generation") != generation:
         raise ValueError(f"Unsupported or mismatched generation snapshot: {generation}")
-    ranked = []
     if not isinstance(snapshot.get("population"), list):
         raise ValueError(f"Invalid population in generation {generation}")
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for reference in snapshot.get("population", []):
         if not isinstance(reference, dict):
             raise ValueError(f"Invalid candidate reference in generation {generation}")
         identity = str(reference.get("candidate_id") or reference.get("id") or "")
         if not identity or identity in {".", ".."} or "/" in identity or "\\" in identity or ":" in identity:
             raise ValueError(f"Invalid candidate identity in generation {generation}: {identity!r}")
+        if identity in seen:
+            raise ValueError(f"Duplicate candidate identity in generation {generation}: {identity!r}")
+        seen.add(identity)
         candidate_dir = run_dir / "candidates" / identity
         candidate_path = candidate_dir / "candidate.json"
         stored = final_test._read_json(candidate_path) if candidate_path.is_file() else {}
@@ -154,14 +187,14 @@ def _select_representative(run_dir: Path, generation: int) -> dict[str, Any]:
             continue
         score = float(score)
         candidate["_selection"] = {
-            "mode": "generation_game_performance", "requested_generation": generation,
+            "mode": "all_runnable_candidates", "requested_generation": generation,
             "selected_generation": generation, "fallback": False,
             "search_game_performance": score,
         }
-        ranked.append((score, identity, candidate))
-    if not ranked:
+        candidates.append(candidate)
+    if not candidates:
         raise ValueError(f"Generation {generation} has no runnable candidate with finite Game Performance.")
-    return sorted(ranked, key=lambda item: (-item[0], item[1]))[0][2]
+    return candidates
 
 
 def _build_protocol(config: ExperimentConfig, repository_root: Path) -> dict[str, Any]:
@@ -199,7 +232,9 @@ def _build_protocol(config: ExperimentConfig, repository_root: Path) -> dict[str
     }
 
 
-def _comparison_row(selection: dict[str, Any], result: dict[str, Any], expected: int) -> dict[str, Any]:
+def _comparison_row(
+    selection: dict[str, Any], result: dict[str, Any], expected: int, *, summary_path: str | None = None,
+) -> dict[str, Any]:
     matches = result["matches"]
     counts = {label: sum(item["result"] == label for item in matches) for label in ("win", "loss", "draw", "error")}
     complete = len(matches) == expected and counts["error"] == 0
@@ -211,7 +246,7 @@ def _comparison_row(selection: dict[str, Any], result: dict[str, Any], expected:
         "mean_match_score": statistics.fmean(item["match"]["score"] for item in matches) if complete else None,
         "opponent_fault_contained_matches": result["opponent_fault_contained_matches"],
         "opponent_fault_recovered_matches": result["opponent_fault_recovered_matches"],
-        "summary_path": f"generation_{selection['generation']:04d}/final_test_summary.json",
+        "summary_path": summary_path or f"generation_{selection['generation']:04d}/final_test_summary.json",
     }
 
 

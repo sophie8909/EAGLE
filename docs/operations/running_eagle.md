@@ -519,6 +519,7 @@ does not skip EA or analysis artifacts.
 ```bash
 python -m eagle.fixed_evaluation --run-dir runs/<run>
 python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 0 5 10 15 20 --seed 42
+python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 0 5 10 15 20 --all-candidates --output-dir runs/<run>/fixed_evaluation_all
 ```
 
 The same comparison is also available through the final-test entry point:
@@ -534,8 +535,9 @@ candidate unless `--generations` is supplied.
 The normal `experiment.sh`/`python -m eagle experiment` flow automatically
 passes `--cross-generation` after the ordinary final test whenever
 `--skip-final-test` is absent. This evaluates checkpoints every five
-generations, including the final generation. `--skip-final-test` skips both
-the ordinary and cross-generation final tests.
+generations, including the final generation, and evaluates every runnable
+individual in each checkpoint. `--skip-final-test` skips both the ordinary and
+cross-generation final tests.
 
 For the 1030 slot ablation, treatments 2 and 3 use one combined evaluation:
 

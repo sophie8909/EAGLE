@@ -152,7 +152,9 @@ class FixedEvaluationTests(unittest.TestCase):
         self.assertEqual([r["candidate_id"] for r in summary["rows"]], ["initial", "later"])
         self.assertTrue(all(r["wins"] == 12 and r["mean_match_score"] == 4 for r in summary["rows"]))
         calls = [call.kwargs for call in matches.call_args_list]
-        self.assertEqual([c["match_seed"] for c in calls[:12]], [c["match_seed"] for c in calls[12:]])
+        initial_seeds = sorted(c["match_seed"] for c in calls if c["candidate_id"] == "initial")
+        later_seeds = sorted(c["match_seed"] for c in calls if c["candidate_id"] == "later")
+        self.assertEqual(initial_seeds, later_seeds)
         self.assertEqual(len(set(c["match_seed"] for c in calls[:12])), 12)
         self.assertEqual([c["candidate_id"] for c in calls[:12]], ["initial"] * 12)
         self.assertEqual([c["generation"] for c in calls[12:]], [5] * 12)
@@ -166,6 +168,23 @@ class FixedEvaluationTests(unittest.TestCase):
         self.assertTrue((self.output / "generation_0000/final_test_results.csv").is_file())
         self.assertEqual(self.invoke(), 2)
         self.assertEqual(compile_agent.call_count, 2)
+
+    def test_all_candidates_evaluates_every_individual_and_separates_outputs(self):
+        compile_agent, _, matches = self.runtime()
+        output = self.root / "fixed_evaluation_all"
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(fixed_evaluation.main([
+                "--run-dir", str(self.run), "--generations", "0", "5",
+                "--all-candidates", "--output-dir", str(output),
+            ]), 0)
+        summary = json.loads((output / "fixed_evaluation_summary.json").read_text())
+        self.assertEqual(summary["status"], "complete")
+        self.assertEqual([row["candidate_id"] for row in summary["rows"]], ["initial", "initial", "later"])
+        self.assertTrue(all(row["selection_mode"] == "all_runnable_candidates" for row in summary["rows"]))
+        self.assertTrue((output / "generation_0005/initial/final_test_summary.json").is_file())
+        self.assertTrue((output / "generation_0005/later/final_test_summary.json").is_file())
+        self.assertEqual(compile_agent.call_count, 3)
+        self.assertEqual(len(matches.call_args_list), 36)
 
     def test_missing_or_uncommitted_generation_fails_before_evaluation(self):
         compile_agent, _, _ = self.runtime()
