@@ -599,11 +599,21 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 ./analyze.sh RUN_DIR
 ```
 
-跨世代固定評估使用獨立命令與輸出，不改變一般 `eagle.final_test`：
+跨世代固定評估可由獨立命令或 final-test 入口執行；普通 `eagle.final_test`
+未指定 `--generations` 時仍只評估一個代表 candidate：
 
 ```bash
 python -m eagle.fixed_evaluation --run-dir runs/<run> [--generations 0 5 10 15 20] [--seed <int>] [--output-dir <dir>]
+python -m eagle.final_test --run-dir runs/<run> --generations 0 5 10 15 20 [--seed <int>]
 ```
+
+由 final-test 入口執行時，預設輸出為 `final_test/cross_generation/`；兩個入口
+共用同一套固定 opponents、maps、tick limits、candidate-independent seed stream
+與每代 representative selection。
+
+正常 `experiment.sh`／`python -m eagle experiment` 在沒有指定
+`--skip-final-test` 時，會在普通 final test 完成後自動呼叫這個跨世代固定流程；
+指定 `--skip-final-test` 時兩者都跳過。
 
 1030 ablation 的 treatments 2/3 使用一次命令評估所有指定 checkpoint：
 

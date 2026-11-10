@@ -168,6 +168,32 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertFalse(any(item.startswith("final:") for item in events))
             self.assertEqual(events[-1], "ea:one")
 
+    def test_final_test_flow_includes_cross_generation_comparison(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            path = self.config(root, "only.yaml", model_name="one", model_path=model)
+            run_dir = root / "run"
+            calls: list[list[str]] = []
+
+            def search(config, **_kwargs):
+                return SearchResult(run_dir, [], None)
+
+            def final(argv):
+                calls.append(argv)
+                return 0
+
+            ExperimentOrchestrator(
+                search_runner=search,
+                final_test_runner=final,
+            ).run(config_path=path)
+
+            self.assertEqual(
+                calls,
+                [["--cross-generation", "--run-dir", str(run_dir)]],
+            )
+
     def test_direct_config_runs_requested_replicates_with_incremented_seeds(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

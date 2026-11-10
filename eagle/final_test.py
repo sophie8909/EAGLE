@@ -45,6 +45,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, help="Defaults to the run-local resolved config.yaml.")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--candidate-id")
+    parser.add_argument(
+        "--generations", nargs="+", type=int,
+        help="Run the fixed-opponent cross-generation final test for these snapshots.",
+    )
+    parser.add_argument(
+        "--seed", type=int,
+        help="Fixed cross-generation evaluation root seed; defaults to the run seed.",
+    )
+    parser.add_argument(
+        "--cross-generation", action="store_true",
+        help="After the ordinary final test, run fixed-opponent checkpoints every five generations.",
+    )
     args = parser.parse_args(argv)
 
     repository_root = Path(__file__).resolve().parents[1]
@@ -53,6 +65,20 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = (args.output_dir or run_dir / "final_test").expanduser().resolve()
 
     try:
+        if args.generations is not None:
+            if args.candidate_id is not None:
+                raise ValueError("--candidate-id cannot be combined with --generations.")
+            from eagle import fixed_evaluation
+
+            fixed_output_dir = output_dir / "cross_generation" if args.output_dir is None else output_dir
+            delegated = [
+                "--run-dir", str(run_dir),
+                "--generations", *(str(generation) for generation in args.generations),
+                "--output-dir", str(fixed_output_dir),
+            ]
+            if args.seed is not None:
+                delegated.extend(("--seed", str(args.seed)))
+            return fixed_evaluation.main(delegated)
         config = _load_config(config_path, repository_root)
         manifest = _read_json(run_dir / "manifest.json")
         if str(manifest.get("status") or "") != "complete":
@@ -69,6 +95,24 @@ def main(argv: list[str] | None = None) -> int:
         print(_markdown_table(summary))
         print(f"final_test_summary={output_dir / 'final_test_summary.json'}")
         print(f"final_test_csv={output_dir / 'final_test_results.csv'}")
+        if args.cross_generation:
+            generations = _cross_generation_checkpoints(
+                config, int(manifest.get("latest_generation") or config.generations)
+            )
+            from eagle import fixed_evaluation
+
+            cross_output_dir = _cross_generation_output_dir(output_dir / "cross_generation")
+            if cross_output_dir is None:
+                print(f"cross_generation_summary={output_dir / 'cross_generation' / 'fixed_evaluation_summary.json'}")
+                return 0
+            delegated = [
+                "--run-dir", str(run_dir),
+                "--generations", *(str(generation) for generation in generations),
+                "--output-dir", str(cross_output_dir),
+            ]
+            if args.seed is not None:
+                delegated.extend(("--seed", str(args.seed)))
+            return fixed_evaluation.main(delegated)
         return 0
     except (OSError, ValueError, RuntimeError, KeyError, json.JSONDecodeError) as exc:
         print(f"ERROR: final test failed: {exc}", file=sys.stderr)
@@ -124,6 +168,37 @@ def _load_config(config_path: Path, repository_root: Path) -> ExperimentConfig:
     config = ExperimentConfig.from_file(config_path)
     microrts_dir = _resolve_path(repository_root, config.microrts_dir)
     return replace(config, microrts_dir=microrts_dir)
+
+
+def _cross_generation_checkpoints(config: ExperimentConfig, latest_generation: int) -> list[int]:
+    """Return every fifth completed generation, including a non-multiple final generation."""
+
+    final_generation = min(int(config.generations), int(latest_generation))
+    generations = list(range(0, final_generation + 1, 5))
+    if final_generation not in generations:
+        generations.append(final_generation)
+    return generations
+
+
+def _cross_generation_output_dir(base: Path) -> Path | None:
+    """Preserve partial/previous cross-generation evidence on reruns."""
+
+    if not base.exists() or not any(base.iterdir()):
+        return base
+    summary_path = base / "fixed_evaluation_summary.json"
+    if summary_path.is_file():
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            summary = {}
+        if summary.get("status") == "complete":
+            return None
+    index = 1
+    while True:
+        candidate = base.parent / f"{base.name}_retry_{index:03d}"
+        if not candidate.exists():
+            return candidate
+        index += 1
 
 
 def _resolve_path(repository_root: Path, path: str | Path) -> Path:

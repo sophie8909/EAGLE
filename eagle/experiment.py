@@ -170,7 +170,7 @@ def _run_final_test_if_eligible(
         if manifest.get("status") != "complete":
             print("Status: evolutionary run failed; skipping final test.")
             return
-    status = runner(["--run-dir", str(result.run_dir)])
+    status = runner(["--cross-generation", "--run-dir", str(result.run_dir)])
     if status:
         raise RuntimeError(f"Final test failed with exit code {status}.")
 

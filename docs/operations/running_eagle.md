@@ -521,6 +521,22 @@ python -m eagle.fixed_evaluation --run-dir runs/<run>
 python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 0 5 10 15 20 --seed 42
 ```
 
+The same comparison is also available through the final-test entry point:
+
+```bash
+python -m eagle.final_test --run-dir runs/<run> --generations 0 5 10 15 20 --seed 42
+```
+
+When invoked this way, output defaults to
+`final_test/cross_generation/`. Ordinary final test remains a single selected
+candidate unless `--generations` is supplied.
+
+The normal `experiment.sh`/`python -m eagle experiment` flow automatically
+passes `--cross-generation` after the ordinary final test whenever
+`--skip-final-test` is absent. This evaluates checkpoints every five
+generations, including the final generation. `--skip-final-test` skips both
+the ordinary and cross-generation final tests.
+
 For the 1030 slot ablation, treatments 2 and 3 use one combined evaluation:
 
 ```bash

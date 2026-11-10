@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from eagle.config import ExperimentConfig
 from eagle.final_test import (
@@ -19,6 +22,26 @@ from eagle.opponents import SAFE_ALLINBOT_CLASS_NAME
 
 
 class FinalTestTests(unittest.TestCase):
+    def test_generations_delegate_fixed_comparison_into_final_test_flow(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            delegated = []
+            with patch("eagle.fixed_evaluation.main", side_effect=lambda argv: delegated.append(argv) or 0):
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    status = __import__("eagle.final_test", fromlist=["main"]).main([
+                        "--run-dir", str(run_dir), "--generations", "0", "5", "10", "--seed", "42",
+                    ])
+            self.assertEqual(status, 0)
+            self.assertEqual(len(delegated), 1)
+            self.assertEqual(
+                delegated[0],
+                [
+                    "--run-dir", str(run_dir.resolve()), "--generations", "0", "5", "10",
+                    "--output-dir", str((run_dir / "final_test" / "cross_generation").resolve()),
+                    "--seed", "42",
+                ],
+            )
+
     def test_historical_staged_model_config_remains_loadable(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
