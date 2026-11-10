@@ -40,6 +40,16 @@ and contains 600 matches (10 opponents × 3 maps × 10 games × 2 sides).
 The search `game_performance` values are evaluated in the evolving self-play
 context. They should not be interpreted as a frozen cross-generation benchmark.
 
+## Cross-generation convergence
+
+The solid lines show the two-seed mean of the best search candidate at each
+generation. The shaded region is the seed-wise min–max range.
+
+![50-generation cross-generation convergence](cross_generation_convergence.png)
+
+Data: [`cross_generation_convergence.csv`](cross_generation_convergence.csv)
+and reproducible script: [`plot_50gen_cross_generation.py`](../../../scripts/plot_50gen_cross_generation.py).
+
 ## Run artifacts
 
 ### 10 GPT initial
