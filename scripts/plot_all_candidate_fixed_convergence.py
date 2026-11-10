@@ -27,8 +27,8 @@ DEFAULT_RUNS = {
 COLORS = {"10 GPT initial": "#2563eb", "1 GPT + 9 local": "#dc2626"}
 
 
-def load_rows(run_dir: Path) -> list[dict[str, object]]:
-    path = run_dir / "fixed_evaluation_all/fixed_evaluation_results.csv"
+def load_rows(run_dir: Path, evaluation_dir_name: str) -> list[dict[str, object]]:
+    path = run_dir / evaluation_dir_name / "fixed_evaluation_results.csv"
     if not path.is_file():
         raise FileNotFoundError(
             f"Missing all-candidate results: {path}. Run fixed_evaluation with --all-candidates first."
@@ -85,13 +85,15 @@ def aggregate(records: list[dict[str, object]]) -> list[dict[str, object]]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, default=ROOT / "reports/all_candidate_fixed_convergence")
+    parser.add_argument("--evaluation-dir-name", default="fixed_evaluation_all")
+    parser.add_argument("--report-path", type=Path)
     args = parser.parse_args()
     records: list[dict[str, object]] = []
     for treatment, runs in DEFAULT_RUNS.items():
         for seed, run_dir in runs.items():
             records.extend(
                 {"treatment": treatment, "seed": seed, **row}
-                for row in load_rows(run_dir)
+                for row in load_rows(run_dir, args.evaluation_dir_name)
             )
     aggregate_rows = aggregate(records)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -132,6 +134,17 @@ def main() -> None:
     axis.legend(ncol=2, fontsize=8)
     fig.savefig(args.output_dir / "five_statistic_convergence.png", dpi=180)
     plt.close(fig)
+    if args.report_path is not None:
+        args.report_path.parent.mkdir(parents=True, exist_ok=True)
+        args.report_path.write_text(
+            "# 1113 全體個體固定對手收斂比較\n\n"
+            "每 5 代評估每個 seed 的全部 runnable individuals；兩種初始化方法使用固定 opponents、maps、tick limits 與 paired seed stream。\n\n"
+            "![五統計收斂圖](all_candidate_fixed_convergence/five_statistic_convergence.png)\n\n"
+            "原始個體結果：[all_candidate_results.csv](all_candidate_fixed_convergence/all_candidate_results.csv)\n\n"
+            "彙總統計：[five_statistic_summary.csv](all_candidate_fixed_convergence/five_statistic_summary.csv)\n\n"
+            "圖中實線是所有個體平均；虛線是各 seed 最佳／最差個體的平均；色塊範圍是最佳 seed 平均到最差 seed 平均。\n",
+            encoding="utf-8",
+        )
 
 
 if __name__ == "__main__":
