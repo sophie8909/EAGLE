@@ -93,6 +93,11 @@ def main(argv: list[str] | None = None) -> int:
         for selection, (generation, candidate) in zip(selections, selected, strict=True):
             summary["active_generation"] = selection["generation"]
             _write_comparison(output_dir, summary)
+            print(
+                f"starting generation={selection['generation']} candidate={candidate['candidate_id']} "
+                f"({len(summary['rows']) + 1}/{len(selections)})",
+                flush=True,
+            )
             if _build_protocol(config, repository_root) != protocol:
                 raise ValueError("Fixed evaluation assets changed after the protocol was frozen.")
             source = final_test._candidate_source_path(
@@ -106,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
             result = final_test._evaluate_candidate(
                 config=config, repository_root=repository_root, run_dir=run_dir,
                 candidate=candidate, output_dir=generation_dir, seed_identity=SCHEMA_VERSION,
+                progress=lambda completed, total: print(
+                    f"progress generation={selection['generation']} candidate={candidate['candidate_id']} "
+                    f"matches={completed}/{total}", flush=True,
+                ),
             )
             result["fixed_evaluation_protocol"] = os.path.relpath(output_dir / "protocol.json", generation_dir)
             result["fixed_evaluation_valid"] = False

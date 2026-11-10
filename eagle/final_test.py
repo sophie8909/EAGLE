@@ -14,7 +14,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from eagle.evaluation.compiler import compile_generated_agent
 from eagle.evaluation.opponents import (
@@ -128,6 +128,7 @@ def _evaluate_candidate(
     candidate: dict[str, Any],
     output_dir: Path,
     seed_identity: str | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
     original_classes = run_dir / "classes" / candidate_id
@@ -157,7 +158,7 @@ def _evaluate_candidate(
     results = _run_final_matrix(
         config=config, repository_root=repository_root, candidate=candidate,
         classes_dir=classes_dir, output_dir=output_dir, source_path=source_path,
-        seed_identity=seed_identity,
+        seed_identity=seed_identity, progress=progress,
     )
     return _build_summary(
         config=config, run_dir=run_dir, output_dir=output_dir, candidate=candidate,
@@ -343,6 +344,7 @@ def _run_final_matrix(
     output_dir: Path,
     source_path: Path | None = None,
     seed_identity: str | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> list[dict[str, Any]]:
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
     candidate_generation = int(candidate.get("generation") or 0)
@@ -461,6 +463,10 @@ def _run_final_matrix(
                     "match": result.to_json_dict(),
                 }
             )
+            if progress is not None and (
+                len(results) == 1 or len(results) % 25 == 0 or len(results) == len(specifications)
+            ):
+                progress(len(results), len(specifications))
     return results
 
 
