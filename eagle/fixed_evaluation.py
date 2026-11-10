@@ -41,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
         "--all-candidates", action="store_true",
         help="Evaluate every runnable individual in each requested generation instead of only its representative.",
     )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Resume an incomplete fixed-evaluation output directory without overwriting completed rows.",
+    )
     args = parser.parse_args(argv)
     run_dir = args.run_dir.expanduser().resolve()
     output_dir = (args.output_dir or run_dir / "fixed_evaluation").expanduser().resolve()
@@ -56,8 +60,11 @@ def main(argv: list[str] | None = None) -> int:
         completed = manifest.get("completed_generations")
         if completed is not None and not set(generations).issubset(completed):
             raise ValueError("Requested generations must be marked complete in the run manifest.")
-        if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())):
+        resume_summary_path = output_dir / "fixed_evaluation_summary.json"
+        if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())) and not args.resume:
             raise ValueError(f"Refusing to overwrite fixed-evaluation output: {output_dir}")
+        if args.resume and not resume_summary_path.is_file():
+            raise ValueError(f"Cannot resume without a fixed-evaluation summary: {resume_summary_path}")
         config = final_test._load_config(run_dir / "config.yaml", repository_root)
         if args.seed is not None:
             config = replace(config, random_seed=args.seed)
@@ -82,15 +89,32 @@ def main(argv: list[str] | None = None) -> int:
             for generation, candidate in selected
         ]
         output_dir.mkdir(parents=True, exist_ok=True)
-        final_test._atomic_json(output_dir / "protocol.json", protocol)
-        summary = {
-            "schema_version": SCHEMA_VERSION, "run_dir": str(run_dir),
-            "status": "running", "active_generation": None,
-            "selection_mode": "all_runnable_candidates" if args.all_candidates else "generation_representative",
-            "protocol": protocol, "selections": selections, "rows": [],
-        }
+        if args.resume:
+            summary = final_test._read_json(resume_summary_path)
+            if summary.get("status") == "complete":
+                raise ValueError(f"Fixed evaluation is already complete: {output_dir}")
+            if summary.get("protocol") != protocol or summary.get("selections") != selections:
+                raise ValueError("Resume output protocol or selections do not match the current request.")
+            summary["status"] = "running"
+            summary["error"] = None
+        else:
+            final_test._atomic_json(output_dir / "protocol.json", protocol)
+            summary = {
+                "schema_version": SCHEMA_VERSION, "run_dir": str(run_dir),
+                "status": "running", "active_generation": None,
+                "selection_mode": "all_runnable_candidates" if args.all_candidates else "generation_representative",
+                "protocol": protocol, "selections": selections, "rows": [],
+            }
         _write_comparison(output_dir, summary)
+        completed_keys = {
+            (int(row["generation"]), row["candidate_id"])
+            for row in summary["rows"]
+            if row.get("status") == "complete"
+        }
         for selection, (generation, candidate) in zip(selections, selected, strict=True):
+            key = (int(selection["generation"]), selection["candidate_id"])
+            if key in completed_keys:
+                continue
             summary["active_generation"] = selection["generation"]
             _write_comparison(output_dir, summary)
             print(
@@ -108,6 +132,14 @@ def main(argv: list[str] | None = None) -> int:
             generation_dir = output_dir / f"generation_{selection['generation']:04d}"
             if args.all_candidates:
                 generation_dir /= candidate["candidate_id"]
+                if generation_dir.exists() and any(generation_dir.iterdir()):
+                    retry_index = 1
+                    while True:
+                        retry_dir = generation_dir.parent / f"{generation_dir.name}_retry_{retry_index:03d}"
+                        if not retry_dir.exists():
+                            generation_dir = retry_dir
+                            break
+                        retry_index += 1
             result = final_test._evaluate_candidate(
                 config=config, repository_root=repository_root, run_dir=run_dir,
                 candidate=candidate, output_dir=generation_dir, seed_identity=SCHEMA_VERSION,
