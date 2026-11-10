@@ -1,0 +1,8 @@
+schema_version: eagle-experiment-index-v1
+runs:
+  10_gpt_initial_seed8_9.yaml:
+  - /home/mhlab/EAGLE/runs/20261108_144319_755348
+  - /home/mhlab/EAGLE/runs/20261109_000650_966551
+  1_gpt_9_local_seed8_9.yaml:
+  - /home/mhlab/EAGLE/runs/20261109_072720_479146
+  - /home/mhlab/EAGLE/runs/20261109_150205_472817
