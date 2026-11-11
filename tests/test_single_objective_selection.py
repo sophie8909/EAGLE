@@ -61,7 +61,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
         reference = candidate("reference", 10.0, ("a", "a", "a"))
         population = [
             reference,
-            candidate("same", 10.0, ("a", "a", "a")),
+            candidate("same", 2.0, ("a", "a", "a")),
             candidate("partial", 9.5, ("a", "b", "a")),
             candidate("different", 9.0, ("b", "b", "b")),
         ]
@@ -81,7 +81,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
             reference,
             candidate("near", 9.0, ("a", "b", "a")),
             candidate("far", 10.0, ("b", "b", "b")),
-            candidate("outside-tier", 8.999999, ("a", "a", "a")),
+            candidate("lower-score", 8.999999, ("b", "a", "b")),
             candidate("incompatible", 10.0, ("a", "a", "a"), dataset_id="other"),
         ]
 
@@ -120,7 +120,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
             selected_ids.add(chosen.id)
         self.assertEqual(selected_ids, {"near-a", "near-b"})
 
-    def test_parent_reference_reuses_only_member_of_top_tier(self) -> None:
+    def test_parent_reference_ignores_score_and_reuses_a_only_if_alone(self) -> None:
         reference = candidate("reference", 10.0, ("a", "a", "a"))
         for population in ([reference], [reference, candidate("lower", 8.0, ("a", "a", "a"))]):
             with self.subTest(size=len(population)):
@@ -130,7 +130,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
                     selection_mode=GAME_PERFORMANCE_SELECTION,
                     semantic_reference=reference,
                 )
-                self.assertEqual(chosen.id, reference.id)
+                self.assertEqual(chosen.id, "reference" if len(population) == 1 else "lower")
 
     def test_parent_reference_without_comparable_evidence_excludes_itself(self) -> None:
         reference = candidate("reference", 10.0, ("a", "a", "a"))
@@ -167,22 +167,28 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
 
         self.assertEqual(chosen.id, "compatible")
 
-    def test_survivor_tiers_are_anchored_and_do_not_chain(self) -> None:
+    def test_survivors_reserve_two_seats_against_the_same_eight_elites(self) -> None:
+        elites = [
+            candidate(f"elite-{index}", 100.0 - index, (("a",) if index < 7 else ("c",)) * 3)
+            for index in range(8)
+        ]
         population = [
-            candidate("maximum", 10.0, None, status="unavailable"),
-            candidate("within", 9.4, None, status="unavailable"),
-            candidate("chained-only", 8.8, None, status="unavailable"),
+            *elites,
+            candidate("high-score", 90.0, ("c", "c", "c")),
+            candidate("distant-a", 10.0, ("b", "b", "b")),
+            candidate("distant-b", 1.0, ("b", "b", "b")),
         ]
 
         selected = select_next_generation(
             population,
             [],
-            population_size=2,
+            population_size=10,
             rng=random.Random(3),
             selection_mode=GAME_PERFORMANCE_SELECTION,
         )
 
-        self.assertEqual([item.id for item in selected], ["maximum", "within"])
+        self.assertEqual(selected[:8], elites)
+        self.assertEqual({item.id for item in selected[8:]}, {"distant-a", "distant-b"})
 
     def test_survivor_selection_rejects_an_all_failed_pool(self) -> None:
         failed = [
@@ -243,7 +249,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
 
         self.assertEqual({item.id for item in selected}, {"parent-a", "parent-b"})
 
-    def test_survivor_keeps_better_tier_then_uses_boundary_novelty(self) -> None:
+    def test_survivor_keeps_top_score_then_uses_behavior_distance(self) -> None:
         best = candidate("best", 12.0, ("a", "a", "a"))
         same = candidate("same", 10.0, ("a", "a", "a"))
         partial = candidate("partial", 9.5, ("a", "b", "a"))
@@ -259,7 +265,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
 
         self.assertEqual([item.id for item in selected], ["best", "different"])
 
-    def test_boundary_selection_is_farthest_first(self) -> None:
+    def test_diversity_seat_prefers_farthest_from_elite(self) -> None:
         population = [
             candidate("same-a", 4.0, ("a", "a", "a")),
             candidate("same-b", 4.0, ("a", "a", "a")),
@@ -274,7 +280,7 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
             selection_mode=GAME_PERFORMANCE_SELECTION,
         )
 
-        self.assertIn("different", {item.id for item in selected})
+        self.assertEqual([item.id for item in selected], ["different", "same-a"])
         self.assertEqual(len({item.id for item in selected}), 2)
 
     def test_complete_summaries_seed_before_missing_fallback(self) -> None:
@@ -295,18 +301,19 @@ class SingleObjectiveSelectionTests(unittest.TestCase):
         self.assertEqual({item.id for item in selected}, {"known-a", "known-b"})
 
     def test_invalid_complete_summary_is_treated_as_fallback(self) -> None:
+        elite = candidate("elite", 5.0, ("a", "a", "a"))
         valid = candidate("valid", 4.0, ("a", "a", "a"))
         invalid = candidate("invalid", 4.0, ("b",), probes=("early", "mid"))
 
         selected = select_next_generation(
-            [valid, invalid],
+            [elite, valid, invalid],
             [],
-            population_size=1,
+            population_size=2,
             rng=random.Random(4),
             selection_mode=GAME_PERFORMANCE_SELECTION,
         )
 
-        self.assertEqual(selected[0].id, "valid")
+        self.assertEqual(selected[1].id, "valid")
 
     def test_scalar_survivors_remain_unique_across_parent_and_offspring_pool(self) -> None:
         duplicate = candidate("duplicate", 4.0, None, status="unavailable")

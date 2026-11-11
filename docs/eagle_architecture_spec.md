@@ -589,14 +589,18 @@ acts on each reloaded state. Unit actions are canonically ordered and hashed;
 the ordered nine-action vector defines exact equivalence for the opponent
 library, while semantic distance is normalized Hamming distance over the nine
 action hashes.
-Scores within `fitness_tie_tolerance` (default and canonical value `1.0`,
-inclusive) of a tier's maximum are equal for selection. Tiers use that maximum
-as a fixed anchor, so pairwise chaining cannot merge a worse candidate. Missing
-or incompatible signatures are fallback evidence, never maximally novel.
-Within the top tier, parent B minimizes compatible semantic distance to parent A,
-excluding parent A when another tier member exists. A singleton tier reuses its
-only member. Equal distances use seeded choice in candidate-ID order. Survivor
-boundary selection retains seeded farthest-first max-min diversity.
+Parent A is selected from the tier within `fitness_tie_tolerance` of the
+maximum Game Performance (default `1.0`, inclusive). Parent B minimizes
+compatible semantic distance to A across the population regardless of fitness.
+A is excluded from that choice when another individual exists.
+Environmental selection fills all but two seats by descending Game Performance,
+breaking exact score ties by candidate ID and keeping at least one score leader.
+Each remaining seat goes to the candidate whose minimum compatible distance to
+those score leaders is largest. Both seats use the same score leaders as
+references. There is no fitness threshold for the diversity seats. Equal
+distances use seeded choice in candidate-ID order. Without comparable distances,
+selection uses seeded choice among complete signatures if available, or all
+eligible candidates otherwise.
 
 After each surviving population is fixed, every unordered pair is persisted
 with this same compatible normalized Hamming distance. Generation metrics store

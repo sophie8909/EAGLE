@@ -49,25 +49,25 @@ def select_parent(
 ) -> Candidate:
     """Select one parent under the requested seeded selection contract.
 
-    Scalar selection considers only the top non-chained Game Performance tier.
-    A second-parent request may supply the first parent as a semantic reference;
-    complete compatible action signatures then break the fitness tie by minimum
-    distance, excluding that parent when another member of the tier exists.
-    Missing or incompatible signatures remain fallback candidates.
+    Self-play selects the first parent from the top Game Performance tier.
+    The second parent is the nearest behavioral match across the population,
+    excluding the first parent when another candidate exists.
     """
 
     if selection_mode == LEXICASE_SELECTION:
         return lexicase_select(population, rng)
     _validate_selection_mode(selection_mode)
-    _validate_fitness_tolerance(fitness_tolerance)
     if not population:
         raise ValueError("Cannot select from an empty population.")
 
-    tier = _top_score_tier(population, tolerance=fitness_tolerance)
-    if semantic_reference is not None:
-        tier = [candidate for candidate in tier if candidate.id != semantic_reference.id] or tier
-    references = [] if semantic_reference is None else [semantic_reference]
-    return _choose_by_semantic_distance(tier, references, rng, prefer_nearest=True)
+    if semantic_reference is None:
+        _validate_fitness_tolerance(fitness_tolerance)
+        tier = _top_score_tier(population, tolerance=fitness_tolerance)
+        return _choose_by_semantic_distance(tier, [], rng, prefer_nearest=True)
+    mates = [candidate for candidate in population if candidate.id != semantic_reference.id]
+    return _choose_by_semantic_distance(
+        mates or population, [semantic_reference], rng, prefer_nearest=True
+    )
 
 
 def select_next_generation(
@@ -77,21 +77,16 @@ def select_next_generation(
     population_size: int,
     rng: random.Random,
     selection_mode: SelectionMode = LEXICASE_SELECTION,
-    fitness_tolerance: float = GAME_PERFORMANCE_TIE_TOLERANCE,
 ) -> list[Candidate]:
     """Select a fixed-size generation from parents and offspring jointly.
 
-    Lexicase remains the default fixed-roster behavior. Scalar selection keeps
-    complete score tiers in descending order. If the population boundary cuts
-    through a tier, seeded farthest-first semantic novelty chooses only within
-    that tier; semantics can never promote a candidate from a worse tier.
+    Self-play reserves up to two seats for behaviorally distant candidates
+    after filling the other seats by Game Performance.
     """
 
     if population_size < 0:
         raise ValueError("population_size must be non-negative.")
     _validate_selection_mode(selection_mode)
-    if selection_mode == GAME_PERFORMANCE_SELECTION:
-        _validate_fitness_tolerance(fitness_tolerance)
 
     available: list[Candidate] = []
     available_ids: set[str] = set()
@@ -128,7 +123,6 @@ def select_next_generation(
             available,
             population_size=population_size,
             rng=rng,
-            tolerance=fitness_tolerance,
         )
 
     selected: list[Candidate] = []
@@ -179,31 +173,21 @@ def _select_scalar_survivors(
     *,
     population_size: int,
     rng: random.Random,
-    tolerance: float,
 ) -> list[Candidate]:
-    """Fill survivors from non-chained scalar-fitness tiers."""
+    """Keep score leaders and rank diversity against those fixed references."""
 
-    selected: list[Candidate] = []
-    remaining = list(available)
-    while len(selected) < population_size:
-        tier = _top_score_tier(remaining, tolerance=tolerance)
-        open_slots = population_size - len(selected)
-        if len(tier) <= open_slots:
-            # Preserve canonical candidate-ID order when the whole
-            # tier survives. Semantic evidence is unnecessary because no tied
-            # candidate is being discarded.
-            selected.extend(tier)
-            tier_ids = {candidate.id for candidate in tier}
-            remaining = [candidate for candidate in remaining if candidate.id not in tier_ids]
-            continue
-        selected.extend(
-            _semantic_subset(
-                tier,
-                count=open_slots,
-                references=selected,
-                rng=rng,
-            )
-        )
+    if population_size == 0:
+        return []
+    diversity_seats = min(2, population_size - 1)
+    elite_count = population_size - diversity_seats
+    ranked = sorted(available, key=_game_performance, reverse=True)
+    elites = ranked[:elite_count]
+    remaining = ranked[elite_count:]
+    selected = list(elites)
+    for _ in range(diversity_seats):
+        chosen = _choose_by_semantic_distance(remaining, elites, rng)
+        selected.append(chosen)
+        remaining = [candidate for candidate in remaining if candidate.id != chosen.id]
     return selected
 
 
@@ -221,28 +205,6 @@ def _top_score_tier(
         for candidate in candidates
         if maximum - _game_performance(candidate) <= tolerance
     ]
-
-
-def _semantic_subset(
-    candidates: list[Candidate],
-    *,
-    count: int,
-    references: list[Candidate],
-    rng: random.Random,
-) -> list[Candidate]:
-    """Choose a seeded max-min semantic subset from one fitness tier."""
-
-    chosen: list[Candidate] = []
-    remaining = list(candidates)
-    while len(chosen) < count:
-        candidate = _choose_by_semantic_distance(
-            remaining,
-            [*references, *chosen],
-            rng,
-        )
-        chosen.append(candidate)
-        remaining = [item for item in remaining if item.id != candidate.id]
-    return chosen
 
 
 def _choose_by_semantic_distance(

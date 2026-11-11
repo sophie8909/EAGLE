@@ -531,10 +531,12 @@ identity 才重用 cached fitness；runtime 或 map 資產變更時必須建立�
 與 resolved-class hash。
 
 Self-play 以每個 tier 的最高
-`game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
-最高適應度同級內 parent B 優先選擇與 parent A 語意距離最小的不同個體；同級只有
-parent A 時沿用它，距離相同時以 candidate ID 排序後做 seeded 選擇。survivor boundary 使用 seeded
-max-min 語意多樣性。Self-play 目前要求 `reflection_operator_mode: static` 與
+`game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，用於選擇 parent A。
+Parent B 從全族群選與 A 行為距離最近的不同個體，單一個體時沿用 A。
+Environmental selection 先按 Game Performance 選前八名，再從其餘個體選兩名。
+兩個多樣性名額都以同一批前八名為參考，最大化與參考個體的最小可比較行為距離，
+兩席皆無分數門檻。其他族群大小最多留兩席給多樣性，並保留至少一名最高分個體。
+Self-play 目前要求 `reflection_operator_mode: static` 與
 `parent_evaluation_mode: reuse_cached`。Context 取樣、resume 與舊 checkpoint 的相容性以
 前述 `tournament-v1` 規範為準。
 

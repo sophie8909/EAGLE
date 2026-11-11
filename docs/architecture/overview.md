@@ -179,10 +179,10 @@ flowchart TD
   but does not participate in lexicase case filtering.
 - Failed candidates remain in the joint parent-plus-offspring input and artifact records with the canonical failure sentinel and stage diagnostics, but cannot displace completed candidates during survivor selection. If fewer than the configured population size completed candidates remain, selection fails explicitly.
 - Survivor selection uses the joint parent-plus-offspring (`mu_plus_lambda`)
-  pool. Fixed roster uses seeded lexicase without replacement. Self-play forms
-  non-chained fitness tiers anchored at each current maximum; scores within
-  `1.0` inclusive are tied and exact probe-action diversity resolves any
-  boundary cut.
+  pool. Fixed roster uses seeded lexicase without replacement. Self-play fills
+  all but two seats by raw Game Performance and fills the remaining seats by
+  max-min probe-action distance to those fixed score leaders. Smaller
+  populations always keep at least one score leader.
 - The canonical `parent_evaluation_mode` is `reuse_cached`: parents are not
   regenerated between generations. `regenerate_same_genotype` is a
   non-canonical diagnostic treatment restricted to inherited Java with static

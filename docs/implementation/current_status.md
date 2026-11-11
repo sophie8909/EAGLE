@@ -348,11 +348,11 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   defender, including compilation and Integration. Compileall and diff checks
   passed. A complete real evolutionary run and the full permanent roster were
   not exercised; this checkout lacks the AllInBot JAR.
-- Fixed-roster parent/survivor selection is seeded lexicase. Self-play maximizes
-  Game Performance, treats scores within `1.0` of a tier maximum as tied, and
-  uses nine-probe full-agent behavior distance to preserve different semantics
-  inside the tied tier. Survivor selection always uses the joint
-  parent-plus-offspring (`mu_plus_lambda`) pool.
+- Fixed-roster parent/survivor selection is seeded lexicase. Self-play selects
+  parent A from the top fitness tier and parent B by the nearest compatible
+  behavior across the population. From the joint parent-plus-offspring pool,
+  it reserves two diversity seats after filling the other seats by score.
+  Both diversity seats maximize minimum distance to the fixed score leaders.
 - Survivor selection keeps failed candidates in the diagnostic parent-plus-
   offspring pool but excludes them from survivor choice when completed
   candidates can fill the population; a failed offspring batch therefore keeps

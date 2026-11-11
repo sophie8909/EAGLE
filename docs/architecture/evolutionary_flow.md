@@ -144,11 +144,13 @@ are specified in their own sections.
 The shared generation implementation is in `eagle/evolution/generation.py` and `eagle/evolution/offspring.py`; selection is in `eagle/operators/selection.py`, with evaluation in
 `eagle/evaluation/pipeline.py`.
 
-Self-play mating chooses parent B with minimum compatible behavioral distance
-to parent A within the highest fitness tier. It excludes parent A when another
-tier member exists; a singleton tier reuses its member. Missing/incompatible
-signatures use seeded fallback. Survivor boundary selection retains max-min
-semantic diversity. Fixed-roster lexicase selection is unchanged.
+Self-play selects parent A from the highest fitness tier. Parent B minimizes
+compatible behavioral distance to A across the entire current population,
+excluding A when another candidate exists. Missing or incompatible signatures
+use seeded fallback. Environmental selection keeps the highest-scoring eight
+in a population of ten, then takes the two remaining candidates with the largest
+minimum behavioral distances to those same eight. The diversity seats have no
+fitness threshold.
 
 ## Bounded execution
 

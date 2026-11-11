@@ -64,7 +64,13 @@ successful description/genome updates; at most four malformed initial-fill
 calls before failure without random/default production fallback; mock sampled
 initial genomes with authored descriptions and zero external calls.
 
-## Nearest-behavior mating (2026-10-23)
+## Self-play mating and survivor diversity
+
+`tests/test_single_objective_selection.py` verifies that a mate outside the
+top fitness tier is eligible and that the two diversity seats ignore fitness
+and use the same eight score leaders as distance references.
+
+### Nearest-behavior mating validation (2026-10-23)
 
 `tests/test_single_objective_selection.py` covers nearest distinct mates,
 positive and zero distances, inclusive fitness-tier boundaries, seeded

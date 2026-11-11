@@ -237,7 +237,6 @@ def run_generation_step(
         population_size=config.population_size,
         rng=random.Random(derive_seed(config.random_seed, "evolution", generation, "survivors")),
         selection_mode=config.algorithm,
-        fitness_tolerance=config.fitness_tie_tolerance,
     )
     next_signature = population_signature(
         next_population,
