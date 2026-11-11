@@ -20,8 +20,8 @@ seed_prompt_files: [seeds/worker_rush_policy.txt]
 max_prompt_chars: 16000
 
 runs: 1
-random_seeds: [8, 9, 10, 11, 12, 13]
-generations: 20
+random_seeds: [8]
+generations: 50
 population_size: 10
 # Parent B chooses the nearest distinct behavior within the top fitness tier.
 

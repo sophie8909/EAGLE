@@ -1,0 +1,7 @@
+schema_version: eagle-experiment-index-v1
+runs:
+  qwen3_5_9b_gen2_pop3_seed8_13_2run.yaml:
+  - /home/mhlab/EAGLE/runs/20261023_121202_353868
+  - /home/mhlab/EAGLE/runs/20261023_122938_462298
+  - /home/mhlab/EAGLE/runs/20261023_124713_922225
+  - /home/mhlab/EAGLE/runs/20261023_130629_120085

@@ -1,0 +1,4 @@
+schema_version: eagle-experiment-index-v1
+runs:
+  qwen3_5_9b_gen2_pop3_smoke.yaml:
+  - /home/mhlab/EAGLE/runs/20261023_114130_876274

@@ -36,6 +36,7 @@ resources/config.properties
 /third_party/microrts/runs/
 
 # Experiment inputs, outputs, and logs
+/*.log
 Response*.csv
 LLM_Gemini_*.json
 tournament_results_*.json
