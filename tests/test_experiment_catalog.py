@@ -136,7 +136,7 @@ class ExperimentCatalogTests(unittest.TestCase):
             "strategy_reflection_probability": 1.0,
             "prompt_reflection_probability": 0.0,
             "code_reflection_probability": 0.0,
-            "framework": {"bundle_sha256": "same", "gpt_initial_candidates": 0,
+            "framework": {"bundle_sha256": "f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b", "gpt_initial_candidates": 0,
                            "initial_genomes": [{"slot": 1}], "evolution_mode": "local"},
             "evaluation": {"mode": "self_play", "self_play_refresh_interval": 5},
         })

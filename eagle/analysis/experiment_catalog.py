@@ -16,6 +16,7 @@ from eagle.run_artifacts import RUN_SCHEMA_VERSION
 SETTINGS_PATH = "logs/experiment-analysis.yaml"
 SETTINGS_SCHEMA = "eagle-analysis-settings-v1"
 CATALOG_SCHEMA = "eagle-experiment-catalog-v1"
+COMPARABLE_FRAMEWORK_SHA256 = "f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b"
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
 _READ_ERRORS = (OSError, ValueError, TypeError, yaml.YAMLError)
 
@@ -146,30 +147,51 @@ def _comparison_metadata(path: Path) -> dict[str, str]:
     population = int(config.get("population_size", 10))
     gpt_count = int(framework.get("gpt_initial_candidates", 0) or 0)
     initial_genomes = framework.get("initial_genomes") or ()
-    if gpt_count >= population:
+    generations = int(config.get("generations", 1) or 1)
+    if generations == 0 and gpt_count:
+        initialization = "GPT initial genome；依 strategy description"
+        init_id = "gpt_initial_genome"
+    elif gpt_count >= population:
         initialization = f"{population} GPT；依 {population} 份 strategy description"
+        init_id = f"{population}_gpt_description"
     elif initial_genomes:
         initialization = "1 GPT genome + 其餘 local；GPT genome 來自 description"
+        init_id = "1_gpt_9_local_description"
     elif framework.get("initial_strategy_mode") == "llm_plus_authored":
         initialization = "GPT description + authored descriptions"
+        init_id = "gpt_description_authored"
     else:
         initialization = "Local seeded initialization"
+        init_id = "local_seeded"
 
     experiment_name = str(config.get("experiment_name", ""))
-    diversity = "" if "seed8_12" not in experiment_name else " + 2 diversity seats"
-    survivor = f"每代：Game Performance elites{diversity}"
-    parent = "每個 offspring：最高 Game Performance tier + nearest semantic mate"
+    is_self_play = str(evaluation.get("mode", "fixed_roster")) == "self_play"
+    if is_self_play:
+        survivor = "每代：Game Performance elites + 2 max-min diversity seats"
+        selection_id = "game_performance_plus_diversity_per_generation"
+        parent = "每個 offspring：最高 Game Performance tier + nearest semantic mate"
+    else:
+        survivor = "每代：opponent-wise lexicase"
+        selection_id = "opponent_wise_lexicase_per_generation"
+        parent = "每個 offspring：opponent-wise lexicase"
     refresh = f"每 5 代（G1、G6、G11…）；interval={evaluation.get('self_play_refresh_interval', 5)}"
     mode = str(framework.get("evolution_mode", "local"))
     if mode == "option_reflection":
         reflection = "每 5 代邊界（G6、G11…）：Option Reflection"
+        reflection_id = "option_reflection_every_5_generations"
     elif mode == "reflection":
         reflection = "每 5 代邊界（G6、G11…）：Framework Reflection"
+        reflection_id = "framework_reflection_every_5_generations"
     elif str(config.get("reflection_operator_mode", "static")) == "static" and float(config.get("strategy_reflection_probability", 0.0)) == 1.0:
-        reflection = "每個 offspring：Strategy Reflection"
+        reflection = "每個 offspring：Strategy Reflection（使用 1 場最差 completed match）"
+        reflection_id = "strategy_reflection_per_offspring"
     else:
         reflection = "未啟用"
+        reflection_id = "no_reflection"
+    name = f"初始化：{initialization}｜選擇：{survivor}｜反思：{reflection}"
     return {
+        "name": name,
+        "id": f"{init_id}__{selection_id}__{reflection_id}",
         "framework": str(framework.get("bundle_sha256", "unknown")),
         "initialization": initialization,
         "parent_selection": parent,
@@ -348,10 +370,16 @@ def discover(root: Path, runs_roots) -> dict:
             elif len(parts) == 2 and parts[0].startswith("seed_"):
                 version = root_path.name
             if version:
-                identity = _default_id(version)
+                try:
+                    comparison = _comparison_metadata(path)
+                    identity = comparison["id"]
+                    label = comparison["name"]
+                except _READ_ERRORS:
+                    identity = _default_id(version)
+                    label = version
                 manual[path].append({
                     "experiment": "gui_results", "treatment": identity,
-                    "label": version, "indexed": False,
+                    "label": label, "indexed": False,
                     "source": str(root_path), "replicate_index": None,
                     "benchmarks": [],
                 })
@@ -388,9 +416,22 @@ def discover(root: Path, runs_roots) -> dict:
             assignment["source"] = matching[0]["source"]
         row.update(assignment)
         if row["experiment"] == "gui_results":
-            comparison = _comparison_metadata(path)
+            try:
+                comparison = _comparison_metadata(path)
+            except _READ_ERRORS as exc:
+                issue(path, f"Unable to read comparison metadata: {exc}")
+                continue
+            if comparison["framework"] not in {"unknown", COMPARABLE_FRAMEWORK_SHA256}:
+                continue
             row["comparison"] = comparison
-            treatment_info = treatments[(row["experiment"], row["treatment"])]
+            row["treatment"] = comparison["id"]
+            row["label"] = comparison["name"]
+            treatment_info = treatments.setdefault(
+                (row["experiment"], row["treatment"]),
+                {"experiment": row["experiment"], "treatment": row["treatment"],
+                 "label": row["label"], "expected_seeds": set()},
+            )
+            treatment_info["label"] = row["label"]
             treatment_info.setdefault("comparison", comparison)
         row["availability"] = _availability(row)
         rows.append(row)

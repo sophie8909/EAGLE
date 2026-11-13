@@ -42,10 +42,32 @@ from eagle.timing import Stopwatch, append_event, build_generation_event
 
 
 def _result_version_folder(config: ExperimentConfig) -> str:
-    """Return a filesystem-safe version label for GUI-facing result folders."""
-    value = "_".join(str(config.experiment_name).strip().split())
-    value = "".join(char if char.isalnum() or char in "._-" else "_" for char in value)
-    return value.strip("._-") or "experiment"
+    """Return the comparison dimensions used in a GUI-facing result folder."""
+    population = int(config.population_size)
+    if config.generations == 0 and config.framework_gpt_initial_candidates:
+        initialization = "gpt_initial_genome"
+    elif config.framework_gpt_initial_candidates >= population:
+        initialization = f"{population}_gpt_description"
+    elif config.framework_initial_genomes:
+        initialization = "1_gpt_9_local_description"
+    elif config.framework_initial_strategy_mode == "llm_plus_authored":
+        initialization = "gpt_description_authored"
+    else:
+        initialization = "local_seeded"
+    selection = (
+        "game_performance_plus_diversity_per_generation"
+        if config.evaluation_mode == "self_play"
+        else "opponent_wise_lexicase_per_generation"
+    )
+    if config.framework_evolution_mode == "option_reflection":
+        reflection = "option_reflection_every_5_generations"
+    elif config.framework_evolution_mode == "reflection":
+        reflection = "framework_reflection_every_5_generations"
+    elif config.reflection_operator_mode.value == "static" and config.strategy_reflection_probability == 1.0:
+        reflection = "strategy_reflection_per_offspring"
+    else:
+        reflection = "no_reflection"
+    return f"{initialization}__{selection}__{reflection}"
 
 
 def _new_run_directory(config: ExperimentConfig, active_run_id: str, run_id: str | None) -> Path:
