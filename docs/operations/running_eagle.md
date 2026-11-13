@@ -57,6 +57,8 @@ Open `http://127.0.0.1:8877`. Use `--port PORT` if occupied and
 `--runs-root PATH` for a different initial run root. The server deliberately
 binds only to loopback and accepts control requests only from its own page.
 Config files stay under `configs/`; generated batch indices are excluded.
+Open the **實驗分析** tab to compare experiment treatments and seeds.
+See [Experiment Analysis](experiment_analysis.md) for archive registration and Git exports.
 
 1. Select and load a YAML config. Edit scalar fields in the form; fixed enums
    and booleans use dropdowns, arrays use JSON, and the complete YAML editor

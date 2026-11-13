@@ -141,6 +141,7 @@ def _final_test_is_complete(run_dir: Path) -> bool:
     return (
         isinstance(payload, dict)
         and payload.get("schema_version") in SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS
+        and payload.get("final_test_valid") is not False
     )
 
 

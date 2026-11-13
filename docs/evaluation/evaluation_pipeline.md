@@ -156,6 +156,12 @@ completed generations newest-first and tests the newest available runnable
 representative. An explicitly requested candidate ID never falls back to a
 different candidate.
 
+The ordinary final-test summary records the map hashes, opponent and runtime
+identities, scoring parameters, and candidate-dependent match seed policy.
+If the protocol assets change while a final test runs, the summary is saved
+with `final_test_valid: false` and the launcher treats the final test as
+unfinished. Older summaries remain readable and may lack this provenance.
+
 ## Fixed cross-generation evaluation
 
 `python -m eagle.fixed_evaluation --run-dir runs/<run>` evaluates exact generation snapshots under one frozen protocol. The same operation is available through `python -m eagle.final_test --run-dir runs/<run> --generations ...`; this final-test entry point defaults its derived output to `final_test/cross_generation/`. Optional `--generations`, `--seed`, and `--output-dir` override defaults. It requires a completed run and each requested snapshot; it never substitutes a generation. By default it selects the runnable survivor with the highest finite generation-local `game_performance`: self-play fitness objective `game_performance` takes precedence, otherwise the value is `game_eval_result.game_performance`. `--all-candidates` evaluates every runnable finite-score individual in each snapshot, storing each candidate under its own generation directory. Candidate ID breaks ties deterministically for representative mode. A run-wide summary best is not used.

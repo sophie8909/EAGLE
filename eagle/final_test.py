@@ -87,11 +87,18 @@ def main(argv: list[str] | None = None) -> int:
             )
         candidate = _select_candidate(run_dir, args.candidate_id)
         preflight_evaluation_opponents(config, mock=False, repository_root=repository_root)
+        from eagle.fixed_evaluation import _build_protocol
+
+        protocol = _build_protocol(config, repository_root, candidate_seed=True)
         summary = _evaluate_candidate(
             config=config, repository_root=repository_root, run_dir=run_dir,
             candidate=candidate, output_dir=output_dir,
         )
+        summary["protocol"] = protocol
+        summary["final_test_valid"] = _build_protocol(config, repository_root, candidate_seed=True) == protocol
         _write_outputs(output_dir, summary)
+        if not summary["final_test_valid"]:
+            raise ValueError("Final-test assets changed during the benchmark.")
         print(_markdown_table(summary))
         print(f"final_test_summary={output_dir / 'final_test_summary.json'}")
         print(f"final_test_csv={output_dir / 'final_test_results.csv'}")

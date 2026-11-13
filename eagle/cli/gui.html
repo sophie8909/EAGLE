@@ -13,7 +13,8 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
 <body>
 <header><div><h1>EAGLE 實驗控制台</h1><p>設定實驗，挑選個體，觀看 MicroRTS 對戰。</p></div><span>LOCAL · Ubuntu / Windows</span></header>
 <div id="message" role="status" hidden></div>
-<main>
+<nav id="workspace-tabs" class="tabs" aria-label="工作區"><button id="workspace-control-tab" aria-controls="control-workspace" aria-pressed="true">實驗控制</button> <button id="workspace-analysis-tab" aria-controls="analysis-workspace" aria-pressed="false">實驗分析</button></nav>
+<main id="control-workspace">
 <section class="panel" aria-labelledby="config-title">
  <h2 id="config-title">01　實驗設定</h2>
  <div class="row"><label>選擇 Config<select id="configs"></select></label><button id="load">載入</button><button id="reload">刷新清單</button></div>
@@ -178,5 +179,6 @@ async function init(){
 }
 init().catch(error=>message(error.message,true));
 </script>
+__EXPERIMENT_ANALYSIS__
 </body>
 </html>

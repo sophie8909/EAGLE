@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import yaml
 
+from eagle.analysis import experiment_dashboard
 from eagle.config import (
     CANDIDATE_JAVA_MODES, EVALUATION_MODES, INITIAL_POPULATION_MODES,
     PARENT_EVALUATION_MODES, ExperimentConfig,
@@ -159,6 +160,7 @@ class GuiApp:
         self.experiment = Job(self.root, "experiment")
         self.server = Job(self.root, "server")
         self.match = Job(self.root, "match")
+        self.analysis_export_lock = threading.Lock()
 
     def run_path(self, value: str) -> Path:
         path = Path(value).expanduser().resolve()
@@ -183,6 +185,8 @@ class GuiApp:
         }
 
     def get(self, path: str, query: dict) -> dict:
+        if path == "/api/analysis":
+            return experiment_dashboard.catalog(self.root, self.runs_roots)
         if path == "/api/meta":
             return self.metadata()
         if path == "/api/config":
@@ -200,6 +204,11 @@ class GuiApp:
         raise ValueError("Unknown API route.")
 
     def post(self, path: str, body: dict) -> dict:
+        if path == "/api/analysis/view":
+            return experiment_dashboard.view(self.root, self.runs_roots, body)
+        if path == "/api/analysis/export":
+            with self.analysis_export_lock:
+                return experiment_dashboard.export(self.root, self.runs_roots, body)
         if path == "/api/parse":
             payload = yaml.safe_load(body["text"])
             if not isinstance(payload, dict):
@@ -330,7 +339,9 @@ class GuiHandler(BaseHTTPRequestHandler):
             return self.reply(403, {"error": "Open the printed 127.0.0.1 URL."})
         url = urlsplit(self.path)
         if url.path == "/":
-            return self.reply(200, HTML.read_text(encoding="utf-8").replace("__CSRF_TOKEN__", self.server.app.token), "text/html; charset=utf-8")
+            fragment = HTML.with_name("experiment_analysis.html").read_text(encoding="utf-8-sig")
+            page = HTML.read_text(encoding="utf-8").replace("__EXPERIMENT_ANALYSIS__", fragment)
+            return self.reply(200, page.replace("__CSRF_TOKEN__", self.server.app.token), "text/html; charset=utf-8")
         try:
             self.reply(200, self.server.app.get(url.path, parse_qs(url.query)))
         except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as exc:

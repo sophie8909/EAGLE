@@ -238,7 +238,9 @@ def _select_all_representatives(run_dir: Path, generation: int) -> list[dict[str
     return candidates
 
 
-def _build_protocol(config: ExperimentConfig, repository_root: Path) -> dict[str, Any]:
+def _build_protocol(
+    config: ExperimentConfig, repository_root: Path, *, candidate_seed: bool = False,
+) -> dict[str, Any]:
     maps = canonical_evaluation_maps(config.evaluation_maps, tick_limits=config.resolved_evaluation_map_tick_limits)
     opponents = []
     for opponent in final_test.FINAL_TEST_OPPONENTS:
@@ -249,8 +251,11 @@ def _build_protocol(config: ExperimentConfig, repository_root: Path) -> dict[str
         })
     return {
         "schema_version": SCHEMA_VERSION, "random_seed": config.random_seed,
-        "seed_identity": SCHEMA_VERSION,
-        "seed_scheme": "derive_match_seed(root, fixed identity, opponent, map, game, side, match index)",
+        "seed_identity": "candidate_id" if candidate_seed else SCHEMA_VERSION,
+        "seed_scheme": (
+            "derive_match_seed(root, candidate_id, opponent, map, game, side, match index)" if candidate_seed
+            else "derive_match_seed(root, fixed identity, opponent, map, game, side, match index)"
+        ),
         "opponents": opponents,
         "maps": [
             {"id": item.map_id, "path": item.path, "tick_limit": item.tick_limit,
