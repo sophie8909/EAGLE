@@ -71,6 +71,58 @@ distance 對 fitness leaders 做 max-min 選擇。這不是新的初始化 treat
 下 diversity control 穩定提升的結論。1111 的 seed 10 尚未完成，seed 11、12
 尚未開始。
 
+## 四、三個版本的 opponent-level final-test 表
+
+以下均為跨已完成 seeds 的 aggregate，欄位順序為 `W/D/L/E`。100 代兩組取
+G100 fixed final-test；diversity-control 取 1111 已完成 seed 8、9 的 final-test。
+每個 seed 每個 opponent 有 60 場，因此：100 代表格每列共 180 場，diversity
+control 表格每列共 120 場。
+
+### 4.1 完整 100 代：10 GPT initial（seeds 8、9、10）
+
+| Opponent | W | D | L | E |
+|---|---:|---:|---:|---:|
+| PassiveAI | 180 | 0 | 0 | 0 |
+| RandomAI | 180 | 0 | 0 | 0 |
+| RandomBiasedAI | 180 | 0 | 0 | 0 |
+| LightRush | 110 | 0 | 70 | 0 |
+| HeavyRush | 150 | 0 | 30 | 0 |
+| WorkerRush | 140 | 0 | 40 | 0 |
+| AllInBot | 122 | 0 | 58 | 0 |
+| Mayari | 57 | 12 | 111 | 0 |
+| COAC | 58 | 3 | 119 | 0 |
+| TMA | 20 | 0 | 160 | 0 |
+
+### 4.2 完整 100 代：1 GPT + 9 local（seeds 8、9、10）
+
+| Opponent | W | D | L | E |
+|---|---:|---:|---:|---:|
+| PassiveAI | 180 | 0 | 0 | 0 |
+| RandomAI | 180 | 0 | 0 | 0 |
+| RandomBiasedAI | 180 | 0 | 0 | 0 |
+| LightRush | 120 | 0 | 60 | 0 |
+| HeavyRush | 160 | 0 | 20 | 0 |
+| WorkerRush | 120 | 10 | 50 | 0 |
+| AllInBot | 133 | 23 | 24 | 0 |
+| Mayari | 31 | 10 | 139 | 0 |
+| COAC | 71 | 0 | 109 | 0 |
+| TMA | 40 | 0 | 140 | 0 |
+
+### 4.3 50 代 diversity-control：1 GPT + 9 local（已完成 seeds 8、9）
+
+| Opponent | W | D | L | E |
+|---|---:|---:|---:|---:|
+| PassiveAI | 120 | 0 | 0 | 0 |
+| RandomAI | 119 | 1 | 0 | 0 |
+| RandomBiasedAI | 120 | 0 | 0 | 0 |
+| LightRush | 110 | 0 | 10 | 0 |
+| HeavyRush | 120 | 0 | 0 | 0 |
+| WorkerRush | 90 | 0 | 30 | 0 |
+| AllInBot | 77 | 2 | 41 | 0 |
+| Mayari | 18 | 11 | 91 | 0 |
+| COAC | 41 | 7 | 72 | 0 |
+| TMA | 0 | 0 | 120 | 0 |
+
 ## Run 對照
 
 | 比較 | Treatment | Seed | Run |
