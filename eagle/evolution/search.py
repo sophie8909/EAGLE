@@ -41,6 +41,20 @@ from eagle.strategy_diversity import (
 from eagle.timing import Stopwatch, append_event, build_generation_event
 
 
+def _result_version_folder(config: ExperimentConfig) -> str:
+    """Return a filesystem-safe version label for GUI-facing result folders."""
+    value = "_".join(str(config.experiment_name).strip().split())
+    value = "".join(char if char.isalnum() or char in "._-" else "_" for char in value)
+    return value.strip("._-") or "experiment"
+
+
+def _new_run_directory(config: ExperimentConfig, active_run_id: str, run_id: str | None) -> Path:
+    # Explicit IDs are used by tests, forks, and callers that own their layout.
+    if run_id is not None:
+        return config.runs_dir / active_run_id
+    return config.runs_dir / _result_version_folder(config) / f"seed_{config.random_seed}" / active_run_id
+
+
 def run_search(
     config: ExperimentConfig,
     *,
@@ -94,7 +108,7 @@ def _run_search_impl(
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_dir = config.runs_dir / active_run_id
+    run_dir = _new_run_directory(config, active_run_id, run_id)
     candidates_dir = run_dir / "candidates"
     generated_agents_dir = run_dir / "generated_agents"
     classes_dir = run_dir / "classes"

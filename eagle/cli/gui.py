@@ -164,8 +164,8 @@ class GuiApp:
 
     def run_path(self, value: str) -> Path:
         path = Path(value).expanduser().resolve()
-        if not any(path.parent == root for root in self.runs_roots):
-            raise ValueError("Select a direct run folder from the configured runs root.")
+        if not any(path.is_relative_to(root) for root in self.runs_roots):
+            raise ValueError("Select a run folder from one of the configured result folders.")
         manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
         if not isinstance(manifest, dict) or manifest.get("schema_version") != "eagle-run-v2":
             raise ValueError("Only canonical eagle-run-v2 runs are supported.")
@@ -376,10 +376,13 @@ def open_browser(url: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, prog="python -m eagle gui")
     parser.add_argument("--port", type=int, default=8877)
-    parser.add_argument("--runs-root", type=Path, default=ROOT / "runs")
+    parser.add_argument("--runs-root", type=Path, action="append", default=None,
+                        help="Result folder; repeat this option to compare multiple folders.")
     parser.add_argument("--open", action="store_true", help="Open the local GUI in a browser.")
     args = parser.parse_args(argv)
-    app = GuiApp(ROOT, args.runs_root)
+    app = GuiApp(ROOT, (args.runs_root or [ROOT / "runs"])[0])
+    for runs_root in (args.runs_root or [])[1:]:
+        app.runs_roots.add(runs_root.expanduser().resolve())
     try:
         server = GuiServer(("127.0.0.1", args.port), app)
     except OSError as exc:

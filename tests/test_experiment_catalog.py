@@ -128,6 +128,27 @@ class ExperimentCatalogTests(unittest.TestCase):
         self.assertEqual(catalog["treatments"][0]["expected_seeds"], [8, 9])
         self.assertEqual(catalog["issues"], [])
 
+    def test_nested_gui_result_exposes_comparison_metadata(self):
+        run = self.runs / "gpt_version" / "seed_8" / "attempt_0001"
+        self.yaml(run / "config.yaml", {
+            "experiment_name": "gpt_framework_gpt_seed_local_evolution_50x10_seed8_12",
+            "random_seed": 8, "generations": 50, "population_size": 10,
+            "strategy_reflection_probability": 1.0,
+            "prompt_reflection_probability": 0.0,
+            "code_reflection_probability": 0.0,
+            "framework": {"bundle_sha256": "same", "gpt_initial_candidates": 0,
+                           "initial_genomes": [{"slot": 1}], "evolution_mode": "local"},
+            "evaluation": {"mode": "self_play", "self_play_refresh_interval": 5},
+        })
+        (run / "manifest.json").write_text(json.dumps({
+            "schema_version": RUN_SCHEMA_VERSION, "run_id": "attempt_0001",
+            "status": "complete", "latest_generation": 50,
+        }), encoding="utf-8")
+        metadata = discover(self.root, [self.runs])["treatments"][0]["comparison"]
+        self.assertIn("1 GPT genome", metadata["initialization"])
+        self.assertIn("diversity seats", metadata["survivor_selection"])
+        self.assertTrue(metadata["opponent_refresh"].startswith("每 5 代"))
+
 
 if __name__ == "__main__":
     unittest.main()

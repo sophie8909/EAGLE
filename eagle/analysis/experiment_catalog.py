@@ -138,6 +138,49 @@ def _run_metadata(path: Path) -> dict:
     }
 
 
+def _comparison_metadata(path: Path) -> dict[str, str]:
+    """Describe the experimentally meaningful choices shown by the GUI."""
+    config = _yaml(path / "config.yaml")
+    framework = _mapping(config.get("framework", {}))
+    evaluation = _mapping(config.get("evaluation", {}))
+    population = int(config.get("population_size", 10))
+    gpt_count = int(framework.get("gpt_initial_candidates", 0) or 0)
+    initial_genomes = framework.get("initial_genomes") or ()
+    if gpt_count >= population:
+        initialization = f"{population} GPT；依 {population} 份 strategy description"
+    elif initial_genomes:
+        initialization = "1 GPT genome + 其餘 local；GPT genome 來自 description"
+    elif framework.get("initial_strategy_mode") == "llm_plus_authored":
+        initialization = "GPT description + authored descriptions"
+    else:
+        initialization = "Local seeded initialization"
+
+    experiment_name = str(config.get("experiment_name", ""))
+    diversity = "" if "seed8_12" not in experiment_name else " + 2 diversity seats"
+    survivor = f"每代：Game Performance elites{diversity}"
+    parent = "每個 offspring：最高 Game Performance tier + nearest semantic mate"
+    refresh = f"每 5 代（G1、G6、G11…）；interval={evaluation.get('self_play_refresh_interval', 5)}"
+    mode = str(framework.get("evolution_mode", "local"))
+    if mode == "option_reflection":
+        reflection = "每 5 代邊界（G6、G11…）：Option Reflection"
+    elif mode == "reflection":
+        reflection = "每 5 代邊界（G6、G11…）：Framework Reflection"
+    elif str(config.get("reflection_operator_mode", "static")) == "static" and float(config.get("strategy_reflection_probability", 0.0)) == 1.0:
+        reflection = "每個 offspring：Strategy Reflection"
+    else:
+        reflection = "未啟用"
+    return {
+        "framework": str(framework.get("bundle_sha256", "unknown")),
+        "initialization": initialization,
+        "parent_selection": parent,
+        "survivor_selection": survivor,
+        "opponent_refresh": refresh,
+        "strategy_reflection": reflection,
+        "prompt_reflection": "未啟用" if float(config.get("prompt_reflection_probability", 0.0)) == 0.0 else "啟用",
+        "code_reflection": "未啟用" if float(config.get("code_reflection_probability", 0.0)) == 0.0 else "啟用",
+    }
+
+
 def _availability(run: dict) -> dict:
     path = Path(run["path"])
     latest = run["latest_generation"]
@@ -286,7 +329,34 @@ def discover(root: Path, runs_roots) -> dict:
 
     paths = set(claims) | set(manual)
     for runs_root in runs_roots:
-        paths.update(path.parent.resolve() for path in Path(runs_root).glob("*/manifest.json"))
+        paths.update(path.parent.resolve() for path in Path(runs_root).resolve().rglob("manifest.json"))
+    # Fresh GUI runs carry comparison identity in the version/seed layout.
+    # Legacy flat runs still require an index or explicit catalog assignment.
+    for path in sorted(paths):
+        if path in claims or path in manual:
+            continue
+        for configured_root in runs_roots:
+            root_path = Path(configured_root).resolve()
+            try:
+                relative = path.relative_to(root_path)
+            except ValueError:
+                continue
+            parts = relative.parts
+            version = None
+            if len(parts) >= 3 and parts[-2].startswith("seed_"):
+                version = parts[-3]
+            elif len(parts) == 2 and parts[0].startswith("seed_"):
+                version = root_path.name
+            if version:
+                identity = _default_id(version)
+                manual[path].append({
+                    "experiment": "gui_results", "treatment": identity,
+                    "label": version, "indexed": False,
+                    "source": str(root_path), "replicate_index": None,
+                    "benchmarks": [],
+                })
+                treatment("gui_results", identity, version)
+                break
     rows = []
     for path in sorted(paths):
         try:
@@ -317,6 +387,11 @@ def discover(root: Path, runs_roots) -> dict:
             assignment["replicate_index"] = matching[0]["replicate_index"]
             assignment["source"] = matching[0]["source"]
         row.update(assignment)
+        if row["experiment"] == "gui_results":
+            comparison = _comparison_metadata(path)
+            row["comparison"] = comparison
+            treatment_info = treatments[(row["experiment"], row["treatment"])]
+            treatment_info.setdefault("comparison", comparison)
         row["availability"] = _availability(row)
         rows.append(row)
         treatment(row["experiment"], row["treatment"], row["label"], [row["seed"]])

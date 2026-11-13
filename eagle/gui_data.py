@@ -100,13 +100,15 @@ def _read_object(path: Path) -> dict:
 
 
 def list_runs(runs_root: Path) -> list[dict]:
+    runs_root = runs_root.resolve()
     runs = []
-    for path in sorted(runs_root.glob("*/manifest.json"), reverse=True):
+    for path in sorted(runs_root.rglob("manifest.json"), reverse=True):
         manifest = _read_object(path)
         if manifest.get("schema_version") != RUN_SCHEMA_VERSION:
             continue
         runs.append({
-            "path": str(path.parent.resolve()), "name": path.parent.name,
+            "path": str(path.parent.resolve()),
+            "name": path.parent.name if path.parent.parent == runs_root else str(path.parent.relative_to(runs_root)),
             "status": manifest.get("status", "unknown"),
             "latest_generation": manifest.get("latest_generation"),
         })

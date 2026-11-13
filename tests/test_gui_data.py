@@ -154,6 +154,16 @@ class GuiRunTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             inspect_run(legacy)
 
+    def test_nested_version_seed_attempt_runs_are_listed(self):
+        nested = self.runs / "version_a" / "seed_8" / "attempt_0001"
+        nested.mkdir(parents=True)
+        (nested / "manifest.json").write_text(json.dumps({
+            "schema_version": "eagle-run-v2", "status": "complete", "latest_generation": 1,
+        }), encoding="utf-8")
+        rows = list_runs(self.runs)
+        self.assertEqual(rows[0]["path"], str(nested.resolve()))
+        self.assertEqual(rows[0]["name"], "version_a/seed_8/attempt_0001")
+
 
 if __name__ == "__main__":
     unittest.main()

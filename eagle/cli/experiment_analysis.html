@@ -4,6 +4,14 @@
 #analysis-workspace .panel{padding:18px}
 #analysis-workspace aside label{margin:0 0 12px}
 #analysis-workspace select[multiple]{min-height:86px}
+#analysis-treatment-table{overflow:auto;margin:0 0 14px;border:1px solid #d9e2e5;border-radius:6px}
+#analysis-treatment-table table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+#analysis-treatment-table th,#analysis-treatment-table td{border-bottom:1px solid #dfe8eb;padding:6px 7px;text-align:left;vertical-align:top}
+#analysis-treatment-table th{background:#eff5f7;color:#315865;position:sticky;top:0}
+#analysis-treatment-table tr{cursor:pointer}
+#analysis-treatment-table tr.selected{background:#f4fafb}
+#analysis-treatment-table td.diff{background:#ffe5bd}
+#analysis-treatment-table td.same{background:#fff}
 #analysis-workspace h3{margin-top:0}
 .analysis-results{display:grid;gap:16px;min-width:0}
 .analysis-header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:start}
@@ -26,7 +34,9 @@
  <aside class="panel" aria-labelledby="analysis-filter-title">
   <h2 id="analysis-filter-title">篩選條件</h2>
   <label>實驗 / 結果包<select id="analysis-experiment"></select></label>
-  <label>比較版本<select id="analysis-treatments" multiple size="4"></select></label>
+  <label>比較版本</label>
+  <div id="analysis-treatment-table" aria-label="版本差異比較表"></div>
+  <select id="analysis-treatments" multiple hidden></select>
   <label>Seeds<select id="analysis-seeds" multiple size="4"></select></label>
   <p class="hint">使用 Ctrl / ⌘ 選取多個項目，或取消選取以查看全部。</p>
   <label>比較模式<select id="analysis-mode"><option value="explore">探索</option><option value="paired">配對消融</option></select></label>
@@ -179,7 +189,9 @@
 
  function renderControls(filters) {
   const labels = treatmentLabels();
-  fill(ui('treatments'), [...labels], (filters.treatments || []).map(String));
+  const treatmentSelection = filters.treatments?.length ? filters.treatments.map(String) : [...labels.keys()];
+  fill(ui('treatments'), [...labels], treatmentSelection);
+  renderTreatmentTable(treatmentSelection);
   const expected = (model.treatments || []).flatMap(item => item.expected_seeds || []);
   const seedOptions = [...new Set([...expected, ...model.runs.map(run => run.seed)])].filter(Number.isInteger).sort((a,b) => a-b);
   fill(ui('seeds'), seedOptions.map(seed => [seed, seed]), (filters.seeds || []).map(String));
@@ -215,6 +227,43 @@
    const statistic = filters.statistics?.[metric];
    if ([...ui(metric).options].some(option => option.value === statistic)) ui(metric).value = statistic;
   }
+ }
+
+ function renderTreatmentTable(preferred) {
+  const target = ui('treatment-table');
+  const rows = model?.treatments || [];
+  const columns = [
+   ['framework','Initial framework'], ['initialization','初始化'], ['parent_selection','Parent selection'],
+   ['survivor_selection','Survivor selection'], ['opponent_refresh','對手池更新'],
+   ['strategy_reflection','Strategy Reflection'], ['prompt_reflection','Prompt Reflection'],
+   ['code_reflection','Code Reflection'],
+  ];
+  const selected = new Set(preferred.map(String));
+  const values = key => new Set(rows.filter(row=>selected.has(row.treatment)).map(row=>row.comparison?.[key] ?? '—'));
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  head.append(document.createElement('th'));
+  head.append(Object.assign(document.createElement('th'),{textContent:'版本'}));
+  for (const [,label] of columns) head.append(Object.assign(document.createElement('th'),{textContent:label}));
+  const body = table.createTBody();
+  for (const row of rows) {
+   const tr = body.insertRow();
+   if (selected.has(row.treatment)) tr.className = 'selected';
+   const check = document.createElement('input'); check.type='checkbox'; check.checked=selected.has(row.treatment); check.dataset.treatment=row.treatment;
+   const cell = tr.insertCell(); cell.append(check);
+   tr.insertCell().textContent = row.label;
+   for (const [key] of columns) {
+    const td = tr.insertCell(); td.textContent = row.comparison?.[key] ?? '—';
+    td.className = values(key).size > 1 && selected.has(row.treatment) ? 'diff' : 'same';
+   }
+   tr.addEventListener('click', event => { if (event.target !== check) check.click(); });
+   check.addEventListener('change', () => {
+    const ids = [...target.querySelectorAll('input[data-treatment]:checked')].map(input=>input.dataset.treatment);
+    fill(ui('treatments'), [...treatmentLabels()], ids);
+    renderTreatmentTable(ids); updateBaseline();
+   });
+  }
+  target.replaceChildren(table);
  }
 
  function updateBaseline() {
