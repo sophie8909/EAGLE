@@ -55,7 +55,11 @@ distance 對 fitness leaders 做 max-min 選擇。這不是新的初始化 treat
 - **Original**：1109 的 1 GPT + 9 local，seed 8、9。
 - **Diversity control**：1111 的 1 GPT + 9 local，seed 8、9；目前兩個已完成。
 
-![diversity control 與原始版本](comparison_03_diversity_control.png)
+左圖是每一代 population 內 45 個 candidate pair 的平均 semantic distance；實線為
+原始版本，虛線為 diversity control。右圖是相同兩個已完成 seed 的 final-test
+勝率。
+
+![diversity control 多樣性收斂與 final-test](comparison_03_diversity_control.png)
 
 | Seed | Original final W/D/L | Diversity-control final W/D/L | Original win rate | Diversity-control win rate |
 |---:|---:|---:|---:|---:|
