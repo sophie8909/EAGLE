@@ -185,9 +185,12 @@ def _opponent_rows(summary, generation, source, protocol):
                 counts[key] = sum(cell[key] for cell in cells)
         counts["faults"] = counts.get("opponent_fault_contained")
         counted = counts["wins"] + counts["draws"] + counts["losses"]
+        scores = _match_scores(summary, opponent)
         yield {
             "opponent": opponent, "generation": generation, "source": source, "protocol": protocol, **counts,
             "counted": counted, "win_rate": counts["wins"] / counted if counted else None,
+            "mean_match_score": statistics.fmean(scores) if scores else None,
+            "score_count": len(scores),
         }
 
 

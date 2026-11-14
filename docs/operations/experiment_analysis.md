@@ -82,9 +82,16 @@ rate. Errors and contained opponent faults have their own columns.
 ## Share results
 
 Use **匯出 Git 結果包** to write the selected results under
-`reports/experiments/<experiment-id>/`. The manifest records filters, selected
-run IDs, benchmark metadata and relative output paths. CSV tables and PNG charts
-can be committed with ordinary Git commands. Open the exported experiment from
-the same GUI in a clean clone to inspect the recorded selection. The bundle
-contains the selected fixed-benchmark opponent scope and generation range.
+`results/<experiment-id>/`. This is the portable, committed analysis layer;
+the source `runs/` tree remains local and is ignored by Git. Each result package
+contains a small `manifest.json`, CSV tables (`points`, `aggregates`, `deltas`,
+`opponents`, `fixed_coverage`) and PNG charts. `points.csv` includes self-play,
+final-test, all-opponent aggregates, and one fixed-opponent cross-generation
+curve per recorded opponent. `opponents.csv` contains per-seed and pooled
+final-test W/D/L, win rate, and mean match score.
+
+The GUI reads committed packages from `results/` directly, so another machine
+only needs the repository checkout to inspect them. It still reads `runs/` only
+for live experiment status, resume, candidate browsing, and MicroRTS observation.
+Existing packages under `reports/experiments/` remain readable for migration.
 Use the source runs to export a different scope.

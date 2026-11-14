@@ -49,6 +49,9 @@ benchmark_results_*.txt
 /model_benchmarks/
 /prompt/
 /runs/
+/results/
+!/results/
+!/results/**
 /traces/
 /data/
 !/examples/traces/

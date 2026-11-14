@@ -29,7 +29,7 @@ class ExperimentDashboardTests(unittest.TestCase):
             self.addCleanup(replacement.stop)
 
     def discover(self, root, runs_roots):
-        return {"issues": [], "runs": self.runs, "treatments": self.treatments}
+        return {"schema_version": "eagle-experiment-catalog-v1", "issues": [], "runs": self.runs, "treatments": self.treatments}
 
     def metrics(self, run, *, fixed_opponent=None):
         seed = run["seed"]
@@ -76,11 +76,17 @@ class ExperimentDashboardTests(unittest.TestCase):
         expected = dashboard.view(self.root, [], filters)
         result = dashboard.export(self.root, [], filters)
         path = self.root / result["path"]
+        self.assertEqual(path.parent.name, "results")
         for file in ("manifest.json", "points.csv", "aggregates.csv", "deltas.csv", "opponents.csv", "fixed.png"):
             self.assertGreater((path / file).stat().st_size, 0)
         reopened = self.view(bundle=True)
         for key in ("aggregates", "deltas", "opponents"):
             self.assertEqual(reopened[key], expected[key])
+
+    def test_catalog_finds_committed_results_without_source_runs(self):
+        dashboard.export(self.root, [], {"experiment": "exp"})
+        catalog = dashboard.catalog(self.root, [])
+        self.assertIn({"id": "exp", "label": "exp", "bundle": True}, catalog["experiments"])
 
     def test_unknown_protocol_is_inspectable_without_pooling(self):
         with patch.object(dashboard, "read_metrics", return_value={

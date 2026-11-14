@@ -593,6 +593,13 @@ snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` �
 所在的 snapshot 世代；candidate 自己的建立世代另存為 `birth_generation`。因此父代
 若連續存活，會在每個實際存活的世代各出現一次，不會全部被畫回出生世代。
 
+`runs/` 是本機、被 Git 忽略的完整實驗 evidence；`results/<experiment>/` 是由 GUI
+匯出的精簡、可提交分析包。結果包包含 manifest、points／aggregates／deltas／opponents／
+fixed_coverage CSV 與圖表：points 保留 self-play、final test、各固定對手的跨代曲線，
+opponents 保留每個 seed 與 pooled 的 W/D/L、勝率及平均分數。GUI 分析優先讀取
+`results/`，因此複製 repository 到另一台電腦即可分析，不需要複製 runs/；runs 仍只供
+本機執行、續跑與觀戰。
+
 ## 執行入口
 
 ```bash

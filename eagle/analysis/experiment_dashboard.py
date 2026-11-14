@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import re
 import statistics
 import tempfile
@@ -21,10 +22,13 @@ METRICS = ("self_play", "fixed", "diversity")
 def _bundle_dir(root, experiment):
     if not isinstance(experiment, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", experiment):
         raise ValueError("Invalid experiment ID.")
-    reports = root / "reports" / "experiments"
-    destination = reports / experiment
+    destination = root / "results" / experiment
     if destination.resolve() != destination:
         raise ValueError("Result destination must be inside the repository without symlinks.")
+    if not (destination / "manifest.json").is_file():
+        legacy = root / "reports" / "experiments" / experiment
+        if (legacy / "manifest.json").is_file():
+            return legacy
     return destination
 
 
@@ -35,11 +39,14 @@ def _diagnostics(local):
 def catalog(root, runs_roots):
     local = discover(root, runs_roots)
     experiments = {row["experiment"] for row in local["treatments"] + local["runs"]}
+    result_manifests = sorted((root / "results").glob("*/manifest.json"))
+    # Keep old local exports readable while moving new exports to results/.
+    result_manifests += sorted((root / "reports/experiments").glob("*/manifest.json"))
     return {
         "schema_version": local["schema_version"],
         "experiments": [{"id": name, "label": name} for name in sorted(experiments)]
         + [{"id": path.parent.name, "label": path.parent.name, "bundle": True}
-           for path in sorted((root / "reports/experiments").glob("*/manifest.json"))],
+           for path in result_manifests],
         "issues": _diagnostics(local),
     }
 
@@ -74,6 +81,10 @@ def _stats(values):
     return {"value": statistics.fmean(values), "n": len(values),
             "min": min(values), "max": max(values),
             "sd": statistics.stdev(values) if len(values) > 1 else None}
+
+
+def _number(value):
+    return type(value) in (int, float) and math.isfinite(value)
 
 
 def _rate(row):
@@ -173,6 +184,11 @@ def _opponent_totals(rows):
             faults=sum(row.get("faults", row.get("opponent_fault_contained", 0)) or 0 for row in members)
             if any(row.get("faults", row.get("opponent_fault_contained")) is not None for row in members) else None,
             mean_seed_win_rate=statistics.fmean(rates) if rates else None,
+            mean_match_score=statistics.fmean(
+                [row["mean_match_score"] for row in members
+                 if _number(row.get("mean_match_score"))]
+            ) if any(_number(row.get("mean_match_score")) for row in members) else None,
+            score_count=sum(row.get("score_count", 0) or 0 for row in members),
         )))
     return result
 
@@ -230,6 +246,19 @@ def view(root, runs_roots, filters):
             issues.extend(f"{run['run_id']}: {issue}" for issue in evidence["issues"])
             fixed_coverage.extend({**row, **identity} for row in evidence.get("fixed_coverage", []))
             fixed_opponents.update(evidence.get("fixed_opponents", []))
+            # Keep a separate cross-generation curve for every opponent in the
+            # portable package, in addition to the all-opponent aggregate.
+            if fixed_opponent is None:
+                for opponent in evidence.get("fixed_opponents", []):
+                    detail = read_metrics(run, fixed_opponent=opponent)
+                    source_points.extend(
+                        {**row, **identity} for row in detail["points"]
+                        if row.get("metric") == "fixed"
+                    )
+                    fixed_coverage.extend(
+                        {**row, **identity} for row in detail.get("fixed_coverage", [])
+                        if row.get("metric") == "fixed"
+                    )
     selected_ids = {(run["treatment"], run["seed"], run["run_id"]) for run in selected}
 
     def included(row):
@@ -249,7 +278,7 @@ def view(root, runs_roots, filters):
     points = [
         row for row in source_points if included(row) and (
             row["metric"] == "final"
-            or (row["metric"] != "fixed" or row.get("opponent") == fixed_opponent)
+            or (row["metric"] != "fixed" or fixed_opponent is None or row.get("opponent") == fixed_opponent)
             and (minimum is None or row["generation"] >= minimum)
             and (maximum is None or row["generation"] <= maximum)
         )
