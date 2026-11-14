@@ -488,11 +488,10 @@ class ExperimentLauncherTests(unittest.TestCase):
                     ExperimentOrchestrator().run(config_path=None, resume_dir=root, mock=True)
                 self.assertEqual(index_path.read_text(encoding="utf-8"), original)
 
-    def test_run_index_rejects_unknown_schema_and_invalid_entries_without_overwrite(self):
+    def test_run_index_accepts_pending_entries_and_rejects_other_invalid_entries_without_overwrite(self):
         for payload, message in (
             ({"schema_version": "eagle-experiment-index-v2", "runs": {}}, "Unsupported"),
             ({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {"a.yaml": "not-a-list"}}, "Invalid"),
-            ({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {"a.yaml": []}}, "Invalid"),
             ({"schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {"a.yaml": ["relative/run"]}}, "absolute"),
         ):
             with self.subTest(payload=payload), tempfile.TemporaryDirectory() as directory:
@@ -503,6 +502,15 @@ class ExperimentLauncherTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     _load_experiment_run_index(root)
                 self.assertEqual(index_path.read_text(encoding="utf-8"), original)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            index_path = root / "experiment.yaml"
+            index_path.write_text(yaml.safe_dump({
+                "schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION,
+                "runs": {"a.yaml": []},
+            }), encoding="utf-8")
+            self.assertEqual(_load_experiment_run_index(root), {"a.yaml": []})
 
     def test_folder_resume_replaces_only_uncheckpointed_replicate_slot(self):
         with tempfile.TemporaryDirectory() as directory:

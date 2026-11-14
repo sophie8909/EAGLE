@@ -48,7 +48,6 @@ def decode_experiment_run_index(payload: object, index_path: Path) -> dict[str, 
         not isinstance(name, str)
         or Path(name).suffix.lower() not in {".yaml", ".yml"}
         or not isinstance(run_dirs, list)
-        or not run_dirs
         or any(not isinstance(folder, str) or not folder for folder in run_dirs)
         for name, run_dirs in entries.items()
     ):
