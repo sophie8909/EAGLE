@@ -46,6 +46,8 @@ def _result_version_folder(config: ExperimentConfig) -> str:
     population = int(config.population_size)
     if config.generations == 0 and config.framework_gpt_initial_candidates:
         initialization = "gpt_initial_genome"
+    elif config.framework_qwen_initial_candidates:
+        initialization = f"{config.framework_qwen_initial_candidates}_qwen_initial_genome"
     elif config.framework_gpt_initial_candidates >= population:
         initialization = f"{population}_gpt_description"
     elif config.framework_initial_genomes:
@@ -59,7 +61,9 @@ def _result_version_folder(config: ExperimentConfig) -> str:
         if config.evaluation_mode == "self_play"
         else "opponent_wise_lexicase_per_generation"
     )
-    if config.framework_evolution_mode == "option_reflection":
+    if config.framework_evolution_mode == "local" and config.framework_qwen_initial_candidates:
+        reflection = "no_reflection"
+    elif config.framework_evolution_mode == "option_reflection":
         reflection = "option_reflection_every_5_generations"
     elif config.framework_evolution_mode == "reflection":
         reflection = "framework_reflection_every_5_generations"

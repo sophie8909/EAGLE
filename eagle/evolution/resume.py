@@ -151,6 +151,12 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
                 raise ValueError(
                     "Resume config/manifest framework GPT initial candidate count mismatch."
                 )
+            if manifest.get("framework_qwen_initial_candidates", 0) != framework.get(
+                "qwen_initial_candidates", 0
+            ):
+                raise ValueError(
+                    "Resume config/manifest framework Qwen initial candidate count mismatch."
+                )
             if manifest.get("framework_initial_genome_count", 0) != persisted_config.framework_initial_genome_count:
                 raise ValueError(
                     "Resume config/manifest framework initial genome count mismatch."

@@ -196,6 +196,9 @@ class ExperimentConfig:
     # A bounded prefix of generation zero can be selected by the direct GPT
     # API while all later framework-slot evolution remains seeded local EA.
     framework_gpt_initial_candidates: int = 0
+    # A bounded prefix of generation zero can be selected by the configured
+    # local model; framework-slot evolution remains seeded local EA afterward.
+    framework_qwen_initial_candidates: int = 0
     # Explicit complete generation-zero genomes, represented as immutable
     # key/value pairs for frozen-config and resume comparisons.
     framework_initial_genomes: tuple[tuple[tuple[str, Any], ...], ...] = ()
@@ -523,6 +526,9 @@ class ExperimentConfig:
             framework_gpt_initial_candidates=_parse_framework_gpt_initial_candidates(
                 (payload.get("framework") or {}).get("gpt_initial_candidates", 0)
             ),
+            framework_qwen_initial_candidates=_parse_framework_gpt_initial_candidates(
+                (payload.get("framework") or {}).get("qwen_initial_candidates", 0)
+            ),
             framework_initial_genomes=_parse_framework_initial_genomes(
                 (payload.get("framework") or {}).get("initial_genomes", ())
             ),
@@ -668,7 +674,9 @@ class ExperimentConfig:
             raise ValueError("framework.initial_strategy_mode must be authored or llm_plus_authored.")
         if self.framework_initial_strategy_mode == "llm_plus_authored" and (
             self.java_materialization_mode != "framework_slots" or self.population_size != 10
-            or self.framework_gpt_initial_candidates or self.framework_initial_genomes
+            or self.framework_gpt_initial_candidates
+            or self.framework_qwen_initial_candidates
+            or self.framework_initial_genomes
         ):
             raise ValueError("framework.initial_strategy_mode=llm_plus_authored requires framework_slots population_size=10 and no initial genomes or GPT initial candidates.")
         if self.framework_coach_offspring_probability is not None:
@@ -695,6 +703,25 @@ class ExperimentConfig:
                 "java_materialization_mode=framework_slots and "
                 "framework.evolution_mode=local."
             )
+        if self.framework_qwen_initial_candidates and (
+            self.java_materialization_mode != "framework_slots"
+            or self.framework_evolution_mode != "local"
+        ):
+            raise ValueError(
+                "framework.qwen_initial_candidates requires "
+                "java_materialization_mode=framework_slots and "
+                "framework.evolution_mode=local."
+            )
+        if (
+            not isinstance(self.framework_qwen_initial_candidates, int)
+            or isinstance(self.framework_qwen_initial_candidates, bool)
+            or self.framework_qwen_initial_candidates < 0
+            or self.framework_qwen_initial_candidates > self.population_size
+        ):
+            raise ValueError(
+                "framework.qwen_initial_candidates must be an integer in "
+                "[0, population_size]."
+            )
         if len(self.framework_initial_genomes) > self.population_size:
             raise ValueError(
                 "framework.initial_genomes may contain at most population_size genomes."
@@ -708,10 +735,17 @@ class ExperimentConfig:
                 "java_materialization_mode=framework_slots and "
                 "framework.evolution_mode=local."
             )
-        if self.framework_initial_genomes and self.framework_gpt_initial_candidates:
+        if self.framework_initial_genomes and (
+            self.framework_gpt_initial_candidates or self.framework_qwen_initial_candidates
+        ):
             raise ValueError(
                 "framework.initial_genomes is mutually exclusive with "
-                "framework.gpt_initial_candidates."
+                "framework.gpt_initial_candidates/framework.qwen_initial_candidates."
+            )
+        if self.framework_gpt_initial_candidates and self.framework_qwen_initial_candidates:
+            raise ValueError(
+                "framework.gpt_initial_candidates and "
+                "framework.qwen_initial_candidates are mutually exclusive."
             )
         if self.framework_bootstrap_backend not in {"groq", "mistral", "gpt", "codex", "local"}:
             raise ValueError(
@@ -1161,6 +1195,8 @@ class ExperimentConfig:
                 mapping["framework"]["coach_offspring_probability"] = self.framework_coach_offspring_probability
             if self.framework_gpt_initial_candidates:
                 mapping["framework"]["gpt_initial_candidates"] = self.framework_gpt_initial_candidates
+            if self.framework_qwen_initial_candidates:
+                mapping["framework"]["qwen_initial_candidates"] = self.framework_qwen_initial_candidates
             if self.framework_initial_genomes:
                 mapping["framework"]["initial_genomes"] = [
                     dict(genome) for genome in self.framework_initial_genomes
@@ -1263,6 +1299,7 @@ class ExperimentConfig:
                     "llm_coach", "reflection", "option_reflection",
                 }
                 or self.framework_initial_strategy_mode == "llm_plus_authored"
+                or self.framework_qwen_initial_candidates > 0
                 or (
                     self.framework_bundle_path is None
                     and self.framework_bootstrap_backend == "local"
@@ -1359,7 +1396,7 @@ def _parse_prompt_files(
 
 
 def _parse_framework_gpt_initial_candidates(value: object) -> int:
-    """Parse the strictly integral direct-GPT initialization count."""
+    """Parse a strictly integral bounded initial-selection count."""
 
     if not isinstance(value, int) or isinstance(value, bool):
         raise ValueError("framework.gpt_initial_candidates must be an integer.")
@@ -1410,7 +1447,7 @@ def _parse_framework_bundle(
     unknown = sorted(
         set(value).difference({
             "bundle_path", "bundle_version", "bundle_sha256", "evolution_mode",
-            "coach_offspring_probability", "gpt_initial_candidates", "initial_genomes", "bootstrap_backend", "initial_strategy_mode",
+            "coach_offspring_probability", "gpt_initial_candidates", "qwen_initial_candidates", "initial_genomes", "bootstrap_backend", "initial_strategy_mode",
             "bootstrap_scope", "bootstrap_max_attempts", "design_brief", "model",
         })
     )

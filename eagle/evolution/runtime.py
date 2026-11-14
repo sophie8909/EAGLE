@@ -87,10 +87,15 @@ def build_search_runtime(
         and config.framework_evolution_mode == "local"
         and config.framework_gpt_initial_candidates > 0
     )
+    framework_initial_qwen = (
+        framework_slots
+        and config.framework_evolution_mode == "local"
+        and config.framework_qwen_initial_candidates > 0
+    )
     framework_options = {}
     framework_selection_schema = None
     bundle = None
-    if framework_coach or framework_direct_gpt:
+    if framework_coach or framework_direct_gpt or framework_initial_qwen:
         from eagle.operators.framework_coach import (
             FRAMEWORK_SELECTION_SCHEMA_NAME,
             framework_selection_response_schema,
@@ -113,7 +118,7 @@ def build_search_runtime(
         if mock or config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
         else generation_client.generation_backend(logger=logger)
     )
-    if mock and (framework_coach or framework_direct_gpt):
+    if mock and (framework_coach or framework_direct_gpt or framework_initial_qwen):
         from eagle.operators.framework_coach import MockFrameworkRoleBackend
 
         assert bundle is not None
@@ -125,6 +130,14 @@ def build_search_runtime(
         initial_policy_backend = DirectGPTFrameworkSelectionBackend(
             model=config.framework_model,
             response_schema=framework_selection_schema,
+        )
+    elif framework_initial_qwen:
+        assert framework_selection_schema is not None
+        initial_policy_backend = client.prompt_backend(
+            operation="framework_initial_selection",
+            temperature=config.initial_policy_temperature,
+            response_schema=framework_selection_schema,
+            response_schema_name=FRAMEWORK_SELECTION_SCHEMA_NAME,
         )
     elif mock or (framework_slots and not framework_coach):
         initial_policy_backend = MockInitialPolicyBackend()

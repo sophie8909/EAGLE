@@ -98,6 +98,7 @@ def initialize_population(
             periodic_reflection
             or config.framework_initial_strategy_mode == "llm_plus_authored"
             or config.framework_gpt_initial_candidates > 0
+            or config.framework_qwen_initial_candidates > 0
         )
         if uses_descriptions and config.population_size > len(FRAMEWORK_INITIAL_STRATEGIES):
             raise ValueError("Add distinct framework initial strategies for the requested population size.")
@@ -155,7 +156,10 @@ def initialize_population(
                 },
             ))
         direct_gpt_count = config.framework_gpt_initial_candidates
-        if config.framework_initial_strategy_mode != "llm_plus_authored" and (config.framework_evolution_mode == "llm_coach" or direct_gpt_count):
+        qwen_count = config.framework_qwen_initial_candidates
+        if config.framework_initial_strategy_mode != "llm_plus_authored" and (
+            config.framework_evolution_mode == "llm_coach" or direct_gpt_count or qwen_count
+        ):
             from eagle.operators.framework_coach import select_initial_framework_genome
 
             if policy_backend is None or candidates_dir is None:
@@ -166,11 +170,11 @@ def initialize_population(
             selection_count = (
                 config.population_size
                 if config.framework_evolution_mode == "llm_coach"
-                else direct_gpt_count
+                else max(direct_gpt_count, qwen_count)
             )
             selection_model = (
                 config.llm_model
-                if config.framework_evolution_mode == "llm_coach"
+                if config.framework_evolution_mode == "local" and qwen_count
                 else config.framework_model
             )
 
@@ -194,8 +198,8 @@ def initialize_population(
                             **selected.metadata,
                             "framework_coach_selection": {
                                 **selection_metadata,
-                                "provider": "direct_openai_gpt",
-                                "model": config.framework_model,
+                                "provider": "local_qwen" if qwen_count else "direct_openai_gpt",
+                                "model": selection_model,
                             },
                         },
                     )
