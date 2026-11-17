@@ -108,7 +108,7 @@ def list_runs(runs_root: Path) -> list[dict]:
             continue
         runs.append({
             "path": str(path.parent.resolve()),
-            "name": path.parent.name if path.parent.parent == runs_root else str(path.parent.relative_to(runs_root)),
+            "name": path.parent.relative_to(runs_root).as_posix(),
             "status": manifest.get("status", "unknown"),
             "latest_generation": manifest.get("latest_generation"),
         })
