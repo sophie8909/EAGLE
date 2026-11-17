@@ -1,3 +1,5 @@
 schema_version: eagle-experiment-index-v1
 runs:
-  qwen_gen0_local_evolution_50x10_seed8_12.yaml: []
+  qwen_gen0_local_evolution_50x10_seed8_12.yaml:
+  - /home/mhlab/EAGLE/runs/10_qwen_initial_genome__game_performance_plus_diversity_per_generation__no_reflection/seed_8/20261114_223802_745607
+  - /home/mhlab/EAGLE/runs/10_qwen_initial_genome__game_performance_plus_diversity_per_generation__no_reflection/seed_9/20261115_125805_617599
