@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -44,7 +46,7 @@ def setup_allibot(root: Path) -> Path:
     adapted_source_dir = root / "build" / "allibot" / "source"
     classes_dir = root / "build" / "allibot" / "classes"
     jar_path = root / "jars" / "allibot.jar"
-    _checkout_pinned_source(source_dir)
+    _checkout_pinned_source(source_dir, UPSTREAM_REPOSITORY, PINNED_COMMIT)
     if not (source_dir / "src" / "ai" / "abstraction" / "submissions" / "allibot" / "alli.java").is_file():
         raise RuntimeError("Pinned upstream checkout does not contain the expected AlliBot source tree.")
     prepare_llama_cpp_sources(source_dir / "src", adapted_source_dir)
@@ -52,15 +54,12 @@ def setup_allibot(root: Path) -> Path:
     if classes_dir.exists():
         shutil.rmtree(classes_dir)
     classes_dir.mkdir(parents=True)
-    build = subprocess.run(
-        [
-            "javac", "-encoding", "UTF-8", "-Xlint:all", "-cp", str(source_dir / "lib" / "*"), "-d", str(classes_dir),
-            *(str(path) for path in source_files),
-        ],
+    build = _compile_java_sources(
+        source_files,
         cwd=adapted_source_dir,
-        capture_output=True,
-        text=True,
-        check=False,
+        classpath=str(source_dir / "lib" / "*"),
+        output_dir=classes_dir,
+        flags=("-Xlint:all",),
     )
     if build.returncode != 0:
         raise RuntimeError("AlliBot upstream source build failed:\n" + (build.stderr or build.stdout).strip())
@@ -86,35 +85,52 @@ def setup_allibot(root: Path) -> Path:
     return resolved
 
 
-def _checkout_pinned_source(source_dir: Path) -> None:
+def _checkout_pinned_source(source_dir: Path, repository: str, commit: str) -> None:
     newly_cloned = False
     if not source_dir.exists():
         source_dir.parent.mkdir(parents=True, exist_ok=True)
-        _run(["git", "clone", "--no-checkout", UPSTREAM_REPOSITORY, str(source_dir)])
+        _run(["git", "clone", "--no-checkout", "--depth", "1", repository, str(source_dir)])
         newly_cloned = True
     if not (source_dir / ".git").is_dir():
-        raise RuntimeError(f"AlliBot source path is not a Git checkout: {source_dir}")
-    if _run(["git", "-C", str(source_dir), "remote", "get-url", "origin"]).rstrip("/").removesuffix(".git") != UPSTREAM_REPOSITORY.removesuffix(".git"):
-        raise RuntimeError("AlliBot source checkout origin does not match the pinned upstream repository.")
+        raise RuntimeError(f"Opponent source path is not a Git checkout: {source_dir}")
+    if _run(["git", "-C", str(source_dir), "remote", "get-url", "origin"]).rstrip("/").removesuffix(".git") != repository.removesuffix(".git"):
+        raise RuntimeError(f"Opponent checkout origin does not match {repository}: {source_dir}")
     dirty = _run(["git", "-C", str(source_dir), "status", "--porcelain"])
     unmaterialized = bool(dirty) and not any(path.name != ".git" for path in source_dir.iterdir())
     if dirty and not unmaterialized:
-        raise RuntimeError(f"AlliBot source checkout has local changes: {source_dir}")
-    _run(["git", "-C", str(source_dir), "fetch", "--depth", "1", "origin", PINNED_COMMIT])
+        raise RuntimeError(f"Opponent source checkout has local changes: {source_dir}")
+    if newly_cloned or _run(["git", "-C", str(source_dir), "rev-parse", "HEAD"]) != commit:
+        _run(["git", "-C", str(source_dir), "fetch", "--depth", "1", "origin", commit])
     checkout = ["git", "-C", str(source_dir), "checkout", "--detach"]
     if newly_cloned or unmaterialized:
         checkout.append("--force")
-    checkout.append(PINNED_COMMIT)
+    checkout.append(commit)
     _run(checkout)
-    if _run(["git", "-C", str(source_dir), "rev-parse", "HEAD"]) != PINNED_COMMIT:
-        raise RuntimeError("AlliBot pinned revision enforcement failed.")
+    if _run(["git", "-C", str(source_dir), "rev-parse", "HEAD"]) != commit:
+        raise RuntimeError(f"Opponent checkout is not at {commit}: {source_dir}")
+
+
+def _compile_java_sources(
+    sources: tuple[Path, ...], *, cwd: Path, classpath: str, output_dir: Path,
+    flags: tuple[str, ...] = (),
+) -> subprocess.CompletedProcess[str]:
+    # A source list can exceed the Windows command-line limit.
+    with tempfile.TemporaryDirectory() as temporary:
+        argfile = Path(temporary) / "sources.args"
+        paths = [Path(os.path.relpath(source, cwd)).as_posix() for source in sources]
+        argfile.write_text("".join(f'"{path}"\n' for path in paths), encoding="utf-8")
+        return subprocess.run(
+            ["javac", "-J-Dfile.encoding=UTF-8", "-encoding", "UTF-8", *flags,
+             "-cp", classpath, "-d", str(output_dir), f"@{argfile}"],
+            cwd=cwd, capture_output=True, text=True, check=False,
+        )
 
 
 def _verify_entrypoint(jar_path: Path, source_dir: Path) -> None:
     # MicroRTS has no stable --help contract. Loading the declared class through its
     # own runtime is a less ambiguous proof than attempting a display-dependent game.
     probe = subprocess.run(
-        ["javap", "-classpath", f"{jar_path}:{source_dir / 'lib' / '*'}", ENTRY_CLASS],
+        ["javap", "-classpath", os.pathsep.join((str(jar_path), str(source_dir / "lib" / "*"))), ENTRY_CLASS],
         capture_output=True,
         text=True,
         check=False,
@@ -123,13 +139,13 @@ def _verify_entrypoint(jar_path: Path, source_dir: Path) -> None:
         raise RuntimeError("AlliBot entry class is not loadable from the rebuilt JAR.")
 
 
-def _write_jar(classes_dir: Path, jar_path: Path) -> None:
+def _write_jar(classes_dir: Path, jar_path: Path, *, created_by: str = "EAGLE AlliBot setup") -> None:
     jar_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = jar_path.with_suffix(".jar.tmp")
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         manifest = zipfile.ZipInfo("META-INF/MANIFEST.MF", date_time=(1980, 1, 1, 0, 0, 0))
         manifest.external_attr = 0o644 << 16
-        archive.writestr(manifest, "Manifest-Version: 1.0\r\nCreated-By: EAGLE AlliBot setup\r\n\r\n")
+        archive.writestr(manifest, f"Manifest-Version: 1.0\r\nCreated-By: {created_by}\r\n\r\n")
         for path in sorted(classes_dir.rglob("*.class")):
             info = zipfile.ZipInfo(path.relative_to(classes_dir).as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
             info.external_attr = 0o644 << 16

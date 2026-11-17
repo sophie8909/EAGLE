@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.swing.JFrame;
 
-import ai.eagle.EAGLE;
 import rts.units.Unit;
 import rts.units.UnitTypeTable;
 
@@ -296,9 +295,9 @@ public class Game {
         appendJsonField(json, "termination_reason", quote(tickTimeout ? "tick_timeout" : gameover ? "gameover" : "stopped"), true);
         appendJsonField(json, "ai1", quote(ai1.getClass().getName()), true);
         appendJsonField(json, "ai2", quote(ai2.getClass().getName()), true);
-        appendJsonField(json, "llm_calls", String.valueOf(llmCallCount(ai1)), true);
-        appendJsonField(json, "llm_call_limit", String.valueOf(llmCallLimit(ai1)), true);
-        appendJsonField(json, "llm_call_limit_reached", String.valueOf(llmCallLimitReached(ai1)), true);
+        appendJsonField(json, "llm_calls", "0", true);
+        appendJsonField(json, "llm_call_limit", "0", true);
+        appendJsonField(json, "llm_call_limit_reached", "false", true);
         json.append("  \"players\": {\n");
         json.append("    \"p0\": ").append(snapshotJson(p0)).append(",\n");
         json.append("    \"p1\": ").append(snapshotJson(p1)).append("\n");
@@ -340,18 +339,6 @@ public class Game {
             return "p1_win";
         }
         return tickTimeout ? "timeout_draw" : "draw";
-    }
-
-    private int llmCallCount(AI ai) {
-        return ai instanceof EAGLE ? ((EAGLE) ai).getLlmCallCount() : 0;
-    }
-
-    private int llmCallLimit(AI ai) {
-        return ai instanceof EAGLE ? ((EAGLE) ai).getLlmCallLimit() : 0;
-    }
-
-    private boolean llmCallLimitReached(AI ai) {
-        return ai instanceof EAGLE && ((EAGLE) ai).hasLlmCallLimitReached();
     }
 
     private String snapshotJson(ResourceSnapshot snapshot) {

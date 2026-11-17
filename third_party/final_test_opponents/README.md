@@ -1,24 +1,20 @@
-# Final-test champion dependencies
+# Pinned MicroRTS champion dependencies
 
-This directory owns only post-evolution opponents. Champion code is never copied into
-the EAGLE Python packages or `third_party/microrts/src`.
-
-Prepare all three pinned opponents from native Ubuntu or WSL2 Ubuntu with:
+The search roster and the final test use these locally built JARs.
+With Git, Python and JDK 17 available, run the following from the repository root.
+The Windows installer also runs this command.
 
 ```bash
 python3 scripts/setup_final_test_opponents.py
 ```
 
-The setup command checks out the exact commits in `manifest.toml`, rebuilds each JAR
-from pinned Java source against the vendored MicroRTS runtime, discovers concrete
-MicroRTS AI classes from the resulting JAR, verifies the documented upstream
-entrypoint can be loaded and instantiated, and writes `resolved_manifest.json`.
-It never substitutes a baseline bot and fails if any opponent cannot be prepared.
+The command builds the vendored MicroRTS runtime, checks out the commits pinned
+in the manifest, and compiles each opponent JAR against that runtime. It checks
+that the expected AI class was built for each opponent.
 
 TMA's upstream `TMA.jar` contains Java source rather than compiled classes. Mayari's
 upstream repository contains both source and a prebuilt JAR. COAC contains source
-only. EAGLE therefore rebuilds all three from source and records available upstream
-archive hashes for comparison.
+only. EAGLE rebuilds all three from source.
 
 
 The pinned TMA README identifies its original `strategies` folder as outdated and
@@ -26,8 +22,7 @@ instructs users to remove it when the bot does not work. The manifest therefore
 builds the unchanged `TMA.java` entrypoint and active `strategiesV2` sources. TMA's
 entrypoint retains a stale wildcard import of the old package, so EAGLE supplies the
 behavior-free `adapters/tma/ai/tma/strategies/CompatibilityMarker.java` solely to
-make that package resolvable by `javac`. The adapter does not participate in TMA's
-runtime strategy and its path and hash are recorded in the resolved manifest.
+make that package resolvable by `javac`.
 At the pinned revisions, none of the three repositories contains a repository-level
 `LICENSE`, `COPYING`, or `NOTICE` file. Their source and generated JARs are consequently
 downloaded for local evaluation only and are ignored by Git. EAGLE does not
