@@ -53,6 +53,7 @@ def continue_search(
     for generation in range(completed_generation + 1, config.generations + 1):
         if stop_reason is not None:
             break
+        print(f"Generation {generation}/{config.generations}: started", flush=True)
         step = run_generation_step(
             generation=generation,
             config=config,

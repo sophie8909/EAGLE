@@ -116,6 +116,9 @@ unavailable，不補成 0。generation metrics 保存 comparable/unavailable 數
 Bootstrap 期間 stdout 會以 `flush=True` 顯示 backend/model、每次 request attempt、
 驗證結果、bundle freeze 與進入 Gen 0 的進度；不輸出 credential、完整 prompt 或 response。
 
+1114 的混合初始化沿用固定 framework。每個新 run 的 G0 由 GPT API 依第一份策略
+描述選完整 slot list，本地 Qwen 依接下來九份描述各選一份。G1 起執行本地 EA。
+
 新增 opt-in `framework.evolution_mode: reflection`，要求 self-play；初始 framework
 由 GPT 設計。Gen 0 使用十份不同的自然語言策略描述，其中一份忠實描述 vendored
 WorkerRush，再由本地 Qwen Coach 依每份描述填完整 slots。每個個體保存
@@ -633,7 +636,7 @@ python -m eagle.fixed_evaluation --run-dir runs/<run> --generations 20 30 40 50 
 這不會建立六次 evolutionary run；treatment 1 只對 Gen 0 使用
 `--generations 0`。
 
-預設世代為 0、5、10、15、20；未指定 seed 時讀取 run config。run 必須完成，每個指定 snapshot 都必須存在，不會替換世代。預設每代從 runnable survivors 選擇 generation-local、有限且最高的 Game Performance；`--all-candidates` 則評估該代所有 runnable 個體，並以個別 candidate 子目錄保存證據。所有代表或個體共用凍結 protocol 與同一 seed stream，分別重新編譯及 Integration，並各跑 600 場；不呼叫 LLM，也不修改 search artifacts。protocol、逐代證據、彙總與部分進度寫入獨立 `fixed_evaluation/`。指定的 output directory 必須是新建或空目錄；重跑請使用另一個目錄以保留舊證據。彙總檔名為 `fixed_evaluation_summary.json`、`fixed_evaluation_results.csv`、`fixed_evaluation_results.md`。`mean_match_score` 是 benchmark 的未加權平均，與 canonical search fitness 分開；矩陣不完整或含錯誤時 aggregate score 和 win rate 為 null，命令以非零狀態結束。
+預設世代為 0、5、10、15、20；未指定 seed 時讀取 run config。run 必須完成，每個指定 snapshot 都必須存在，不會替換世代。預設每代從 runnable survivors 選擇 generation-local、有限且最高的 Game Performance；`--all-candidates` 則評估該代所有 runnable 個體，並以個別 candidate 子目錄保存證據。所有代表或個體共用凍結 protocol 與同一 seed stream，各自重新編譯並通過 Integration。一般 final test 和跨代評估都依 `evaluation.final_test_games_per_side` 決定每個「地圖 × 對手」組合的單側場次。預設 P0、P1 各 10 場，每個個體 600 場。1114 baseline 設定 P0、P1 各 5 場，每個個體 300 場。不呼叫 LLM，也不修改 search artifacts。protocol、逐代證據、彙總與部分進度寫入獨立 `fixed_evaluation/`。指定的 output directory 必須是新建或空目錄；重跑請使用另一個目錄以保留舊證據。彙總檔名為 `fixed_evaluation_summary.json`、`fixed_evaluation_results.csv`、`fixed_evaluation_results.md`。`mean_match_score` 是 benchmark 的未加權平均，與 canonical search fitness 分開；矩陣不完整或含錯誤時 aggregate score 和 win rate 為 null，命令以非零狀態結束。
 
 實驗主機也提供常駐、唯讀的本地監控入口；它會自動發現 `runs/` 下現在與之後
 由 `experiment` 建立的 canonical run：
@@ -660,6 +663,9 @@ chat preflight、EA、resume 與 final test，並預設啟動、重用和清理�
 保留 GPU、offload 與 health 檢查。Windows 使用外部軟體已開好的服務時，
 CLI 加上 `--connect-only`，或在 GUI 勾選「只連線」，EAGLE 不會重啟或停止該服務。
 獨立的 `python -m eagle server --config CONFIG.yaml` 仍可用於手動管理 server。
+GUI 與 CLI 的 compact 評估共用 1114 WSL 的單檔緩衝，啟動時會檢查 Java 編譯檔是否支援。
+關閉瀏覽器或啟動視窗後，實驗繼續執行。重開同一連接埠的 GUI 可查看原實驗，
+在 GUI 終端按 Ctrl+C 則中止實驗並關閉 GUI 服務。
 additional endpoint 永遠由外部服務管理。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 `python -m eagle runtime` 已移除。
 

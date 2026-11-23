@@ -131,6 +131,8 @@ runs without applying current resume-only runtime validation. Adapter tests
 cover WorkerRush and SafeAllInBot classpaths and temporary compilation wiring.
 Platform checks cover POSIX session/stop behavior, Windows owned console group
 creation and Ctrl+Break dispatch, UTF-8 child logs, and portable map paths.
+The launcher reattaches to the same loopback service after closure. Its Ctrl+C
+requests authenticated service shutdown, and shutdown refuses new jobs.
 `tests/test_interrupts.py` checks handler restoration and, from a Windows
 console, waking a blocked child and completing cleanup. Native process tests
 in `tests/test_runtime_windows.py` verify command quoting, creation-time
@@ -180,6 +182,10 @@ checks per representative, and 12 paired-seed MicroRTS matches against PassiveAI
 External-opponent setup is stubbed in that smoke. This does not establish full
 ten-opponent or historical-run benchmark results; full discovery was not run.
 
+On Windows, the real paired benchmark test uses a nested output directory that
+puts candidate classes and per-match evidence beyond the legacy Win32 path
+limit. It verifies compilation, Integration, and persisted match results.
+
 | Area | Required proof |
 | --- | --- |
 | Candidate | in `llm` mode, default two-prompt and opt-in prompt/prompt/Java modes; in deterministic mode, active policy-only genotype; generation-qualified seeded IDs, explicit-ID preservation, and fail-closed rejection of missing IDs; inherited Java versus generated phenotype separation; terminal failure retains state |
@@ -193,10 +199,11 @@ ten-opponent or historical-run benchmark results; full discovery was not run.
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |
 | Matches | one promoted source/class tree; complete configured matrix with resolved per-map tick caps in normal, AOS head-to-head, and final-test execution; a real distinct WorkerRush; pinned AllInBot original JAR/class plus separately compiled reflection adapter; a contained upstream fault remains `ok` but is a machine-readable neutral draw, never a candidate win/failure; population-summed generation counts; distinct directories and round indices; both sides; no fake match-seed property; no regeneration after Integration starts |
-| Fixed cross-generation evaluation | completed-run and exact-snapshot requirements; default/explicit generations and config-derived seed; highest finite generation-local Game Performance among runnable survivors with deterministic ID ties; no summary-best or generation fallback; one frozen protocol and candidate-independent seed stream; separate compile/Integration; 600 matches per representative; explicit errors and retained partial evidence; exact combined filenames; new/empty output directory; unweighted benchmark mean distinct from search fitness; null aggregate score/win rate and nonzero exit for incomplete/error matrices; no LLM or search-artifact mutation |
+| Fixed cross-generation evaluation | completed-run and exact-snapshot requirements; default/explicit generations and config-derived seed; highest finite generation-local Game Performance among runnable survivors with deterministic ID ties; no summary-best or generation fallback; one frozen protocol and candidate-independent seed stream; separate compile/Integration; configured game count per side for both benchmark entry points (default 600 matches per candidate, 1114 uses 300); explicit errors and retained partial evidence; exact combined filenames; new/empty output directory; unweighted benchmark mean distinct from search fitness; null aggregate score/win rate and nonzero exit for incomplete/error matrices; no LLM or search-artifact mutation |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | run-v2/generation-v3, with LLM phase4-v6/candidate-v6 and deterministic phase4-v7/candidate-v7 contracts; v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |
+| Compact snapshots | A real compiled MicroRTS match writes one buffered file with every tick. Real compact evaluation preflight rejects an older compiled runtime. Buffered input and individual logs produce identical scoring telemetry and trace rows. An interrupted stream retains complete frames and the trace integrity check reports missing ticks. |
 | Timing | UTC fields, monotonic durations, LLM attempts or deterministic materialization timing, optional null stages, 180 match durations; match timing lives in `result.json`; deterministic-mode match seeds are stable and persisted; framework `llm_coach` initialization and Coach attempts are timed with one run event per actual request while Java `generation_llm` remains empty |
 | Opponent-wise lexicase | exactly ten maximized opponent cases; seeded case-order filtering; joint parent-plus-offspring selection without replacement; failed offspring cannot displace completed parents; fixed-size survivor behavior |
 | Self-play | Approved `tournament-v1` contract: exact policy-marker gating and legacy resume fence; capacity includes permanent protected four and rejects values below 10; seed-deterministic deduplication/admission; seeded one-incumbent tournament; 18-match W/D/L scoring, strict promotion, and incomplete/error non-promotion with retained evidence; generation-zero ten built-in sources under fixed slot IDs (protected actual IDs plus six diagnostic slots); refresh context uses four protected case IDs plus six sampled members in `self_play_000`…`self_play_005`; uniform slot weights; scalar Game Performance; context/configuration/case IDs persisted with cached scores; runtime/map asset identity verified before cache reuse; same-context parent refresh; pool checkpoint/restore before replay; v4 snapshot/context hash; prepared defender class-tree and available builtin hashes in tournament evidence; opponent-pool archive and timing event. Validated by 28 focused tests and a broader 105-test regression run (one skip), plus a separate 36-match real runtime smoke against LightRush and a saved generated defender. Full real evolutionary runs and the complete permanent roster were not exercised; historical cohort/FIFO results describe prior behavior only. |
@@ -395,8 +402,10 @@ complete Gen-0 genomes, and validate every response against
 `eagle-framework-selection-v1` plus the exact frozen bundle hash. Raw response,
 request, timing, genome, and validation artifacts are retained before parsing;
 invalid or exhausted selection fails initialization without random/default
-fallback. Remaining Gen-0 slots and every offspring must use local seeded
-operators, with no later GPT request. The 1030 ablation configs must validate
+fallback. When Qwen initialization is configured, its backend selects the next
+requested Gen-0 slots after the GPT prefix. Tests cover the 1114 split across
+two fresh runs and reject counts that exceed the population. Remaining Gen-0
+slots and every offspring use local seeded operators. The 1030 ablation configs must validate
 one shared bundle and the three treatment shapes; fixed evaluation must accept
 one invocation with generations `20 30 40 50 75 100`.
 

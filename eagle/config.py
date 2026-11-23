@@ -49,6 +49,7 @@ DEFAULT_EVALUATION_MAPS = (
 )
 DEFAULT_SEED_POLICY_PATH = Path(__file__).resolve().parents[1] / "seeds" / "blank_policy.txt"
 DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXICASE_CASES)
+DEFAULT_FINAL_TEST_GAMES_PER_SIDE = 10
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
 LEXICASE_SELECTION = "lexicase"
@@ -229,6 +230,7 @@ class ExperimentConfig:
     evaluation_map_tick_limits: tuple[int, ...] = ()
     rounds_per_map: int = 3
     swap_player_sides: bool = True
+    final_test_games_per_side: int = DEFAULT_FINAL_TEST_GAMES_PER_SIDE
     evaluation_opponents: tuple[tuple[str, float], ...] = DEFAULT_SEARCH_OPPONENTS
     max_prompt_chars: int = 4000
     max_prompt_lines: int = 80
@@ -450,6 +452,11 @@ class ExperimentConfig:
         )
         rounds_per_map = int(evaluation_settings.get("rounds_per_map", payload.get("rounds_per_map", 3)))
         swap_player_sides = bool(evaluation_settings.get("swap_player_sides", payload.get("swap_player_sides", True)))
+        final_test_games_per_side = evaluation_settings.get(
+            "final_test_games_per_side", DEFAULT_FINAL_TEST_GAMES_PER_SIDE,
+        )
+        if type(final_test_games_per_side) is not int or final_test_games_per_side < 1:
+            raise ValueError("evaluation.final_test_games_per_side must be a positive integer.")
         if "evaluation_opponents" in payload:
             raise ValueError("evaluation_opponents is fixed by eagle.opponent_cases and must not be overridden.")
         evaluation_opponents = DEFAULT_SEARCH_OPPONENTS
@@ -621,6 +628,7 @@ class ExperimentConfig:
             evaluation_map_tick_limits=evaluation_map_tick_limits,
             rounds_per_map=rounds_per_map,
             swap_player_sides=swap_player_sides,
+            final_test_games_per_side=final_test_games_per_side,
             evaluation_opponents=evaluation_opponents,
             max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
             max_prompt_lines=int(payload.get("max_prompt_lines", 80)),
@@ -742,10 +750,10 @@ class ExperimentConfig:
                 "framework.initial_genomes is mutually exclusive with "
                 "framework.gpt_initial_candidates/framework.qwen_initial_candidates."
             )
-        if self.framework_gpt_initial_candidates and self.framework_qwen_initial_candidates:
+        if self.framework_gpt_initial_candidates + self.framework_qwen_initial_candidates > self.population_size:
             raise ValueError(
-                "framework.gpt_initial_candidates and "
-                "framework.qwen_initial_candidates are mutually exclusive."
+                "framework.gpt_initial_candidates and framework.qwen_initial_candidates "
+                "must total at most population_size."
             )
         if self.framework_bootstrap_backend not in {"groq", "mistral", "gpt", "codex", "local"}:
             raise ValueError(
@@ -1166,6 +1174,7 @@ class ExperimentConfig:
                 ],
                 "rounds_per_map": self.rounds_per_map,
                 "swap_player_sides": self.swap_player_sides,
+                "final_test_games_per_side": self.final_test_games_per_side,
                 "opponents": [
                     {"id": opponent_id, "weight": weight}
                     for opponent_id, weight in self.evaluation_opponents

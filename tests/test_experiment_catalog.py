@@ -128,6 +128,27 @@ class ExperimentCatalogTests(unittest.TestCase):
         self.assertEqual(catalog["treatments"][0]["expected_seeds"], [8, 9])
         self.assertEqual(catalog["issues"], [])
 
+    def test_initialization_is_distinct_from_local_llm_evolution(self):
+        common = {
+            "schema_version": "experiment-v2",
+            "random_seed": 8, "generations": 50, "population_size": 10,
+            "java_materialization_mode": "framework_slots",
+            "model": {"name": "qwen", "host": "127.0.0.1"},
+        }
+        self.yaml("configs/experiments/1114_sample/qwen.yaml", {
+            **common, "framework": {"evolution_mode": "local", "qwen_initial_candidates": 10},
+            "strategy_reflection_probability": 1.0,
+        })
+        self.yaml("configs/experiments/1115_sample/coach.yaml", {
+            **common, "framework": {"evolution_mode": "llm_coach"},
+        })
+        planned = {row["experiment"]: row["comparison"] for row in discover(self.root, [])["treatments"]}
+        self.assertEqual(planned["1114_sample"]["local_llm_evolution"], "no")
+        self.assertEqual(planned["1114_sample"]["initialization_group"], "Qwen 初始")
+        self.assertEqual(planned["1114_sample"]["strategy_reflection"], "未啟用")
+        self.assertEqual(planned["1115_sample"]["local_llm_evolution"], "yes")
+        self.assertEqual(planned["1115_sample"]["evolution"], "LLM Coach")
+
     def test_nested_gui_result_exposes_comparison_metadata(self):
         run = self.runs / "gpt_version" / "seed_8" / "attempt_0001"
         self.yaml(run / "config.yaml", {

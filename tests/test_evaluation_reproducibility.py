@@ -25,6 +25,7 @@ from eagle.evaluation.matches import evaluate_matches
 from eagle.evaluation.parent_offspring import evaluate_parent_vs_offspring
 from eagle.evaluation.records import EvaluationOpponent
 from eagle.evaluation.runtime_evaluation import MatchResult, run_microrts_match
+from eagle.evaluation.windows_paths import windows_output_path
 from eagle.evaluation.semantic_signature import SemanticDataset, evaluate_semantic_signature
 from eagle.final_test import FINAL_TEST_OPPONENTS, _run_final_matrix, main as final_test_main
 from eagle.generation.java_agent_generator import GeneratedJavaAgent
@@ -123,7 +124,7 @@ class EvaluationReproducibilityTests(unittest.TestCase):
                  patch("eagle.final_test._write_outputs"), \
                  patch("eagle.final_test._markdown_table", return_value="ok"), redirect_stdout(io.StringIO()):
                 self.assertEqual(final_test_main(["--run-dir", str(root)]), 0)
-            fresh_classes = root / "final_test/classes/a"
+            fresh_classes = windows_output_path(root / "final_test/classes/a")
             self.assertEqual(compile_agent.call_args.args[0], source_path)
             self.assertEqual(compile_agent.call_args.kwargs["output_dir"], fresh_classes)
             self.assertEqual(integrate.call_args.kwargs["classes_dir"], fresh_classes)

@@ -12,13 +12,14 @@ fi
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-if [[ "$1" == "--resume" ]]; then
-  exec conda run --no-capture-output -n eagle \
-    python -m eagle experiment "$@"
+if [[ "$1" != "--resume" ]]; then
+  set -- --config-dir "$@"
 fi
 
-CONFIG_TARGET="$1"
-shift
-
-exec conda run --no-capture-output -n eagle \
-  python -m eagle experiment --config-dir "$CONFIG_TARGET" "$@"
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  exec "$ROOT_DIR/.venv/bin/python" -u -m eagle experiment "$@"
+fi
+if command -v conda >/dev/null 2>&1; then
+  exec conda run --no-capture-output -n eagle python -u -m eagle experiment "$@"
+fi
+exec python3 -u -m eagle experiment "$@"

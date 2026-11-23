@@ -20,11 +20,14 @@ from urllib.parse import parse_qs, urlsplit
 import yaml
 
 from eagle.analysis import experiment_dashboard
+from eagle.cli.gui_launcher import INSTANCE_PATH, SHUTDOWN_PATH, supervise_gui
 from eagle.config import (
     CANDIDATE_JAVA_MODES, EVALUATION_MODES, INITIAL_POPULATION_MODES,
     PARENT_EVALUATION_MODES, ExperimentConfig,
 )
+from eagle.experiment_index import is_experiment_run_index
 from eagle.gui_data import config_choices, inspect_run, list_runs, read_config, save_config, validate_config
+from eagle.gui_progress import ExperimentProgress
 from eagle.interrupts import install_interrupt_handlers
 from eagle.operators.adaptive import ReflectionOperatorMode
 from eagle.opponents import EVALUATION_ROSTER, GUI_ONLY_OPPONENTS, rooted_jar_path
@@ -33,6 +36,7 @@ from eagle.opponents import EVALUATION_ROSTER, GUI_ONLY_OPPONENTS, rooted_jar_pa
 ROOT = Path(__file__).resolve().parents[2]
 HTML = Path(__file__).with_name("gui.html")
 IS_WINDOWS = sys.platform == "win32"
+JOB_START_ROUTES = {"/api/start", "/api/start-server", "/api/resume", "/api/watch"}
 
 
 def form_payload(payload: dict, root: Path) -> dict:
@@ -97,10 +101,11 @@ class Job:
         self.root, self.kind = root, kind
         self.process: subprocess.Popen | None = None
         self.log: Path | None = None
+        self.progress: ExperimentProgress | None = None
         self.stopping = False
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
 
-    def start(self, command: list[str], folder: Path) -> dict:
+    def start(self, command: list[str], folder: Path, *, progress_target: Path | None = None) -> dict:
         with self.lock:
             if self.process is not None and self.process.poll() is None:
                 raise ValueError(f"{self.kind} is already running; wait or stop it first.")
@@ -117,6 +122,7 @@ class Job:
                     stdin=subprocess.DEVNULL, env=environment, **process_options,
                 )
             self.process, self.log, self.stopping = process, log, False
+            self.progress = ExperimentProgress(progress_target or folder) if self.kind == "experiment" else None
             return self.status()
 
     def stop(self) -> dict:
@@ -137,19 +143,22 @@ class Job:
             return self.status()
 
     def status(self) -> dict:
-        code = None if self.process is None else self.process.poll()
-        running = self.process is not None and code is None
-        output = ""
-        if self.log is not None and self.log.exists():
-            with self.log.open("rb") as stream:
-                stream.seek(0, 2)
-                stream.seek(max(0, stream.tell() - 32000))
-                output = stream.read().decode("utf-8", errors="replace")
-        return {
-            "running": running, "stopping": running and self.stopping,
-            "returncode": code, "pid": None if self.process is None else self.process.pid,
-            "output": output, "log": None if self.log is None else str(self.log),
-        }
+        with self.lock:
+            code = None if self.process is None else self.process.poll()
+            running = self.process is not None and code is None
+            output = ""
+            if self.log is not None and self.log.exists():
+                with self.log.open("rb") as stream:
+                    stream.seek(0, 2)
+                    stream.seek(max(0, stream.tell() - 32000))
+                    output = stream.read().decode("utf-8", errors="replace")
+            progress = self.progress.read(self.log) if self.progress is not None and self.log is not None else None
+            return {
+                "running": running, "stopping": running and self.stopping,
+                "returncode": code, "pid": None if self.process is None else self.process.pid,
+                "output": output, "log": None if self.log is None else str(self.log),
+                "progress": progress,
+            }
 
 
 class GuiApp:
@@ -171,6 +180,31 @@ class GuiApp:
             raise ValueError("Only canonical eagle-run-v2 runs are supported.")
         return path
 
+    def batch_path(self, value: str) -> Path:
+        folder = (self.root / value).resolve()
+        configs = self.root / "configs"
+        gui_jobs = self.root / "logs/gui"
+        index = folder / "experiment.yaml"
+        if not (folder.is_relative_to(configs) or folder.parent == gui_jobs):
+            raise ValueError("Choose a batch from configs or the GUI experiment snapshots.")
+        if index.resolve().parent != folder:
+            raise ValueError("The run index must belong to the selected batch folder.")
+        if not is_experiment_run_index(index):
+            raise ValueError("The batch requires a generated experiment.yaml run index.")
+        return folder
+
+    def batch_choices(self) -> list[str]:
+        batches = set()
+        config_indices = (self.root / "configs").rglob("experiment.yaml")
+        gui_indices = (self.root / "logs/gui").glob("*/experiment.yaml")
+        for index in (*config_indices, *gui_indices):
+            try:
+                folder = self.batch_path(str(index.parent))
+            except (ValueError, UnicodeError):
+                continue
+            batches.add(folder.relative_to(self.root).as_posix())
+        return sorted(batches, reverse=True)
+
     def metadata(self) -> dict:
         opponents = []
         for spec in (*EVALUATION_ROSTER, *GUI_ONLY_OPPONENTS):
@@ -179,12 +213,14 @@ class GuiApp:
                               "available": jar is None or jar.is_file()})
         maps_root = self.root / "third_party/microrts"
         return {
-            "configs": config_choices(self.root), "forms": form_options(),
+            "configs": config_choices(self.root), "batches": self.batch_choices(), "forms": form_options(),
             "opponents": opponents,
             "maps": sorted(path.relative_to(maps_root).as_posix() for path in (maps_root / "maps").rglob("*.xml")),
         }
 
     def get(self, path: str, query: dict) -> dict:
+        if path == INSTANCE_PATH:
+            return {"root": str(self.root), "token": self.token, "runs_roots": list(map(str, self.runs_roots.copy()))}
         if path == "/api/analysis":
             return experiment_dashboard.catalog(self.root, self.runs_roots)
         if path == "/api/meta":
@@ -196,9 +232,11 @@ class GuiApp:
             runs = Path(result["payload"].get("runs_dir", "runs"))
             self.runs_roots.add((self.root / runs).resolve())
             return result
-        if path == "/api/status":
-            runs = [run for root in sorted(self.runs_roots) for run in list_runs(root)]
-            return {"server": self.server.status(), "experiment": self.experiment.status(), "match": self.match.status(), "runs": runs}
+        if path in {"/api/jobs", "/api/status"}:
+            jobs = {"server": self.server.status(), "experiment": self.experiment.status(), "match": self.match.status()}
+            if path == "/api/status":
+                jobs["runs"] = [run for root in sorted(self.runs_roots.copy()) for run in list_runs(root)]
+            return jobs
         if path == "/api/run":
             return inspect_run(self.run_path(query["path"][0]))
         raise ValueError("Unknown API route.")
@@ -244,7 +282,7 @@ class GuiApp:
                 command = [sys.executable, "-u", "-m", "eagle", "server", "--config", str(snapshot)]
                 return self.server.start(command, folder)
             self.runs_roots.add((self.root / config.runs_dir).resolve())
-            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir", str(snapshot)]
+            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir", str(folder)]
             if body.get("connect_only") is True:
                 command.append("--connect-only")
             if body.get("mock") is True:
@@ -253,15 +291,15 @@ class GuiApp:
                 command.append("--skip-final-test")
             return self.experiment.start(command, folder)
         if path == "/api/resume":
-            run = self.run_path(body["run"])
-            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--resume", str(run)]
+            target = self.batch_path(body["batch"]) if "batch" in body else self.run_path(body["run"])
+            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--resume", str(target)]
             if body.get("connect_only") is True:
                 command.append("--connect-only")
             if body.get("mock") is True:
                 command.append("--mock")
             if body.get("skip_final_test") is True:
                 command.append("--skip-final-test")
-            return self.experiment.start(command, self.root / "logs/gui" / uuid.uuid4().hex)
+            return self.experiment.start(command, self.root / "logs/gui" / uuid.uuid4().hex, progress_target=target)
         if path == "/api/watch":
             from scripts.run_gui_match import load_candidate_source, resolve_opponent
 
@@ -312,6 +350,8 @@ class GuiServer(ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], app: GuiApp):
         self.app = app
+        self.job_start_lock = threading.Lock()
+        self.stopping = False
         super().__init__(address, GuiHandler)
         self.origin = f"http://127.0.0.1:{self.server_port}"
 
@@ -359,7 +399,23 @@ class GuiHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Request must contain a JSON object.")
-            self.reply(200, self.server.app.post(urlsplit(self.path).path, body))
+            path = urlsplit(self.path).path
+            if path == SHUTDOWN_PATH:
+                with self.server.job_start_lock:
+                    self.server.stopping = True
+                try:
+                    self.reply(200, {"status": "stopping"})
+                finally:
+                    self.server.shutdown()
+                return
+            if path in JOB_START_ROUTES:
+                with self.server.job_start_lock:
+                    if self.server.stopping:
+                        raise ValueError("The GUI is stopping.")
+                    result = self.server.app.post(path, body)
+            else:
+                result = self.server.app.post(path, body)
+            self.reply(200, result)
         except (OSError, ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
             self.reply(400, {"error": str(exc)})
 
@@ -379,7 +435,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs-root", type=Path, action="append", default=None,
                         help="Result folder; repeat this option to compare multiple folders.")
     parser.add_argument("--open", action="store_true", help="Open the local GUI in a browser.")
+    parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if not 0 <= args.port <= 65535:
+        parser.error("--port must be between 0 and 65535.")
+    if not args.serve and args.port:
+        return supervise_gui(ROOT, args.port, args.runs_root or [], open_browser if args.open else None)
     app = GuiApp(ROOT, (args.runs_root or [ROOT / "runs"])[0])
     for runs_root in (args.runs_root or [])[1:]:
         app.runs_roots.add(runs_root.expanduser().resolve())
@@ -398,6 +459,8 @@ def main(argv: list[str] | None = None) -> int:
         pass
     finally:
         restore_interrupts()
+        with server.job_start_lock:
+            server.stopping = True
         app.experiment.stop()
         app.match.stop()
         server.server_close()

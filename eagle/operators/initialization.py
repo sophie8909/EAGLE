@@ -79,6 +79,7 @@ def initialize_population(
     config: ExperimentConfig,
     *,
     policy_backend: InitialPolicyBackend | None = None,
+    qwen_policy_backend: InitialPolicyBackend | None = None,
     candidates_dir: Path | None = None,
     timing_logger: LLMCallLogger | None = None,
 ) -> list[Candidate]:
@@ -166,22 +167,22 @@ def initialize_population(
                 raise ValueError(
                     "framework initial GPT/Coach selection requires a backend and artifact directory."
                 )
+            if direct_gpt_count and qwen_count and qwen_policy_backend is None:
+                raise ValueError("Mixed framework initialization requires a separate Qwen backend.")
 
             selection_count = (
                 config.population_size
                 if config.framework_evolution_mode == "llm_coach"
-                else max(direct_gpt_count, qwen_count)
-            )
-            selection_model = (
-                config.llm_model
-                if config.framework_evolution_mode == "local" and qwen_count
-                else config.framework_model
+                else direct_gpt_count + qwen_count
             )
 
             def select_genome(candidate: Candidate) -> Candidate:
+                use_qwen = qwen_count > 0 and candidate.metadata["seed_index"] >= direct_gpt_count
+                selection_model = config.llm_model if use_qwen else config.framework_model
+                backend = qwen_policy_backend if use_qwen and qwen_policy_backend is not None else policy_backend
                 write_candidate_inputs(candidates_dir, candidate)
                 selected = select_initial_framework_genome(
-                    candidate, bundle, policy_backend,
+                    candidate, bundle, backend,
                     artifact_dir=candidates_dir / candidate.id,
                     timing_logger=timing_logger,
                     max_attempts=config.initial_policy_max_attempts,
@@ -198,7 +199,7 @@ def initialize_population(
                             **selected.metadata,
                             "framework_coach_selection": {
                                 **selection_metadata,
-                                "provider": "local_qwen" if qwen_count else "direct_openai_gpt",
+                                "provider": "local_qwen" if use_qwen else "direct_openai_gpt",
                                 "model": selection_model,
                             },
                         },

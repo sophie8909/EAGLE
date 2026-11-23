@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -16,7 +18,6 @@ from eagle.run_artifacts import RUN_SCHEMA_VERSION
 SETTINGS_PATH = "logs/experiment-analysis.yaml"
 SETTINGS_SCHEMA = "eagle-analysis-settings-v1"
 CATALOG_SCHEMA = "eagle-experiment-catalog-v1"
-COMPARABLE_FRAMEWORK_SHA256 = "f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b"
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
 _READ_ERRORS = (OSError, ValueError, TypeError, yaml.YAMLError)
 
@@ -139,32 +140,67 @@ def _run_metadata(path: Path) -> dict:
     }
 
 
+def _model_location(profile: dict) -> str:
+    if profile.get("path") and profile.get("llama_server"):
+        return "yes"
+    configured = [profile, *(profile.get("additional_endpoints") or [])]
+    hosts = []
+    for item in configured:
+        if not isinstance(item, dict):
+            continue
+        address = item.get("base_url") or item.get("host")
+        if address:
+            hosts.append(urlsplit(str(address) if "://" in str(address) else f"//{address}").hostname)
+    if any(host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"} for host in hosts):
+        return "yes"
+    if hosts and all(hosts):
+        return "no"
+    return "yes" if profile.get("name") else "unknown"
+
+
 def _comparison_metadata(path: Path) -> dict[str, str]:
-    """Describe the experimentally meaningful choices shown by the GUI."""
-    config = _yaml(path / "config.yaml")
+    """Describe initialization and generation 1+ as separate conditions."""
+    config = _yaml(path if path.is_file() else path / "config.yaml")
     framework = _mapping(config.get("framework", {}))
     evaluation = _mapping(config.get("evaluation", {}))
     population = int(config.get("population_size", 10))
     gpt_count = int(framework.get("gpt_initial_candidates", 0) or 0)
+    qwen_count = int(framework.get("qwen_initial_candidates", 0) or 0)
+    mode = str(framework.get("evolution_mode", "local"))
     initial_genomes = framework.get("initial_genomes") or ()
-    generations = int(config.get("generations", 1) or 1)
-    if generations == 0 and gpt_count:
+    generations = int(config.get("generations", 1))
+    if gpt_count and qwen_count:
+        init_name = f"{gpt_count} GPT + {qwen_count} Qwen"
+        initialization = f"G0 由 {init_name} 選 genome"
+        init_id = f"{gpt_count}_gpt_{qwen_count}_qwen_initial"
+    elif qwen_count:
+        initialization = f"Qwen 只在 G0 選 {qwen_count} 個 genome"
+        init_id = f"{qwen_count}_qwen_initial"
+        init_name = "Qwen 初始" if qwen_count >= population else f"{qwen_count} Qwen + 其餘本地初始"
+    elif generations == 0 and gpt_count:
         initialization = "GPT initial genome；依 strategy description"
         init_id = "gpt_initial_genome"
+        init_name = "GPT 初始"
     elif gpt_count >= population:
         initialization = f"{population} GPT；依 {population} 份 strategy description"
         init_id = f"{population}_gpt_description"
+        init_name = f"{population} GPT 初始"
     elif initial_genomes:
         initialization = "1 GPT genome + 其餘 local；GPT genome 來自 description"
         init_id = "1_gpt_9_local_description"
+        init_name = "1 GPT + 本地初始"
     elif framework.get("initial_strategy_mode") == "llm_plus_authored":
         initialization = "GPT description + authored descriptions"
         init_id = "gpt_description_authored"
+        init_name = "GPT 策略描述"
+    elif mode == "llm_coach" or config.get("initial_population_mode") == "llm_generated_policies":
+        initialization = "LLM 初始化"
+        init_id = "llm_initial"
+        init_name = initialization
     else:
         initialization = "Local seeded initialization"
         init_id = "local_seeded"
-
-    experiment_name = str(config.get("experiment_name", ""))
+        init_name = "本地規則初始"
     is_self_play = str(evaluation.get("mode", "fixed_roster")) == "self_play"
     if is_self_play:
         survivor = "每代：Game Performance elites + 2 max-min diversity seats"
@@ -174,32 +210,91 @@ def _comparison_metadata(path: Path) -> dict[str, str]:
         survivor = "每代：opponent-wise lexicase"
         selection_id = "opponent_wise_lexicase_per_generation"
         parent = "每個 offspring：opponent-wise lexicase"
-    refresh = f"每 5 代（G1、G6、G11…）；interval={evaluation.get('self_play_refresh_interval', 5)}"
-    mode = str(framework.get("evolution_mode", "local"))
+    interval = evaluation.get("self_play_refresh_interval", 5)
+    refresh = f"每 {interval} 代更新" if is_self_play else "固定對手"
+    materialization = config.get("java_materialization_mode")
+    primary_key = "remote_model" if config.get("use_remote_llm") else "model"
+    primary = config.get(primary_key) or {}
+    if config.get("use_remote_llm") and not (primary.get("base_url") or primary.get("host")):
+        primary = {}
+    if generations == 0:
+        evolution = "僅初始化"
+        evolution_id = "initialization_only"
+        local_llm = "no"
+    elif mode in {"reflection", "option_reflection"} or (
+        mode == "llm_coach" and float(framework.get("coach_offspring_probability", 1.0)) > 0
+    ):
+        evolution = {
+            "llm_coach": "LLM Coach",
+            "reflection": "Framework Reflection",
+            "option_reflection": "Option Reflection",
+        }[mode]
+        evolution_id = mode
+        local_llm = _model_location(primary)
+    elif materialization in {"framework_slots", "deterministic_dsl"} or framework:
+        evolution = "本地演化（無 LLM）"
+        evolution_id = "local_ea"
+        local_llm = "no"
+    elif materialization == "llm":
+        evolution = "LLM 產生 Java"
+        evolution_id = "llm_generation"
+        routes = {_model_location(primary), _model_location(config.get("generation_model") or primary)}
+        local_llm = "yes" if "yes" in routes else "no" if routes == {"no"} else "unknown"
+    else:
+        evolution = "演化設定未記錄"
+        evolution_id = "unknown"
+        local_llm = "unknown"
+    if config.get("execution_mode") in {"mock", "offline_mock"}:
+        local_llm = "no"
+
     if mode == "option_reflection":
         reflection = "每 5 代邊界（G6、G11…）：Option Reflection"
         reflection_id = "option_reflection_every_5_generations"
     elif mode == "reflection":
         reflection = "每 5 代邊界（G6、G11…）：Framework Reflection"
         reflection_id = "framework_reflection_every_5_generations"
-    elif str(config.get("reflection_operator_mode", "static")) == "static" and float(config.get("strategy_reflection_probability", 0.0)) == 1.0:
+    elif evolution_id in {"llm_coach", "llm_generation"} and str(config.get("reflection_operator_mode", "static")) == "static" and float(config.get("strategy_reflection_probability", 0.0)) == 1.0:
         reflection = "每個 offspring：Strategy Reflection（使用 1 場最差 completed match）"
         reflection_id = "strategy_reflection_per_offspring"
     else:
         reflection = "未啟用"
         reflection_id = "no_reflection"
-    name = f"初始化：{initialization}｜選擇：{survivor}｜反思：{reflection}"
+    short_name = f"{init_name} · {evolution}"
+    if gpt_count and qwen_count:
+        chart_init = f"{init_name} init"
+    elif qwen_count:
+        chart_init = f"{qwen_count} Qwen init"
+    elif gpt_count:
+        chart_init = f"{gpt_count} GPT init"
+    elif initial_genomes:
+        chart_init = "GPT + local init"
+    else:
+        chart_init = "Local or authored init" if init_id != "llm_initial" else "LLM init"
+    chart_evolution = {
+        "initialization_only": "Init only", "local_ea": "EA only", "llm_coach": "LLM Coach",
+        "reflection": "Framework Reflection", "option_reflection": "Option Reflection",
+        "llm_generation": "LLM Java", "unknown": "Evolution unknown",
+    }[evolution_id]
+    framework_hash = str(framework.get("bundle_sha256") or "unknown")
+    identity = f"{init_id}__{selection_id}__{evolution_id}__{local_llm}__{reflection_id}"
+    if framework_hash != "unknown":
+        identity += f"__{framework_hash[:10]}"
     return {
-        "name": name,
-        "id": f"{init_id}__{selection_id}__{reflection_id}",
-        "framework": str(framework.get("bundle_sha256", "unknown")),
+        "name": short_name,
+        "short_name": short_name,
+        "chart_name": f"{chart_init} · {chart_evolution}",
+        "id": _default_id(identity),
+        "initialization_group": init_name,
+        "evolution": evolution,
+        "local_llm_evolution": local_llm,
+        "framework": framework_hash,
         "initialization": initialization,
         "parent_selection": parent,
         "survivor_selection": survivor,
         "opponent_refresh": refresh,
         "strategy_reflection": reflection,
-        "prompt_reflection": "未啟用" if float(config.get("prompt_reflection_probability", 0.0)) == 0.0 else "啟用",
-        "code_reflection": "未啟用" if float(config.get("code_reflection_probability", 0.0)) == 0.0 else "啟用",
+        "prompt_reflection": "啟用" if evolution_id == "llm_generation" and config.get("prompt_reflection_probability") else "未啟用",
+        "code_reflection": "啟用" if evolution_id == "llm_generation" and config.get("code_reflection_probability") else "未啟用",
     }
 
 
@@ -215,6 +310,13 @@ def _availability(run: dict) -> dict:
         ) or any((path / "final_test").glob("cross_generation_retry_*/fixed_evaluation_summary.json")),
         "final": (path / "final_test/final_test_summary.json").is_file(),
     }
+
+
+def _run_directories(root: Path):
+    for directory, subdirectories, files in os.walk(root):
+        if {"manifest.json", "config.yaml"}.issubset(files):
+            yield Path(directory).resolve()
+            subdirectories.clear()
 
 
 def discover(root: Path, runs_roots) -> dict:
@@ -238,6 +340,11 @@ def discover(root: Path, runs_roots) -> dict:
     claims = defaultdict(list)
     treatments = {}
     indices = set((root / "configs").rglob("experiment.yaml"))
+    indices.update(
+        path.parent / "experiment.yaml"
+        for path in (root / "configs/experiments").glob("*/*.y*ml")
+        if path.suffix in {".yaml", ".yml"}
+    )
     batch_options = {}
     for source, raw in batches.items():
         try:
@@ -249,7 +356,7 @@ def discover(root: Path, runs_roots) -> dict:
         except _READ_ERRORS as exc:
             issue(source, exc)
 
-    def treatment(experiment: str, identity: str, label: str, seeds=()) -> None:
+    def treatment(experiment: str, identity: str, label: str, seeds=(), comparison=None) -> None:
         key = experiment, identity
         item = treatments.setdefault(key, {
             "experiment": experiment, "treatment": identity, "label": label, "expected_seeds": set(),
@@ -257,10 +364,12 @@ def discover(root: Path, runs_roots) -> dict:
         if label != item["label"]:
             issue(f"{experiment}/{identity}", f"Conflicting treatment labels: {item['label']} and {label}.")
         item["expected_seeds"].update(seeds)
+        if comparison:
+            item.setdefault("comparison", comparison)
 
     for index in sorted(indices):
         try:
-            payload = _yaml(index) if index.exists() or index not in batch_options else {
+            payload = _yaml(index) if index.exists() else {
                 "schema_version": EXPERIMENT_INDEX_SCHEMA_VERSION, "runs": {},
             }
             if payload.get("schema_version") == "experiment-v2":
@@ -303,11 +412,16 @@ def discover(root: Path, runs_roots) -> dict:
                 issue(source, exc)
                 continue
             seeds = ()
+            comparison = None
             try:
-                seeds = _planned_seeds(index.parent / name)
+                config_path = index.parent / name
+                seeds = _planned_seeds(config_path)
+                planned = _yaml(config_path)
+                if planned.get("java_materialization_mode") or _mapping(planned.get("framework") or {}).get("evolution_mode"):
+                    comparison = _comparison_metadata(config_path)
             except _READ_ERRORS as exc:
-                issue(source, f"Unable to read planned seeds: {exc}")
-            treatment(experiment, identity, label, seeds)
+                issue(source, f"Unable to read planned config: {exc}")
+            treatment(experiment, identity, label, seeds, comparison)
             for replicate, folder in enumerate(entries.get(name, ())):
                 try:
                     path = _relocate(folder, root, mappings)
@@ -351,7 +465,7 @@ def discover(root: Path, runs_roots) -> dict:
 
     paths = set(claims) | set(manual)
     for runs_root in runs_roots:
-        paths.update(path.parent.resolve() for path in Path(runs_root).resolve().rglob("manifest.json"))
+        paths.update(_run_directories(Path(runs_root).resolve()))
     # Fresh GUI runs carry comparison identity in the version/seed layout.
     # Legacy flat runs still require an index or explicit catalog assignment.
     for path in sorted(paths):
@@ -383,7 +497,7 @@ def discover(root: Path, runs_roots) -> dict:
                     "source": str(root_path), "replicate_index": None,
                     "benchmarks": [],
                 })
-                treatment("gui_results", identity, version)
+                treatment("gui_results", identity, label)
                 break
     rows = []
     for path in sorted(paths):
@@ -415,27 +529,24 @@ def discover(root: Path, runs_roots) -> dict:
             assignment["replicate_index"] = matching[0]["replicate_index"]
             assignment["source"] = matching[0]["source"]
         row.update(assignment)
-        if row["experiment"] == "gui_results":
+        comparison = None
+        if path not in external:
             try:
-                comparison = _comparison_metadata(path)
+                resolved = _yaml(path / "config.yaml")
+                if row["experiment"] == "gui_results" or resolved.get("java_materialization_mode") or (
+                    _mapping(resolved.get("framework") or {})
+                ).get("evolution_mode"):
+                    comparison = _comparison_metadata(path)
             except _READ_ERRORS as exc:
                 issue(path, f"Unable to read comparison metadata: {exc}")
-                continue
-            if comparison["framework"] not in {"unknown", COMPARABLE_FRAMEWORK_SHA256}:
-                continue
+        if comparison:
             row["comparison"] = comparison
-            row["treatment"] = comparison["id"]
-            row["label"] = comparison["name"]
-            treatment_info = treatments.setdefault(
-                (row["experiment"], row["treatment"]),
-                {"experiment": row["experiment"], "treatment": row["treatment"],
-                 "label": row["label"], "expected_seeds": set()},
-            )
-            treatment_info["label"] = row["label"]
-            treatment_info.setdefault("comparison", comparison)
+            if row["experiment"] == "gui_results":
+                row["treatment"] = comparison["id"]
+                row["label"] = comparison["short_name"]
         row["availability"] = _availability(row)
         rows.append(row)
-        treatment(row["experiment"], row["treatment"], row["label"], [row["seed"]])
+        treatment(row["experiment"], row["treatment"], row["label"], [row["seed"]], comparison)
 
     # Identical copies share their portable run ID. Require a single canonical
     # location when registered copies with the same ID have conflicting paths.

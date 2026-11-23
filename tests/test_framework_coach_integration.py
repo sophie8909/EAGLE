@@ -6,6 +6,7 @@ import random
 import tempfile
 import unittest
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -39,6 +40,57 @@ def bundle_payload() -> dict:
 
 
 class FrameworkCoachIntegrationTests(unittest.TestCase):
+    def test_1114_mixed_initialization_calls_gpt_for_one_and_qwen_for_nine_per_run(self):
+        from eagle.operators.framework_coach import MockFrameworkRoleBackend
+
+        config = ExperimentConfig.from_file(
+            Path("configs/experiments/1122_1gpt_9qwen_gen0_local_evolution_50x10_seed8_12.yaml")
+        )
+        config.validate()
+        with self.assertRaisesRegex(ValueError, "total at most population_size"):
+            replace(config, framework_qwen_initial_candidates=10).validate()
+        bundle = load_framework_bundle(config.framework_bundle_path, expected_sha256=config.framework_bundle_sha256)
+        qwen = MockFrameworkRoleBackend(bundle, config.framework_bundle_sha256)
+
+        def response(*args, **kwargs):
+            content = json.dumps({
+                "schema_version": "eagle-framework-selection-v1",
+                "framework_bundle_sha256": config.framework_bundle_sha256,
+                "control_genome": {slot.slot_id: slot.default for slot in bundle.slots},
+            })
+            return BytesIO(json.dumps({"choices": [
+                {"finish_reason": "stop", "message": {"content": content}},
+            ]}).encode("utf-8"))
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            key_path = root / "gpt-key"
+            key_path.write_text("test-key", encoding="utf-8")
+            with (
+                patch("eagle.operators.framework_coach.GPT_API_KEY_PATH", key_path),
+                patch("eagle.operators.framework_coach.urllib.request.urlopen", side_effect=response) as api,
+                patch("eagle.evolution.runtime.preflight_llm_endpoint"),
+                patch("eagle.evolution.runtime.LLMClient.prompt_backend", return_value=qwen),
+                patch.object(qwen, "generate", wraps=qwen.generate) as local,
+            ):
+                for index in range(2):
+                    run = root / str(index)
+                    runtime = build_search_runtime(config, mock=False, run_dir=run, candidates_dir=run / "candidates")
+                    population = initialize_population(
+                        config, policy_backend=runtime.initial_policy_backend,
+                        qwen_policy_backend=runtime.initial_qwen_backend,
+                        candidates_dir=run / "candidates", timing_logger=runtime.llm_logger,
+                    )
+                    providers = [candidate.metadata["framework_coach_selection"]["provider"] for candidate in population]
+                    self.assertEqual(providers, ["direct_openai_gpt", *(["local_qwen"] * 9)])
+                    self.assertTrue(all(candidate.status != "failed" for candidate in population))
+                    self.assertEqual(runtime.mutations, {})
+                self.assertEqual(api.call_count, 2)
+                self.assertEqual(local.call_count, 18)
+                for call in api.call_args_list:
+                    self.assertEqual(call.args[0].full_url, "https://api.openai.com/v1/chat/completions")
+                    self.assertEqual(json.loads(call.args[0].data)["model"], "gpt-6.1-sol")
+
     def config(self, root: Path, *, mode: str | None = "llm_coach", **overrides) -> ExperimentConfig:
         bundle = root / "bundle.json"
         bundle.write_text(json.dumps(bundle_payload(), indent=2) + "\n", encoding="utf-8")

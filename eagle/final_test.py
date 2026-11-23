@@ -1,8 +1,8 @@
 """Run the post-evolution MicroRTS benchmark and write W/L/D tables.
 
 The final test is deliberately separate from evolutionary evaluation. It
-reuses the canonical ten-opponent roster and MicroRTS process runner, but runs
-ten games for each map and candidate side.
+reuses the canonical ten-opponent roster and MicroRTS process runner with a
+configurable number of games for each map and candidate side.
 """
 
 from __future__ import annotations
@@ -29,12 +29,12 @@ from eagle.opponents import SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from eagle.evaluation.match_matrix import canonical_evaluation_maps
 from eagle.evaluation.microrts_runner import integrate_microrts_agent
 from eagle.evaluation.runtime_evaluation import run_microrts_match
+from eagle.evaluation.windows_paths import java_path, windows_output_path
 from eagle.config import ExperimentConfig
 
 
 FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v3"
 SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS = {"eagle-final-test-v2", FINAL_TEST_SCHEMA_VERSION}
-FINAL_TEST_GAMES_PER_SIDE = 10
 AGENT_CLASS = "ai.generated.CandidateAgent"
 FINAL_TEST_OPPONENTS = SEARCH_OPPONENT_REGISTRY
 
@@ -76,6 +76,8 @@ def main(argv: list[str] | None = None) -> int:
                 "--generations", *(str(generation) for generation in args.generations),
                 "--output-dir", str(fixed_output_dir),
             ]
+            if args.config is not None:
+                delegated.extend(("--config", str(config_path)))
             if args.seed is not None:
                 delegated.extend(("--seed", str(args.seed)))
             return fixed_evaluation.main(delegated)
@@ -108,7 +110,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             from eagle import fixed_evaluation
 
-            cross_output_dir = _cross_generation_output_dir(output_dir / "cross_generation")
+            cross_output_dir = _cross_generation_output_dir(
+                output_dir / "cross_generation", games_per_side=config.final_test_games_per_side,
+            )
             if cross_output_dir is None:
                 print(f"cross_generation_summary={output_dir / 'cross_generation' / 'fixed_evaluation_summary.json'}")
                 return 0
@@ -118,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
                 "--output-dir", str(cross_output_dir),
                 "--all-candidates",
             ]
+            if args.config is not None:
+                delegated.extend(("--config", str(config_path)))
             if args.seed is not None:
                 delegated.extend(("--seed", str(args.seed)))
             return fixed_evaluation.main(delegated)
@@ -140,6 +146,7 @@ def _evaluate_candidate(
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
     original_classes = run_dir / "classes" / candidate_id
     _validate_candidate_artifacts(original_classes, candidate)
+    output_dir = windows_output_path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     source_path = _candidate_source_path(original_classes, candidate_id)
     classes_dir = output_dir / "classes" / candidate_id
@@ -189,7 +196,7 @@ def _cross_generation_checkpoints(config: ExperimentConfig, latest_generation: i
     return generations
 
 
-def _cross_generation_output_dir(base: Path) -> Path | None:
+def _cross_generation_output_dir(base: Path, *, games_per_side: int) -> Path | None:
     """Preserve partial/previous cross-generation evidence on reruns."""
 
     if not base.exists() or not any(base.iterdir()):
@@ -204,7 +211,12 @@ def _cross_generation_output_dir(base: Path) -> Path | None:
             row.get("selection_mode") == "all_runnable_candidates"
             for row in summary.get("rows", [])
         )
-        if summary.get("status") == "complete" and all_candidates:
+        protocol = summary.get("protocol") or {}
+        if (
+            summary.get("status") == "complete"
+            and all_candidates
+            and protocol.get("games_per_side_per_map") == games_per_side
+        ):
             return None
     index = 1
     while True:
@@ -382,7 +394,7 @@ def _run_final_matrix(
     match_index = 0
     for opponent in FINAL_TEST_OPPONENTS:
         for evaluation_map in maps:
-            for game_index in range(FINAL_TEST_GAMES_PER_SIDE):
+            for game_index in range(config.final_test_games_per_side):
                 for candidate_player in (0, 1):
                     match_dir = (
                         output_dir
@@ -532,7 +544,7 @@ def _build_summary(
     return {
         "schema_version": FINAL_TEST_SCHEMA_VERSION,
         "run_dir": str(run_dir),
-        "output_dir": str(output_dir),
+        "output_dir": java_path(output_dir),
         "candidate": {
             "candidate_id": candidate.get("candidate_id") or candidate.get("id"),
             "generation": candidate.get("generation"),
@@ -552,7 +564,7 @@ def _build_summary(
                 tick_limits=config.resolved_evaluation_map_tick_limits,
             )
         ],
-        "games_per_side_per_map": FINAL_TEST_GAMES_PER_SIDE,
+        "games_per_side_per_map": config.final_test_games_per_side,
         "total_matches": len(results),
         "opponent_fault_contained_matches": sum(
             bool(item.get("opponent_fault_contained")) for item in results
@@ -580,6 +592,7 @@ def _empty_cell() -> dict[str, Any]:
 
 
 def _write_outputs(output_dir: Path, summary: dict[str, Any]) -> None:
+    output_dir = windows_output_path(output_dir)
     _atomic_json(output_dir / "final_test_summary.json", summary)
     csv_path = output_dir / "final_test_results.csv"
     rows = []

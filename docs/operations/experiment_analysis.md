@@ -1,7 +1,8 @@
 # Experiment Analysis
 
 Open **實驗分析** in the local GUI started by `gui.cmd`, `./gui.sh`, or
-`python -m eagle gui --open`. Pick an experiment, select treatments and seeds,
+`python -m eagle gui --open`. Use the composition checkboxes to find an
+experiment or result package, choose its short display name, select treatments,
 and choose a run attempt where a seed was restarted. Refresh rebuilds the
 catalog from current sources. The dashboard reads committed generation snapshots
 and evaluation summaries. Analysis and export leave the launcher index and run
@@ -11,7 +12,15 @@ The default hierarchy comes from each batch's `experiment.yaml` and the exact
 config filenames in it. The resolved run config supplies the effective seed.
 The index position is recorded separately as the replicate index. If a run
 has several attempts, the dashboard prefers the indexed attempt and uses only
-one attempt per treatment and seed.
+one attempt per treatment and seed. The charts and tables include all available
+seeds for the selected treatments. In paired mode, the delta table uses paired
+observations while the other charts and tables retain all seeds.
+
+Composition options distinguish initialization, the evolutionary method, and
+whether a local LLM is configured for evolution after G0. For example, 1114
+uses Qwen to initialize the population at G0, then applies local evolutionary
+operators. An LLM Coach using a local endpoint involves a local LLM during
+evolution. Older packages with no recorded composition show it as unknown.
 
 ## Archive locations and treatment labels
 
@@ -95,3 +104,17 @@ only needs the repository checkout to inspect them. It still reads `runs/` only
 for live experiment status, resume, candidate browsing, and MicroRTS observation.
 Existing packages under `reports/experiments/` remain readable for migration.
 Use the source runs to export a different scope.
+
+## Resume an interrupted cross-generation evaluation
+
+Run the standalone fixed evaluator with the original checkpoint list and
+selection mode. For example, to resume an all-candidate evaluation at
+checkpoints 0, 5, and 10, use:
+
+```text
+python -m eagle.fixed_evaluation --run-dir <run> --output-dir <run>/final_test/cross_generation --all-candidates --generations 0 5 10 --resume
+```
+
+Include the original `--seed` if the evaluation used a seed override. Resume
+validates the frozen protocol and candidate selections and preserves completed
+rows and the ordinary Final Test outputs.

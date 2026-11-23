@@ -7,11 +7,11 @@ import math
 import re
 import statistics
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from eagle.analysis.experiment_catalog import discover
-from eagle.analysis.experiment_metrics import read_metrics
+from eagle.analysis.experiment_metrics import read_fixed_opponents, read_metrics
 
 BUNDLE_SCHEMA = "eagle-experiment-results-v1"
 TABLES = ("points", "aggregates", "deltas", "opponents", "fixed_coverage")
@@ -36,19 +36,77 @@ def _diagnostics(local):
     return [f"{item['source']}: {item['reason']}" for item in local["issues"]]
 
 
+def _catalog_entry(experiment, treatments, run_count, *, bundle=False):
+    dated = re.match(r"^(\d{4})(?:_|$)", experiment)
+    components = []
+    for treatment in treatments:
+        comparison = treatment.get("comparison") or {}
+        components.append({
+            "treatment": treatment["treatment"],
+            "initialization_group": comparison.get("initialization_group", "未記錄"),
+            "evolution": comparison.get("evolution", "未記錄"),
+            "local_llm_evolution": comparison.get("local_llm_evolution", "unknown"),
+        })
+    label = experiment
+    if dated:
+        short_names = list(dict.fromkeys(
+            item["comparison"]["short_name"] for item in treatments
+            if (item.get("comparison") or {}).get("short_name")
+        ))
+        if len(short_names) == 1:
+            label = dated[1] + " · " + short_names[0]
+        elif short_names:
+            label = dated[1] + " · 初始化與演化比較"
+        else:
+            label = dated[1] + " · " + experiment[dated.end():].replace("_", " ")[:32].rstrip()
+    elif experiment == "gui_results":
+        label = "GUI 實驗"
+    if bundle:
+        label = label + "（結果包）" if label != experiment else label
+    return {"id": experiment, "label": label, "components": components, "run_count": run_count,
+            **({"bundle": True} if bundle else {})}
+
+
+def _qualify_repeated_labels(entries):
+    counts = Counter(row["label"] for row in entries)
+    for row in entries:
+        if counts[row["label"]] < 2:
+            continue
+        words = set(row["id"].split("_"))
+        variant = next((label for key, label in (
+            ("smoke", "冒煙測試"), ("nearest", "最近配對"), ("stability", "穩定性"),
+        ) if key in words), None)
+        dimensions = re.search(r"(\d+)x(\d+)|gen(\d+)_pop(\d+)", row["id"])
+        size = "×".join(value for value in dimensions.groups() if value) if dimensions else None
+        seed = re.search(r"seed(\d+)(?:[_-](\d+))?", row["id"])
+        seed_label = "Seed " + "–".join(value for value in seed.groups() if value) if seed else None
+        suffix = " · ".join(value for value in (variant, size, seed_label) if value)
+        if suffix:
+            row["label"] += f" · {suffix}"
+
+
 def catalog(root, runs_roots):
     local = discover(root, runs_roots)
-    experiments = {row["experiment"] for row in local["treatments"] + local["runs"]}
-    result_manifests = sorted((root / "results").glob("*/manifest.json"))
-    # Keep old local exports readable while moving new exports to results/.
-    result_manifests += sorted((root / "reports/experiments").glob("*/manifest.json"))
-    return {
-        "schema_version": local["schema_version"],
-        "experiments": [{"id": name, "label": name} for name in sorted(experiments)]
-        + [{"id": path.parent.name, "label": path.parent.name, "bundle": True}
-           for path in result_manifests],
-        "issues": _diagnostics(local),
-    }
+    by_experiment = defaultdict(list)
+    for treatment in local["treatments"]:
+        by_experiment[treatment["experiment"]].append(treatment)
+    counts = Counter(row["experiment"] for row in local["runs"])
+    entries = [
+        _catalog_entry(name, by_experiment[name], counts[name])
+        for name in counts.keys() | by_experiment.keys()
+    ]
+    manifests = {path.parent.name: path for path in (root / "reports/experiments").glob("*/manifest.json")}
+    manifests.update({path.parent.name: path for path in (root / "results").glob("*/manifest.json")})
+    issues = _diagnostics(local)
+    for name, path in manifests.items():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))["dashboard"]
+            entries.append(_catalog_entry(name, data["treatments"], len(data["selected"]), bundle=True))
+        except (OSError, ValueError, KeyError, TypeError):
+            issues.append(f"{name}: unable to read result package metadata")
+    _qualify_repeated_labels(entries)
+    entries.sort(key=lambda item: (bool(item["run_count"]), item["id"], not item.get("bundle")), reverse=True)
+    return {"schema_version": local["schema_version"], "experiments": entries, "issues": issues}
 
 
 def _selected(runs, filters):
@@ -223,6 +281,9 @@ def view(root, runs_roots, filters):
         if not runs and not treatments:
             raise ValueError("Choose an experiment from the catalog.")
         issues = _diagnostics(local)
+    all_seeds = bool(filters.get("include_all_seeds"))
+    if all_seeds:
+        filters = {key: value for key, value in filters.items() if key != "seeds"}
     selected = _selected(runs, filters)
     by_treatment = defaultdict(set)
     for run in selected:
@@ -233,8 +294,9 @@ def view(root, runs_roots, filters):
         if requested_treatments is None:
             requested_treatments = [row["treatment"] for row in treatments]
         common = set.intersection(*(by_treatment[key] for key in requested_treatments)) if requested_treatments else set()
-        selected = [run for run in selected if run["seed"] in common]
-        if not selected:
+        if not all_seeds:
+            selected = [run for run in selected if run["seed"] in common]
+        if not common:
             issues.append("No selected seeds are shared across the treatments.")
     if not filters.get("bundle"):
         for run in selected:
@@ -249,8 +311,7 @@ def view(root, runs_roots, filters):
             # Keep a separate cross-generation curve for every opponent in the
             # portable package, in addition to the all-opponent aggregate.
             if fixed_opponent is None:
-                for opponent in evidence.get("fixed_opponents", []):
-                    detail = read_metrics(run, fixed_opponent=opponent)
+                for detail in read_fixed_opponents(run, evidence.get("fixed_opponents", [])):
                     source_points.extend(
                         {**row, **identity} for row in detail["points"]
                         if row.get("metric") == "fixed"
@@ -273,7 +334,7 @@ def view(root, runs_roots, filters):
     horizon = {"observed": common_horizon(observed), "planned": common_horizon(planned)}
     minimum = filters.get("minimum")
     maximum = filters.get("maximum")
-    if paired and horizon["observed"] is not None:
+    if paired and not all_seeds and horizon["observed"] is not None:
         maximum = horizon["observed"] if maximum is None else min(maximum, horizon["observed"])
     points = [
         row for row in source_points if included(row) and (
@@ -329,7 +390,8 @@ def export(root, runs_roots, filters):
     # Diagnostic text from local readers can contain absolute machine paths.
     data["issues"] = []
     data["runs"] = data["selected"]
-    data["fixed_opponents"] = [filters["fixed_opponent"]] if filters.get("fixed_opponent") else []
+    if filters.get("fixed_opponent"):
+        data["fixed_opponents"] = [filters["fixed_opponent"]]
     destination.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=destination) as temporary:
         stage = Path(temporary)
@@ -359,10 +421,12 @@ def export(root, runs_roots, filters):
                 if row["metric"] != metric or row["statistic"] != primary:
                     continue
                 group = groups[row.get("protocol")]
-                if (row["treatment"], None) not in group:
-                    group.setdefault((row["treatment"], row["seed"]), {})[row["generation"]] = row
+                group.setdefault((row["treatment"], row["seed"]), {})[row["generation"]] = row
             axes = figure.subplots(max(1, len(groups)), squeeze=False)[:, 0]
-            labels = {item["treatment"]: item["label"] for item in data["treatments"]}
+            labels = {
+                item["treatment"]: (item.get("comparison") or {}).get("chart_name") or item["label"]
+                for item in data["treatments"]
+            }
             if not groups:
                 axes[0].text(.5, .5, "No observations", ha="center", transform=axes[0].transAxes)
             for axis in axes:
@@ -379,17 +443,20 @@ def export(root, runs_roots, filters):
                     })
                 else:
                     checkpoints = range(min(checkpoints), max(checkpoints) + 1)
+                same_treatment = list(dict.fromkeys(key[0] for key in group))
                 for (treatment, seed), rows in group.items():
                     label = labels.get(treatment, treatment)
                     if seed is not None:
                         label += f" · seed {seed}"
+                    color = f"C{same_treatment.index(treatment) % 10}"
                     axis.plot(checkpoints, [rows[g]["value"] if g in rows else float("nan") for g in checkpoints],
-                              marker=".", label=label)
+                              marker=".", color=color, alpha=1 if seed is None else .55,
+                              linestyle="-" if seed is None else "--", label=label)
                     axis.fill_between(checkpoints, *[
                         [rows[g][key] if g in rows and rows[g].get("n", 0) >= 2 else float("nan") for g in checkpoints]
                         for key in ("min", "max")
-                    ], alpha=.16)
-                axis.legend()
+                    ], color=color, alpha=.16)
+                axis.legend(fontsize="small")
             name = f"{metric}.png"
             figure.savefig(stage / name, dpi=144)
             files[metric] = name
@@ -402,7 +469,7 @@ def export(root, runs_roots, filters):
                         "win_rate": "Wins divided by wins, draws and losses. Errors are counted separately.",
                     },
                     "filters": {key: filters[key] for key in (
-                        "paired", "fixed_cohort", "minimum", "maximum", "baseline", "fixed_opponent", "statistics",
+                        "paired", "fixed_cohort", "minimum", "maximum", "baseline", "fixed_opponent", "statistics", "include_all_seeds",
                     ) if key in filters}}
         (stage / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
                                              encoding="utf-8")

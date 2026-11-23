@@ -33,7 +33,7 @@ def _config_path(root: Path, path: str) -> Path:
 def config_choices(root: Path) -> list[str]:
     root = root.resolve()
     choices = []
-    for path in sorted((root / "configs").rglob("*")):
+    for path in sorted((root / "configs").rglob("*"), reverse=True):
         if not path.is_file() or path.suffix.lower() not in {".yaml", ".yml"}:
             continue
         try:

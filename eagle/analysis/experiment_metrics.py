@@ -235,7 +235,7 @@ def _match_scores(summary, opponent=None):
 
 
 class _RunMetrics:
-    def __init__(self, run, fixed_opponent):
+    def __init__(self, run, fixed_opponent, detail_cache=None, detail_opponents=()):
         self.run = run
         self.root = Path(run["path"])
         self.fixed_opponent = fixed_opponent if fixed_opponent != "all" else None
@@ -246,6 +246,8 @@ class _RunMetrics:
         self.populations = {}
         self.fixed_opponents = set()
         self.fixed_coverage = []
+        self.detail_cache = {} if detail_cache is None else detail_cache
+        self.detail_opponents = detail_opponents or (self.fixed_opponent,)
 
     def protocol(self, definition):
         if definition is None:
@@ -473,6 +475,9 @@ class _RunMetrics:
         if summary.get("schema_version") != FIXED_SCHEMA or _invalid_matrix(summary):
             self.issues.append(f"{source}: unsupported or invalid fixed benchmark")
             return
+        if summary.get("status") == "failed" and not summary.get("rows"):
+            self.issues.append(f"{source}: fixed evaluation failed before recording candidate scores")
+            return
         raw_protocol = _object(summary.get("protocol"))
         self.fixed_opponents.update(row["id"] for row in _items(raw_protocol.get("opponents")) if _safe_id(row.get("id")))
         mode = summary.get("selection_mode")
@@ -538,13 +543,20 @@ class _RunMetrics:
         detail = (path.parent / relative).resolve()
         if not detail.is_relative_to(path.parent.resolve()):
             return None
-        summary = self.read(detail, f"{source} → {relative}")
-        if summary.get("schema_version") not in SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS:
-            return None
-        if _object(summary.get("candidate")).get("candidate_id") != row.get("candidate_id"):
-            return None
-        scores = _match_scores(summary, self.fixed_opponent)
-        return statistics.fmean(scores) if scores else None
+        key = detail, row.get("candidate_id")
+        if key not in self.detail_cache:
+            summary = self.read(detail, f"{source} → {relative}")
+            values = {}
+            if (
+                summary.get("schema_version") in SUPPORTED_FINAL_TEST_SCHEMA_VERSIONS
+                and _object(summary.get("candidate")).get("candidate_id") == row.get("candidate_id")
+            ):
+                for opponent in self.detail_opponents:
+                    scores = _match_scores(summary, opponent)
+                    if scores:
+                        values[opponent] = statistics.fmean(scores)
+            self.detail_cache[key] = values
+        return self.detail_cache[key].get(self.fixed_opponent)
 
     def population_points(self, generation, source, protocol, values, expected, complete):
         coverage = {"expected": expected, "evaluated": len(values)}
@@ -600,3 +612,14 @@ def read_metrics(run: dict, *, fixed_opponent: str | None = None) -> dict:
     reader.fixed()
     reader.final()
     return reader.result()
+
+
+def read_fixed_opponents(run: dict, opponents):
+    """Read each candidate result once when exporting multiple opponent curves."""
+    opponents = tuple(opponents)
+    detail_scores = {}
+    for opponent in opponents:
+        reader = _RunMetrics(run, opponent, detail_scores, opponents)
+        reader.generations()
+        reader.fixed()
+        yield reader.result()

@@ -18,6 +18,7 @@ from eagle.evaluation.game_metrics import FAILED_GAME_PERFORMANCE
 from eagle.evaluation.match_matrix import canonical_evaluation_maps
 from eagle.evaluation.matches import scoring_config_from_experiment
 from eagle.evaluation.runtime_evaluation import hash_class_directory, hash_file
+from eagle.evaluation.windows_paths import windows_output_path
 from eagle.opponents import rooted_jar_path
 from eagle.run_artifacts import GENERATION_SCHEMA_VERSION
 
@@ -34,6 +35,7 @@ ROW_FIELDS = (
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m eagle.fixed_evaluation")
     parser.add_argument("--run-dir", required=True, type=Path)
+    parser.add_argument("--config", type=Path, help="Defaults to the run-local resolved config.yaml.")
     parser.add_argument("--generations", nargs="+", type=int, default=[0, 5, 10, 15, 20])
     parser.add_argument("--seed", type=int, help="Defaults to the run's random_seed.")
     parser.add_argument("--output-dir", type=Path, help="Must be empty; defaults to <run>/fixed_evaluation.")
@@ -47,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     run_dir = args.run_dir.expanduser().resolve()
-    output_dir = (args.output_dir or run_dir / "fixed_evaluation").expanduser().resolve()
+    output_dir = windows_output_path((args.output_dir or run_dir / "fixed_evaluation").expanduser().resolve())
     repository_root = Path(__file__).resolve().parents[1]
     summary: dict[str, Any] | None = None
     try:
@@ -65,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"Refusing to overwrite fixed-evaluation output: {output_dir}")
         if args.resume and not resume_summary_path.is_file():
             raise ValueError(f"Cannot resume without a fixed-evaluation summary: {resume_summary_path}")
-        config = final_test._load_config(run_dir / "config.yaml", repository_root)
+        config_path = final_test._resolve_path(repository_root, args.config or run_dir / "config.yaml")
+        config = final_test._load_config(config_path, repository_root)
         if args.seed is not None:
             config = replace(config, random_seed=args.seed)
         selected: list[tuple[int, dict[str, Any]]] = []
@@ -261,8 +264,8 @@ def _build_protocol(
             {"id": item.map_id, "path": item.path, "tick_limit": item.tick_limit,
              "sha256": hash_file(config.microrts_dir / item.path)} for item in maps
         ],
-        "games_per_side_per_map": final_test.FINAL_TEST_GAMES_PER_SIDE,
-        "matches_per_representative": len(opponents) * len(maps) * final_test.FINAL_TEST_GAMES_PER_SIDE * 2,
+        "games_per_side_per_map": config.final_test_games_per_side,
+        "matches_per_representative": len(opponents) * len(maps) * config.final_test_games_per_side * 2,
         "scoring": scoring_config_from_experiment(config).to_json_dict(),
         "match_timeout_seconds": config.match_timeout_seconds, "match_workers": config.match_workers,
         "microrts_identity": {

@@ -500,6 +500,10 @@ class MultiEndpointExecutionTests(unittest.TestCase):
             preflight_llm_endpoint(client)
 
         self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["timeout"] for call in urlopen.call_args_list],
+            [client.timeout_seconds] * 2,
+        )
         requests = [call.args[0] for call in urlopen.call_args_list]
         self.assertEqual(
             [request.full_url for request in requests],

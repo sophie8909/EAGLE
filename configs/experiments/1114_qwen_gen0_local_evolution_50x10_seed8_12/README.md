@@ -4,6 +4,8 @@
 
 設定為 seeds **8、9、10、11、12**、population 10、50 generations。`generations: 50` 表示 gen0 初始化加上 G1–G50 演化。
 
+一般 final test 和跨代固定評估中，每個個體對每個「地圖 × 對手」組合以 P0、P1 各打 5 場，每個個體共 300 場。
+
 ```bash
 bash experiment.sh configs/experiments/1114_qwen_gen0_local_evolution_50x10_seed8_12
 ```

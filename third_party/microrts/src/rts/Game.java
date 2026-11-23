@@ -2,6 +2,8 @@ package rts;
 
 import ai.core.AI;
 import gui.PhysicalGameStatePanel;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -165,55 +167,12 @@ public class Game {
         ai1.preGameAnalysis(gs, 0);
         ai2.preGameAnalysis(gs, 0);
 
-        boolean gameover = false;
         String tracePath = System.getProperty("microrts.trace.path", "").trim();
         String roundStateDirPath = System.getProperty("microrts.round_state_dir", "").trim();
         Trace trace = tracePath.isEmpty() ? null : new Trace(utt);
-        writeRoundStateSnapshot(roundStateDirPath, gs.getTime(), false);
-
-        while (!gameover && gs.getTime() < maxCycles) {
-            long timeToNextUpdate = System.currentTimeMillis() + updateInterval;
-
-            rts.GameState playerOneGameState =
-                    partiallyObservable ? new PartiallyObservableGameState(gs, 0) : gs;
-            rts.GameState playerTwoGameState =
-                    partiallyObservable ? new PartiallyObservableGameState(gs, 1) : gs;
-
-            // Game waits for both AIs to respond - this is naturally fair
-            // If an AI takes 5 seconds, the game just runs slower, not unfairly
-            rts.PlayerAction pa1 = ai1.getAction(0, playerOneGameState);
-            rts.PlayerAction pa2 = ai2.getAction(1, playerTwoGameState);
-            if (trace != null) {
-                TraceEntry entry = new TraceEntry(gs.getPhysicalGameState().cloneIncludingTerrain(), gs.getTime());
-                entry.addPlayerAction(pa1);
-                entry.addPlayerAction(pa2);
-                trace.addEntry(entry);
-            }
-            gs.issueSafe(pa1);
-            gs.issueSafe(pa2);
-
-            // simulate
-            gameover = gs.cycle();
-            writeRoundStateSnapshot(roundStateDirPath, gs.getTime(), gameover);
-
-            // if not headless mode, wait and repaint the window
-            if (w != null) {
-                if (!w.isVisible())
-                    break;
-
-                // only wait if the AIs have not already consumed more time than the predetermined interval
-                long waitTime = timeToNextUpdate - System.currentTimeMillis();
-                if (waitTime >=0) {
-                    try {
-                        Thread.sleep(waitTime);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                // repaint the window after (or regardless of) wait time
-                w.repaint();
-            }
+        boolean gameover;
+        try (DataOutputStream snapshots = openRoundStateStream(roundStateDirPath)) {
+            gameover = runCycles(w, trace, roundStateDirPath, snapshots);
         }
         ai1.gameOver(gs.winner());
         ai2.gameOver(gs.winner());
@@ -396,19 +355,89 @@ public class Game {
         System.out.print(renderStateSnapshot(finalTick));
     }
 
-    private void writeRoundStateSnapshot(String roundStateDirPath, int tick, boolean gameover) {
+    private boolean runCycles(JFrame w, Trace trace, String roundStateDirPath, DataOutputStream snapshots)
+            throws Exception {
+        boolean gameover = false;
+        writeRoundStateSnapshot(roundStateDirPath, snapshots, gs.getTime(), false);
+
+        while (!gameover && gs.getTime() < maxCycles) {
+            long timeToNextUpdate = System.currentTimeMillis() + updateInterval;
+
+            rts.GameState playerOneGameState =
+                    partiallyObservable ? new PartiallyObservableGameState(gs, 0) : gs;
+            rts.GameState playerTwoGameState =
+                    partiallyObservable ? new PartiallyObservableGameState(gs, 1) : gs;
+
+            // Game waits for both AIs to respond - this is naturally fair
+            // If an AI takes 5 seconds, the game just runs slower, not unfairly
+            rts.PlayerAction pa1 = ai1.getAction(0, playerOneGameState);
+            rts.PlayerAction pa2 = ai2.getAction(1, playerTwoGameState);
+            if (trace != null) {
+                TraceEntry entry = new TraceEntry(gs.getPhysicalGameState().cloneIncludingTerrain(), gs.getTime());
+                entry.addPlayerAction(pa1);
+                entry.addPlayerAction(pa2);
+                trace.addEntry(entry);
+            }
+            gs.issueSafe(pa1);
+            gs.issueSafe(pa2);
+
+            // simulate
+            gameover = gs.cycle();
+            writeRoundStateSnapshot(roundStateDirPath, snapshots, gs.getTime(), gameover);
+
+            // if not headless mode, wait and repaint the window
+            if (w != null) {
+                if (!w.isVisible())
+                    break;
+
+                // only wait if the AIs have not already consumed more time than the predetermined interval
+                long waitTime = timeToNextUpdate - System.currentTimeMillis();
+                if (waitTime >=0) {
+                    try {
+                        Thread.sleep(waitTime);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                // repaint the window after (or regardless of) wait time
+                w.repaint();
+            }
+        }
+        return gameover;
+    }
+
+    private DataOutputStream openRoundStateStream(String roundStateDirPath) throws IOException {
+        if (roundStateDirPath.isEmpty() || !Boolean.getBoolean("microrts.round_state_stream")) {
+            return null;
+        }
+        Path roundStateDir = Paths.get(roundStateDirPath);
+        Files.createDirectories(roundStateDir);
+        return new DataOutputStream(new BufferedOutputStream(
+                Files.newOutputStream(roundStateDir.resolve("round_states-v1.bin"))));
+    }
+
+    private void writeRoundStateSnapshot(String roundStateDirPath, DataOutputStream snapshots,
+            int tick, boolean gameover) throws IOException {
         if (roundStateDirPath == null || roundStateDirPath.isEmpty()) {
+            return;
+        }
+        StringBuilder content = new StringBuilder();
+        content.append("ROUND_TICK: ").append(tick).append('\n');
+        content.append("GAMEOVER: ").append(gameover).append('\n');
+        content.append(renderStateSnapshot(tick));
+        byte[] payload = content.toString().getBytes(StandardCharsets.UTF_8);
+        if (snapshots != null) {
+            snapshots.writeInt(tick);
+            snapshots.writeInt(payload.length);
+            snapshots.write(payload);
             return;
         }
         try {
             Path roundStateDir = Paths.get(roundStateDirPath);
             Files.createDirectories(roundStateDir);
             String fileName = String.format("round_%06d.log", tick);
-            StringBuilder content = new StringBuilder();
-            content.append("ROUND_TICK: ").append(tick).append('\n');
-            content.append("GAMEOVER: ").append(gameover).append('\n');
-            content.append(renderStateSnapshot(tick));
-            Files.write(roundStateDir.resolve(fileName), content.toString().getBytes(StandardCharsets.UTF_8));
+            Files.write(roundStateDir.resolve(fileName), payload);
         } catch (IOException e) {
             System.err.println("[MicroRTS] failed to write round state snapshot: " + e.getMessage());
         }

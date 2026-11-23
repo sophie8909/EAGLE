@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eagle.evaluation.windows_paths import java_path, resolve_evaluation_path
+
 DEFAULT_MAP_PATH = "maps/8x8/basesWorkers8x8.xml"
 
 INTEGRATION_CHECK_NAMES = (
@@ -237,7 +239,7 @@ def integrate_microrts_agent(
 ) -> IntegrationResult:
     started_at = _utc_now()
     started = time.monotonic()
-    artifact_dir = None if integration_artifacts_dir is None else integration_artifacts_dir.resolve()
+    artifact_dir = None if integration_artifacts_dir is None else resolve_evaluation_path(integration_artifacts_dir)
     if artifact_dir is not None:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         (artifact_dir / "request.txt").write_text(
@@ -268,17 +270,17 @@ def integrate_microrts_agent(
         return result
 
     microrts_dir = microrts_dir.resolve()
-    classes_dir = classes_dir.resolve()
+    classes_dir = resolve_evaluation_path(classes_dir)
     if artifact_dir is None:
         artifact_dir = classes_dir.parent / "integration"
         artifact_dir.mkdir(parents=True, exist_ok=True)
     probe_source = artifact_dir / "EAGLEIntegrationProbe.java"
     probe_source.write_text(INTEGRATION_PROBE_SOURCE, encoding="utf-8")
     classpath = os.pathsep.join(
-        [str(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
+        [java_path(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
     )
-    compile_command = ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(artifact_dir), str(probe_source)]
-    run_command = ["java", f"-Deagle.match.seed={int(seed)}", "-cp", os.pathsep.join([classpath, str(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
+    compile_command = ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", java_path(artifact_dir), java_path(probe_source)]
+    run_command = ["java", f"-Deagle.match.seed={int(seed)}", "-cp", os.pathsep.join([classpath, java_path(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
     commands = (tuple(compile_command), tuple(run_command))
 
     try:

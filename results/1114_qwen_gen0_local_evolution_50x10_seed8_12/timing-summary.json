@@ -1,0 +1,256 @@
+{
+  "seeds": {
+    "8": {
+      "run": "20261118_123008_161040",
+      "g0": -42.203712,
+      "g50": 41.240618,
+      "best": 52.765509,
+      "best_g": 30,
+      "fixed_g0": -64.32266738116667,
+      "fixed_g50": 50.360092784500004,
+      "fixed_n": 110,
+      "fixed_status": "complete",
+      "candidate_birth": 50,
+      "final_gp": 53.796772821666664,
+      "wdle": [
+        443,
+        15,
+        139,
+        3
+      ],
+      "faults": 0,
+      "start": "2026-11-18T04:30:08.185201+00:00",
+      "finish": "2026-11-21T07:01:06.940889+00:00",
+      "search_wall_s": 89194.911259,
+      "generation_active_s": 86974.3528811,
+      "search_evaluation_s": 85754.35383669993,
+      "llm_work_s": 46.20352200000002,
+      "g0_s": 1651.3597035,
+      "refresh_n": 10,
+      "normal_median_s": 1424.1317481,
+      "refresh_median_s": 2867.79732745,
+      "final_s": 457.90354,
+      "cross_s": 9610.40087,
+      "total_s": 99263.215669,
+      "events": {
+        "llm_request": 10,
+        "match": 111420,
+        "generation": 51,
+        "opponent_pool_tournament": 470
+      }
+    },
+    "9": {
+      "run": "20261119_145500_301608",
+      "g0": -30.552052,
+      "g50": 5.539649,
+      "best": 30.746701,
+      "best_g": 30,
+      "fixed_g0": -66.30454680049999,
+      "fixed_g50": -2.9328644976666673,
+      "fixed_n": 110,
+      "fixed_status": "complete",
+      "candidate_birth": 49,
+      "final_gp": 6.115154946666667,
+      "wdle": [
+        305,
+        16,
+        279,
+        0
+      ],
+      "faults": 0,
+      "start": "2026-11-19T06:55:00.306210+00:00",
+      "finish": "2026-11-19T15:01:01.753394+00:00",
+      "search_wall_s": 19157.099464,
+      "generation_active_s": 19153.820262231002,
+      "search_evaluation_s": 18209.075069232007,
+      "llm_work_s": 44.034424958000045,
+      "g0_s": 351.07688661,
+      "refresh_n": 10,
+      "normal_median_s": 334.78619043599997,
+      "refresh_median_s": 634.8545058775001,
+      "final_s": 99.785987,
+      "cross_s": 9904.561733,
+      "total_s": 29161.447184,
+      "events": {
+        "llm_request": 10,
+        "match": 109800,
+        "generation": 51,
+        "opponent_pool_tournament": 126
+      }
+    },
+    "10": {
+      "run": "20261119_230102_385202",
+      "g0": -35.173018,
+      "g50": 25.000485,
+      "best": 25.000485,
+      "best_g": 50,
+      "fixed_g0": -62.476900539166664,
+      "fixed_g50": 6.716560811333333,
+      "fixed_n": 110,
+      "fixed_status": "complete",
+      "candidate_birth": 50,
+      "final_gp": 11.314051566666667,
+      "wdle": [
+        326,
+        8,
+        266,
+        0
+      ],
+      "faults": 1,
+      "start": "2026-11-19T15:01:02.390011+00:00",
+      "finish": "2026-11-19T23:49:43.258573+00:00",
+      "search_wall_s": 21679.270684,
+      "generation_active_s": 21675.222722608,
+      "search_evaluation_s": 20822.098129128863,
+      "llm_work_s": 43.57836249200409,
+      "g0_s": 357.072390237,
+      "refresh_n": 10,
+      "normal_median_s": 355.263332762,
+      "refresh_median_s": 695.6259794995001,
+      "final_s": 72.292542,
+      "cross_s": 9969.305336,
+      "total_s": 31720.868562,
+      "events": {
+        "llm_request": 10,
+        "match": 109800,
+        "generation": 51,
+        "opponent_pool_tournament": 104
+      }
+    },
+    "11": {
+      "run": "20261120_074943_932960",
+      "g0": -1.428336,
+      "g50": 14.805417,
+      "best": 33.56885,
+      "best_g": 5,
+      "fixed_g0": -48.58425278433333,
+      "fixed_g50": 7.003719948999999,
+      "fixed_n": 110,
+      "fixed_status": "complete",
+      "candidate_birth": 49,
+      "final_gp": 14.280069386666666,
+      "wdle": [
+        332,
+        12,
+        256,
+        0
+      ],
+      "faults": 0,
+      "start": "2026-11-19T23:49:43.937807+00:00",
+      "finish": "2026-11-20T07:58:24.536479+00:00",
+      "search_wall_s": 19352.46675,
+      "generation_active_s": 19348.650263324,
+      "search_evaluation_s": 18704.55275727791,
+      "llm_work_s": 41.566865050008346,
+      "g0_s": 337.390337059,
+      "refresh_n": 10,
+      "normal_median_s": 328.755698746,
+      "refresh_median_s": 639.130513264,
+      "final_s": 84.216072,
+      "cross_s": 9883.91585,
+      "total_s": 29320.598672,
+      "events": {
+        "llm_request": 10,
+        "match": 109800,
+        "generation": 51,
+        "opponent_pool_tournament": 67
+      }
+    },
+    "12": {
+      "run": "20261120_155825_243041",
+      "g0": -38.512335,
+      "g50": 18.882362,
+      "best": 42.869333,
+      "best_g": 35,
+      "fixed_g0": -66.45703056133333,
+      "fixed_g50": 23.47819775416667,
+      "fixed_n": 110,
+      "fixed_status": "complete",
+      "candidate_birth": 50,
+      "final_gp": 36.866012553333334,
+      "wdle": [
+        403,
+        1,
+        196,
+        0
+      ],
+      "faults": 0,
+      "start": "2026-11-20T07:58:25.247196+00:00",
+      "finish": "2026-11-20T16:18:29.477345+00:00",
+      "search_wall_s": 19930.714726,
+      "generation_active_s": 19926.920144758,
+      "search_evaluation_s": 18879.766331592255,
+      "llm_work_s": 42.258086183996056,
+      "g0_s": 311.6013496,
+      "refresh_n": 10,
+      "normal_median_s": 342.9873246525,
+      "refresh_median_s": 625.2392951894999,
+      "final_s": 89.865182,
+      "cross_s": 9983.650241,
+      "total_s": 30004.230149,
+      "events": {
+        "llm_request": 10,
+        "match": 109800,
+        "generation": 51,
+        "opponent_pool_tournament": 133
+      }
+    }
+  },
+  "opponents": {
+    "passive": {
+      "win": 300
+    },
+    "random": {
+      "win": 300
+    },
+    "randombias": {
+      "win": 300
+    },
+    "lightrush": {
+      "win": 160,
+      "loss": 140
+    },
+    "heavyrush": {
+      "win": 180,
+      "loss": 120
+    },
+    "workerrush": {
+      "win": 270,
+      "draw": 10,
+      "loss": 20
+    },
+    "allinbot": {
+      "win": 170,
+      "loss": 112,
+      "draw": 18
+    },
+    "mayari": {
+      "loss": 226,
+      "win": 50,
+      "draw": 24
+    },
+    "coac": {
+      "loss": 251,
+      "win": 49
+    },
+    "tma": {
+      "loss": 267,
+      "error": 3,
+      "win": 30
+    }
+  },
+  "wsl_batch_s": 120209.171135,
+  "fixed_mean_by_generation": {
+    "0": -61.62907961329999,
+    "5": -13.703321039400002,
+    "10": -12.614234528033334,
+    "15": -8.589741722933333,
+    "20": 0.40873507333333314,
+    "25": 4.196638935633334,
+    "30": 7.133677541233334,
+    "35": 12.400611348766667,
+    "40": 15.447255179199999,
+    "45": 15.953526875833333,
+    "50": 16.925141360266668
+  }
+}

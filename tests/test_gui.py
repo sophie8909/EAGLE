@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 import yaml
 
 from eagle.cli.gui import IS_WINDOWS, GuiApp, GuiServer, Job, form_options
+from eagle.cli.gui_launcher import INSTANCE_PATH, SHUTDOWN_PATH, _request, supervise_gui
 
 
 class GuiAppTests(unittest.TestCase):
@@ -93,7 +94,7 @@ use_remote_llm: true
             result = self.app.post("/api/start", {"path": "configs/example.yaml", "text": text, "mock": True, "skip_final_test": True})
         command = start.call_args.args[0]
         self.assertEqual(command[:6], [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir"])
-        snapshot = Path(command[6])
+        snapshot = Path(command[6]) / "config.yaml"
         self.assertNotEqual(snapshot, original)
         self.assertEqual(command[7:], ["--mock", "--skip-final-test"])
         self.assertEqual(snapshot.read_text(encoding="utf-8"), text)
@@ -106,6 +107,34 @@ use_remote_llm: true
             self.assertTrue(start.call_args.kwargs["start_new_session"])
         self.assertEqual(start.call_args.kwargs["env"]["PYTHONIOENCODING"], "utf-8")
         self.assertEqual(start.call_args.kwargs["cwd"], self.root)
+
+    def test_jobs_refresh_tracks_seed_and_generation_without_scanning_runs(self):
+        with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process):
+            self.app.post("/api/start", {"text": "random_seeds: [8, 9]\ngenerations: 50\n"})
+        log = self.app.experiment.log
+        log.write_text(
+            "Run [1/2] random_seed=8\nGeneration 0: checkpoint complete\n"
+            + ("match output\n" * 3000)
+            + "Generation 1/50: started\n",
+            encoding="utf-8",
+        )
+        with patch("eagle.cli.gui.list_runs", side_effect=AssertionError("jobs must not scan runs")):
+            status = self.app.get("/api/jobs", {})["experiment"]
+            self.assertNotIn("random_seed=8", status["output"])
+            self.assertEqual(status["progress"], {
+                "phase": "evolution", "seed": 8, "run_number": 1, "run_total": 2,
+                "generation": 1, "total_generations": 50, "completed_generation": 0,
+            })
+            with log.open("a", encoding="utf-8") as stream:
+                stream.write("starting generation=0 candidate=gen_0000_123 (2/110)\n")
+            progress = self.app.get("/api/jobs", {})["experiment"]["progress"]
+            self.assertEqual((progress["phase"], progress["generation"], progress["benchmark_number"]),
+                             ("cross_generation", 0, 2))
+            with log.open("a", encoding="utf-8") as stream:
+                stream.write("Run [2/2] random_seed=9\nGeneration 0: initializing population\n")
+            progress = self.app.get("/api/jobs", {})["experiment"]["progress"]
+            self.assertEqual((progress["seed"], progress["generation"], progress["phase"]), (9, 0, "initialization"))
+            self.assertNotIn("benchmark_number", progress)
 
     def test_connect_only_is_forwarded_for_start_and_resume(self):
         run, _ = self.run_fixture()
@@ -194,6 +223,31 @@ use_remote_llm: true
                     self.app.post("/api/watch", {**body, **change})
         start.assert_not_called()
 
+    def test_resume_lists_and_launches_indexed_batches(self):
+        batch_names = ["configs/experiments/batch", "logs/gui/job"]
+        for name in batch_names:
+            folder = self.root / name
+            folder.mkdir(parents=True)
+            (folder / "experiment.yaml").write_text(
+                "schema_version: eagle-experiment-index-v1\nruns: {}\n", encoding="utf-8",
+            )
+        self.assertEqual(self.app.get("/api/meta", {})["batches"], sorted(batch_names, reverse=True))
+        for name in batch_names:
+            with self.subTest(name=name), patch.object(self.app.experiment, "start") as start:
+                self.app.post("/api/resume", {"batch": name, "connect_only": True})
+                self.assertEqual(start.call_args.args[0], [
+                    sys.executable, "-u", "-m", "eagle", "experiment", "--resume",
+                    str(self.root / name), "--connect-only",
+                ])
+
+    def test_resume_rejects_a_folder_without_an_index(self):
+        folder = self.root / "configs/batch"
+        folder.mkdir(parents=True)
+        (folder / "experiment.yaml").write_text("experiment_name: test\n", encoding="utf-8")
+        self.assertEqual(self.app.get("/api/meta", {})["batches"], [])
+        with self.assertRaisesRegex(ValueError, "generated experiment.yaml"):
+            self.app.post("/api/resume", {"batch": "configs/batch"})
+
     def test_resume_uses_canonical_run_and_flags(self):
         run, _ = self.run_fixture()
         with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start:
@@ -245,6 +299,19 @@ use_remote_llm: true
         self.assertFalse(result["running"])
         self.assertFalse(result["stopping"])
 
+    def test_launcher_treats_a_connect_timeout_as_no_running_gui(self):
+        with patch("eagle.cli.gui_launcher.HTTPConnection") as connection:
+            connection.return_value.connect.side_effect = TimeoutError
+            self.assertIsNone(_request(8877, INSTANCE_PATH))
+        connection.return_value.request.assert_not_called()
+
+    def test_launcher_handles_a_probe_racing_service_shutdown(self):
+        with patch("eagle.cli.gui_launcher.HTTPConnection") as connection:
+            connection.return_value.request.side_effect = ConnectionResetError
+            self.assertIsNone(_request(8877, INSTANCE_PATH))
+            with self.assertRaises(ConnectionResetError):
+                _request(8877, SHUTDOWN_PATH, token="token")
+
 
 class GuiHttpTests(unittest.TestCase):
     def setUp(self):
@@ -287,6 +354,30 @@ class GuiHttpTests(unittest.TestCase):
             code, _ = self.request("GET", "/api/status", headers={"Host": "localhost.evil"})
         self.assertEqual(code, 403)
         read.assert_not_called()
+
+    def test_launcher_reattaches_and_ctrl_c_requests_authenticated_shutdown(self):
+        port = self.server.server_port
+        self.assertEqual(self.request("POST", SHUTDOWN_PATH, {}, {"X-Eagle-Token": ""})[0], 403)
+        self.assertTrue(self.thread.is_alive())
+        code, instance = self.request("GET", INSTANCE_PATH)
+        self.assertEqual(code, 200)
+        self.assertEqual(instance["root"], str(self.app.root))
+        with (
+            patch("eagle.cli.gui_launcher._start_service") as start,
+            patch("eagle.cli.gui_launcher.time.sleep", side_effect=KeyboardInterrupt),
+        ):
+            self.assertEqual(supervise_gui(self.app.root, port, [], None), 0)
+        start.assert_not_called()
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive())
+
+    def test_shutdown_refuses_new_experiment_jobs(self):
+        self.server.stopping = True
+        with patch.object(self.app.experiment, "start") as start:
+            code, response = self.request("POST", "/api/start", {"text": "{}"})
+        self.assertEqual(code, 400)
+        self.assertIn("stopping", response["error"])
+        start.assert_not_called()
 
     def test_invalid_json_and_body_size_are_rejected_before_dispatch(self):
         for data, length in (("{", "1"), ("{}", "-1"), ("{}", "2000001")):

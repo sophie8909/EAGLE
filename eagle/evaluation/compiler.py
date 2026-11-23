@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from eagle.evaluation.windows_paths import java_path, resolve_evaluation_path
+
 
 @dataclass(frozen=True)
 class CompilerDiagnostic:
@@ -155,7 +157,7 @@ def compile_generated_agent(
     for path in all_source_paths:
         if "EAGLE_BODY" in path.read_text(encoding="utf-8"):
             raise ValueError(f"Refusing to compile unresolved Java behavior template: {path}")
-    output_dir = output_dir.resolve()
+    output_dir = resolve_evaluation_path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [
         "javac",
@@ -164,7 +166,7 @@ def compile_generated_agent(
         "-cp",
         os.pathsep.join([str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),
         "-d",
-        str(output_dir),
+        java_path(output_dir),
         *(str(path) for path in all_source_paths),
     ]
     if mock:

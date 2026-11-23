@@ -26,6 +26,23 @@ primary. Mock and provider-free local EA runs do not need an LLM server. The
 standalone `python -m eagle server --config CONFIG.yaml` command remains
 available for manual server management.
 
+## Native WSL checkout
+
+Keep the checkout, model, and run outputs on the WSL filesystem under the
+Linux user's home directory. Install the Linux CUDA llama-server and Java in
+that distribution. The experiment launcher prefers the checkout's Linux
+`.venv`, then falls back to Conda or `python3`.
+
+From the WSL checkout, continue a batch by passing its config folder:
+
+```bash
+./experiment.sh --resume configs/experiments/1114_qwen_gen0_local_evolution_50x10_seed8_12
+```
+
+Use the experiment index that belongs to that checkout. An index copied from
+another machine may reference run folders that are absent locally. A partial
+self-play run also needs the runtime and paths recorded in its checkpoint.
+
 ## Local experiment GUI
 
 On Ubuntu, run the launcher from the checkout:
@@ -78,6 +95,9 @@ See [Experiment Analysis](experiment_analysis.md) for archive registration and G
    Further editor changes cannot alter the active experiment. Mock and
    skip-final-test controls use existing CLI flags. One experiment job and
    one observation job may run concurrently.
+   The GUI refreshes the live output every second independently of the saved
+   Run list. The progress row shows the active seed and generation, including
+   separate labels for initialization, final test, and cross-generation evaluation.
 4. Choose a Run and completed generation to inspect its exact survivor
    population. The separate other-candidates entry includes candidates not
    referenced by a survivor snapshot, including eliminated individuals; it
@@ -92,11 +112,19 @@ See [Experiment Analysis](experiment_analysis.md) for archive registration and G
 
 Stop requests use SIGTERM on Ubuntu and an owned console group's Ctrl+Break on
 Windows. Stopping an experiment cleans up its owned local server; connect-only
-endpoints are left alone. Keep the Windows launcher terminal open while using
-the GUI. Closing the browser leaves jobs running; Ctrl+C in the GUI server
-terminal requests job cleanup and stops the GUI. The selected Run can resume with its own
+endpoints are left alone. The GUI service runs independently of its launcher
+terminal. Closing the browser or launcher window leaves the experiment running.
+Launch the GUI again on the same port to see the existing job. Press Ctrl+C in
+the launcher terminal to stop the experiment and shut down the GUI service.
+The selected Run can resume with its own
 saved config through existing compatibility checks. Historical runtime config
 fields do not prevent observation; they can still prevent resume.
+
+GUI and command-line experiments use the same MicroRTS runtime checks. Compact
+evaluations require the buffered Java writer used by the 1114 WSL run. Rebuild
+the vendored MicroRTS runtime when updating an older checkout. A self-play
+checkpoint and a partial fixed benchmark still require their original runtime
+hashes to resume. Start fresh evaluation output when switching runtime builds.
 
 The shell interface is `./experiment.sh CONFIG_TARGET [OPTIONS...]`. The normal batch command is:
 
@@ -540,6 +568,12 @@ passes `--cross-generation` after the ordinary final test whenever
 generations, including the final generation, and evaluates every runnable
 individual in each checkpoint. `--skip-final-test` skips both the ordinary and
 cross-generation final tests.
+
+Both benchmarks use `evaluation.final_test_games_per_side` for each map and
+opponent. It defaults to 10 games on each side. The 1114 baseline and seed 8
+rerun configs set it to 5, for 300 matches per candidate. Evaluating an older
+run with the new setting requires `--config` and a fresh `--output-dir` to
+preserve the earlier results.
 
 For the 1030 slot ablation, treatments 2 and 3 use one combined evaluation:
 

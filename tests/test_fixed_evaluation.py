@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ from eagle import final_test, fixed_evaluation
 from eagle.config import ExperimentConfig
 from eagle.evaluation.compiler import CompileResult
 from eagle.evaluation.runtime_evaluation import MatchResult
+from eagle.evaluation.windows_paths import windows_output_path
 from eagle.run_artifacts import GENERATION_SCHEMA_VERSION, RUN_SCHEMA_VERSION
 
 
@@ -26,7 +28,10 @@ class FixedEvaluationTests(unittest.TestCase):
         self.run = self.root / "run"
         self.run.mkdir()
         self.output = self.run / "fixed_evaluation"
-        self.config = replace(ExperimentConfig.from_mapping({}), microrts_dir=self.root / "microrts")
+        self.config = replace(
+            ExperimentConfig.from_mapping({"evaluation": {"final_test_games_per_side": 2}}),
+            microrts_dir=self.root / "microrts",
+        )
         for name in ("src", "bin", "lib"):
             (self.config.microrts_dir / name).mkdir(parents=True)
         for path in self.config.evaluation_maps:
@@ -85,13 +90,12 @@ class FixedEvaluationTests(unittest.TestCase):
         target.write_bytes(b"fresh")
         return CompileResult(ok=True, command=["javac", str(source_path)])
 
-    def runtime(self):
+    def runtime(self, *, config=None):
         stack = ExitStack()
         self.addCleanup(stack.close)
-        stack.enter_context(patch("eagle.fixed_evaluation.final_test._load_config", return_value=self.config))
+        stack.enter_context(patch("eagle.final_test._load_config", return_value=config or self.config))
         stack.enter_context(patch("eagle.final_test.preflight_evaluation_opponents"))
         stack.enter_context(patch("eagle.final_test.FINAL_TEST_OPPONENTS", final_test.FINAL_TEST_OPPONENTS[:1]))
-        stack.enter_context(patch("eagle.final_test.FINAL_TEST_GAMES_PER_SIDE", 2))
         stack.enter_context(patch("eagle.final_test._prepare_worker_rush_opponent", return_value=self.root))
         stack.enter_context(patch("eagle.final_test._prepare_safe_allinbot_opponent", return_value=self.root))
         stack.enter_context(patch("eagle.final_test._opponent_classpath", return_value=()))
@@ -168,6 +172,38 @@ class FixedEvaluationTests(unittest.TestCase):
         self.assertTrue((self.output / "generation_0000/final_test_results.csv").is_file())
         self.assertEqual(self.invoke(), 2)
         self.assertEqual(compile_agent.call_count, 2)
+
+    def test_final_and_cross_generation_use_configured_games_on_both_sides(self):
+        config = replace(self.config, generations=5, final_test_games_per_side=5)
+        self.runtime(config=config)
+        output = self.run / "final_test"
+        cross_dir = output / "cross_generation"
+        self.write_json(cross_dir / "fixed_evaluation_summary.json", {
+            "status": "complete", "selection_mode": "all_runnable_candidates",
+            "protocol": {"games_per_side_per_map": 10},
+        })
+        stderr = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+            status = final_test.main(["--run-dir", str(self.run), "--cross-generation"])
+        self.assertEqual(status, 0, stderr.getvalue())
+        cross_path = output / "cross_generation_retry_001" / "fixed_evaluation_summary.json"
+        comparison = json.loads(cross_path.read_text())
+        self.assertEqual(comparison["protocol"]["games_per_side_per_map"], 5)
+        self.assertEqual(len(comparison["rows"]), 3)
+        self.assertTrue(all(row["completed_matches"] == 30 for row in comparison["rows"]))
+        summary_paths = (
+            output / "final_test_summary.json",
+            cross_path.parent / comparison["rows"][0]["summary_path"],
+        )
+        for summary_path in summary_paths:
+            summary = json.loads(summary_path.read_text())
+            self.assertEqual(summary["games_per_side_per_map"], 5)
+            self.assertEqual(summary["total_matches"], 30)  # One opponent, three maps.
+            for cell in summary["table"]["passive"].values():
+                self.assertEqual(sum(cell["p0"].values()), 5)
+                self.assertEqual(sum(cell["p1"].values()), 5)
+        previous = json.loads((cross_dir / cross_path.name).read_text())
+        self.assertEqual(previous["protocol"]["games_per_side_per_map"], 10)
 
     def test_all_candidates_evaluates_every_individual_and_separates_outputs(self):
         compile_agent, _, matches = self.runtime()
@@ -296,22 +332,28 @@ class FixedEvaluationTests(unittest.TestCase):
         repository = Path(__file__).resolve().parents[1]
         config = replace(
             self.config, microrts_dir=repository / "third_party/microrts",
-            evaluation_map_tick_limits=(2, 2, 2),
+            evaluation_map_tick_limits=(2, 2, 2), final_test_games_per_side=1,
         )
         source = (repository / "eagle/java_seeds/worker_rush/CandidateAgent.java").read_text()
         for identity in ("initial", "later"):
             (self.run / "candidates" / identity / "phenotype/CandidateAgent.java").write_text(source, encoding="utf-8")
+        output = self.output
+        if os.name == "nt":
+            # Keep the output root short enough for legacy Win32 calls and
+            # force the candidate's class and per-match paths past MAX_PATH.
+            output = self.root / ("x" * 95) / ("y" * 75)
+            extended = windows_output_path(output.parent)
+            self.addCleanup(shutil.rmtree, extended, ignore_errors=True)
         # Only unused external-opponent setup is stubbed in this six-match smoke.
         with patch("eagle.final_test._load_config", return_value=config), \
              patch("eagle.final_test.preflight_evaluation_opponents"), \
              patch("eagle.final_test.FINAL_TEST_OPPONENTS", final_test.FINAL_TEST_OPPONENTS[:1]), \
-             patch("eagle.final_test.FINAL_TEST_GAMES_PER_SIDE", 1), \
              patch("eagle.final_test._prepare_worker_rush_opponent", return_value=self.root), \
              patch("eagle.final_test._prepare_safe_allinbot_opponent", return_value=self.root):
-            self.assertEqual(self.invoke(), 0)
+            self.assertEqual(self.invoke("--output-dir", str(output)), 0)
         matrices = []
         for generation in (0, 5):
-            directory = self.output / f"generation_{generation:04d}"
+            directory = windows_output_path(output) / f"generation_{generation:04d}"
             result = json.loads((directory / "final_test_summary.json").read_text())
             self.assertEqual(result["integration"]["status"], "success")
             self.assertEqual(len(result["integration"]["ordered_checks"]), 7)

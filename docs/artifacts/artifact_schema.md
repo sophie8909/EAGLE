@@ -596,7 +596,7 @@ and `match_metadata.json` `evaluation_configuration.tick_limit` must equal the
 resolved cap of the associated map. Final-test summary map entries likewise
 retain `tick_limit` beside map ID and path.
 
-Compact mode does not request the transient Java XML replay and removes round-state inputs after durable telemetry/trace creation. Full mode retains both replay and round-state inputs. `result.json` owns match timing; there is no `timing.json`. Empty stdout/stderr files are absent and have null references. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
+Compact mode uses one buffered, versioned round-state stream per match. Python reads it once for scoring telemetry and the canonical trace, then removes the temporary input. Real compact benchmarks require a compiled MicroRTS build with the stream writer. Full mode retains the Java XML replay and individual round-state logs. `result.json` owns match timing; there is no `timing.json`. Empty stdout/stderr files are absent and have null references. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
 
 Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
 
@@ -657,7 +657,8 @@ An indexed slot is lifecycle-complete when its run manifest is `complete` and,
 for a non-mock invocation that does not use `--skip-final-test`, a canonical
 `final_test/final_test_summary.json` exists and has the current
 `eagle-final-test-v3` schema. The summary records the requested and selected
-generation, including whether an older-generation fallback was used, and
+generation, including whether an older-generation fallback was used, and the
+configured game count per side per map and opponent (`games_per_side_per_map`). It
 records contained upstream-opponent
 faults separately; a recovered containment is an explicit neutral draw rather
 than a candidate win. Incomplete indexed entries are

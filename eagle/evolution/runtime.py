@@ -36,6 +36,7 @@ class SearchRuntime:
     llm_logger: LLMCallLogger
     mutations: dict[str, Any]
     operator_controller: ReflectionOperatorController
+    initial_qwen_backend: Any = None
 
 
 def build_search_runtime(
@@ -118,27 +119,23 @@ def build_search_runtime(
         if mock or config.java_materialization_mode in {"deterministic_dsl", "framework_slots"}
         else generation_client.generation_backend(logger=logger)
     )
+    initial_qwen_backend = None
     if mock and (framework_coach or framework_direct_gpt or framework_initial_qwen):
         from eagle.operators.framework_coach import MockFrameworkRoleBackend
 
         assert bundle is not None
         initial_policy_backend = MockFrameworkRoleBackend(bundle, config.framework_bundle_sha256)
-    elif framework_direct_gpt:
-        from eagle.operators.framework_coach import DirectGPTFrameworkSelectionBackend
-
-        assert framework_selection_schema is not None
-        initial_policy_backend = DirectGPTFrameworkSelectionBackend(
-            model=config.framework_model,
-            response_schema=framework_selection_schema,
-        )
+        if framework_initial_qwen:
+            initial_qwen_backend = initial_policy_backend
     elif framework_initial_qwen:
         assert framework_selection_schema is not None
-        initial_policy_backend = client.prompt_backend(
+        initial_qwen_backend = client.prompt_backend(
             operation="framework_initial_selection",
             temperature=config.initial_policy_temperature,
             response_schema=framework_selection_schema,
             response_schema_name=FRAMEWORK_SELECTION_SCHEMA_NAME,
         )
+        initial_policy_backend = initial_qwen_backend
     elif mock or (framework_slots and not framework_coach):
         initial_policy_backend = MockInitialPolicyBackend()
     else:
@@ -159,6 +156,14 @@ def build_search_runtime(
                 if framework_coach
                 else "eagle_initial_policy"
             ),
+        )
+    if framework_direct_gpt and not mock:
+        from eagle.operators.framework_coach import DirectGPTFrameworkSelectionBackend
+
+        assert framework_selection_schema is not None
+        initial_policy_backend = DirectGPTFrameworkSelectionBackend(
+            model=config.framework_model,
+            response_schema=framework_selection_schema,
         )
     # The mock and production generator must render the same configured
     # immutable scaffold, including inherited-Java requests.
@@ -232,6 +237,7 @@ def build_search_runtime(
         generation_client=generation_client,
         generation_backend=generation_backend,
         initial_policy_backend=initial_policy_backend,
+        initial_qwen_backend=initial_qwen_backend,
         llm_logger=logger,
         mutations=mutations,
         operator_controller=build_reflection_operator_controller(config, state=controller_state),
@@ -262,7 +268,7 @@ def preflight_llm_endpoint(client: LLMClient) -> None:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=min(15.0, client.timeout_seconds)) as response:
+            with urllib.request.urlopen(request, timeout=client.timeout_seconds) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             if not isinstance(payload.get("choices"), list):
                 raise RuntimeError("response has no choices array")

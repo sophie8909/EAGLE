@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 from eagle.config import ExperimentConfig
 from eagle.final_test import (
-    FINAL_TEST_GAMES_PER_SIDE,
     FINAL_TEST_OPPONENTS,
     _build_summary,
     _empty_cell,
@@ -30,6 +29,7 @@ class FinalTestTests(unittest.TestCase):
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     status = __import__("eagle.final_test", fromlist=["main"]).main([
                         "--run-dir", str(run_dir), "--generations", "0", "5", "10", "--seed", "42",
+                        "--config", str(run_dir / "benchmark.yaml"),
                     ])
             self.assertEqual(status, 0)
             self.assertEqual(len(delegated), 1)
@@ -38,6 +38,7 @@ class FinalTestTests(unittest.TestCase):
                 [
                     "--run-dir", str(run_dir.resolve()), "--generations", "0", "5", "10",
                     "--output-dir", str((run_dir / "final_test" / "cross_generation").resolve()),
+                    "--config", str((run_dir / "benchmark.yaml").resolve()),
                     "--seed", "42",
                 ],
             )
@@ -67,6 +68,7 @@ class FinalTestTests(unittest.TestCase):
 
         self.assertEqual(config.model.name, "reflection-model")
         self.assertEqual(config.resolved_generation_model.name, "generation-model")
+        self.assertEqual(config.final_test_games_per_side, 10)
 
     def test_roster_reuses_all_ten_ea_opponents_without_duplicates(self):
         ids = [item.opponent_id for item in FINAL_TEST_OPPONENTS]
@@ -77,7 +79,6 @@ class FinalTestTests(unittest.TestCase):
                 "workerrush", "allinbot", "mayari", "coac", "tma",
             ],
         )
-        self.assertEqual(FINAL_TEST_GAMES_PER_SIDE, 10)
         self.assertEqual(
             next(item.class_name for item in FINAL_TEST_OPPONENTS if item.opponent_id == "allinbot"),
             SAFE_ALLINBOT_CLASS_NAME,
@@ -107,6 +108,7 @@ class FinalTestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = ExperimentConfig.from_mapping({
                 "evaluation": {
+                    "final_test_games_per_side": 5,
                     "maps": [
                         {"path": "maps/8x8/basesWorkers8x8.xml", "tick_limit": 1500},
                         {"path": "maps/16x16/basesWorkers16x16.xml", "tick_limit": 3000},
@@ -133,6 +135,8 @@ class FinalTestTests(unittest.TestCase):
             )
 
         cell = summary["table"]["allinbot"]["map_1"]
+        self.assertEqual(summary["games_per_side_per_map"], 5)
+        self.assertEqual(ExperimentConfig.from_mapping(config.to_mapping()).final_test_games_per_side, 5)
         self.assertEqual(cell["draws"], 1)
         self.assertEqual(
             [item["tick_limit"] for item in summary["maps"]],

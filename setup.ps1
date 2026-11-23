@@ -16,9 +16,10 @@ function Invoke-Checked {
 
 function Install-Package {
     param([string]$Id)
+    $PSNativeCommandUseErrorActionPreference = $false
     & winget.exe install --id $Id --exact --source winget --architecture x64 --silent --no-upgrade --accept-package-agreements --accept-source-agreements --disable-interactivity
-    # WinGet reports UPDATE_NOT_APPLICABLE for some already-installed packages.
-    if ($LASTEXITCODE -notin @(0, -1978335189)) {
+    # WinGet can return UPDATE_NOT_APPLICABLE or PACKAGE_ALREADY_INSTALLED.
+    if ($LASTEXITCODE -notin @(0, 0x8A15002B, 0x8A150061)) {
         throw "WinGet could not install $Id (exit $LASTEXITCODE)."
     }
     $env:Path = ((
@@ -39,7 +40,10 @@ function Get-VerifiedDownload {
 
     $partial = "$Destination.part"
     try {
-        Invoke-Checked 'curl.exe' @('--fail', '--location', '--retry', '3', '--output', $partial, $Url)
+        # Schannel can continue when a revocation server is offline. The pinned hash still gates installation.
+        Invoke-Checked 'curl.exe' @(
+            '--fail', '--location', '--retry', '3', '--ssl-revoke-best-effort', '--output', $partial, $Url
+        )
         if ((Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash -ne $Sha256) {
             throw "SHA256 mismatch for $Url."
         }

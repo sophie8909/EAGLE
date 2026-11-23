@@ -1,8 +1,7 @@
 """Lossless, streamed match-state artifacts for MicroRTS matches.
 
-The Java runner owns the observation point.  This module owns conversion of the
-per-tick round-state files into the durable trace artifact consumed by the
-commentator.  It deliberately does not participate in scoring.
+The Java runner owns the observation point. This module converts round-state
+observations into the durable trace artifact consumed by the commentator.
 """
 
 from __future__ import annotations
@@ -37,14 +36,13 @@ def write_match_trace(
     result: dict[str, Any],
     expected_last_tick: int | None = None,
     write_result: bool = True,
+    snapshots: Iterable[tuple[str, str]] | None = None,
 ) -> TraceArtifact:
     """Stream round-state observations into the canonical match artifacts.
 
-    Round-state files are already emitted by the Java game loop one per cycle.
-    Reading them in filename order keeps memory bounded and makes the integrity
-    report expose any missing quiet ticks instead of silently filling them. The
-    runtime evaluator can defer the canonical result write until all trace
-    metadata is available, avoiding an intermediate result overwrite.
+    The Java game loop emits one observation per cycle. The integrity report
+    exposes missing quiet ticks. The runtime evaluator can defer the canonical
+    result write until all trace metadata is available.
     """
 
     match_dir.mkdir(parents=True, exist_ok=True)
@@ -77,8 +75,12 @@ def write_match_trace(
             newline="\n",
             compresslevel=TRACE_GZIP_COMPRESSLEVEL,
         ) as handle:
-            for path in sorted(round_state_dir.glob("round_*.log")):
-                raw_state = path.read_text(encoding="utf-8", errors="replace")
+            if snapshots is None:
+                snapshots = (
+                    (path.name, path.read_text(encoding="utf-8", errors="replace"))
+                    for path in sorted(round_state_dir.glob("round_*.log"))
+                )
+            for state_source, raw_state in snapshots:
                 row = _parse_round_state(raw_state)
                 if row is None:
                     continue
@@ -92,7 +94,7 @@ def write_match_trace(
                 ticks.append(int(row["tick"]))
                 row.pop("map_width", None)
                 row.pop("map_height", None)
-                row["state_source"] = path.name
+                row["state_source"] = state_source
                 row["raw_state"] = raw_state
                 handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
                 handle.write("\n")

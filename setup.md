@@ -12,6 +12,11 @@ experiment_env/model/llama.cpp-b10236-win-cuda-12.4-x64/llama-server.exe
 
 使用其他電腦的 LLM 服務時，改跑 `.\setup.cmd -ToolsOnly -WithEditor`，在 GUI 填入服務位址並勾選 Connect only。
 
+## 更新已安裝的 MicroRTS
+
+原始碼更新後，等現有實驗結束，再執行 `.\setup.cmd -ToolsOnly` 重編 MicroRTS。
+新版在 `match_artifact_mode: compact` 下每場只用一個逐 tick 暫存檔。
+
 ## 額外下載或搬移
 
 - Windows 10／11 x64 若缺 `winget`，安裝最新版 [Microsoft App Installer](https://apps.microsoft.com/detail/9nblggh4nns1)。

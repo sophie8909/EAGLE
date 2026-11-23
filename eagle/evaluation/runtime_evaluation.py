@@ -28,6 +28,8 @@ from eagle.evaluation.game_performance import (
     write_telemetry_json,
 )
 from eagle.evaluation.match_trace import TraceArtifact, write_match_trace
+from eagle.evaluation.round_states import ROUND_STATE_STREAM_NAME, ROUND_STATE_STREAM_PROPERTY, read_round_state_stream
+from eagle.evaluation.windows_paths import java_path, resolve_evaluation_path
 
 
 DEFAULT_MAP_PATH = "maps/8x8/basesWorkers8x8.xml"
@@ -240,10 +242,10 @@ def run_microrts_match(
     """Run one bounded match and persist its independent evidence immediately."""
 
     microrts_dir = microrts_dir.resolve()
-    classes_dir = classes_dir.resolve()
+    classes_dir = resolve_evaluation_path(classes_dir)
     scoring_config = scoring_config or GamePerformanceConfig()
-    root = (match_artifacts_dir or classes_dir).resolve()
-    match_dir = (match_output_dir or match_directory(root, match_index=match_index)).resolve()
+    root = resolve_evaluation_path(match_artifacts_dir or classes_dir)
+    match_dir = resolve_evaluation_path(match_output_dir or match_directory(root, match_index=match_index))
     match_dir.mkdir(parents=True, exist_ok=True)
     if candidate_player not in {0, 1}:
         raise ValueError("candidate_player must be 0 or 1.")
@@ -255,9 +257,9 @@ def run_microrts_match(
     replay_path = match_dir / "replay.xml"
     telemetry_path = match_dir / ("telemetry.json.gz" if artifact_mode == "compact" else "telemetry.json")
     breakdown_path = match_dir / "performance_breakdown.json"
-    additional_classpath = [str(Path(value).resolve()) for value in extra_classpath_entries]
+    additional_classpath = [java_path(resolve_evaluation_path(Path(value))) for value in extra_classpath_entries]
     classpath = os.pathsep.join(
-        [str(classes_dir), *additional_classpath, str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
+        [java_path(classes_dir), *additional_classpath, str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
     )
     ai1 = agent_class if candidate_player == 0 else opponent
     ai2 = opponent if candidate_player == 0 else agent_class
@@ -268,7 +270,10 @@ def run_microrts_match(
         raise ValueError("eagle.match.seed must match the derived match_seed")
     resolved_system_properties["eagle.match.seed"] = str(match_seed)
     if artifact_mode == "full":
-        resolved_system_properties["microrts.trace.path"] = str(replay_path)
+        resolved_system_properties["microrts.trace.path"] = java_path(replay_path)
+    elif not mock:
+        (round_state_dir / ROUND_STATE_STREAM_NAME).unlink(missing_ok=True)
+        resolved_system_properties[ROUND_STATE_STREAM_PROPERTY] = "true"
     system_properties = [
         f"-D{key}={value}"
         for key, value in sorted(resolved_system_properties.items())
@@ -276,7 +281,7 @@ def run_microrts_match(
     command = [
         "java",
         *system_properties,
-        f"-Dmicrorts.round_state_dir={round_state_dir}",
+        f"-Dmicrorts.round_state_dir={java_path(round_state_dir)}",
         "-cp",
         classpath,
         "rts.MicroRTS",
@@ -295,7 +300,7 @@ def run_microrts_match(
         "--ai2",
         ai2,
         "--result-json",
-        str(raw_result_path),
+        java_path(raw_result_path),
     ]
     started_at = _utc_now()
     started = time.monotonic()
@@ -508,6 +513,16 @@ def _finish_match(
     telemetry: MatchTelemetry | None = None
     telemetry_persisted = False
     persistence_error: str | None = None
+    snapshots = None
+    stream_path = round_state_dir / ROUND_STATE_STREAM_NAME
+    if artifact_mode == "compact" and stream_path.is_file():
+        snapshots = []
+        try:
+            snapshots.extend(read_round_state_stream(stream_path))
+        except (OSError, ValueError) as exc:
+            if failure is None:
+                failure = ("invalid_match_result", f"round-state stream read failed: {exc}")
+            persistence_error = f"round-state stream read failed: {exc}"
     if raw_result:
         try:
             (match_dir / "raw_result.json").write_text(
@@ -526,6 +541,7 @@ def _finish_match(
                 opponent_index=1 - candidate_player,
                 replay_path=(str(replay_path.name) if artifact_mode == "full" else None),
                 scoring_config=scoring_config,
+                snapshots=snapshots,
             )
             if opponent_fault_recovered:
                 telemetry = _neutralize_contained_opponent_fault(telemetry)
@@ -593,6 +609,7 @@ def _finish_match(
             result=raw_result,
             expected_last_tick=int_or_none(raw_result.get("final_tick")) if raw_result else tick_limit,
             write_result=False,
+            snapshots=snapshots,
         )
     except (OSError, TypeError, ValueError) as exc:
         persistence_error = f"failed to persist match trace: {exc}"

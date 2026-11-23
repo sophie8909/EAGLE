@@ -48,6 +48,13 @@ by [Java generation](java_generation.md) and the
 
 ## Evolution policy
 
+Local evolution can combine the Gen-0 GPT and Qwen selection counts. Each fresh
+run sends the first `gpt_initial_candidates` strategy descriptions to the
+authenticated OpenAI API and the next `qwen_initial_candidates` descriptions to
+the configured Qwen endpoint. Their total may not exceed the population. Any
+remaining initial genomes use seeded sampling, and later generations use local
+crossover and slot mutation. The 1114 mixed treatment uses 1 GPT and 9 Qwen.
+
 `framework.evolution_mode` selects how complete `control_genome` values are
 chosen. It defaults to `local`, preserving seeded local sampling, per-slot
 crossover, and at-most-one-slot mutation. The opt-in `llm_coach` mode keeps the

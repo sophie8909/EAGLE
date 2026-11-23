@@ -44,7 +44,9 @@ from eagle.timing import Stopwatch, append_event, build_generation_event
 def _result_version_folder(config: ExperimentConfig) -> str:
     """Return the comparison dimensions used in a GUI-facing result folder."""
     population = int(config.population_size)
-    if config.generations == 0 and config.framework_gpt_initial_candidates:
+    if config.framework_gpt_initial_candidates and config.framework_qwen_initial_candidates:
+        initialization = f"{config.framework_gpt_initial_candidates}_gpt_{config.framework_qwen_initial_candidates}_qwen_initial"
+    elif config.generations == 0 and config.framework_gpt_initial_candidates:
         initialization = "gpt_initial_genome"
     elif config.framework_qwen_initial_candidates:
         initialization = f"{config.framework_qwen_initial_candidates}_qwen_initial_genome"
@@ -202,6 +204,7 @@ def run_generation_zero(
     population = initialize_population(
         config,
         policy_backend=runtime.initial_policy_backend,
+        qwen_policy_backend=runtime.initial_qwen_backend,
         candidates_dir=candidates_dir,
         timing_logger=runtime.llm_logger,
     )

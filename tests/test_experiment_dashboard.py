@@ -62,6 +62,12 @@ class ExperimentDashboardTests(unittest.TestCase):
         self.assertTrue(all(row["n"] == 0 for row in data["deltas"] if row["metric"] == "final"))
         self.assertFalse(any(item["run_id"] == "old-attempt" for item in data["selected"]))
 
+    def test_dashboard_keeps_all_seed_traces_when_pairing(self):
+        data = self.view(paired=True, baseline="base", include_all_seeds=True, seeds=[8])
+        self.assertEqual({item["seed"] for item in data["selected"]}, {8, 9, 10})
+        self.assertTrue(any(item["seed"] == 10 for item in data["points"]))
+        self.assertFalse(any(row["seed"] == 10 for row in data["deltas"]))
+
     def test_cohort_attempt_and_win_rate_denominators(self):
         data = self.view(treatments=["base"], seeds=[8, 9], fixed_cohort=True, attempts={"base:8": "old-attempt"})
         rows = [row for row in data["aggregates"] if row["metric"] == "fixed"]
@@ -86,7 +92,8 @@ class ExperimentDashboardTests(unittest.TestCase):
     def test_catalog_finds_committed_results_without_source_runs(self):
         dashboard.export(self.root, [], {"experiment": "exp"})
         catalog = dashboard.catalog(self.root, [])
-        self.assertIn({"id": "exp", "label": "exp", "bundle": True}, catalog["experiments"])
+        bundle, = [row for row in catalog["experiments"] if row.get("bundle")]
+        self.assertEqual((bundle["id"], bundle["label"], bundle["run_count"]), ("exp", "exp", 5))
 
     def test_unknown_protocol_is_inspectable_without_pooling(self):
         with patch.object(dashboard, "read_metrics", return_value={

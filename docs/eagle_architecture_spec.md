@@ -729,6 +729,11 @@ the configured replicate schedule. Indexed runs that have not completed their
 required lifecycle are processed first: interrupted/failed search resumes from
 its latest atomic generation, while a search-complete run without a required
 final-test summary resumes at final testing. Fully completed slots are skipped.
+The ordinary and cross-generation final tests share
+`evaluation.final_test_games_per_side`, a positive integer defaulting to 10.
+It sets the number of games for each side of every map/opponent combination
+in the post-search benchmarks. Both record the effective count in their
+protocol. The 1114 baseline sets it to 5 for 300 matches per candidate.
 Missing replicate slots are created after indexed recovery; each new run is
 added atomically to the same index. A fresh launch starts a fresh index. A direct
 run-directory target retains the single-run resume behavior. If interruption
@@ -916,8 +921,11 @@ for `framework_slots` with `framework.evolution_mode: local`. Direct GPT reads
 the authenticated key from `api_key/gpt`, uses `framework.model`, and selects
 exactly the first N complete Gen-0 `control_genome` values. Each response is
 validated as `eagle-framework-selection-v1` against the exact frozen bundle
-SHA-256 before materialization. Remaining Gen-0 slots use seeded local sampling
-and all offspring use local per-slot crossover/mutation; no GPT request occurs
+SHA-256 before materialization. When `framework.qwen_initial_candidates` is
+positive, the configured Qwen endpoint selects the next requested number of
+complete genomes. The two counts may not exceed population size in total.
+Remaining Gen-0 slots use seeded local sampling and all offspring use local
+per-slot crossover/mutation; no GPT request occurs
 after initialization. The resolved count is persisted and resume-fenced. Raw
 request/response, timing, complete genome, bundle hash, and validation outcome
 are retained under the candidate initialization owner; invalid or exhausted
@@ -926,7 +934,7 @@ selection fails initialization without random/default fallback.
 For a provider-free replay, `framework.initial_genomes` may instead provide an
 ordered list of complete frozen-bundle genome mappings. It is valid only with
 `framework_slots` plus `framework.evolution_mode: local`, is mutually exclusive
-with `gpt_initial_candidates`, and occupies exactly the first N Gen-0 slots;
+with live GPT and Qwen initialization, and occupies exactly the first N Gen-0 slots;
 the remaining slots and all offspring stay local. The canonical ordered-list
 list is persisted in the resolved config, while its canonical hash and count
 are persisted in the manifest; all are resume-fenced. This permits a validated

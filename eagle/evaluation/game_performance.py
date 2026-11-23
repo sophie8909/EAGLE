@@ -8,7 +8,7 @@ import math
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 RESULT_WIN_SCORE = 100.0
@@ -137,9 +137,21 @@ class MatchTelemetry:
         }
 
 
-def build_match_telemetry(*, raw_result: dict[str, Any], round_state_dir: Path, max_tick: int, player_index: int = 0, opponent_index: int = 1, replay_path: str | None = None, scoring_config: GamePerformanceConfig | None = None) -> MatchTelemetry:
+def build_match_telemetry(
+    *,
+    raw_result: dict[str, Any],
+    round_state_dir: Path,
+    max_tick: int,
+    player_index: int = 0,
+    opponent_index: int = 1,
+    replay_path: str | None = None,
+    scoring_config: GamePerformanceConfig | None = None,
+    snapshots: Iterable[tuple[str, str]] | None = None,
+) -> MatchTelemetry:
     config = scoring_config or GamePerformanceConfig()
-    ticks = read_tick_telemetry(round_state_dir, player_index=player_index, scoring_config=config)
+    ticks = read_tick_telemetry(
+        round_state_dir, player_index=player_index, scoring_config=config, snapshots=snapshots,
+    )
     end_tick = int_or_default(raw_result.get("final_tick"), max_tick)
     result = str(raw_result.get("result") or result_from_winner(raw_result.get("winner"), raw_result.get("tick_timeout")))
     if not ticks:
@@ -149,10 +161,20 @@ def build_match_telemetry(*, raw_result: dict[str, Any], round_state_dir: Path, 
     return MatchTelemetry(player_index, opponent_index, max_tick, end_tick, result, ticks, final_tick.player_resource, final_tick.enemy_resource, replay_path, performance, config)
 
 
-def read_tick_telemetry(round_state_dir: Path, *, player_index: int, scoring_config: GamePerformanceConfig) -> list[MatchTickTelemetry]:
+def read_tick_telemetry(
+    round_state_dir: Path,
+    *,
+    player_index: int,
+    scoring_config: GamePerformanceConfig,
+    snapshots: Iterable[tuple[str, str]] | None = None,
+) -> list[MatchTickTelemetry]:
     ticks: dict[int, MatchTickTelemetry] = {}
-    for path in sorted(round_state_dir.glob("round_*.log")):
-        text = path.read_text(encoding="utf-8")
+    if snapshots is None:
+        snapshots = (
+            (path.name, path.read_text(encoding="utf-8"))
+            for path in sorted(round_state_dir.glob("round_*.log"))
+        )
+    for _, text in snapshots:
         # Mock-only trace rows are retained for the commentator but are not
         # folded into the established scoring telemetry contract.
         if "TRACE_ONLY: true" in text:

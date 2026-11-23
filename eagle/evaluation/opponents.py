@@ -12,6 +12,8 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation.compiler import compile_generated_agent
+from eagle.evaluation.round_states import require_buffered_round_states
+from eagle.evaluation.windows_paths import java_path, resolve_evaluation_path
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 from eagle.opponents import (
     ALLINBOT_UPSTREAM_CLASS_NAME,
@@ -174,6 +176,8 @@ def preflight_evaluation_opponents(
             source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
             if not any(path.is_file() and path.suffix == ".jar" for path in source_lib.glob("*.jar")):
                 raise OpponentSetupError(f"AllInBot upstream libraries are missing: {source_lib}")
+    if config.match_artifact_mode == "compact":
+        require_buffered_round_states(config.microrts_dir)
 
 
 def _resolved_static_evaluation_opponents(
@@ -244,7 +248,7 @@ def _prepare_safe_allinbot_opponent(
     """
 
     repository_root = (repository_root or _repository_root()).resolve()
-    root = classes_dir.resolve() / "_opponent_adapters" / "safe_allinbot"
+    root = resolve_evaluation_path(classes_dir) / "_opponent_adapters" / "safe_allinbot"
     source = repository_root / "eagle" / "opponent_adapters" / "SafeAllInBot.java"
     output = root / "classes"
     class_file = output / "ai" / "eagle" / "SafeAllInBot.class"
@@ -272,7 +276,7 @@ def _prepare_safe_allinbot_opponent(
     microrts_dir = config.microrts_dir.resolve()
     classpath = os.pathsep.join((str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")))
     completed = subprocess.run(
-        ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(output), str(source)],
+        ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", java_path(output), str(source)],
         cwd=microrts_dir,
         capture_output=True,
         text=True,
@@ -307,7 +311,7 @@ def _prepare_safe_allinbot_opponent(
 def _prepare_worker_rush_opponent(config: ExperimentConfig, *, classes_dir: Path) -> Path:
     """Compile the vendored upstream WorkerRush implementation once per run."""
 
-    root = classes_dir.resolve() / "_opponent_adapters" / "worker_rush"
+    root = resolve_evaluation_path(classes_dir) / "_opponent_adapters" / "worker_rush"
     source = (
         Path(__file__).resolve().parents[2]
         / "third_party" / "microrts" / "src" / "ai" / "abstraction" / "WorkerRush.java"
@@ -331,7 +335,7 @@ def _prepare_worker_rush_opponent(config: ExperimentConfig, *, classes_dir: Path
     classpath = os.pathsep.join((str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")))
     random_source = microrts_dir / "src" / "rts" / "RandomSource.java"
     completed = subprocess.run(
-        ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(output), str(random_source), str(source)],
+        ["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", java_path(output), str(random_source), str(source)],
         cwd=microrts_dir,
         capture_output=True,
         text=True,

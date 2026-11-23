@@ -362,6 +362,9 @@ def validate_resume_config(
 ) -> None:
     run_mapping = persisted.to_mapping(mock=False)
     requested_mapping = config.to_mapping(mock=mock)
+    # The benchmark runs after search and uses the run's persisted settings.
+    for mapping in (run_mapping, requested_mapping):
+        mapping["evaluation"].pop("final_test_games_per_side")
     if (
         persisted.java_materialization_mode == "framework_slots"
         and config.java_materialization_mode == "framework_slots"
