@@ -187,9 +187,10 @@ def _print_non_batch_output(
     *,
     config: ExperimentConfig,
     config_path: Path,
-    completed_generation: int,
+    completed_generation: int | None,
 ) -> None:
     print("EAGLE experiment")
+    print(f"Run [1/1] random_seed={config.random_seed}")
     print(f"Experiment: {config.experiment_name}")
     print(f"Reflection model: {config.active_primary_model.name}")
     print(f"Generation model: {config.resolved_generation_model.name}")
@@ -202,7 +203,8 @@ def _print_non_batch_output(
     print(f"Code {kind} probability: {config.code_reflection_probability:.2f}")
     print(f"AOS minimum probability: {config.aos_minimum_probability:.2f}")
     print(f"run_dir={config_path}")
-    print(f"completed_generation={completed_generation}")
+    if completed_generation is not None:
+        print(f"Generation {completed_generation}/{config.generations}: resuming from checkpoint", flush=True)
 
 
 def _shares_framework_bootstrap(config: ExperimentConfig) -> bool:
@@ -264,7 +266,9 @@ class ExperimentOrchestrator:
             if not mock and not connect_only and config.needs_managed_runtime:
                 if manager is None:
                     manager = RuntimeManager()
+                print(f"LLM server: checking {config.active_primary_model.name} runtime", flush=True)
                 manager.ensure(runtime_config_from_experiment(config))
+                print("LLM server: ready", flush=True)
 
         try:
             return self._run(
@@ -306,14 +310,13 @@ class ExperimentOrchestrator:
                 validate_resume_config(requested, persisted, mock=mock)
             config = persisted
             config.validate()
-            print("EAGLE experiment")
+            manifest_path = resume_dir / "manifest.json"
+            latest_generation = load_manifest(resume_dir).get("latest_generation") if manifest_path.is_file() else None
             _print_non_batch_output(
                 config=config,
                 config_path=config_path or resume_dir / "config.yaml",
-                completed_generation=0,
+                completed_generation=latest_generation,
             )
-            manifest_path = resume_dir / "manifest.json"
-            latest_generation = load_manifest(resume_dir).get("latest_generation") if manifest_path.is_file() else None
             if latest_generation is None or int(latest_generation) < config.generations:
                 ensure_runtime(config)
             result = self.resume_runner(
@@ -361,11 +364,11 @@ class ExperimentOrchestrator:
                 )
                 if shared_framework is not None:
                     run_config = _bind_shared_framework(run_config, shared_framework)
-                if config.total_runs > 1:
-                    print(
-                        f"Run [{replicate_index + 1}/{config.total_runs}] "
-                        f"random_seed={run_config.random_seed}"
-                    )
+                print(
+                    f"Run [{replicate_index + 1}/{config.total_runs}] "
+                    f"random_seed={run_config.random_seed}",
+                    flush=True,
+                )
                 ensure_runtime(run_config)
                 result = self.search_runner(
                     run_config,
@@ -472,6 +475,11 @@ class ExperimentOrchestrator:
                     else:
                         print(f"Status: resuming {indexed_run}")
                     latest_generation = manifest.get("latest_generation")
+                    if latest_generation is not None:
+                        print(
+                            f"Generation {latest_generation}/{persisted.generations}: resuming from checkpoint",
+                            flush=True,
+                        )
                     if latest_generation is None or int(latest_generation) < persisted.generations:
                         ensure_runtime(persisted)
                     result = self.resume_runner(

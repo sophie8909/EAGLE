@@ -74,9 +74,10 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
 const $=id=>document.getElementById(id);
 const csrf='__CSRF_TOKEN__';
 let meta, payload={}, originalText='', editing='form', dirty=false, loaded=false, runData={generations:[],pending:[]}, jobRunning=false, serverRunning=false, matchRunning=false, refreshing=false;
-let fastJobs=true, jobsRefreshing=false, legacyLog=null, legacyProgress={};
-async function api(path,body){
- const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Eagle-Token':csrf},body:JSON.stringify(body)});
+let fastJobs=true, jobsRefreshing=false, experimentRevision=0, legacyStatus=null;
+let legacyLog=null, legacyOutput=null, legacyProgress={};
+async function api(path,body,signal){
+ const response=await fetch(path,body===undefined?{signal}:{method:'POST',headers:{'Content-Type':'application/json','X-Eagle-Token':csrf},body:JSON.stringify(body)});
  const data=await response.json();if(!response.ok)throw new Error(data.error||response.statusText);return data;
 }
 function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';$('message').hidden=false;}
@@ -158,25 +159,32 @@ function renderJob(kind,job){
  const name=kind==='server'?'LLM server':kind==='experiment'?'實驗':'對戰';
  $(kind+'-status').textContent=job.pid===null?'尚未啟動'+name:job.running?(job.stopping?'正在停止，等待清理…':name+'執行中 · PID '+job.pid):name+(job.returncode===0?'已完成':'已結束 · exit '+job.returncode);
  const log=$(kind+'-log');const previousTop=log.scrollTop;const path=job.log||'';
- const follow=log.dataset.path!==path||previousTop+log.clientHeight>=log.scrollHeight-30;
- if(log.textContent!==job.output){log.textContent=job.output;log.scrollTop=follow?log.scrollHeight:previousTop;}
+ const changedJob=log.dataset.path!==path;
+ const follow=changedJob||previousTop+log.clientHeight>=log.scrollHeight-30;
+ if(changedJob||log.textContent!==job.output){log.textContent=job.output;log.scrollTop=follow?log.scrollHeight:previousTop;}
  log.dataset.path=path;$(kind+'-file').textContent=path;
 }
 function progressFromLegacyJob(job,runs){
  // A GUI service that was already running can still use its existing status API.
- if(legacyLog!==job.log){legacyLog=job.log;legacyProgress={};}
- for(const line of job.output.split(/\r?\n/)){
-  const run=line.match(/(?:^|: )Run \[(\d+)\/(\d+)\] random_seed=(-?\d+)\b/);
-  const generation=line.match(/^(?:Generation (\d+)(?:\/(\d+))?:|\[gen (\d+)(?:\s|\]))/);
-  const cross=line.match(/^starting generation=(\d+) candidate=\S+ \((\d+)\/(\d+)\)/);
-  if(run){legacyProgress={phase:'starting',seed:Number(run[3]),run_number:Number(run[1]),run_total:Number(run[2])};}
-  else if(cross){Object.assign(legacyProgress,{phase:'cross_generation',generation:Number(cross[1]),benchmark_number:Number(cross[2]),benchmark_total:Number(cross[3])});}
-  else if(line.startsWith('Final test:')||line.startsWith('final_test_summary=')){legacyProgress.phase='final_test';}
-  else if(generation){
-   const number=Number(generation[1]??generation[3]);
-   const complete=line.includes('checkpoint complete')||line.startsWith(`[gen ${number}] diversity:`);
-   Object.assign(legacyProgress,{phase:number===0?'initialization':'evolution',generation:number,completed_generation:complete?number:number-1});
-   if(generation[2]!==undefined)legacyProgress.total_generations=Number(generation[2]);
+ if(legacyLog!==job.log){legacyLog=job.log;legacyOutput=null;legacyProgress={};}
+ if(legacyOutput!==job.output){
+  legacyOutput=job.output;
+  for(const line of job.output.split(/\r?\n/).slice(0,-1)){
+   const run=line.match(/(?:^|: )Run \[(\d+)\/(\d+)\] random_seed=(-?\d+)\b/);
+   const generation=line.match(/^(?:Generation (\d+)(?:\/(\d+))?:|\[gen (\d+)(?:\s|\]))/);
+   const cross=line.match(/^starting generation=(\d+) candidate=\S+ \((\d+)\/(\d+)\)/);
+   if(run){legacyProgress={phase:'starting',seed:Number(run[3]),run_number:Number(run[1]),run_total:Number(run[2])};}
+   else if(cross){Object.assign(legacyProgress,{phase:'cross_generation',generation:Number(cross[1]),benchmark_number:Number(cross[2]),benchmark_total:Number(cross[3]),benchmark_complete:Number(cross[2])-1});}
+   else if(legacyProgress.phase==='cross_generation'&&/^generation=\d+ candidate=\S+ status=\S+$/.test(line)){legacyProgress.benchmark_complete=legacyProgress.benchmark_number;}
+   else if(line.startsWith('Final test:')||line.startsWith('final_test_summary=')){legacyProgress.phase='final_test';}
+   else if(generation){
+    const number=Number(generation[1]??generation[3]);
+    const resuming=line.endsWith(': resuming from checkpoint');
+    const complete=resuming||line.endsWith(': checkpoint complete')||line.startsWith(`[gen ${number}] diversity:`);
+    Object.assign(legacyProgress,{phase:resuming?'resuming':number===0?'initialization':'evolution',generation:number,
+     completed_generation:Math.max(legacyProgress.completed_generation??-1,complete?number:number-1)});
+    if(generation[2]!==undefined)legacyProgress.total_generations=Number(generation[2]);
+   }
   }
  }
  if(legacyProgress.seed===undefined&&job.running){
@@ -195,9 +203,9 @@ function renderExperiment(job,runs=[]){
  const parts=[];
  if(seed!==undefined)parts.push(`Seed ${seed}${run_number!==undefined?`（${run_number}/${run_total}）`:''}`);
  if(generation!==undefined)parts.push(`G${generation}${total_generations!==undefined&&phase!=='cross_generation'?` / ${total_generations}`:''}`);
- const phases={starting:'啟動中',initialization:'初始化',evolution:'演化中',final_test:'Final test',cross_generation:'跨代評估'};
+ const phases={starting:'啟動中',resuming:'從已完成的世代續跑',initialization:'初始化',evolution:'演化中',final_test:'Final test',cross_generation:'跨代評估'};
  parts.push(job.stopping?'正在停止':!job.running?(job.returncode===0?'已完成':'已結束'):(phases[phase]||'啟動中'));
- if(phase==='cross_generation'&&benchmark_total)parts.push(`個體 ${benchmark_complete??benchmark_number}/${benchmark_total}`);
+ if(phase==='cross_generation'&&benchmark_total)parts.push(`個體 ${benchmark_number}/${benchmark_total}`);
  const label=$('experiment-progress-label');const heading=parts.join(' · ');
  if(label.textContent!==heading)label.textContent=heading;
  const bar=$('experiment-progress-bar');
@@ -208,20 +216,34 @@ function renderExperiment(job,runs=[]){
  }else if(job.returncode===0){bar.max=1;bar.value=1;}
  else{bar.removeAttribute('value');}
 }
-function renderJobs(data){
+function renderJobs(data,revision){
  serverRunning=data.server.running;renderJob('server',data.server);
  matchRunning=data.match.running;renderJob('match',data.match);
- renderExperiment(data.experiment,data.runs??[]);updateButtons();
+ if(revision===experimentRevision)renderExperiment(data.experiment,data.runs??[]);
+ updateButtons();
 }
 async function refreshJobs(){
- if(!fastJobs||jobsRefreshing)return;jobsRefreshing=true;
- try{renderJobs(await api('/api/jobs'));}
- catch(error){if(error.message==='Unknown API route.')fastJobs=false;else throw error;}
- finally{jobsRefreshing=false;}
+ if(jobsRefreshing)return;
+ jobsRefreshing=true;
+ const revision=experimentRevision;
+ try{
+  if(fastJobs){
+   try{renderJobs(await api('/api/jobs',undefined,AbortSignal.timeout(20000)),revision);return;}
+   catch(error){if(error.message!=='Unknown API route.')throw error;fastJobs=false;}
+  }
+  legacyStatus=await api('/api/status',undefined,AbortSignal.timeout(20000));
+  renderJobs(legacyStatus,revision);
+ }finally{jobsRefreshing=false;}
+}
+async function experimentAction(path,body){
+ const job=await api(path,body);
+ experimentRevision++;
+ renderExperiment(job);
 }
 async function refresh(){
  if(refreshing)return;refreshing=true;
- try{const data=await api('/api/status');if(!fastJobs)renderJobs(data);
+ try{const data=fastJobs?await api('/api/status'):legacyStatus;
+ if(!data)return;
  const runs=data.runs.map(run=>({value:run.path,label:run.name+' · '+run.status}));
  setOptions($('runs'),runs,'尚無 Run');
  setOptions($('resume-run'),runs,'尚無 Run');
@@ -236,11 +258,11 @@ action('validate',async()=>{message((await api('/api/validate',await bodyConfig(
 action('save',async()=>{const data=await api('/api/save',{...await bodyConfig(),path:$('save-path').value});originalText=data.text;payload=data.payload;$('yaml').value=data.text;dirty=false;$('dirty').textContent='已儲存';message('已儲存：'+data.path);});
 action('start-server',async()=>{await api('/api/start-server',await bodyConfig());message('LLM server 啟動中，請等日誌顯示 ready。');await refresh();});
 action('stop-server',async()=>{await api('/api/stop-server',{});await refresh();});
-action('start',async()=>{renderExperiment(await api('/api/start',{...await bodyConfig(),...flags()}));message('實驗已啟動。');});
-action('stop-experiment',async()=>{renderExperiment(await api('/api/stop-experiment',{}));});
+action('start',async()=>{await experimentAction('/api/start',{...await bodyConfig(),...flags()});message('實驗已啟動。');});
+action('stop-experiment',()=>experimentAction('/api/stop-experiment',{}));
 action('stop-match',async()=>{await api('/api/stop-match',{});await refresh();});
 async function resume(target){
- renderExperiment(await api('/api/resume',{...target,...flags()}));
+ await experimentAction('/api/resume',{...target,...flags()});
  message('已啟動續跑，進度請查看實驗輸出。');
 }
 function renderBatches(batches){
@@ -256,9 +278,11 @@ action('watch',async()=>{await api('/api/watch',{run:$('runs').value,candidate:$
 action('refresh-runs',refresh);
 $('runs').onchange=()=>refresh().catch(error=>message(error.message,true));$('generations').onchange=renderCandidates;$('candidates').onchange=updateButtons;$('opponent').onchange=updateButtons;
 window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+const pollJobs=()=>refreshJobs().catch(error=>message(error.message,true));
+setInterval(pollJobs,1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollJobs();});
+pollJobs();
 async function init(){
- await refreshJobs();
- setInterval(()=>refreshJobs().catch(error=>message(error.message,true)),1000);
  meta=await api('/api/meta');setOptions($('configs'),meta.configs.map(path=>({value:path,label:path})),'尚無設定');renderBatches(meta.batches);
  const preferred=meta.configs.find(path=>path.includes('qwen3_5_9b/'));if(preferred)$('configs').value=preferred;
  setOptions($('opponent'),meta.opponents.map(item=>({value:item.id,label:item.name+(item.available?'':'（缺少依賴）'),disabled:!item.available})));$('opponent').value='lightrush';

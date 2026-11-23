@@ -106,6 +106,7 @@ use_remote_llm: true
         else:
             self.assertTrue(start.call_args.kwargs["start_new_session"])
         self.assertEqual(start.call_args.kwargs["env"]["PYTHONIOENCODING"], "utf-8")
+        self.assertEqual(start.call_args.kwargs["env"]["PYTHONUNBUFFERED"], "1")
         self.assertEqual(start.call_args.kwargs["cwd"], self.root)
 
     def test_jobs_refresh_tracks_seed_and_generation_without_scanning_runs(self):
@@ -130,11 +131,38 @@ use_remote_llm: true
             progress = self.app.get("/api/jobs", {})["experiment"]["progress"]
             self.assertEqual((progress["phase"], progress["generation"], progress["benchmark_number"]),
                              ("cross_generation", 0, 2))
+            self.assertEqual(progress["benchmark_complete"], 1)
+            with log.open("a", encoding="utf-8") as stream:
+                stream.write("generation=0 candidate=gen_0000_123 status=complete\n")
+            progress = self.app.get("/api/jobs", {})["experiment"]["progress"]
+            self.assertEqual(progress["benchmark_complete"], 2)
             with log.open("a", encoding="utf-8") as stream:
                 stream.write("Run [2/2] random_seed=9\nGeneration 0: initializing population\n")
             progress = self.app.get("/api/jobs", {})["experiment"]["progress"]
             self.assertEqual((progress["seed"], progress["generation"], progress["phase"]), (9, 0, "initialization"))
             self.assertNotIn("benchmark_number", progress)
+
+    def test_jobs_refresh_reads_resume_checkpoint_and_waits_for_complete_progress_line(self):
+        run, _ = self.run_fixture()
+        (run / "config.yaml").write_text(
+            "random_seed: 9\nrandom_seeds: [8, 9]\ngenerations: 50\n", encoding="utf-8",
+        )
+        with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process):
+            status = self.app.post("/api/resume", {"run": str(run)})
+        self.assertEqual(status["progress"], {"phase": "starting", "seed": 9, "total_generations": 50})
+        log = self.app.experiment.log
+        log.write_bytes(b"Generation 12/50: resuming from checkpoint\r\nGeneration 13/50: star")
+        status = self.app.get("/api/jobs", {})["experiment"]
+        self.assertTrue(status["output"].endswith("star"))
+        self.assertEqual(status["progress"], {
+            "phase": "resuming", "seed": 9, "generation": 12,
+            "total_generations": 50, "completed_generation": 12,
+        })
+        with log.open("ab") as stream:
+            stream.write(b"ted\r\n")
+        progress = self.app.get("/api/jobs", {})["experiment"]["progress"]
+        self.assertEqual((progress["phase"], progress["generation"], progress["completed_generation"]),
+                         ("evolution", 13, 12))
 
     def test_connect_only_is_forwarded_for_start_and_resume(self):
         run, _ = self.run_fixture()

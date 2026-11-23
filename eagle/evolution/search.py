@@ -190,6 +190,7 @@ def run_generation_zero(
             "Framework bootstrap: checkpoint persisted; entering generation 0",
             flush=True,
         )
+    print("Generation 0: preparing evaluation runtime", flush=True)
     runtime = build_search_runtime(
         config,
         mock=mock,
@@ -199,8 +200,7 @@ def run_generation_zero(
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
     generation_span = Stopwatch.start()
-    if framework_slots:
-        print("Generation 0: initializing population", flush=True)
+    print("Generation 0: initializing population", flush=True)
     population = initialize_population(
         config,
         policy_backend=runtime.initial_policy_backend,
@@ -225,8 +225,7 @@ def run_generation_zero(
         )
     # Generation zero enters the same evaluation boundary as every offspring,
     # so objective and failure records have one shape.
-    if framework_slots:
-        print("Generation 0: evaluating initial population", flush=True)
+    print("Generation 0: evaluating initial population", flush=True)
     generation_zero_fixed_java = generation_zero_uses_fixed_java(config)
     evaluated_population = evaluate_population(
         population,
@@ -268,7 +267,6 @@ def run_generation_zero(
         run_id=active_run_id, generation=0, candidates=evaluated_population,
         span=generation_span.finish(),
     ))
-    print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
     record_generation(
         run_dir,
@@ -277,8 +275,8 @@ def run_generation_zero(
         diversity=generation_diversity,
         aos=runtime.operator_controller.initial_generation_record(),
     )
-    if framework_slots:
-        print("Generation 0: checkpoint complete", flush=True)
+    print(diversity_console_summary(0, generation_diversity), flush=True)
+    print("Generation 0: checkpoint complete", flush=True)
 
     return continue_search(
         config=config,

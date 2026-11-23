@@ -115,7 +115,7 @@ class Job:
                 {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
                 if IS_WINDOWS else {"start_new_session": True}
             )
-            environment = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+            environment = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1", PYTHONUNBUFFERED="1")
             with log.open("wb") as stream:
                 process = subprocess.Popen(
                     command, cwd=self.root, stdout=stream, stderr=subprocess.STDOUT,
