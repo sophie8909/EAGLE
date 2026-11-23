@@ -45,16 +45,25 @@ self-play run also needs the runtime and paths recorded in its checkpoint.
 
 ## Local experiment GUI
 
+Check the default WSL distribution with `wsl.exe --list --verbose` from
+PowerShell. If none is installed, run `wsl.exe --install -d Ubuntu-24.04`
+from an administrator PowerShell, restart if prompted, and open the distribution
+once to create your Linux user. See the
+[WSL installation guide](https://learn.microsoft.com/en-us/windows/wsl/install).
+
 Before opening `gui.cmd` from Windows, prepare the checkout's Linux virtual
-environment in the default WSL distribution and put `java` and `javac` on PATH:
+environment in the default WSL distribution. These commands are for Ubuntu 24.04.
 
 ```bash
+sudo apt update
+sudo apt install python3-venv openjdk-17-jdk
 cd /path/to/EAGLE
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
+python3 -m venv .venv-wsl
+.venv-wsl/bin/python -m pip install -e .
 ```
 
-The launcher runs `.venv/bin/python` inside WSL. From PowerShell, run
+The launcher prefers `.venv-wsl/bin/python` so a Windows `.venv` can coexist,
+and also accepts an existing Linux `.venv/bin/python`. From PowerShell, run
 `.\gui.cmd --port 8878` to select a different GUI port. Visual MicroRTS
 matches use WSLg. For a server managed by the experiment, configure
 `model.path` and `model.llama_server` for WSL. For an already-running
