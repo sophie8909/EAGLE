@@ -4,12 +4,23 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
 from eagle.evaluation.windows_paths import java_path, resolve_evaluation_path
+
+
+def require_java_toolchain() -> None:
+    missing = [name for name in ("java", "javac") if shutil.which(name) is None]
+    if missing:
+        raise RuntimeError(
+            f"Java tools missing from PATH: {', '.join(missing)}. "
+            "Install a JDK in the environment running EAGLE. "
+            "On Ubuntu/WSL, run sudo apt install openjdk-17-jdk."
+        )
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,7 @@ from typing import Callable
 from eagle.artifacts import write_run_config
 from eagle.candidate import has_completed_evaluation
 from eagle.config import ExperimentConfig
+from eagle.evaluation.compiler import require_java_toolchain
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.evaluation.pipeline import evaluate_population
 from eagle.evaluation.round_states import require_buffered_round_states
@@ -149,6 +150,8 @@ def _run_search_impl(
     artifacts are produced; this function owns population-level orchestration.
     """
     config.validate()
+    if not mock:
+        require_java_toolchain()
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
     elif not mock:

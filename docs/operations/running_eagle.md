@@ -54,12 +54,20 @@ open the distribution once to create your Linux user. See the
 
 Before opening `gui.cmd` from Windows, prepare the checkout's Linux virtual
 environment in the default WSL distribution. EAGLE requires Python 3.10–3.13.
-On Ubuntu with a supported system Python, run the following commands in a WSL
-terminal.
+For real MicroRTS evaluation, install the JDK in that same WSL distribution.
+On Ubuntu, run the following commands.
 
 ```bash
 sudo apt update
-sudo apt install python3-venv openjdk-17-jdk
+sudo apt install openjdk-17-jdk
+java -version
+javac -version
+```
+
+On Ubuntu with a supported system Python, create the Linux environment in WSL.
+
+```bash
+sudo apt install python3-venv
 cd /path/to/EAGLE
 python3 -m venv .venv-wsl
 .venv-wsl/bin/python -m pip install -e .

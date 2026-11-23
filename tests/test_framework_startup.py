@@ -20,6 +20,19 @@ from tests.test_framework_slots_artifacts import bundle_payload
 
 
 class FrameworkStartupTests(unittest.TestCase):
+    def test_missing_javac_fails_before_framework_bootstrap(self):
+        config = ExperimentConfig.from_mapping({
+            "reflection_operator_mode": "static",
+            "evaluation": {"mode": "self_play", "self_play_pool_policy": "tournament-v1"},
+        })
+        with (
+            patch("eagle.evaluation.compiler.shutil.which", side_effect=["/usr/bin/java", None]),
+            patch("eagle.evolution.search.freeze_framework_bundle") as freeze,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Java tools missing from PATH: javac"):
+                run_search(config)
+        freeze.assert_not_called()
+
     def test_fixed_bundle_config_skips_bootstrap_but_keeps_coach_runtime(self):
         config = ExperimentConfig.from_mapping({
             "java_materialization_mode": "framework_slots",

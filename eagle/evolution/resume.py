@@ -19,6 +19,7 @@ from eagle.config import (
 )
 from eagle.candidate import FRAMEWORK_SLOTS_MATERIALIZATION_VERSION
 from eagle.strategy_dsl import normalize_strategy_dsl
+from eagle.evaluation.compiler import require_java_toolchain
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.evaluation.round_states import require_buffered_round_states
 from eagle.run_artifacts import (
@@ -222,7 +223,10 @@ def _resume_search_impl(
     elif not mock:
         require_buffered_round_states(config.microrts_dir)
     manifest = load_manifest(run_dir)
-    if manifest.get("latest_generation") is None:
+    latest_generation = manifest.get("latest_generation")
+    if not mock and (latest_generation is None or int(latest_generation) < config.generations):
+        require_java_toolchain()
+    if latest_generation is None:
         if (
             config.java_materialization_mode != "framework_slots"
             or not has_framework_startup_checkpoint(run_dir, manifest=manifest)
