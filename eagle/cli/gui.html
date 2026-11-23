@@ -35,8 +35,9 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
   <p class="hint">關閉瀏覽器或啟動視窗後，實驗會繼續跑。可重新開啟 GUI 查看進度。按「停止實驗」或在 GUI 終端按 Ctrl+C 可中止。</p>
   <p class="hint">預設自動啟動並管理本機 LLM，實驗結束時釋放。Windows 若由其他軟體開好 server，請勾選「只連線」；該服務不會被重啟或關閉。兩台分別設定不同 random_seeds，其他實驗參數保持相同；非空清單會優先於 random_seed。</p>
   <div class="toolbar"><label><input type="checkbox" id="connect-only">只連線（server 已由其他軟體開啟）</label><label><input type="checkbox" id="mock">Mock（不呼叫模型）</label><label><input type="checkbox" id="skip-final">略過 Final Test</label></div>
-  <label id="llm-server-port-field" hidden>LLM server 連接埠
-   <input id="llm-server-port" type="text" inputmode="numeric" placeholder="留空則沿用實驗設定">
+  <label id="llm-server-address-field" hidden>LLM server 網址
+   <input id="llm-server-address" type="text" inputmode="url" spellcheck="false" autocomplete="off"
+          placeholder="例如 http://192.168.1.136:1234（留空則沿用實驗設定）">
   </label>
   <div class="toolbar"><button id="start" class="primary">啟動目前設定</button><button id="stop-experiment" class="danger" disabled>停止實驗</button></div>
   <h3>繼續實驗（Resume）</h3>
@@ -139,17 +140,30 @@ async function loadConfig(){
  const data=await api('/api/config?path='+encodeURIComponent($('configs').value));
  payload=data.payload;originalText=data.text;$('yaml').value=data.text;$('save-path').value=data.path;loaded=true;dirty=false;$('dirty').textContent='已載入';renderForm();await refresh();
 }
-function llmServerPort(){
- const input=$('llm-server-port');
- const value=input.value.trim();
+function llmServerAddress(){
+ const value=$('llm-server-address').value.trim();
  if(!value)return null;
- const port=Number(value);
- if(!/^\d+$/.test(value)||port<1||port>65535)throw new Error('請輸入 1 到 65535 的整數連接埠。');
- return port;
+ if(/^\d+$/.test(value)){
+  const port=Number(value);
+  if(port<1||port>65535)throw new Error('請輸入 1 到 65535 的整數連接埠。');
+  return port;
+ }
+ try{
+  const url=new URL(value);
+  if(/^https?:\/\//i.test(value)&&!/[\s\\?#]/.test(value)&&url.hostname
+     &&!url.username&&!url.password&&url.port!=='0')return value;
+ }catch{
+  // The launch action reports invalid values after the user finishes editing.
+ }
+ throw new Error('請貼上完整的 HTTP 或 HTTPS 網址，例如 http://192.168.1.136:1234。');
 }
 function flags(){
  const connectOnly=$('connect-only').checked;
- return {connect_only:connectOnly,llm_server_port:connectOnly?llmServerPort():null,
+ const address=connectOnly?llmServerAddress():null;
+ if(address!==null&&meta?.llm_server_address===undefined){
+  throw new Error('請重新啟動 EAGLE GUI 服務，再使用 LLM server 網址。');
+ }
+ return {connect_only:connectOnly,llm_server_address:address,
   mock:$('mock').checked,skip_final_test:$('skip-final').checked};
 }
 function candidates(){return $('generations').value==='pending'?runData.pending:(runData.generations.find(item=>String(item.generation)===$('generations').value)?.population||[]);}
@@ -273,12 +287,13 @@ action('validate',async()=>{message((await api('/api/validate',await bodyConfig(
 action('save',async()=>{const data=await api('/api/save',{...await bodyConfig(),path:$('save-path').value});originalText=data.text;payload=data.payload;$('yaml').value=data.text;dirty=false;$('dirty').textContent='已儲存';message('已儲存：'+data.path);});
 action('start-server',async()=>{await api('/api/start-server',await bodyConfig());message('LLM server 啟動中，請等日誌顯示 ready。');await refresh();});
 action('stop-server',async()=>{await api('/api/stop-server',{});await refresh();});
-$('connect-only').onchange=()=>{$('llm-server-port-field').hidden=!$('connect-only').checked;};
-let saveLlmPort=Promise.resolve();
-$('llm-server-port').oninput=()=>{
+$('connect-only').onchange=()=>{$('llm-server-address-field').hidden=!$('connect-only').checked;};
+let saveLlmAddress=Promise.resolve();
+$('llm-server-address').oninput=()=>{
+ if(meta?.llm_server_address===undefined)return;
  try{
-  const port=llmServerPort();
-  saveLlmPort=saveLlmPort.then(()=>api('/api/llm-server-port',{port})).catch(error=>message(error.message,true));
+  const address=llmServerAddress();
+  saveLlmAddress=saveLlmAddress.then(()=>api('/api/llm-server-address',{address})).catch(error=>message(error.message,true));
  }catch{
   // Allow partial edits. The launch action reports invalid values.
  }
@@ -309,8 +324,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollJobs()
 pollJobs();
 async function init(){
  meta=await api('/api/meta');setOptions($('configs'),meta.configs.map(path=>({value:path,label:path})),'尚無設定');renderBatches(meta.batches);
- $('llm-server-port').value=meta.llm_server_port??'';
- $('llm-server-port-field').hidden=!$('connect-only').checked;
+ $('llm-server-address').value=meta.llm_server_address??meta.llm_server_port??'';
+ $('llm-server-address-field').hidden=!$('connect-only').checked;
  const preferred=meta.configs.find(path=>path.includes('qwen3_5_9b/'));if(preferred)$('configs').value=preferred;
  setOptions($('opponent'),meta.opponents.map(item=>({value:item.id,label:item.name+(item.available?'':'（缺少依賴）'),disabled:!item.available})));$('opponent').value='lightrush';
  setOptions($('map'),meta.maps.map(path=>({value:path,label:path})));if(meta.maps.includes('maps/8x8/basesWorkers8x8.xml'))$('map').value='maps/8x8/basesWorkers8x8.xml';

@@ -52,13 +52,14 @@ def resume_search(
     run_dir: Path,
     mock: bool = False,
     llm_server_port: int | None = None,
+    llm_server_url: str | None = None,
 ) -> SearchResult:
     """Continue from the last atomically recorded generation."""
 
     persisted = load_resume_config(run_dir)
     if config is not None:
         validate_resume_config(config, persisted, mock=mock)
-    config = replace(persisted, llm_server_port=llm_server_port)
+    config = replace(persisted, llm_server_port=llm_server_port, llm_server_url=llm_server_url)
     try:
         mark_run_started(run_dir)
         return _resume_search_impl(

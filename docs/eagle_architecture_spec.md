@@ -711,7 +711,10 @@ search, resume and final test. A local primary with runtime paths is started and
 owned by the experiment through `RuntimeManager`; compatible runtimes are reused
 across seeds/configs and owned cleanup runs on completion, failure or
 interruption. `--connect-only` skips runtime file checks and lifecycle actions
-for a prestarted endpoint but keeps endpoint preflight. Omitting both runtime
+for a prestarted endpoint but keeps endpoint preflight. With connect-only,
+`--llm-server-url URL` temporarily overrides the primary endpoint with the
+supplied HTTP(S) base URL for fresh search or resume. The GUI remembers the
+last address locally. Omitting both runtime
 paths also uses an external primary. Generation and additional endpoints remain
 externally managed. Mock mode skips endpoint preflight and model work.
 

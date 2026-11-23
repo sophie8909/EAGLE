@@ -23,7 +23,7 @@ from eagle.analysis import experiment_dashboard
 from eagle.cli.gui_launcher import INSTANCE_PATH, SHUTDOWN_PATH, supervise_gui
 from eagle.config import (
     CANDIDATE_JAVA_MODES, EVALUATION_MODES, INITIAL_POPULATION_MODES,
-    PARENT_EVALUATION_MODES, ExperimentConfig, validate_llm_server_port,
+    PARENT_EVALUATION_MODES, ExperimentConfig, normalize_llm_server_url, validate_llm_server_port,
 )
 from eagle.experiment_index import is_experiment_run_index
 from eagle.gui_data import (
@@ -41,17 +41,25 @@ IS_WINDOWS = sys.platform == "win32"
 JOB_START_ROUTES = {"/api/start", "/api/start-server", "/api/resume", "/api/watch"}
 
 
+def validate_llm_server_address(address: str | int) -> None:
+    if isinstance(address, str):
+        normalize_llm_server_url(address)
+    else:
+        validate_llm_server_port(address)
+
+
 def experiment_flags(body: dict) -> list[str]:
     flags = []
     connect_only = body.get("connect_only") is True
     if connect_only:
         flags.append("--connect-only")
-    port = body.get("llm_server_port")
-    if port is not None:
+    address = body.get("llm_server_address", body.get("llm_server_port"))
+    if address is not None:
         if not connect_only:
-            raise ValueError("An LLM server port override requires connect-only mode.")
-        validate_llm_server_port(port)
-        flags.extend(["--llm-server-port", str(port)])
+            raise ValueError("An LLM server address override requires connect-only mode.")
+        validate_llm_server_address(address)
+        option = "--llm-server-url" if isinstance(address, str) else "--llm-server-port"
+        flags.extend([option, str(address)])
     if body.get("mock") is True:
         flags.append("--mock")
     if body.get("skip_final_test") is True:
@@ -190,15 +198,20 @@ class GuiApp:
         self.server = Job(self.root, "server")
         self.match = Job(self.root, "match")
         self.analysis_export_lock = threading.Lock()
-        self.llm_port_path = self.root / "logs/gui/llm-server-port.json"
-        self.llm_port_lock = threading.Lock()
+        self.llm_address_path = self.root / "logs/gui/llm-server-address.json"
+        self.llm_address_lock = threading.Lock()
 
-    def saved_llm_port(self) -> int | None:
-        with self.llm_port_lock:
+    def saved_llm_address(self) -> str | int | None:
+        with self.llm_address_lock:
             try:
-                port = json.loads(self.llm_port_path.read_text(encoding="utf-8"))
-                validate_llm_server_port(port)
-                return port
+                try:
+                    text = self.llm_address_path.read_text(encoding="utf-8")
+                except FileNotFoundError:
+                    text = self.llm_address_path.with_name("llm-server-port.json").read_text(encoding="utf-8")
+                address = json.loads(text)
+                if address is not None:
+                    validate_llm_server_address(address)
+                return address
             except (OSError, ValueError):
                 return None
 
@@ -245,7 +258,7 @@ class GuiApp:
         maps_root = self.root / "third_party/microrts"
         return {
             "configs": config_choices(self.root), "batches": self.batch_choices(), "forms": form_options(),
-            "llm_server_port": self.saved_llm_port(),
+            "llm_server_address": self.saved_llm_address(),
             "opponents": opponents,
             "maps": sorted(path.relative_to(maps_root).as_posix() for path in (maps_root / "maps").rglob("*.xml")),
         }
@@ -274,13 +287,13 @@ class GuiApp:
         raise ValueError("Unknown API route.")
 
     def post(self, path: str, body: dict) -> dict:
-        if path == "/api/llm-server-port":
-            port = body["port"]
-            if port is not None:
-                validate_llm_server_port(port)
-            with self.llm_port_lock:
-                write_atomic_text(self.llm_port_path, json.dumps(port) + "\n")
-            return {"port": port}
+        if path == "/api/llm-server-address":
+            address = body["address"]
+            if address is not None:
+                validate_llm_server_address(address)
+            with self.llm_address_lock:
+                write_atomic_text(self.llm_address_path, json.dumps(address) + "\n")
+            return {"address": address}
         if path == "/api/analysis/view":
             return experiment_dashboard.view(self.root, self.runs_roots, body)
         if path == "/api/analysis/export":

@@ -1074,7 +1074,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             ).run(config_path=path, skip_final_test=True, connect_only=True)
             self.runtime_manager.assert_not_called()
 
-    def test_connect_only_port_reaches_fresh_and_resumed_search(self):
+    def test_connect_only_address_reaches_fresh_and_resumed_search(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path = self.config(root, "local.yaml", model_name="local", model_path=root / "missing.gguf")
@@ -1085,21 +1085,28 @@ class ExperimentLauncherTests(unittest.TestCase):
             )
             saved_config = (run_dir / "config.yaml").read_bytes()
 
-            def search(config, **_kwargs):
-                self.assertEqual(config.llm_base_url, "http://127.0.0.1:12345")
-                self.assertEqual(config.resolved_generation_model.port, 12345)
-                self.assertNotEqual(config.to_mapping()["model"]["port"], 12345)
-                return SearchResult(run_dir, [], None)
+            original_model = ExperimentConfig.from_file(path).to_mapping()["model"]
+            for override, base_url in (
+                ({"llm_server_port": 12345}, "http://127.0.0.1:12345"),
+                ({"llm_server_url": "http://192.168.1.136:1234"}, "http://192.168.1.136:1234"),
+                ({"llm_server_url": "https://[::1]:1234/proxy/v1/"}, "https://[::1]:1234/proxy"),
+            ):
+                def search(config, **_kwargs):
+                    self.assertEqual(config.llm_base_url, base_url)
+                    self.assertEqual(config.resolved_generation_model.base_url, base_url)
+                    self.assertEqual(config.to_mapping()["model"], original_model)
+                    return SearchResult(run_dir, [], None)
 
-            orchestrator = ExperimentOrchestrator(search_runner=search)
-            options = {"skip_final_test": True, "connect_only": True, "llm_server_port": 12345}
-            orchestrator.run(config_path=path, **options)
-            for target in (run_dir, root):
-                with self.subTest(target=target), patch(
-                    "eagle.evolution.resume._resume_search_impl", side_effect=search,
-                ) as resume:
-                    orchestrator.run(config_path=None, resume_dir=target, **options)
-                    resume.assert_called_once()
+                orchestrator = ExperimentOrchestrator(search_runner=search)
+                options = {"skip_final_test": True, "connect_only": True, **override}
+                with self.subTest(override=override):
+                    orchestrator.run(config_path=path, **options)
+                    for target in (run_dir, root):
+                        with self.subTest(target=target), patch(
+                            "eagle.evolution.resume._resume_search_impl", side_effect=search,
+                        ) as resume:
+                            orchestrator.run(config_path=None, resume_dir=target, **options)
+                            resume.assert_called_once()
             self.assertEqual((run_dir / "config.yaml").read_bytes(), saved_config)
             self.runtime_manager.assert_not_called()
 

@@ -176,25 +176,34 @@ use_remote_llm: true
                 self.assertNotIn("--llm-server-port", start.call_args.args[0])
                 self.app.post(route, {**body, "connect_only": True, "llm_server_port": 12345})
                 self.assertEqual(start.call_args.args[0][-3:], ["--connect-only", "--llm-server-port", "12345"])
+                address = "http://192.168.1.136:1234"
+                self.app.post(route, {**body, "connect_only": True, "llm_server_address": address})
+                self.assertEqual(start.call_args.args[0][-3:], ["--connect-only", "--llm-server-url", address])
 
-    def test_llm_server_port_persists_in_the_local_workspace(self):
-        self.assertIsNone(self.app.metadata()["llm_server_port"])
-        self.app.post("/api/llm-server-port", {"port": 12345})
+    def test_llm_server_address_persists_in_the_local_workspace(self):
+        self.assertIsNone(self.app.metadata()["llm_server_address"])
+        legacy = self.root / "logs/gui/llm-server-port.json"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("12345", encoding="utf-8")
+        self.assertEqual(self.app.metadata()["llm_server_address"], 12345)
+        address = "http://192.168.1.136:1234/v1"
+        self.app.post("/api/llm-server-address", {"address": address})
         reopened = GuiApp(self.root, self.runs)
-        self.assertEqual(reopened.metadata()["llm_server_port"], 12345)
-        for invalid in (0, 65536, True, "12345", 12345.5):
-            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "integer between"):
-                reopened.post("/api/llm-server-port", {"port": invalid})
-        self.assertEqual(reopened.metadata()["llm_server_port"], 12345)
-        reopened.post("/api/llm-server-port", {"port": None})
-        self.assertIsNone(self.app.metadata()["llm_server_port"])
+        self.assertEqual(reopened.metadata()["llm_server_address"], address)
+        for invalid in (0, 65536, True, "12345", 12345.5, "http://host:65536",
+                        "ftp://host:1234", "http://", "http://host/path?query", "http://user@host"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                reopened.post("/api/llm-server-address", {"address": invalid})
+        self.assertEqual(reopened.metadata()["llm_server_address"], address)
+        reopened.post("/api/llm-server-address", {"address": None})
+        self.assertIsNone(self.app.metadata()["llm_server_address"])
 
-    def test_llm_server_port_requires_connect_only_and_a_valid_port(self):
+    def test_llm_server_address_requires_connect_only_and_a_valid_address(self):
         with patch.object(self.app.experiment, "start") as start:
             with self.assertRaisesRegex(ValueError, "requires connect-only"):
-                self.app.post("/api/start", {"text": "{}", "llm_server_port": 12345})
-            with self.assertRaisesRegex(ValueError, "integer between"):
-                self.app.post("/api/start", {"text": "{}", "connect_only": True, "llm_server_port": 65536})
+                self.app.post("/api/start", {"text": "{}", "llm_server_address": "http://localhost:12345"})
+            with self.assertRaisesRegex(ValueError, "valid HTTP"):
+                self.app.post("/api/start", {"text": "{}", "connect_only": True, "llm_server_address": "http://"})
         start.assert_not_called()
 
     def test_duplicate_experiment_is_rejected_without_launching_second_process(self):

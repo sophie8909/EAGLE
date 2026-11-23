@@ -65,6 +65,11 @@ class CanonicalRunCliTests(unittest.TestCase):
                     "experiment", *arguments, "--connect-only", "--llm-server-port", "12345",
                 ]), 0)
                 self.assertEqual(orchestrator.return_value.run.call_args.kwargs["llm_server_port"], 12345)
+                address = "http://192.168.1.136:1234"
+                self.assertEqual(eagle_main([
+                    "experiment", *arguments, "--connect-only", "--llm-server-url", address,
+                ]), 0)
+                self.assertEqual(orchestrator.return_value.run.call_args.kwargs["llm_server_url"], address)
 
     def test_default_routing_uses_only_local_primary(self):
         config = ExperimentConfig.from_mapping({"model": {"name": "local"}})

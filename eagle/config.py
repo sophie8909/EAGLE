@@ -8,6 +8,7 @@ import math
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -82,6 +83,26 @@ def validate_llm_server_port(port: int) -> None:
         raise ValueError("LLM server port must be an integer between 1 and 65535.")
 
 
+def normalize_llm_server_url(url: str) -> str:
+    """Validate a connect-only address and return the base before the API's /v1."""
+    error = "LLM server address must be a valid HTTP(S) base URL."
+    if not isinstance(url, str):
+        raise ValueError(error)
+    value = url.strip()
+    if any(char.isspace() or char in "\\?#" for char in value):
+        raise ValueError(error)
+    try:
+        address = urlsplit(value)
+        port = address.port
+    except ValueError as exc:
+        raise ValueError(error) from exc
+    if address.scheme not in {"http", "https"} or not address.hostname or address.username is not None:
+        raise ValueError(error)
+    if port is not None:
+        validate_llm_server_port(port)
+    return address.geturl().rstrip("/").removesuffix("/v1").rstrip("/")
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     """One functional LLM endpoint, optionally backed by an owned local runtime."""
@@ -96,9 +117,12 @@ class ModelConfig:
     startup_timeout_seconds: float = 180.0
     health_timeout_seconds: float = 5.0
     additional_endpoints: tuple[LLMEndpoint, ...] = ()
+    base_url_override: str | None = field(default=None, kw_only=True)
 
     @property
     def base_url(self) -> str:
+        if self.base_url_override is not None:
+            return self.base_url_override
         host = f"[{self.host}]" if ":" in self.host else self.host
         return f"http://{host}:{self.port}"
 
@@ -164,8 +188,9 @@ class ExperimentConfig:
     use_remote_llm: bool = False
     remote_model: ModelConfig | None = None
     generation_model: ModelConfig | None = None
-    # Operational override supplied by the launcher, outside the saved config.
+    # Operational overrides supplied by the launcher, outside the saved config.
     llm_server_port: int | None = field(default=None, kw_only=True)
+    llm_server_url: str | None = field(default=None, kw_only=True)
     runs: int = 1
     generations: int = 1
     population_size: int = 4
@@ -837,9 +862,6 @@ class ExperimentConfig:
         if not self.experiment_name.strip():
             raise ValueError("experiment_name must not be empty.")
         self.model.validate()
-        if self.llm_server_port is not None:
-            validate_llm_server_port(self.llm_server_port)
-            self.active_primary_model.validate()
         if not isinstance(self.use_remote_llm, bool):
             raise ValueError("use_remote_llm must be a boolean.")
         if self.use_remote_llm and self.remote_model is None:
@@ -853,6 +875,12 @@ class ExperimentConfig:
                 )
         if self.generation_model is not None:
             self.generation_model.validate()
+        if self.llm_server_url is not None or self.llm_server_port is not None:
+            if self.llm_server_url is not None and self.llm_server_port is not None:
+                raise ValueError("Specify either an LLM server URL or a port override.")
+            if self.llm_server_port is not None:
+                validate_llm_server_port(self.llm_server_port)
+            self.active_primary_model.validate()
         if self.runs < 1:
             raise ValueError("runs must be at least 1.")
         if self.random_seeds and len(set(self.random_seeds)) != len(self.random_seeds):
@@ -1272,7 +1300,9 @@ class ExperimentConfig:
             if self.remote_model is None:
                 raise ValueError("use_remote_llm=true requires remote_model.")
             model = self.remote_model
-        if self.llm_server_port is not None:
+        if self.llm_server_url is not None:
+            model = replace(model, base_url_override=normalize_llm_server_url(self.llm_server_url))
+        elif self.llm_server_port is not None:
             model = replace(model, port=self.llm_server_port)
         return model
 

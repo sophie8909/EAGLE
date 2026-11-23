@@ -136,9 +136,10 @@ bounded logs, observation command construction without fitness writes, and
 loopback Host/Origin/token guards. Observation can read canonical historical
 runs without applying current resume-only runtime validation. Adapter tests
 cover WorkerRush and SafeAllInBot classpaths and temporary compilation wiring.
-Connect-only port tests cover local preference reload and clearing, range
-validation, CLI forwarding, and fresh, single-run, and batch endpoint overrides
-without editing the saved experiment definition.
+Connect-only address tests cover full HTTP(S) URLs, local preference reload
+and clearing, compatibility with saved numeric ports, validation, CLI forwarding,
+and fresh, single-run, and batch endpoint overrides without editing the saved
+experiment definition.
 Platform checks cover POSIX session/stop behavior, Windows owned console group
 creation and Ctrl+Break dispatch, UTF-8 child logs, and portable map paths.
 The launcher reattaches to the same loopback service after closure. Its Ctrl+C

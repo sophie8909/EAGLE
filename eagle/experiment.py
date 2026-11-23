@@ -8,7 +8,7 @@ from typing import Callable
 
 import yaml
 
-from eagle.config import ExperimentConfig, validate_llm_server_port
+from eagle.config import ExperimentConfig, normalize_llm_server_url, validate_llm_server_port
 from eagle.runtime import RuntimeManager, runtime_config_from_experiment
 from eagle.experiment_index import (
     EXPERIMENT_INDEX_SCHEMA_VERSION,
@@ -259,11 +259,19 @@ class ExperimentOrchestrator:
         skip_final_test: bool = False,
         connect_only: bool = False,
         llm_server_port: int | None = None,
+        llm_server_url: str | None = None,
     ) -> SearchResult:
-        if llm_server_port is not None:
-            if not connect_only:
-                raise ValueError("An LLM server port override requires --connect-only.")
+        if llm_server_url is not None and llm_server_port is not None:
+            raise ValueError("Specify either an LLM server URL or a port override.")
+        llm_options = {}
+        if llm_server_url is not None:
+            normalize_llm_server_url(llm_server_url)
+            llm_options["llm_server_url"] = llm_server_url
+        elif llm_server_port is not None:
             validate_llm_server_port(llm_server_port)
+            llm_options["llm_server_port"] = llm_server_port
+        if llm_options and not connect_only:
+            raise ValueError("An LLM server override requires --connect-only.")
         manager = None
 
         def ensure_runtime(config: ExperimentConfig) -> None:
@@ -276,14 +284,13 @@ class ExperimentOrchestrator:
                 print("LLM server: ready", flush=True)
 
         def resume_run(run_dir: Path) -> SearchResult:
-            options = {} if llm_server_port is None else {"llm_server_port": llm_server_port}
-            return self.resume_runner(None, run_dir=run_dir, mock=mock, **options)
+            return self.resume_runner(None, run_dir=run_dir, mock=mock, **llm_options)
 
         try:
             return self._run(
                 config_path=config_path, resume_dir=resume_dir, mock=mock,
                 skip_final_test=skip_final_test, ensure_runtime=ensure_runtime,
-                llm_server_port=llm_server_port, resume_run=resume_run,
+                llm_options=llm_options, resume_run=resume_run,
             )
         finally:
             if manager is not None:
@@ -293,7 +300,7 @@ class ExperimentOrchestrator:
         self, *, config_path: Path | None, resume_dir: Path | None,
         mock: bool, skip_final_test: bool,
         ensure_runtime: Callable[[ExperimentConfig], None],
-        llm_server_port: int | None, resume_run: Callable[[Path], SearchResult],
+        llm_options: dict[str, str | int], resume_run: Callable[[Path], SearchResult],
     ) -> SearchResult:
         if resume_dir is not None:
             resume_dir = resume_dir.expanduser().resolve()
@@ -314,14 +321,14 @@ class ExperimentOrchestrator:
                     mock=mock,
                     skip_final_test=skip_final_test,
                     ensure_runtime=ensure_runtime,
-                    llm_server_port=llm_server_port,
+                    llm_options=llm_options,
                     resume_run=resume_run,
                 )
             persisted = load_resume_config(resume_dir)
             if config_path is not None:
                 requested = ExperimentConfig.from_file(resolve_experiment_config(config_path))
                 validate_resume_config(requested, persisted, mock=mock)
-            config = replace(persisted, llm_server_port=llm_server_port)
+            config = replace(persisted, **llm_options)
             config.validate()
             manifest_path = resume_dir / "manifest.json"
             latest_generation = load_manifest(resume_dir).get("latest_generation") if manifest_path.is_file() else None
@@ -352,7 +359,7 @@ class ExperimentOrchestrator:
         last_result: SearchResult | None = None
         for index, resolved_path in enumerate(config_paths, start=1):
             print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
-            config = replace(ExperimentConfig.from_file(resolved_path), llm_server_port=llm_server_port)
+            config = replace(ExperimentConfig.from_file(resolved_path), **llm_options)
             print(f"Reflection model: {config.active_primary_model.name}")
             print(f"Generation model: {config.resolved_generation_model.name}")
             print(f"Survivor selection: {config.survivor_selection} lexicase")
@@ -408,7 +415,7 @@ class ExperimentOrchestrator:
         mock: bool,
         skip_final_test: bool,
         ensure_runtime: Callable[[ExperimentConfig], None],
-        llm_server_port: int | None,
+        llm_options: dict[str, str | int],
         resume_run: Callable[[Path], SearchResult],
     ) -> SearchResult:
         """Resume an interrupted folder batch, then run remaining configs."""
@@ -419,7 +426,7 @@ class ExperimentOrchestrator:
         jobs: list[tuple[Path, int, ExperimentConfig, Path | None]] = []
         shared_frameworks: dict[Path, ExperimentConfig] = {}
         for path in discovered_paths:
-            config = replace(ExperimentConfig.from_file(path), llm_server_port=llm_server_port)
+            config = replace(ExperimentConfig.from_file(path), **llm_options)
             config.validate()
             run_dirs = indexed_runs.get(path.name, [])
             if len(run_dirs) > config.total_runs:
