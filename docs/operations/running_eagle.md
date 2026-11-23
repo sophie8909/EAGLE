@@ -46,13 +46,15 @@ self-play run also needs the runtime and paths recorded in its checkpoint.
 ## Local experiment GUI
 
 Check the default WSL distribution with `wsl.exe --list --verbose` from
-PowerShell. If none is installed, run `wsl.exe --install -d Ubuntu-24.04`
-from an administrator PowerShell, restart if prompted, and open the distribution
-once to create your Linux user. See the
+PowerShell. If none is installed, run `wsl.exe --list --online` and copy an
+available distribution's exact `NAME`. Run `wsl.exe --install -d NAME` from
+an administrator PowerShell, substituting that name. Restart if prompted and
+open the distribution once to create your Linux user. See the
 [WSL installation guide](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 Before opening `gui.cmd` from Windows, prepare the checkout's Linux virtual
-environment in the default WSL distribution. These commands are for Ubuntu 24.04.
+environment in the default WSL distribution. EAGLE requires Python 3.10–3.13.
+On Ubuntu, run the following commands.
 
 ```bash
 sudo apt update
