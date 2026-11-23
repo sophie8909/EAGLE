@@ -898,8 +898,7 @@ Framework-slot mode uses `candidate_java_mode: generated_phenotype`,
 `parent_evaluation_mode: reuse_cached`, `reflection_operator_mode: static`, and
 protocol/materializer version `eagle-framework-slots-v1`. The default
 `framework.evolution_mode: local` performs no candidate-time LLM request by
-default; the bounded `gpt_initial_candidates` Gen-0 extension is the sole
-exception. The
+default and permits opt-in LLM initialization and Weakest Matchup Repair. The
 opt-in `llm_coach` mode uses the configured experiment model for initial
 complete-genome selection. With legacy `coach_offspring_probability: null`, it
 also uses the existing one-worst-match Commentator/Coach Strategy path after
@@ -930,6 +929,15 @@ after initialization. The resolved count is persisted and resume-fenced. Raw
 request/response, timing, complete genome, bundle hash, and validation outcome
 are retained under the candidate initialization owner; invalid or exhausted
 selection fails initialization without random/default fallback.
+
+`framework.weakest_matchup_repair_interval` defaults to `0` and is resume-fenced.
+A positive interval enables [Weakest Matchup Repair](architecture/framework_slots.md#weakest-matchup-repair)
+for local framework-slot self-play. After ordinary parent-plus-offspring
+selection at each completed positive multiple of the interval, the configured
+experiment model proposes one new individual against the survivors' lowest
+pooled win-rate opponent. A fully evaluated proposal takes the lowest
+Game Performance seat within the score-ranked prefix. The diversity seats
+keep their selected occupants.
 
 For a provider-free replay, `framework.initial_genomes` may instead provide an
 ordered list of complete frozen-bundle genome mappings. It is valid only with

@@ -18,6 +18,13 @@ initialization, Coach selection, description persistence and parent-A inheritanc
 remain regression requirements. Live LLM quality and match performance are not
 certified by mock/unit checks.
 
+## Weakest Matchup Repair (2026-11-23)
+
+`test_weakest_matchup_repair` covers baseline config equivalence, matchup
+aggregation and seeded ties, frozen-bundle response validation and attempt
+artifacts, the G5 replacement restricted to the lowest Game Performance seat,
+and checkpoint/resume with both diversity seats intact.
+
 ## Frozen-framework option reflection (2026-10-28)
 
 `test_framework_slots_candidate_config` covers `option_reflection`

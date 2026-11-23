@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from eagle.candidate import Candidate
+from eagle.candidate import Candidate, has_completed_evaluation
 from eagle.config import ExperimentConfig
 from eagle.evaluation.pipeline import evaluate_population
 from eagle.evaluation.determinism import derive_seed
@@ -25,11 +25,14 @@ from eagle.evolution.parent_refresh import (
     write_parent_evaluation_sidecar,
     write_self_play_parent_refresh_sidecar,
 )
+from eagle.evolution.weakest_matchup_repair import OPERATION as WMR_OPERATION, propose_matchup_repair
 from eagle.generation.backend import ExistingJavaPhenotypeBackend
 from eagle.operators.adaptive import ReflectionOperatorController
-from eagle.operators.selection import population_signature, select_next_generation
+from eagle.operators.selection import (
+    population_signature, select_next_generation, self_play_performance_seat_count,
+)
 from eagle.operators.strategy import cleanup_retired_match_traces
-from eagle.run_artifacts import record_error_memory, record_generation
+from eagle.run_artifacts import atomic_json, record_error_memory, record_generation
 from eagle.opponent_pool import PoolMember, select_pool_opponents, update_pool
 from eagle.self_play import (
     assert_shared_self_play_context,
@@ -229,8 +232,6 @@ def run_generation_step(
             [*(parent_replicas or population), *evaluated_offspring]
         )
     archive_before = archive_niches(run_dir)
-    update_strategy_archive(run_dir, selection_candidates)
-    error_memory = record_error_memory(run_dir, selection_candidates)
     next_population = select_next_generation(
         parent_replicas if parent_replicas else population,
         evaluated_offspring,
@@ -238,6 +239,45 @@ def run_generation_step(
         rng=random.Random(derive_seed(config.random_seed, "evolution", generation, "survivors")),
         selection_mode=config.algorithm,
     )
+    repair = None
+    interval = config.framework_weakest_matchup_repair_interval
+    if interval and generation > 0 and generation % interval == 0:
+        assert self_play_opponent_snapshot is not None
+        artifact_dir = run_dir / "generations" / f"generation_{generation:04d}_{WMR_OPERATION}"
+        proposal = propose_matchup_repair(
+            population=next_population, snapshot=self_play_opponent_snapshot, config=config,
+            generation=generation, run_dir=run_dir, artifact_dir=artifact_dir,
+            client=shared_client, mock=mock,
+        )
+        seat = self_play_performance_seat_count(len(next_population)) - 1
+        incumbent = next_population[seat]
+        status = "proposal_failed"
+        if proposal is not None:
+            [repair] = evaluate_population(
+                [proposal], generation=generation, config=config, backend=generation_backend,
+                generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
+                candidates_dir=candidates_dir, mock=mock, llm_client=generation_client,
+                run_timing_path=run_dir / "timing.jsonl", run_id=run_id,
+                opponent_candidates=self_play_opponent_snapshot,
+            )
+            selection_candidates.append(repair)
+            status = "evaluation_failed"
+            if has_completed_evaluation(repair):
+                assert_shared_self_play_context([*next_population, repair])
+                next_population[seat] = repair
+                status = "replaced"
+        atomic_json(artifact_dir / "result.json", {
+            "generation": generation, "status": status,
+            "candidate_id": repair.id if repair is not None else None,
+            "game_performance_seat_index": seat,
+            "incumbent_id": incumbent.id,
+            "replaced_candidate_id": incumbent.id if status == "replaced" else None,
+            "failure_stage": repair.failure_stage if repair is not None else None,
+            "failure_reason": repair.failure_reason if repair is not None else None,
+        })
+        print(f"Generation {generation}: WMR {status}", flush=True)
+    update_strategy_archive(run_dir, selection_candidates)
+    error_memory = record_error_memory(run_dir, selection_candidates)
     next_signature = population_signature(
         next_population,
         selection_mode=config.algorithm,
@@ -269,7 +309,8 @@ def run_generation_step(
                 selected_ids={candidate.id for candidate in next_population},
             )
     if config.evaluation_mode == "self_play":
-        update_pool(run_dir, evaluated_offspring, generation=generation, config=config, mock=mock)
+        births = evaluated_offspring if repair is None else [*evaluated_offspring, repair]
+        update_pool(run_dir, births, generation=generation, config=config, mock=mock)
     append_event(
         run_dir / "timing.jsonl",
         build_generation_event(

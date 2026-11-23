@@ -168,6 +168,11 @@ def population_signature(
     return tuple(sorted(candidate.objective_vector() for candidate in population))
 
 
+def self_play_performance_seat_count(population_size: int) -> int:
+    """Return the size of the score-ranked prefix before diversity seats."""
+    return population_size - min(2, max(0, population_size - 1))
+
+
 def _select_scalar_survivors(
     available: list[Candidate],
     *,
@@ -176,15 +181,12 @@ def _select_scalar_survivors(
 ) -> list[Candidate]:
     """Keep score leaders and rank diversity against those fixed references."""
 
-    if population_size == 0:
-        return []
-    diversity_seats = min(2, population_size - 1)
-    elite_count = population_size - diversity_seats
+    elite_count = self_play_performance_seat_count(population_size)
     ranked = sorted(available, key=_game_performance, reverse=True)
     elites = ranked[:elite_count]
     remaining = ranked[elite_count:]
     selected = list(elites)
-    for _ in range(diversity_seats):
+    for _ in range(population_size - elite_count):
         chosen = _choose_by_semantic_distance(remaining, elites, rng)
         selected.append(chosen)
         remaining = [candidate for candidate in remaining if candidate.id != chosen.id]

@@ -193,6 +193,7 @@ class ExperimentConfig:
     framework_bundle_sha256: str | None = None
     framework_initial_strategy_mode: str = "authored"
     framework_evolution_mode: str = "local"
+    framework_weakest_matchup_repair_interval: int = 0
     framework_coach_offspring_probability: float | None = None
     # A bounded prefix of generation zero can be selected by the direct GPT
     # API while all later framework-slot evolution remains seeded local EA.
@@ -526,6 +527,9 @@ class ExperimentConfig:
             framework_bundle_sha256=framework_bundle_sha256,
             framework_initial_strategy_mode=str((payload.get("framework") or {}).get("initial_strategy_mode", "authored")),
             framework_evolution_mode=str((payload.get("framework") or {}).get("evolution_mode", "local")),
+            framework_weakest_matchup_repair_interval=_parse_wmr_interval(
+                (payload.get("framework") or {}).get("weakest_matchup_repair_interval", 0)
+            ),
             framework_coach_offspring_probability=(
                 None if (payload.get("framework") or {}).get("coach_offspring_probability") is None
                 else float(payload["framework"]["coach_offspring_probability"])
@@ -677,6 +681,15 @@ class ExperimentConfig:
             raise ValueError(
                 f"framework.evolution_mode={self.framework_evolution_mode} requires "
                 "evaluation.mode=self_play."
+            )
+        if _parse_wmr_interval(self.framework_weakest_matchup_repair_interval) and (
+            self.java_materialization_mode != "framework_slots"
+            or self.framework_evolution_mode != "local"
+            or self.evaluation_mode != "self_play"
+        ):
+            raise ValueError(
+                "framework.weakest_matchup_repair_interval requires framework_slots, "
+                "framework.evolution_mode=local, and evaluation.mode=self_play."
             )
         if self.framework_initial_strategy_mode not in {"authored", "llm_plus_authored"}:
             raise ValueError("framework.initial_strategy_mode must be authored or llm_plus_authored.")
@@ -1198,6 +1211,10 @@ class ExperimentConfig:
         if self.java_materialization_mode == "framework_slots":
             mapping.pop("strategy_policy_format", None)
             mapping["framework"] = {"evolution_mode": self.framework_evolution_mode}
+            if self.framework_weakest_matchup_repair_interval:
+                mapping["framework"]["weakest_matchup_repair_interval"] = (
+                    self.framework_weakest_matchup_repair_interval
+                )
             if self.framework_initial_strategy_mode != "authored":
                 mapping["framework"]["initial_strategy_mode"] = self.framework_initial_strategy_mode
             if self.framework_coach_offspring_probability is not None:
@@ -1309,6 +1326,7 @@ class ExperimentConfig:
                 }
                 or self.framework_initial_strategy_mode == "llm_plus_authored"
                 or self.framework_qwen_initial_candidates > 0
+                or self.framework_weakest_matchup_repair_interval > 0
                 or (
                     self.framework_bundle_path is None
                     and self.framework_bootstrap_backend == "local"
@@ -1404,6 +1422,12 @@ def _parse_prompt_files(
     return tuple(paths)
 
 
+def _parse_wmr_interval(value: object) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError("framework.weakest_matchup_repair_interval must be a non-negative integer.")
+    return value
+
+
 def _parse_framework_gpt_initial_candidates(value: object) -> int:
     """Parse a strictly integral bounded initial-selection count."""
 
@@ -1458,6 +1482,7 @@ def _parse_framework_bundle(
             "bundle_path", "bundle_version", "bundle_sha256", "evolution_mode",
             "coach_offspring_probability", "gpt_initial_candidates", "qwen_initial_candidates", "initial_genomes", "bootstrap_backend", "initial_strategy_mode",
             "bootstrap_scope", "bootstrap_max_attempts", "design_brief", "model",
+            "weakest_matchup_repair_interval",
         })
     )
     if unknown:

@@ -1,0 +1,25 @@
+ROLE: weakest_matchup_repair
+
+Design one MicroRTS individual to improve play against the target opponent in the evidence.
+Compare the survivors' results against that opponent. Use their wins, draws, losses, map results,
+and genomes to explain which choices may help in this matchup. Treat the strategy descriptions
+as intent and the slot selections as the actual controls. Qualify any hypothesis the evidence
+cannot establish. Then propose one coherent strategy and select every slot that implements it.
+Prefer a new combination that addresses the target's strengths while remaining usable on the
+other maps and sides. Use only legal values from the frozen framework. Return only the JSON
+object required by the response schema.
+
+MicroRTS gameplay contract:
+$gameplay_contract
+
+Frozen framework:
+$framework_bundle
+
+Target matchup and survivor evidence:
+$matchup_evidence
+
+Previous attempt error:
+$previous_error
+
+Response schema:
+$response_schema

@@ -19,6 +19,7 @@ CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v5"
 FRAMEWORK_SLOTS_MATERIALIZATION_VERSION = "eagle-framework-slots-v1"
 FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION = "eagle-candidate-v8"
 FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION = "4.0"
+WEAKEST_MATCHUP_REPAIR_OPERATOR = "weakest_matchup_repair"
 
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
@@ -449,6 +450,7 @@ def compact_candidate_metadata(
         "initial_policy_source",
         "initial_policy_sample_index",
         "framework_reproduction_route",
+        WEAKEST_MATCHUP_REPAIR_OPERATOR,
         "experimental_parent_evaluation",
         "failure_category",
         "failure_reason",

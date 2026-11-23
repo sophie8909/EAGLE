@@ -1,5 +1,13 @@
 # Current implementation status
 
+## 1122-WMR (2026-11-23)
+
+The 1122 baseline and its WMR variant share the 1 GPT + 9 Qwen initialization,
+frozen framework, and local EA. The [WMR contract](../architecture/framework_slots.md#weakest-matchup-repair)
+adds a five-generation post-selection repair driven by the ten survivors' worst
+pooled matchup. The proposal can take only the lowest Game Performance seat
+among the eight score-ranked survivors. The resolved interval is resume-fenced.
+
 ## All-ten GPT initialization (2026-11-05)
 
 The tracked `1104_description_guided` config now selects all ten initial genomes

@@ -63,7 +63,11 @@ def _result_version_folder(config: ExperimentConfig) -> str:
         if config.evaluation_mode == "self_play"
         else "opponent_wise_lexicase_per_generation"
     )
-    if config.framework_evolution_mode == "local" and config.framework_qwen_initial_candidates:
+    if config.framework_weakest_matchup_repair_interval:
+        reflection = (
+            f"weakest_matchup_repair_every_{config.framework_weakest_matchup_repair_interval}_generations"
+        )
+    elif config.framework_evolution_mode == "local" and config.framework_qwen_initial_candidates:
         reflection = "no_reflection"
     elif config.framework_evolution_mode == "option_reflection":
         reflection = "option_reflection_every_5_generations"

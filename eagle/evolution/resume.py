@@ -141,6 +141,10 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
             framework = payload["framework"]
             if manifest.get("framework_evolution_mode", "local") != framework.get("evolution_mode", "local"):
                 raise ValueError("Resume config/manifest framework evolution mode mismatch.")
+            if manifest.get("framework_weakest_matchup_repair_interval", 0) != (
+                persisted_config.framework_weakest_matchup_repair_interval
+            ):
+                raise ValueError("Resume config/manifest weakest matchup repair interval mismatch.")
             if manifest.get("framework_coach_offspring_probability") != framework.get("coach_offspring_probability"):
                 raise ValueError("Resume config/manifest framework Coach offspring probability mismatch.")
             if manifest.get("framework_initial_strategy_mode", "authored") != framework.get("initial_strategy_mode", "authored"):

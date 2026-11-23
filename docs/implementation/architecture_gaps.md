@@ -1,5 +1,12 @@
 # Architecture gaps
 
+## 1122-WMR (2026-11-23)
+
+The 1122-WMR decision uses the lowest Game Performance score within the ordinary
+score-selected prefix as the replacement target, preserving both diversity
+seats. The [WMR contract](../architecture/framework_slots.md#weakest-matchup-repair)
+specifies the transition. Live matchup improvement remains an experiment question.
+
 ## All-ten direct-GPT initial selection (2026-11-05)
 
 The requested ten description-guided GPT selections reuse the existing local-mode

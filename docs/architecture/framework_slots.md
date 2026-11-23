@@ -574,7 +574,38 @@ pre-generation startup checkpoint or an atomic generation, reloads the relevant
 active run-owned bundle, verifies its byte hash and version,
 and rejects external bundle drift rather than silently adopting it.
 
-## Unchanged downstream semantics
+## Weakest Matchup Repair
+
+The `1122-wmr` treatment uses the same frozen framework, one direct GPT and nine
+Qwen Gen-0 selections, and seeded local EA as its 1122 baseline. It sets
+`framework.weakest_matchup_repair_interval: 5`. The interval is independent of
+opponent refresh: WMR runs after G5, G10, and subsequent multiples, including a
+terminal multiple. The G6/G11 opponent refresh and parent evaluation still run
+at the start of those generations.
+
+1. Complete ordinary parent-plus-offspring selection against the current immutable
+   self-play snapshot. Use the ten selected survivors' complete opponent matrices.
+2. For each snapshot opponent, divide the survivors' total wins by their total
+   completed matches. Draws and losses count as matches. Resolve exact ties
+   through a separate generation-specific seeded draw over the tied slot IDs.
+3. Ask the configured experiment model (local Qwen in `1122-wmr`) to reflect on
+   the target and propose one strategy description and complete legal slot genome
+   pinned to the run's exact-byte bundle hash. Opponent evidence includes W/D/L,
+   per-map results, and the identity pinned by the snapshot. Each survivor
+   supplies its description, genome, and target-opponent result.
+4. Materialize and evaluate the proposal against that same snapshot through the
+   normal candidate pipeline. On success it takes the last score-ranked seat
+   (eighth of ten) regardless of its own score. The two diversity seats retain
+   their occupants. Exhausted proposal attempts or a failed evaluation retain
+   the original ten. The committed generation contains the resulting ten.
+
+Local reproduction continues through the ordinary EA operators in every
+generation. The WMR candidate has its own identity and lists the survivors in
+its evidence metadata. WMR does not assign inherited slot provenance. The
+[artifact schema](../artifacts/artifact_schema.md#weakest-matchup-repair) defines
+the audit record.
+
+## Downstream semantics
 
 Framework slots change only genotype construction and deterministic Java
 materialization. They do not change the Java security envelope, compiler or

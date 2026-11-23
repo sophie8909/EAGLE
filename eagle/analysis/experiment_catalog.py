@@ -167,6 +167,7 @@ def _comparison_metadata(path: Path) -> dict[str, str]:
     gpt_count = int(framework.get("gpt_initial_candidates", 0) or 0)
     qwen_count = int(framework.get("qwen_initial_candidates", 0) or 0)
     mode = str(framework.get("evolution_mode", "local"))
+    wmr_interval = int(framework.get("weakest_matchup_repair_interval", 0) or 0)
     initial_genomes = framework.get("initial_genomes") or ()
     generations = int(config.get("generations", 1))
     if gpt_count and qwen_count:
@@ -221,6 +222,10 @@ def _comparison_metadata(path: Path) -> dict[str, str]:
         evolution = "僅初始化"
         evolution_id = "initialization_only"
         local_llm = "no"
+    elif wmr_interval:
+        evolution = "Weakest Matchup Repair"
+        evolution_id = "weakest_matchup_repair"
+        local_llm = _model_location(primary)
     elif mode in {"reflection", "option_reflection"} or (
         mode == "llm_coach" and float(framework.get("coach_offspring_probability", 1.0)) > 0
     ):
@@ -247,7 +252,10 @@ def _comparison_metadata(path: Path) -> dict[str, str]:
     if config.get("execution_mode") in {"mock", "offline_mock"}:
         local_llm = "no"
 
-    if mode == "option_reflection":
+    if wmr_interval and generations > 0:
+        reflection = f"每 {wmr_interval} 代留存後：Weakest Matchup Repair"
+        reflection_id = f"weakest_matchup_repair_every_{wmr_interval}_generations"
+    elif mode == "option_reflection":
         reflection = "每 5 代邊界（G6、G11…）：Option Reflection"
         reflection_id = "option_reflection_every_5_generations"
     elif mode == "reflection":
@@ -273,6 +281,7 @@ def _comparison_metadata(path: Path) -> dict[str, str]:
     chart_evolution = {
         "initialization_only": "Init only", "local_ea": "EA only", "llm_coach": "LLM Coach",
         "reflection": "Framework Reflection", "option_reflection": "Option Reflection",
+        "weakest_matchup_repair": "WMR",
         "llm_generation": "LLM Java", "unknown": "Evolution unknown",
     }[evolution_id]
     framework_hash = str(framework.get("bundle_sha256") or "unknown")

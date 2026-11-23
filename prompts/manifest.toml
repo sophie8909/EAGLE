@@ -234,3 +234,9 @@ file = "framework_initial_strategy.txt"
 role = "seed"
 stages = ["population_initialization"]
 required_variables = ["gameplay_contract", "framework_bundle", "existing_strategies"]
+
+[prompts.weakest_matchup_repair]
+file = "weakest_matchup_repair.txt"
+role = "coach"
+stages = ["weakest_matchup_repair"]
+required_variables = ["gameplay_contract", "framework_bundle", "matchup_evidence", "previous_error", "response_schema"]

@@ -20,6 +20,7 @@ from eagle.candidate import (
     FRAMEWORK_SLOTS_CANDIDATE_SCHEMA_VERSION,
     FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION,
     FRAMEWORK_SLOTS_MATERIALIZATION_VERSION,
+    WEAKEST_MATCHUP_REPAIR_OPERATOR,
     Candidate,
     has_completed_evaluation,
 )
@@ -365,6 +366,11 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "framework_bundle_sha256": config.framework_bundle_sha256 if config.java_materialization_mode == "framework_slots" else None,
             "framework_bundle_artifact": FRAMEWORK_BUNDLE_ARTIFACT if config.java_materialization_mode == "framework_slots" else None,
             "framework_evolution_mode": config.framework_evolution_mode if config.java_materialization_mode == "framework_slots" else None,
+            "framework_weakest_matchup_repair_interval": (
+                config.framework_weakest_matchup_repair_interval
+                if config.java_materialization_mode == "framework_slots"
+                else None
+            ),
             "framework_coach_offspring_probability": config.framework_coach_offspring_probability if config.java_materialization_mode == "framework_slots" else None,
             "framework_initial_strategy_mode": config.framework_initial_strategy_mode if config.java_materialization_mode == "framework_slots" else None,
             "framework_gpt_initial_candidates": config.framework_gpt_initial_candidates if config.java_materialization_mode == "framework_slots" else None,
@@ -1104,12 +1110,16 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
             raise ValueError("Invalid framework_slots slot provenance.")
         slot_ids = set(bundle.slot_ids)
         generation = int(payload.get("generation") or 0)
-        if generation == 0:
+        parent_ids = tuple(payload.get("parent_ids") or ())
+        is_matchup_repair = payload.get("operator") == WEAKEST_MATCHUP_REPAIR_OPERATOR
+        if is_matchup_repair:
+            if generation <= 0 or parent_ids or slot_parent_ids:
+                raise ValueError("WMR candidates require a positive generation and no parent provenance.")
+        elif generation == 0:
             if slot_parent_ids:
                 raise ValueError("Generation-zero framework candidate has parent provenance.")
         elif set(slot_parent_ids) != slot_ids:
             raise ValueError("Framework candidate provenance must cover every slot.")
-        parent_ids = tuple(payload.get("parent_ids") or ())
         if any(parent_id not in parent_ids for parent_id in slot_parent_ids.values()):
             raise ValueError("Framework slot provenance references a non-parent candidate.")
         expected_sources = tuple(dict.fromkeys(
@@ -1119,6 +1129,11 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
             raise ValueError("Framework source candidate IDs/provenance mismatch.")
 
         lineage = object_json("lineage.json")
+        if is_matchup_repair and (
+            lineage.get("operator") != WEAKEST_MATCHUP_REPAIR_OPERATOR
+            or lineage.get("parent_ids") != []
+        ):
+            raise ValueError("WMR candidate lineage must record its operator and empty parent IDs.")
         lineage_fences = (
             ("lineage_schema_version", FRAMEWORK_SLOTS_LINEAGE_SCHEMA_VERSION),
             ("candidate_id", candidate_id),

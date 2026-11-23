@@ -99,3 +99,8 @@ with operator `framework_option_reflection` and metadata scope
 empty, and every candidate remains pinned to the root bundle hash. Coach-changed
 values do not rewrite the pre-transition slot provenance to claim inheritance
 from another individual.
+
+Weakest Matchup Repair creates an independent candidate with empty `parent_ids`,
+`slot_parent_ids`, and `source_candidate_ids`. Its `weakest_matchup_repair`
+metadata records the selected survivors as evidence, links the target and
+generation evidence, and the generation sidecar records the displaced seat.

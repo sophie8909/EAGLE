@@ -280,8 +280,8 @@ work; Match Commentator and Coach use their existing role timing owners. The
 candidate `reflection_llm` envelope retains the actual role attempts and their
 summed duration so generation LLM aggregates include these calls. These
 calls do not populate `generation_llm`, which remains null with empty attempts
-because no Java Generator runs. Local framework evolution has no LLM attempts or
-request events. In framework `reflection`, whole-framework requests and repair
+because no Java Generator runs. The ordinary local EA operators have no LLM
+attempts or request events. In framework `reflection`, whole-framework requests and repair
 attempts, boundary strategy-revision, and separate batch framework-Coach fill
 calls retain their own run-level
 request/timing evidence and are not candidate mutation or Java-generation
@@ -298,3 +298,8 @@ boundaries, monotonic duration, model/backend, status, and the previous repair
 diagnostic. Compilation-gate time remains inside that outer transition attempt,
 while request events retain request-only durations. No framework-generation
 timing event or candidate mutation LLM envelope is produced.
+
+Weakest Matchup Repair emits one `weakest_matchup_repair` LLM request event per
+proposal attempt, with the proposed candidate ID, generation, endpoint, seed,
+and attempt outcome. The candidate's normal evaluation timing joins the
+generation once evaluated. Proposal timing remains in its generation sidecar.

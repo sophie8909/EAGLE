@@ -1,5 +1,11 @@
 # Architecture traceability matrix
 
+## Weakest Matchup Repair (2026-11-23)
+
+| Contract | Owner | Verification |
+| --- | --- | --- |
+| [WMR post-selection transition](../architecture/framework_slots.md#weakest-matchup-repair) | `eagle/evolution/generation.py`, `eagle/evolution/weakest_matchup_repair.py`, `eagle/config.py` | `test_weakest_matchup_repair` |
+
 ## Description-guided initialization (2026-11-04)
 
 FWSLOT-05 is owned by [framework slots](../architecture/framework_slots.md).

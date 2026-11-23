@@ -690,6 +690,20 @@ inherited Java is inactive compatibility data and does not determine source.
 Resume rejects mode/protocol mismatch and unsupported compiler versions before
 replay; an absent field in an old config means `llm`.
 
+## Weakest Matchup Repair
+
+`generations/generation_<nnnn>_weakest_matchup_repair/evidence.json` records the
+derived tie-break seed, exact win and completed-match counts by opponent slot,
+the target and tied slots, and the selected survivors' target-opponent evidence.
+`attempts/attempt_<nnn>/` retains `request.txt`, any available `response_raw.txt`,
+and `result.json` with model, route, sampling seed, validation status, error,
+and timing. The generation sidecar's `result.json` records the proposed
+candidate, target Game Performance seat and incumbent, actual replacement, and
+evaluation failure details where applicable. The main generation checkpoint
+contains the final survivors. A WMR candidate uses the ordinary candidate
+artifacts and operator `weakest_matchup_repair`. Resume archives sidecars beyond
+the last committed generation with other interrupted generation artifacts.
+
 ## Framework bootstrap
 
 Inline bootstrap stores these artifacts under `<run_dir>/framework/`; the standalone command uses its selected output directory. They are run preparation evidence and do not live inside a candidate:
