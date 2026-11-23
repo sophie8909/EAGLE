@@ -43,12 +43,11 @@ This document owns the LLM-mode `eagle-run-v2`, `eagle-generation-v3`, and `eagl
 ## Run root
 
 GUI-facing fresh runs are grouped as `runs/<version>/seed_<seed>/<attempt>/`.
-The version is the resolved `experiment_name`; each attempt keeps its own
-canonical `eagle-run-v2` directory, so repeated runs with the same seed are
-never overwritten. Explicit `run_id` callers may continue to place a run at
-the supplied legacy root for compatibility. A GPT initial-framework
-single-generation run is likewise an independent attempt and can use its own
-version label such as `gpt_initial_framework`.
+The version groups resolved initialization, selection, and reflection choices.
+On Windows, long version labels use a short initialization prefix and a digest
+of the full version label, leaving room for nested candidate and Java paths.
+Each attempt keeps its own canonical `eagle-run-v2` directory. Explicit
+`run_id` callers may continue to place a run at the supplied legacy root.
 
 ```text
 runs/<version>/seed_<seed>/<attempt>/

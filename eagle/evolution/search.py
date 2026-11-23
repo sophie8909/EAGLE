@@ -6,6 +6,8 @@ iteration and finalization; evaluation owns the child pipeline.
 
 from __future__ import annotations
 
+import hashlib
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -39,6 +41,9 @@ from eagle.strategy_diversity import (
     update_strategy_archive,
 )
 from eagle.timing import Stopwatch, append_event, build_generation_event
+
+
+_WINDOWS = sys.platform == "win32"
 
 
 def _result_version_folder(config: ExperimentConfig) -> str:
@@ -84,7 +89,13 @@ def _new_run_directory(config: ExperimentConfig, active_run_id: str, run_id: str
     # Explicit IDs are used by tests, forks, and callers that own their layout.
     if run_id is not None:
         return config.runs_dir / active_run_id
-    return config.runs_dir / _result_version_folder(config) / f"seed_{config.random_seed}" / active_run_id
+    version = _result_version_folder(config)
+    if _WINDOWS and len(version) > 38:
+        # Leave room for nested candidate and Java artifacts under a Windows checkout.
+        initialization = version.split("__", 1)[0][:24].rstrip("_")
+        digest = hashlib.sha256(version.encode("utf-8")).hexdigest()[:12]
+        version = f"{initialization}__{digest}"
+    return config.runs_dir / version / f"seed_{config.random_seed}" / active_run_id
 
 
 def run_search(

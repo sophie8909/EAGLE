@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
 from io import StringIO
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -15,7 +15,7 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evolution.generation import run_generation_step
 from eagle.evolution.resume import load_resume_config, resume_search
-from eagle.evolution.search import _result_version_folder, run_search
+from eagle.evolution.search import _new_run_directory, _result_version_folder, run_search
 from eagle.evolution.weakest_matchup_repair import (
     SCHEMA_VERSION,
     build_matchup_evidence,
@@ -170,6 +170,28 @@ class WeakestMatchupEvidenceTests(unittest.TestCase):
 
 
 class WeakestMatchupRepairWorkflowTests(unittest.TestCase):
+    def test_windows_version_folder_keeps_generation_zero_artifacts_below_max_path(self):
+        config = replace(ExperimentConfig.from_file(WMR_CONFIG), runs_dir=Path("runs"), random_seed=8)
+        attempt = "20261123_144955_247685"
+        checkout = PureWindowsPath("C:/Users/local/Documents/GitHub/EAGLE")
+        coach_dir = PureWindowsPath("candidates/gen_0000_d1bf70074e31/initialization/framework_coach")
+        evidence = coach_dir / "coach_response_attempt_001.json"
+
+        with patch("eagle.evolution.search._WINDOWS", False):
+            original = _new_run_directory(config, attempt, None)
+        with patch("eagle.evolution.search._WINDOWS", True):
+            compact = _new_run_directory(config, attempt, None)
+            next_seed = _new_run_directory(replace(config, random_seed=12), attempt, None)
+            baseline = _new_run_directory(replace(config, framework_weakest_matchup_repair_interval=0), attempt, None)
+            explicit = _new_run_directory(config, "given-id", "given-id")
+
+        self.assertGreater(len(str(checkout / original / coach_dir)), 248)
+        self.assertGreaterEqual(len(str(checkout / original / evidence)), 260)
+        self.assertLess(len(str(checkout / compact / evidence)), 248)
+        self.assertEqual(compact.parent.parent, next_seed.parent.parent)
+        self.assertNotEqual(compact.parent.parent, baseline.parent.parent)
+        self.assertEqual(explicit, config.runs_dir / "given-id")
+
     def test_config_only_opts_in_to_wmr_and_labels_the_treatment(self):
         baseline = ExperimentConfig.from_file(BASELINE_CONFIG)
         treatment = ExperimentConfig.from_file(WMR_CONFIG)
