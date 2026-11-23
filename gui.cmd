@@ -18,8 +18,7 @@ if "%eagle_wsl_state%"==".venv/bin/python" goto launch
 set "eagle_exit=1"
 if "%eagle_wsl_state%"=="EAGLE_NO_LINUX_PYTHON" (
     echo [EAGLE] Create the Linux virtual environment from WSL in this checkout.
-    echo     python3 -m venv .venv-wsl
-    echo     .venv-wsl/bin/python -m pip install -e .
+    echo     Use Python 3.10 through 3.13. See docs/operations/running_eagle.md.
 ) else if "%eagle_wsl_state%"=="EAGLE_BAD_CHECKOUT" (
     echo [EAGLE] The default WSL distribution could not find this EAGLE checkout.
     echo     Check the project path from WSL with wsl.exe -e /bin/pwd
@@ -31,6 +30,21 @@ if "%eagle_wsl_state%"=="EAGLE_NO_LINUX_PYTHON" (
 goto finish
 
 :launch
+wsl.exe %eagle_wsl_cd% -e "%eagle_wsl_state%" -c "import sys; sys.exit(not ((3, 10) <= sys.version_info[:2] < (3, 14)))" >nul 2>&1
+if errorlevel 1 (
+    echo [EAGLE] %eagle_wsl_state% must run Python 3.10 through 3.13.
+    echo     See docs/operations/running_eagle.md to rebuild the WSL environment.
+    set "eagle_exit=1"
+    goto finish
+)
+wsl.exe %eagle_wsl_cd% -e "%eagle_wsl_state%" -c "import yaml" >nul 2>&1
+if errorlevel 1 (
+    echo [EAGLE] PyYAML could not be imported from %eagle_wsl_state%.
+    echo     Install the EAGLE dependencies in that WSL environment.
+    echo     See docs/operations/running_eagle.md for pip and uv commands.
+    set "eagle_exit=1"
+    goto finish
+)
 wsl.exe %eagle_wsl_cd% -e "%eagle_wsl_state%" -m eagle gui --open %*
 set "eagle_exit=%errorlevel%"
 

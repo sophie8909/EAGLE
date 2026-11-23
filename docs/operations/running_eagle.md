@@ -54,7 +54,8 @@ open the distribution once to create your Linux user. See the
 
 Before opening `gui.cmd` from Windows, prepare the checkout's Linux virtual
 environment in the default WSL distribution. EAGLE requires Python 3.10–3.13.
-On Ubuntu, run the following commands.
+On Ubuntu with a supported system Python, run the following commands in a WSL
+terminal.
 
 ```bash
 sudo apt update
@@ -63,6 +64,24 @@ cd /path/to/EAGLE
 python3 -m venv .venv-wsl
 .venv-wsl/bin/python -m pip install -e .
 ```
+
+If the distribution ships Python 3.14 or another unsupported version, use
+[uv](https://docs.astral.sh/uv/pip/environments/) to create a Python 3.13
+environment and install EAGLE into it. If the earlier venv creation stopped
+with an `ensurepip` error, the following commands move that partial environment
+to your Linux home directory before creating the new one. Run them in WSL from
+the EAGLE checkout.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh
+if [ -e .venv-wsl ]; then
+  mv -- .venv-wsl "$HOME/eagle-venv-wsl-backup-$(date +%Y%m%d-%H%M%S)"
+fi
+"$HOME/.local/bin/uv" venv --python 3.13 .venv-wsl
+"$HOME/.local/bin/uv" pip install --python .venv-wsl/bin/python -e .
+```
+
+Return to Windows PowerShell and run `.\gui.cmd`.
 
 The launcher prefers `.venv-wsl/bin/python` so a Windows `.venv` can coexist,
 and also accepts an existing Linux `.venv/bin/python`. From PowerShell, run
