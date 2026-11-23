@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +75,11 @@ DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Heavy", 4.0),
     ("Ranged", 2.0),
 )
+
+
+def validate_llm_server_port(port: int) -> None:
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError("LLM server port must be an integer between 1 and 65535.")
 
 
 @dataclass(frozen=True)
@@ -159,6 +164,8 @@ class ExperimentConfig:
     use_remote_llm: bool = False
     remote_model: ModelConfig | None = None
     generation_model: ModelConfig | None = None
+    # Operational override supplied by the launcher, outside the saved config.
+    llm_server_port: int | None = field(default=None, kw_only=True)
     runs: int = 1
     generations: int = 1
     population_size: int = 4
@@ -830,6 +837,9 @@ class ExperimentConfig:
         if not self.experiment_name.strip():
             raise ValueError("experiment_name must not be empty.")
         self.model.validate()
+        if self.llm_server_port is not None:
+            validate_llm_server_port(self.llm_server_port)
+            self.active_primary_model.validate()
         if not isinstance(self.use_remote_llm, bool):
             raise ValueError("use_remote_llm must be a boolean.")
         if self.use_remote_llm and self.remote_model is None:
@@ -1257,11 +1267,14 @@ class ExperimentConfig:
     def active_primary_model(self) -> ModelConfig:
         """Return the selected reflection/initialization LLM profile."""
 
+        model = self.model
         if self.use_remote_llm:
             if self.remote_model is None:
                 raise ValueError("use_remote_llm=true requires remote_model.")
-            return self.remote_model
-        return self.model
+            model = self.remote_model
+        if self.llm_server_port is not None:
+            model = replace(model, port=self.llm_server_port)
+        return model
 
     @property
     def llm_base_url(self) -> str:

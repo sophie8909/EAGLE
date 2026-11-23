@@ -78,6 +78,11 @@ def save_config(root: Path, path: str, text: str) -> dict:
         and isinstance(run_dir, str) for name, run_dir in payload.items()
     ):
         raise ValueError("experiment.yaml is reserved for generated indices when its content has index form.")
+    write_atomic_text(target, text)
+    return read_config(root, str(target))
+
+
+def write_atomic_text(target: Path, text: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -88,7 +93,6 @@ def save_config(root: Path, path: str, text: str) -> dict:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-    return read_config(root, str(target))
 
 
 def _read_object(path: Path) -> dict:

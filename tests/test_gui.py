@@ -173,6 +173,29 @@ use_remote_llm: true
             with self.subTest(route=route), patch.object(self.app.experiment, "start") as start:
                 self.app.post(route, {**body, "connect_only": True})
                 self.assertIn("--connect-only", start.call_args.args[0])
+                self.assertNotIn("--llm-server-port", start.call_args.args[0])
+                self.app.post(route, {**body, "connect_only": True, "llm_server_port": 12345})
+                self.assertEqual(start.call_args.args[0][-3:], ["--connect-only", "--llm-server-port", "12345"])
+
+    def test_llm_server_port_persists_in_the_local_workspace(self):
+        self.assertIsNone(self.app.metadata()["llm_server_port"])
+        self.app.post("/api/llm-server-port", {"port": 12345})
+        reopened = GuiApp(self.root, self.runs)
+        self.assertEqual(reopened.metadata()["llm_server_port"], 12345)
+        for invalid in (0, 65536, True, "12345", 12345.5):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "integer between"):
+                reopened.post("/api/llm-server-port", {"port": invalid})
+        self.assertEqual(reopened.metadata()["llm_server_port"], 12345)
+        reopened.post("/api/llm-server-port", {"port": None})
+        self.assertIsNone(self.app.metadata()["llm_server_port"])
+
+    def test_llm_server_port_requires_connect_only_and_a_valid_port(self):
+        with patch.object(self.app.experiment, "start") as start:
+            with self.assertRaisesRegex(ValueError, "requires connect-only"):
+                self.app.post("/api/start", {"text": "{}", "llm_server_port": 12345})
+            with self.assertRaisesRegex(ValueError, "integer between"):
+                self.app.post("/api/start", {"text": "{}", "connect_only": True, "llm_server_port": 65536})
+        start.assert_not_called()
 
     def test_duplicate_experiment_is_rejected_without_launching_second_process(self):
         with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start:

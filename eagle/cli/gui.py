@@ -23,10 +23,12 @@ from eagle.analysis import experiment_dashboard
 from eagle.cli.gui_launcher import INSTANCE_PATH, SHUTDOWN_PATH, supervise_gui
 from eagle.config import (
     CANDIDATE_JAVA_MODES, EVALUATION_MODES, INITIAL_POPULATION_MODES,
-    PARENT_EVALUATION_MODES, ExperimentConfig,
+    PARENT_EVALUATION_MODES, ExperimentConfig, validate_llm_server_port,
 )
 from eagle.experiment_index import is_experiment_run_index
-from eagle.gui_data import config_choices, inspect_run, list_runs, read_config, save_config, validate_config
+from eagle.gui_data import (
+    config_choices, inspect_run, list_runs, read_config, save_config, validate_config, write_atomic_text,
+)
 from eagle.gui_progress import ExperimentProgress
 from eagle.interrupts import install_interrupt_handlers
 from eagle.operators.adaptive import ReflectionOperatorMode
@@ -37,6 +39,24 @@ ROOT = Path(__file__).resolve().parents[2]
 HTML = Path(__file__).with_name("gui.html")
 IS_WINDOWS = sys.platform == "win32"
 JOB_START_ROUTES = {"/api/start", "/api/start-server", "/api/resume", "/api/watch"}
+
+
+def experiment_flags(body: dict) -> list[str]:
+    flags = []
+    connect_only = body.get("connect_only") is True
+    if connect_only:
+        flags.append("--connect-only")
+    port = body.get("llm_server_port")
+    if port is not None:
+        if not connect_only:
+            raise ValueError("An LLM server port override requires connect-only mode.")
+        validate_llm_server_port(port)
+        flags.extend(["--llm-server-port", str(port)])
+    if body.get("mock") is True:
+        flags.append("--mock")
+    if body.get("skip_final_test") is True:
+        flags.append("--skip-final-test")
+    return flags
 
 
 def form_payload(payload: dict, root: Path) -> dict:
@@ -170,6 +190,17 @@ class GuiApp:
         self.server = Job(self.root, "server")
         self.match = Job(self.root, "match")
         self.analysis_export_lock = threading.Lock()
+        self.llm_port_path = self.root / "logs/gui/llm-server-port.json"
+        self.llm_port_lock = threading.Lock()
+
+    def saved_llm_port(self) -> int | None:
+        with self.llm_port_lock:
+            try:
+                port = json.loads(self.llm_port_path.read_text(encoding="utf-8"))
+                validate_llm_server_port(port)
+                return port
+            except (OSError, ValueError):
+                return None
 
     def run_path(self, value: str) -> Path:
         path = Path(value).expanduser().resolve()
@@ -214,6 +245,7 @@ class GuiApp:
         maps_root = self.root / "third_party/microrts"
         return {
             "configs": config_choices(self.root), "batches": self.batch_choices(), "forms": form_options(),
+            "llm_server_port": self.saved_llm_port(),
             "opponents": opponents,
             "maps": sorted(path.relative_to(maps_root).as_posix() for path in (maps_root / "maps").rglob("*.xml")),
         }
@@ -242,6 +274,13 @@ class GuiApp:
         raise ValueError("Unknown API route.")
 
     def post(self, path: str, body: dict) -> dict:
+        if path == "/api/llm-server-port":
+            port = body["port"]
+            if port is not None:
+                validate_llm_server_port(port)
+            with self.llm_port_lock:
+                write_atomic_text(self.llm_port_path, json.dumps(port) + "\n")
+            return {"port": port}
         if path == "/api/analysis/view":
             return experiment_dashboard.view(self.root, self.runs_roots, body)
         if path == "/api/analysis/export":
@@ -274,6 +313,7 @@ class GuiApp:
                     raise ValueError("此設定使用外部 LLM endpoint，請在該服務所在主機啟動 server。")
                 if self.experiment.status()["running"]:
                     raise ValueError("請先停止實驗，再變更或啟動 LLM server。")
+            flags = experiment_flags(body) if path == "/api/start" else []
             folder = self.root / "logs/gui" / uuid.uuid4().hex
             folder.mkdir(parents=True)
             snapshot = folder / "config.yaml"
@@ -282,23 +322,12 @@ class GuiApp:
                 command = [sys.executable, "-u", "-m", "eagle", "server", "--config", str(snapshot)]
                 return self.server.start(command, folder)
             self.runs_roots.add((self.root / config.runs_dir).resolve())
-            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir", str(folder)]
-            if body.get("connect_only") is True:
-                command.append("--connect-only")
-            if body.get("mock") is True:
-                command.append("--mock")
-            if body.get("skip_final_test") is True:
-                command.append("--skip-final-test")
+            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--config-dir", str(folder), *flags]
             return self.experiment.start(command, folder)
         if path == "/api/resume":
             target = self.batch_path(body["batch"]) if "batch" in body else self.run_path(body["run"])
-            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--resume", str(target)]
-            if body.get("connect_only") is True:
-                command.append("--connect-only")
-            if body.get("mock") is True:
-                command.append("--mock")
-            if body.get("skip_final_test") is True:
-                command.append("--skip-final-test")
+            command = [sys.executable, "-u", "-m", "eagle", "experiment", "--resume", str(target),
+                       *experiment_flags(body)]
             return self.experiment.start(command, self.root / "logs/gui" / uuid.uuid4().hex, progress_target=target)
         if path == "/api/watch":
             from scripts.run_gui_match import load_candidate_source, resolve_opponent

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -50,13 +51,14 @@ def resume_search(
     config_path: Path | None = None,
     run_dir: Path,
     mock: bool = False,
+    llm_server_port: int | None = None,
 ) -> SearchResult:
     """Continue from the last atomically recorded generation."""
 
     persisted = load_resume_config(run_dir)
     if config is not None:
         validate_resume_config(config, persisted, mock=mock)
-    config = persisted
+    config = replace(persisted, llm_server_port=llm_server_port)
     try:
         mark_run_started(run_dir)
         return _resume_search_impl(

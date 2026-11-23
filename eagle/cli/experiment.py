@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
         "--connect-only", action="store_true",
         help="Use already-running endpoints; never start, restart or stop an LLM server.",
     )
+    parser.add_argument(
+        "--llm-server-port", type=int,
+        help="Override the primary LLM server port for this connect-only invocation.",
+    )
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--skip-final-test", action="store_true")
     args = parser.parse_args(argv)
@@ -42,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             config_path=config_path,
             resume_dir=None if args.resume is None else args.resume.expanduser().resolve(),
             connect_only=args.connect_only,
+            llm_server_port=args.llm_server_port,
             mock=args.mock,
             skip_final_test=args.skip_final_test,
         )

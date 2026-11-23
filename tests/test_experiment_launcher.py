@@ -1074,6 +1074,35 @@ class ExperimentLauncherTests(unittest.TestCase):
             ).run(config_path=path, skip_final_test=True, connect_only=True)
             self.runtime_manager.assert_not_called()
 
+    def test_connect_only_port_reaches_fresh_and_resumed_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.config(root, "local.yaml", model_name="local", model_path=root / "missing.gguf")
+            run_dir = self.indexed_run(root / "runs" / "a", path, status="interrupted",
+                                       mock=False, latest_generation=0)
+            (root / "experiment.yaml").write_text(
+                yaml.safe_dump({path.name: str(run_dir)}), encoding="utf-8",
+            )
+            saved_config = (run_dir / "config.yaml").read_bytes()
+
+            def search(config, **_kwargs):
+                self.assertEqual(config.llm_base_url, "http://127.0.0.1:12345")
+                self.assertEqual(config.resolved_generation_model.port, 12345)
+                self.assertNotEqual(config.to_mapping()["model"]["port"], 12345)
+                return SearchResult(run_dir, [], None)
+
+            orchestrator = ExperimentOrchestrator(search_runner=search)
+            options = {"skip_final_test": True, "connect_only": True, "llm_server_port": 12345}
+            orchestrator.run(config_path=path, **options)
+            for target in (run_dir, root):
+                with self.subTest(target=target), patch(
+                    "eagle.evolution.resume._resume_search_impl", side_effect=search,
+                ) as resume:
+                    orchestrator.run(config_path=None, resume_dir=target, **options)
+                    resume.assert_called_once()
+            self.assertEqual((run_dir / "config.yaml").read_bytes(), saved_config)
+            self.runtime_manager.assert_not_called()
+
     def test_folder_resume_prioritizes_interrupted_run_then_remaining_configs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
