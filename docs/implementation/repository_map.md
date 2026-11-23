@@ -6,8 +6,8 @@ all ten initial genomes through this path.
 
 The local experiment control surface lives in `eagle/cli/gui.py` and
 `eagle/cli/gui.html`; `eagle/gui_data.py` owns config editing and read-only
-run/generation browsing. `gui.sh` launches on Ubuntu, `gui.cmd` on native
-Windows, and `gui-wsl.cmd` through WSL. `eagle/interrupts.py` shares CLI cleanup
+run/generation browsing. `gui.cmd` launches the GUI from Windows through
+WSL. `eagle/interrupts.py` shares CLI cleanup
 signals, including waking Windows blocking waits on Ctrl+Break. The GUI
 delegates execution to the existing experiment CLI and visual
 inspection script rather than owning evolution or evaluation behavior.
@@ -19,6 +19,7 @@ kept as documentation entries.
 
 | Path | Responsibility |
 | --- | --- |
+| `gui.cmd` | Windows-to-WSL GUI launcher |
 | `experiment.sh` | Positional wrapper for `python -m eagle experiment` |
 | `analyze.sh` | Wrapper for `python -m eagle analyze` |
 | `watchdog.sh` | Optional network-interface monitor; no model lifecycle ownership |

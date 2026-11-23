@@ -11,7 +11,7 @@ terminal:
 ./experiment.sh configs/experiments/1104_description_guided/experiment.yaml --skip-final-test
 ```
 
-On PowerShell, use `.venv/Scripts/python.exe -m eagle experiment --config-dir CONFIG.yaml`.
+On Windows, run the terminal commands in WSL.
 Local startup checks model and executable files, GPU availability, full layer
 offload, port ownership and health. A batch reuses a compatible owned server;
 it switches incompatible local models by stopping the owned process and
@@ -45,30 +45,21 @@ self-play run also needs the runtime and paths recorded in its checkpoint.
 
 ## Local experiment GUI
 
-On Ubuntu, run the launcher from the checkout:
+Before opening `gui.cmd` from Windows, prepare the checkout's Linux virtual
+environment in the default WSL distribution and put `java` and `javac` on PATH:
 
 ```bash
 cd /path/to/EAGLE
-./gui.sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
 ```
 
-On native Windows, double-click `gui.cmd` or run it from a terminal. Ubuntu
-prefers `.venv/bin/python`, Windows prefers `.venv\Scripts\python.exe`; otherwise
-they use `python3` or `python` from the current environment. Install the project
-dependencies in that environment first (`python -m pip install -e .`). Each
-launcher accepts GUI arguments, for example `./gui.sh --port 8878` or
-`gui.cmd --port 8878`. The equivalent direct command on either platform is
-`python -m eagle gui --open`.
-
-`gui-wsl.cmd` is the optional Windows-to-WSL launcher. It uses the WSL `.venv`
-and WSLg. Native Ubuntu/Windows observation uses that OS's desktop directly.
-For migration, configure `model.path`, `model.llama_server`, optional
-`generation_model`, and any absolute paths for the destination OS. Windows
-requires a Windows `llama-server.exe` build with the desired GPU backend;
-Linux binaries cannot be reused. Both systems require `java` and `javac` on
-PATH. Keep portable config paths repository-relative where possible. Existing
-resolved Run configs contain absolute paths and are not automatically rewritten
-for cross-OS resume.
+The launcher runs `.venv/bin/python` inside WSL. From PowerShell, run
+`.\gui.cmd --port 8878` to select a different GUI port. Visual MicroRTS
+matches use WSLg. For a server managed by the experiment, configure
+`model.path` and `model.llama_server` for WSL. For an already-running
+server, use **只連線** and enter its URL as reachable from WSL. Existing
+resolved Run configs retain their saved absolute paths for resume.
 
 Open `http://127.0.0.1:8877`. Use `--port PORT` if occupied and
 `--runs-root PATH` for a different initial run root. The server deliberately
@@ -110,10 +101,10 @@ See [Experiment Analysis](experiment_analysis.md) for archive registration and G
    requires WSLg for the game window. External opponents require their setup
    scripts; AlliBot runtime LLM remains disabled by default.
 
-Stop requests use SIGTERM on Ubuntu and an owned console group's Ctrl+Break on
-Windows. Stopping an experiment cleans up its owned local server; connect-only
-endpoints are left alone. The GUI service runs independently of its launcher
-terminal. Closing the browser or launcher window leaves the experiment running.
+Stop requests from the WSL GUI use SIGTERM. Stopping an experiment cleans up
+its owned local server; connect-only endpoints are left alone. The GUI service
+runs independently of its launcher terminal. Closing the browser or launcher
+window leaves the experiment running.
 Launch the GUI again on the same port to see the existing job. Press Ctrl+C in
 the launcher terminal to stop the experiment and shut down the GUI service.
 The selected Run can resume with its own

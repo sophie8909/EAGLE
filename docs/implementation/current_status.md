@@ -221,8 +221,8 @@ full YAML editing, validated atomic save, immutable launch snapshots, bounded
 live logs, stop/resume controls, and automatically refreshed canonical
 run/generation/candidate lists. Visual observation invokes the retained
 temporary compile/integration/MicroRTS launcher and does not change fitness.
-`gui.sh` launches on native Ubuntu; `gui.cmd` uses native Windows Python.
-`gui-wsl.cmd` retains WSL launching and WSLg observation. Windows child jobs
+`gui.cmd` launches the GUI from Windows through WSL, using the WSL Python
+environment and WSLg observation. Native Windows child jobs
 use owned console groups and graceful Ctrl+Break handlers; Ubuntu retains
 POSIX sessions and signals. The GUI service survives closing its launcher
 window, and a launcher on the same port reattaches to it. Ctrl+C explicitly

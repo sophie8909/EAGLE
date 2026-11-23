@@ -1,16 +1,18 @@
-# EAGLE Windows 安裝
+# EAGLE Windows 工具安裝
+
+GUI 統一從 Windows 執行 `.\gui.cmd`。先依照 [WSL GUI 設定](docs/operations/running_eagle.md#local-experiment-gui) 準備 WSL 的 Linux 虛擬環境。下列步驟用於另外需要原生 Windows 工具或 LLM server 的情況。
 
 ## 執行步驟
 
 1. 把含有 `setup.cmd` 的 EAGLE 原始碼搬到新電腦，讓腳本重建 `.venv`。若要用 Git 取得專案，先安裝 [Git for Windows 2.x x64](https://git-scm.com/download/win)，再 checkout 含有安裝腳本的版本。
 2. 在 EAGLE 資料夾開 PowerShell，執行 `.\setup.cmd -WithEditor`。會裝 Python 相依套件、MicroRTS 和四個對手、llama.cpp、Qwen、VS Code 及 Python／Java 擴充套件。已有編輯器可直接執行 `.\setup.cmd`。
-3. 執行 `.\gui.cmd`。開啟要跑的 YAML，將 `model.llama_server` 設為下方路徑並儲存。1111、1114 的 `model.path` 已對應腳本下載的位置。
+3. 如要在 Windows 啟動獨立 LLM server，腳本安裝的執行檔位於下方路徑。開好服務後，在 WSL GUI 勾選「只連線」並填入 WSL 可存取的完整網址。
 
 ```text
 experiment_env/model/llama.cpp-b10236-win-cuda-12.4-x64/llama-server.exe
 ```
 
-使用其他電腦的 LLM 服務時，改跑 `.\setup.cmd -ToolsOnly -WithEditor`，在 GUI 填入服務位址並勾選 Connect only。
+若只需要 Windows 工具，可執行 `.\setup.cmd -ToolsOnly -WithEditor`。WSL GUI 可直接用「只連線」連到其他電腦已開啟的 LLM 服務。
 
 ## 更新已安裝的 MicroRTS
 

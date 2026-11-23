@@ -135,8 +135,8 @@ try {
         Get-VerifiedDownload $modelUrl (Join-Path $modelDirectory 'model.gguf') '6f5d30666c2d8ae16a306e616d95341dcf3cc46810df84d7e6f5a7d1e4c1b293'
     }
 
-    Invoke-Checked $venvPython @('-m', 'eagle', 'gui', '--help') | Out-Null
-    Write-Host 'Setup complete. Run gui.cmd. See setup.md for the Windows llama_server setting.'
+    Invoke-Checked $venvPython @('-m', 'eagle', 'experiment', '--help') | Out-Null
+    Write-Host 'Windows tools are installed. See setup.md for WSL setup before opening gui.cmd.'
 }
 finally {
     Pop-Location

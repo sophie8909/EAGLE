@@ -1,8 +1,8 @@
 # Experiment Analysis
 
-Open **實驗分析** in the local GUI started by `gui.cmd`, `./gui.sh`, or
-`python -m eagle gui --open`. Use the composition checkboxes to find an
-experiment or result package, choose its short display name, select treatments,
+Open **實驗分析** in the local GUI started by `gui.cmd` through WSL. Use the
+composition checkboxes to find an experiment or result package, choose its short
+display name, select treatments,
 and choose a run attempt where a seed was restarted. Refresh rebuilds the
 catalog from current sources. The dashboard reads committed generation snapshots
 and evaluation summaries. Analysis and export leave the launcher index and run
