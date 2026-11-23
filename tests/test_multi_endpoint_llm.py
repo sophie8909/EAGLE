@@ -5,14 +5,16 @@ import threading
 import tempfile
 import unittest
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 from eagle.config import ExperimentConfig
 from eagle.evolution.runtime import build_search_runtime, preflight_llm_endpoint
 from eagle.evolution.resume import validate_resume_config
 from eagle.execution import LLM_WORKERS, current_llm_worker_slot, parallel_map
-from eagle.llm import LLMClient, LLMEndpoint
+from eagle.llm import LLMClient, LLMEndpoint, LLMServerError
 
 
 class _Response:
@@ -476,6 +478,20 @@ class MultiEndpointExecutionTests(unittest.TestCase):
             )
 
         preflight.assert_called_once_with(runtime.client)
+
+    def test_preflight_http_error_reports_backend_reason(self) -> None:
+        client = LLMClient("http://127.0.0.1:1234", "requested-model")
+        response = BytesIO(b'{"error": {"message": "Unknown loaded model ID"}}')
+        rejection = HTTPError(
+            "http://127.0.0.1:1234/v1/chat/completions", 400, "Bad Request", {}, response,
+        )
+        with patch("eagle.evolution.runtime.urllib.request.urlopen", side_effect=rejection):
+            with self.assertRaisesRegex(LLMServerError, "Unknown loaded model ID") as failure:
+                preflight_llm_endpoint(client)
+
+        self.assertIn("requested-model", str(failure.exception))
+        self.assertIn("http://127.0.0.1:1234/v1/models", str(failure.exception))
+        self.assertTrue(response.closed)
 
     def test_preflight_checks_every_endpoint_with_its_model(self) -> None:
         client = LLMClient(

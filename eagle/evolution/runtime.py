@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from http.client import HTTPException
 from pathlib import Path
 from typing import Any
 
@@ -267,14 +268,27 @@ def preflight_llm_endpoint(client: LLMClient) -> None:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        failure_message = f"Configured LLM endpoint preflight failed at {url} for model {endpoint.model}"
         try:
             with urllib.request.urlopen(request, timeout=client.timeout_seconds) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             if not isinstance(payload.get("choices"), list):
                 raise RuntimeError("response has no choices array")
+        except urllib.error.HTTPError as exc:
+            response_detail = ""
+            try:
+                with exc:
+                    response_body = exc.read(1024).decode("utf-8", errors="replace").strip()
+                if response_body:
+                    response_detail = f" Server response: {response_body!r}."
+            except (OSError, HTTPException):
+                pass
+            raise LLMServerError(
+                f"{failure_message}: {exc}.{response_detail} "
+                f"Check this server's response and model IDs at {api_root}/models."
+            ) from exc
         except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
             raise LLMServerError(
-                f"Configured LLM endpoint preflight failed at {url} "
-                f"for model {endpoint.model}: {exc}. "
+                f"{failure_message}: {exc}. "
                 "Check the configured endpoint and model. For --connect-only or unmanaged profiles, start the service before launching or resuming the experiment."
             ) from exc
