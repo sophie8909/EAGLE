@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from eagle.candidate import Candidate
-from eagle.evaluation.runtime_evaluation import write_mock_round_state
+from tests.match_fixtures import write_mock_round_state
 from eagle.generation.framework_slots import validate_framework_bundle
 from eagle.operators.context import (
     CandidateReflectionSummary,

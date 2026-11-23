@@ -230,7 +230,6 @@ def run_microrts_match(
     candidate_player: int = 0,
     extra_classpath_entries: Iterable[Path] = (),
     match_output_dir: Path | None = None,
-    artifact_mode: str = "full",
     map_id: str | None = None,
     round_index: int | None = None,
     opponent_source_generation: int | None = None,
@@ -249,13 +248,9 @@ def run_microrts_match(
     match_dir.mkdir(parents=True, exist_ok=True)
     if candidate_player not in {0, 1}:
         raise ValueError("candidate_player must be 0 or 1.")
-    if artifact_mode not in {"compact", "full"}:
-        raise ValueError("artifact_mode must be compact or full.")
     round_state_dir = match_dir / "round_states"
-    round_state_dir.mkdir(exist_ok=True)
     raw_result_path = match_dir / "raw_result.json"
-    replay_path = match_dir / "replay.xml"
-    telemetry_path = match_dir / ("telemetry.json.gz" if artifact_mode == "compact" else "telemetry.json")
+    telemetry_path = match_dir / "telemetry.json.gz"
     breakdown_path = match_dir / "performance_breakdown.json"
     additional_classpath = [java_path(resolve_evaluation_path(Path(value))) for value in extra_classpath_entries]
     classpath = os.pathsep.join(
@@ -269,9 +264,8 @@ def run_microrts_match(
     if supplied_seed is not None and int(supplied_seed) != match_seed:
         raise ValueError("eagle.match.seed must match the derived match_seed")
     resolved_system_properties["eagle.match.seed"] = str(match_seed)
-    if artifact_mode == "full":
-        resolved_system_properties["microrts.trace.path"] = java_path(replay_path)
-    elif not mock:
+    if not mock:
+        round_state_dir.mkdir(exist_ok=True)
         (round_state_dir / ROUND_STATE_STREAM_NAME).unlink(missing_ok=True)
         resolved_system_properties[ROUND_STATE_STREAM_PROPERTY] = "true"
     system_properties = [
@@ -313,20 +307,15 @@ def run_microrts_match(
             ai2=ai2,
             candidate_player=candidate_player,
         )
-        raw_result_path.write_text(json.dumps(raw_result, indent=2), encoding="utf-8")
-        # Two complete snapshots are sufficient for deterministic mock scoring.
-        # Writing every synthetic tick made production-size mock experiments
-        # create hundreds of thousands of disposable files per candidate.
+        # Initial and final snapshots are sufficient for deterministic mock scoring.
+        snapshots = []
         for tick in sorted({0, tick_limit}):
             progress = mock_score * (tick / max(1, tick_limit))
-            write_mock_round_state(
-                round_state_dir,
+            snapshots.append(mock_round_state(
                 tick=tick,
                 p0_resource=50.0 + (progress if candidate_player == 0 else 0.0),
                 p1_resource=50.0 + (progress if candidate_player == 1 else 0.0),
-                trace_only=False,
-            )
-        replay_path.write_text("<mock-replay />\n", encoding="utf-8")
+            ))
         return _finish_match(
             raw_result=raw_result,
             command=command,
@@ -338,7 +327,6 @@ def run_microrts_match(
             timeout_seconds=timeout_seconds,
             match_dir=match_dir,
             round_state_dir=round_state_dir,
-            replay_path=replay_path,
             telemetry_path=telemetry_path,
             breakdown_path=breakdown_path,
             scoring_config=scoring_config,
@@ -355,7 +343,7 @@ def run_microrts_match(
             agent_class=agent_class,
             source_hash=source_hash,
             class_hash=class_hash,
-            artifact_mode=artifact_mode,
+            snapshots=snapshots,
             map_id=map_id,
             round_index=round_index,
             opponent_source_generation=opponent_source_generation,
@@ -385,7 +373,6 @@ def run_microrts_match(
             timeout_seconds=timeout_seconds,
             match_dir=match_dir,
             round_state_dir=round_state_dir,
-            replay_path=replay_path,
             telemetry_path=telemetry_path,
             breakdown_path=breakdown_path,
             scoring_config=scoring_config,
@@ -403,7 +390,6 @@ def run_microrts_match(
             source_hash=source_hash,
             class_hash=class_hash,
             forced_failure=("timeout", f"match exceeded {timeout_seconds:g} second timeout"),
-            artifact_mode=artifact_mode,
             map_id=map_id,
             round_index=round_index,
             opponent_source_generation=opponent_source_generation,
@@ -431,7 +417,6 @@ def run_microrts_match(
         timeout_seconds=timeout_seconds,
         match_dir=match_dir,
         round_state_dir=round_state_dir,
-        replay_path=replay_path,
         telemetry_path=telemetry_path,
         breakdown_path=breakdown_path,
         scoring_config=scoring_config,
@@ -448,7 +433,6 @@ def run_microrts_match(
         agent_class=agent_class,
         source_hash=source_hash,
         class_hash=class_hash,
-        artifact_mode=artifact_mode,
         map_id=map_id,
         round_index=round_index,
         opponent_source_generation=opponent_source_generation,
@@ -470,7 +454,6 @@ def _finish_match(
     timeout_seconds: float,
     match_dir: Path,
     round_state_dir: Path,
-    replay_path: Path,
     telemetry_path: Path,
     breakdown_path: Path,
     scoring_config: GamePerformanceConfig,
@@ -488,7 +471,7 @@ def _finish_match(
     source_hash: str | None,
     class_hash: str | None,
     forced_failure: tuple[str, str] | None = None,
-    artifact_mode: str = "full",
+    snapshots: list[tuple[str, str]] | None = None,
     map_id: str | None = None,
     round_index: int | None = None,
     opponent_source_generation: int | None = None,
@@ -513,12 +496,12 @@ def _finish_match(
     telemetry: MatchTelemetry | None = None
     telemetry_persisted = False
     persistence_error: str | None = None
-    snapshots = None
     stream_path = round_state_dir / ROUND_STATE_STREAM_NAME
-    if artifact_mode == "compact" and stream_path.is_file():
+    if snapshots is None:
         snapshots = []
         try:
-            snapshots.extend(read_round_state_stream(stream_path))
+            if stream_path.is_file():
+                snapshots.extend(read_round_state_stream(stream_path))
         except (OSError, ValueError) as exc:
             if failure is None:
                 failure = ("invalid_match_result", f"round-state stream read failed: {exc}")
@@ -539,7 +522,6 @@ def _finish_match(
                 max_tick=tick_limit,
                 player_index=candidate_player,
                 opponent_index=1 - candidate_player,
-                replay_path=(str(replay_path.name) if artifact_mode == "full" else None),
                 scoring_config=scoring_config,
                 snapshots=snapshots,
             )
@@ -614,8 +596,8 @@ def _finish_match(
     except (OSError, TypeError, ValueError) as exc:
         persistence_error = f"failed to persist match trace: {exc}"
     cleanup_error = None
-    if artifact_mode == "compact" and (telemetry is None or telemetry_persisted):
-        cleanup_error = _remove_raw_match_artifacts(round_state_dir, replay_path)
+    if telemetry is None or telemetry_persisted:
+        cleanup_error = _remove_transient_round_states(round_state_dir)
     if cleanup_error is not None:
         persistence_error = cleanup_error if persistence_error is None else f"{persistence_error}; {cleanup_error}"
     result = MatchResult(
@@ -628,8 +610,6 @@ def _finish_match(
         raw_result=raw_result,
         telemetry=telemetry,
         performance_breakdown=performance,
-        replay_path=str(replay_path) if artifact_mode == "full" and replay_path.exists() else None,
-        round_state_path=str(round_state_dir) if artifact_mode == "full" and round_state_dir.exists() else None,
         telemetry_path=str(telemetry_path),
         summary_path=str(breakdown_path),
         persistence_error=persistence_error,
@@ -862,13 +842,12 @@ def _persist_result(match_dir: Path, result: MatchResult) -> None:
         return
 
 
-def _remove_raw_match_artifacts(round_state_dir: Path, replay_path: Path) -> str | None:
-    """Remove transient raw match output after its compact telemetry is durable."""
+def _remove_transient_round_states(round_state_dir: Path) -> str | None:
+    """Remove the temporary snapshots after compact persistence."""
 
     try:
         if round_state_dir.exists():
             shutil.rmtree(round_state_dir)
-        replay_path.unlink(missing_ok=True)
     except OSError as exc:
         return f"failed to remove transient raw match artifacts: {exc}"
     return None
@@ -918,28 +897,21 @@ def match_directory(root: Path, *, match_index: int, **_: Any) -> Path:
     return root / f"match_{match_index:02d}"
 
 
-def write_mock_round_state(
-    round_state_dir: Path,
+def mock_round_state(
     *,
     tick: int,
     p0_resource: float,
     p1_resource: float,
-    trace_only: bool = False,
-) -> None:
-    round_state_dir.mkdir(parents=True, exist_ok=True)
-    lines = [f"ROUND_TICK: {tick}", "GAMEOVER: false"]
-    if trace_only:
-        lines.append("TRACE_ONLY: true")
-    lines.extend([
+) -> tuple[str, str]:
+    lines = [
+        f"ROUND_TICK: {tick}",
+        "GAMEOVER: false",
         f"current time {tick} p0 player 0({p0_resource}) p1 player 1({p1_resource})",
         "(1,1) Ally Base Unit {HP=10, resources=0}",
         "(6,6) Enemy Base Unit {HP=10, resources=0}",
         "",
-    ])
-    (round_state_dir / f"round_{tick:06d}.log").write_text(
-        "\n".join(lines),
-        encoding="utf-8",
-    )
+    ]
+    return f"round_{tick:06d}.log", "\n".join(lines)
 
 
 def read_result_json(path: Path) -> dict[str, Any]:

@@ -96,12 +96,13 @@ function setOptions(select,items,placeholder){
 function valueAt(path){let value=payload;for(const key of path.split('.')){if(value===null||typeof value!=='object'||!Object.hasOwn(value,key))return undefined;value=value[key];}return value;}
 function setAt(path,value){const keys=path.split('.');let parent=payload;for(const key of keys.slice(0,-1)){if(parent[key]===null||typeof parent[key]!=='object'||Array.isArray(parent[key]))parent[key]={};parent=parent[key];}parent[keys.at(-1)]=value;}
 function deleteAt(path){const keys=path.split('.');let parent=payload;for(const key of keys.slice(0,-1)){parent=parent?.[key];if(!parent||typeof parent!=='object')return;}delete parent[keys.at(-1)];}
-const labels={experiment_name:'實驗名稱',generations:'演化代數（另含第 0 代）',population_size:'族群大小',runs:'每個 seed 的重複次數',random_seed:'隨機種子（無清單時使用）',random_seeds:'本機種子清單（優先使用）',use_remote_llm:'使用 remote_model（預設停用）',crossover_rate:'交配機率',mutation_rate:'突變機率',stagnation_generations:'停滯代數上限',java_materialization_mode:'Java 產生方式',candidate_java_mode:'Java 繼承方式',initial_population_mode:'初始族群方式',parent_evaluation_mode:'父代評估方式',reflection_operator_mode:'Reflection 選擇方式',execution_mode:'執行模式',tick_limit:'預設 ticks 上限',match_timeout_seconds:'每場逾時（秒）',match_artifact_mode:'對戰證據保存方式','evaluation.mode':'評估方式','evaluation.rounds_per_map':'每張地圖回合數','evaluation.swap_player_sides':'交換陣營','llm.match_commentator.enabled':'啟用 Match Commentator',runs_dir:'實驗輸出根目錄',microrts_dir:'MicroRTS 目錄'};
+const labels={experiment_name:'實驗名稱',generations:'演化代數（另含第 0 代）',population_size:'族群大小',runs:'每個 seed 的重複次數',random_seed:'隨機種子（無清單時使用）',random_seeds:'本機種子清單（優先使用）',use_remote_llm:'使用 remote_model（預設停用）',crossover_rate:'交配機率',mutation_rate:'突變機率',stagnation_generations:'停滯代數上限',java_materialization_mode:'Java 產生方式',candidate_java_mode:'Java 繼承方式',initial_population_mode:'初始族群方式',parent_evaluation_mode:'父代評估方式',reflection_operator_mode:'Reflection 選擇方式',execution_mode:'執行模式',tick_limit:'預設 ticks 上限',match_timeout_seconds:'每場逾時（秒）','evaluation.mode':'評估方式','evaluation.rounds_per_map':'每張地圖回合數','evaluation.swap_player_sides':'交換陣營','llm.match_commentator.enabled':'啟用 Match Commentator',runs_dir:'實驗輸出根目錄',microrts_dir:'MicroRTS 目錄'};
 function renderForm(){
  const form=$('form');form.replaceChildren();const groups=new Map();
  const paths=new Set(Object.keys(meta.forms.defaults));
  function walk(value,prefix=''){for(const [key,item]of Object.entries(value)){const path=prefix?prefix+'.'+key:key;if(item!==null&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).length)walk(item,path);else paths.add(path);}}
  walk(payload);
+ paths.delete('match_artifact_mode');
  for(const path of paths){
   const group=path.includes('.')?path.split('.')[0]:'實驗與演化';
   if(!groups.has(group)){const title=document.createElement('h3');title.textContent=group;const grid=document.createElement('div');grid.className='grid';form.append(title,grid);groups.set(group,grid);}

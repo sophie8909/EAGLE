@@ -90,12 +90,20 @@ class EvaluationReproducibilityTests(unittest.TestCase):
     def test_final_benchmark_repeats_across_worker_counts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with patch("eagle.final_test.FINAL_TEST_OPPONENTS", FINAL_TEST_OPPONENTS[:1]), patch("eagle.final_test.FINAL_TEST_GAMES_PER_SIDE", 2), patch("eagle.final_test._prepare_worker_rush_opponent", return_value=root), patch("eagle.final_test._prepare_safe_allinbot_opponent", return_value=root), patch("eagle.final_test._opponent_classpath", return_value=()), patch("eagle.final_test.hash_file", return_value="source"), patch("eagle.final_test.run_microrts_match", side_effect=self._stochastic_match):
+            config = replace(ExperimentConfig.from_mapping({}), random_seed=37, final_test_games_per_side=2)
+            with (
+                patch("eagle.final_test.FINAL_TEST_OPPONENTS", FINAL_TEST_OPPONENTS[:1]),
+                patch("eagle.final_test._prepare_worker_rush_opponent", return_value=root),
+                patch("eagle.final_test._prepare_safe_allinbot_opponent", return_value=root),
+                patch("eagle.final_test._opponent_classpath", return_value=()),
+                patch("eagle.final_test.hash_file", return_value="source"),
+                patch("eagle.final_test.run_microrts_match", side_effect=self._stochastic_match),
+            ):
                 snapshots = []
                 for workers in (1, 4, 4):
                     with patch("eagle.config.MATCH_WORKERS", workers):
                         snapshots.append(_run_final_matrix(
-                            config=replace(ExperimentConfig.from_mapping({}), random_seed=37),
+                            config=config,
                             repository_root=root, candidate={"candidate_id": "a"},
                             classes_dir=root, output_dir=root,
                         ))
@@ -161,7 +169,7 @@ class EvaluationReproducibilityTests(unittest.TestCase):
 
     def test_low_level_match_defaults_to_seed_zero_and_rejects_override(self):
         with tempfile.TemporaryDirectory() as directory:
-            arguments = dict(microrts_dir=Path(directory), classes_dir=Path(directory), agent_class="ai.generated.CandidateAgent", opponent="ai.RandomAI", tick_limit=2, match_index=0, mock=True, artifact_mode="compact")
+            arguments = dict(microrts_dir=Path(directory), classes_dir=Path(directory), agent_class="ai.generated.CandidateAgent", opponent="ai.RandomAI", tick_limit=2, match_index=0, mock=True)
             result = run_microrts_match(**arguments)
             self.assertEqual(result.match_seed, 0)
             self.assertIn("-Deagle.match.seed=0", result.command)
@@ -191,7 +199,7 @@ class EvaluationReproducibilityTests(unittest.TestCase):
                     microrts_dir=microrts, classes_dir=classes,
                     agent_class="ai.generated.CandidateAgent", opponent="ai.RandomBiasedAI",
                     tick_limit=30, match_index=match_index,
-                    match_artifacts_dir=root / f"run-{run_index}", artifact_mode="compact",
+                    match_artifacts_dir=root / f"run-{run_index}",
                     match_seed=derive_seed(37, "real-test", match_index), timeout_seconds=30,
                 )
                 self.assertTrue(result.ok, result.failure_reason or result.stderr)

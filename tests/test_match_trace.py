@@ -11,7 +11,7 @@ from pathlib import Path
 from eagle.evaluation.game_performance import build_match_telemetry
 from eagle.evaluation.match_trace import iter_match_trace, write_match_trace
 from eagle.evaluation.round_states import ROUND_STATE_STREAM_NAME, read_round_state_stream, require_buffered_round_states
-from eagle.evaluation.runtime_evaluation import write_mock_round_state
+from tests.match_fixtures import write_mock_round_state
 
 
 class MatchTraceTests(unittest.TestCase):

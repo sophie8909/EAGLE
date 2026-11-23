@@ -349,7 +349,6 @@ def build_command(
     )
     return [
         "java",
-        f"-Dmicrorts.trace.path={workspace / 'replay.xml'}",
         "-cp",
         classpath,
         "rts.MicroRTS",

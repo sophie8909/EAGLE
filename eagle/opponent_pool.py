@@ -347,7 +347,6 @@ def _run_tournament(
                     source_hash=entrant_source_hash,
                     class_hash=entrant_class_hash,
                     extra_classpath_entries=defender_classpath,
-                    artifact_mode=config.match_artifact_mode,
                     map_id=specification.map_id,
                     round_index=specification.round_index,
                     opponent_source_generation=(

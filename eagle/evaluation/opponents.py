@@ -176,8 +176,7 @@ def preflight_evaluation_opponents(
             source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
             if not any(path.is_file() and path.suffix == ".jar" for path in source_lib.glob("*.jar")):
                 raise OpponentSetupError(f"AllInBot upstream libraries are missing: {source_lib}")
-    if config.match_artifact_mode == "compact":
-        require_buffered_round_states(config.microrts_dir)
+    require_buffered_round_states(config.microrts_dir)
 
 
 def _resolved_static_evaluation_opponents(

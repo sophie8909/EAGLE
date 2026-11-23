@@ -6,6 +6,7 @@ from struct import Struct
 
 
 ROUND_STATE_STREAM_NAME = "round_states-v1.bin"
+# Older buffered builds require this flag. The stream format is unchanged.
 ROUND_STATE_STREAM_PROPERTY = "microrts.round_state_stream"
 _FRAME_HEADER = Struct(">II")
 
@@ -17,12 +18,10 @@ def require_buffered_round_states(microrts_dir: Path) -> None:
         compiled = game_class.read_bytes()
     except OSError as exc:
         raise ValueError(f"MicroRTS is not compiled at {game_class}. Build the vendored runtime before starting.") from exc
-    if not all(marker.encode("ascii") in compiled for marker in (
-        ROUND_STATE_STREAM_PROPERTY, ROUND_STATE_STREAM_NAME,
-    )):
+    if ROUND_STATE_STREAM_NAME.encode("ascii") not in compiled:
         raise ValueError(
             f"MicroRTS at {game_class} lacks buffered round-state support. "
-            "Rebuild it from the current vendored Java source before starting a compact evaluation."
+            "Rebuild it from the current vendored Java source before starting evaluation."
         )
 
 

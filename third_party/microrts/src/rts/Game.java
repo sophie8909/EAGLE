@@ -25,7 +25,6 @@ import rts.units.UnitTypeTable;
  */
 public class Game {
 
-    private UnitTypeTable utt;
     protected rts.GameState gs;
     protected AI ai1, ai2;
 
@@ -89,7 +88,6 @@ public class Game {
     private Game(UnitTypeTable utt, String mapLocation, boolean headless, boolean partiallyObservable, int maxCycles,
                  int updateInterval) throws Exception {
 
-        this.utt = utt;
         PhysicalGameState pgs = PhysicalGameState.load(mapLocation, utt);
 
         gs = new GameState(pgs, utt);
@@ -167,12 +165,10 @@ public class Game {
         ai1.preGameAnalysis(gs, 0);
         ai2.preGameAnalysis(gs, 0);
 
-        String tracePath = System.getProperty("microrts.trace.path", "").trim();
         String roundStateDirPath = System.getProperty("microrts.round_state_dir", "").trim();
-        Trace trace = tracePath.isEmpty() ? null : new Trace(utt);
         boolean gameover;
         try (DataOutputStream snapshots = openRoundStateStream(roundStateDirPath)) {
-            gameover = runCycles(w, trace, roundStateDirPath, snapshots);
+            gameover = runCycles(w, snapshots);
         }
         ai1.gameOver(gs.winner());
         ai2.gameOver(gs.winner());
@@ -196,10 +192,6 @@ public class Game {
                 System.out.println("Draw (no winner)");
             }
             System.out.println("===================");
-        }
-        if (trace != null) {
-            trace.toxml(tracePath);
-            System.out.println("[MicroRTS] saved trace: " + tracePath);
         }
 
         System.out.flush();
@@ -355,10 +347,9 @@ public class Game {
         System.out.print(renderStateSnapshot(finalTick));
     }
 
-    private boolean runCycles(JFrame w, Trace trace, String roundStateDirPath, DataOutputStream snapshots)
-            throws Exception {
+    private boolean runCycles(JFrame w, DataOutputStream snapshots) throws Exception {
         boolean gameover = false;
-        writeRoundStateSnapshot(roundStateDirPath, snapshots, gs.getTime(), false);
+        writeRoundStateSnapshot(snapshots, gs.getTime(), false);
 
         while (!gameover && gs.getTime() < maxCycles) {
             long timeToNextUpdate = System.currentTimeMillis() + updateInterval;
@@ -372,18 +363,12 @@ public class Game {
             // If an AI takes 5 seconds, the game just runs slower, not unfairly
             rts.PlayerAction pa1 = ai1.getAction(0, playerOneGameState);
             rts.PlayerAction pa2 = ai2.getAction(1, playerTwoGameState);
-            if (trace != null) {
-                TraceEntry entry = new TraceEntry(gs.getPhysicalGameState().cloneIncludingTerrain(), gs.getTime());
-                entry.addPlayerAction(pa1);
-                entry.addPlayerAction(pa2);
-                trace.addEntry(entry);
-            }
             gs.issueSafe(pa1);
             gs.issueSafe(pa2);
 
             // simulate
             gameover = gs.cycle();
-            writeRoundStateSnapshot(roundStateDirPath, snapshots, gs.getTime(), gameover);
+            writeRoundStateSnapshot(snapshots, gs.getTime(), gameover);
 
             // if not headless mode, wait and repaint the window
             if (w != null) {
@@ -408,7 +393,7 @@ public class Game {
     }
 
     private DataOutputStream openRoundStateStream(String roundStateDirPath) throws IOException {
-        if (roundStateDirPath.isEmpty() || !Boolean.getBoolean("microrts.round_state_stream")) {
+        if (roundStateDirPath.isEmpty()) {
             return null;
         }
         Path roundStateDir = Paths.get(roundStateDirPath);
@@ -417,9 +402,8 @@ public class Game {
                 Files.newOutputStream(roundStateDir.resolve("round_states-v1.bin"))));
     }
 
-    private void writeRoundStateSnapshot(String roundStateDirPath, DataOutputStream snapshots,
-            int tick, boolean gameover) throws IOException {
-        if (roundStateDirPath == null || roundStateDirPath.isEmpty()) {
+    private void writeRoundStateSnapshot(DataOutputStream snapshots, int tick, boolean gameover) throws IOException {
+        if (snapshots == null) {
             return;
         }
         StringBuilder content = new StringBuilder();
@@ -427,20 +411,9 @@ public class Game {
         content.append("GAMEOVER: ").append(gameover).append('\n');
         content.append(renderStateSnapshot(tick));
         byte[] payload = content.toString().getBytes(StandardCharsets.UTF_8);
-        if (snapshots != null) {
-            snapshots.writeInt(tick);
-            snapshots.writeInt(payload.length);
-            snapshots.write(payload);
-            return;
-        }
-        try {
-            Path roundStateDir = Paths.get(roundStateDirPath);
-            Files.createDirectories(roundStateDir);
-            String fileName = String.format("round_%06d.log", tick);
-            Files.write(roundStateDir.resolve(fileName), payload);
-        } catch (IOException e) {
-            System.err.println("[MicroRTS] failed to write round state snapshot: " + e.getMessage());
-        }
+        snapshots.writeInt(tick);
+        snapshots.writeInt(payload.length);
+        snapshots.write(payload);
     }
 
     private String renderStateSnapshot(int tick) {

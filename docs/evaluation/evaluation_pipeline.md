@@ -110,11 +110,10 @@ Per-candidate evaluation artifacts include:
 - `evaluation/code_quality.json`: code-quality diagnostics;
 - `evaluation/matches.json`: compact individual match records.
 
-Compact matches use one buffered Java snapshot stream. Scoring and trace
-generation share the decoded observations, including each tick used by the
-full artifact mode.
+Matches use one buffered Java snapshot stream. Scoring and compressed trace
+generation share the decoded per-tick observations.
 Real search and final benchmarks verify that the compiled MicroRTS runtime
-implements the stream before starting a compact evaluation.
+implements the stream before starting evaluation.
 
 Each run-level generation JSON stores objective statistics for every
 opponent case and the per-opponent reporting summaries used by analysis.

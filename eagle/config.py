@@ -258,7 +258,6 @@ class ExperimentConfig:
     semantic_probe_timeout_seconds: float = 120.0
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
-    match_artifact_mode: str = "compact"
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
     evaluation_map_tick_limits: tuple[int, ...] = ()
     rounds_per_map: int = 3
@@ -309,6 +308,9 @@ class ExperimentConfig:
         schema_version = payload.get("schema_version")
         if schema_version not in {None, "experiment-v1", "experiment-v2"}:
             raise ValueError(f"Unsupported experiment schema version: {schema_version!r}")
+        # Historical configs used either spelling. New matches always use compact artifacts.
+        if payload.get("match_artifact_mode", "compact") not in ("compact", "full"):
+            raise ValueError("Invalid legacy match_artifact_mode.")
         survivor_selection = str(
             payload.get("survivor_selection", MU_PLUS_LAMBDA_SELECTION)
         )
@@ -659,7 +661,6 @@ class ExperimentConfig:
             ),
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
-            match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             evaluation_maps=evaluation_maps,
             evaluation_map_tick_limits=evaluation_map_tick_limits,
             rounds_per_map=rounds_per_map,
@@ -1055,8 +1056,6 @@ class ExperimentConfig:
                 raise ValueError(f"Configured evaluation map does not exist: {microrts_root / map_path}")
         if self.match_timeout_seconds <= 0:
             raise ValueError("match_timeout_seconds must be greater than zero.")
-        if self.match_artifact_mode not in {"compact", "full"}:
-            raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
             raise ValueError("evaluation_opponents must use the canonical ten-opponent order.")
         if any(weight <= 0 for _, weight in self.evaluation_opponents):
@@ -1199,7 +1198,7 @@ class ExperimentConfig:
             "parent_evaluation_mode": self.parent_evaluation_mode,
             "tick_limit": self.tick_limit,
             "match_timeout_seconds": self.match_timeout_seconds,
-            "match_artifact_mode": self.match_artifact_mode,
+            "match_artifact_mode": "compact",
             "evaluation": {
                 "mode": self.evaluation_mode,
                 "match_execution": self.match_execution,

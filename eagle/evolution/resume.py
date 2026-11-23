@@ -20,6 +20,7 @@ from eagle.config import (
 from eagle.candidate import FRAMEWORK_SLOTS_MATERIALIZATION_VERSION
 from eagle.strategy_dsl import normalize_strategy_dsl
 from eagle.evaluation.opponents import preflight_evaluation_opponents
+from eagle.evaluation.round_states import require_buffered_round_states
 from eagle.run_artifacts import (
     FRAMEWORK_BUNDLE_ARTIFACT,
     RUN_SCHEMA_VERSION,
@@ -218,6 +219,8 @@ def _resume_search_impl(
     config.validate()
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
+    elif not mock:
+        require_buffered_round_states(config.microrts_dir)
     manifest = load_manifest(run_dir)
     if manifest.get("latest_generation") is None:
         if (

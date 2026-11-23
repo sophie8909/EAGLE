@@ -104,7 +104,6 @@ def evaluate_matches(
                     generation_index=candidate.generation,
                     source_hash=source_hash, class_hash=class_hash,
                     extra_classpath_entries=opponent.classpath_entries,
-                    artifact_mode=config.match_artifact_mode,
                     map_id=specification.map_id,
                     round_index=specification.round_index,
                     opponent_weight=specification.opponent_weight,

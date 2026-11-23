@@ -366,9 +366,9 @@ match_index order. `evaluation.match_execution: serial` switches the matrix to
 one worker while preserving the same match identities and result ordering.
 This reduces scheduling variance but cannot control external opponent wall-clock
 budgets or private RNGs, so it is not a bitwise reproducibility guarantee.
-match_timeout_seconds and match_artifact_mode remain
-independent top-level settings because they control per-process timeout and
-evidence retention rather than scheduling.
+`match_timeout_seconds` controls the per-process timeout. Match evidence
+always uses the compact format. Historical configs with the old
+`match_artifact_mode` setting resume using compact output for new matches.
 
 The resolved config records `survivor_selection: mu_plus_lambda`. Parent and
 offspring candidates jointly enter the evaluation mode's survivor selection:

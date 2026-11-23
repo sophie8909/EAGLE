@@ -19,7 +19,7 @@ from eagle.operators.strategy import (
     select_reflection_matches,
 )
 from eagle.evaluation.match_trace import iter_match_trace, write_match_trace
-from eagle.evaluation.runtime_evaluation import write_mock_round_state
+from tests.match_fixtures import write_mock_round_state
 
 
 def _write_trace(path: Path, *, metadata, round_state_dir, raw_result, tick_limit) -> None:

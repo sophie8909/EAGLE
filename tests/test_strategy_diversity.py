@@ -113,7 +113,7 @@ class StrategyDiversityTests(unittest.TestCase):
             root = Path(directory)
             states = root / "states"
             from eagle.evaluation.match_trace import write_match_trace
-            from eagle.evaluation.runtime_evaluation import write_mock_round_state
+            from tests.match_fixtures import write_mock_round_state
             write_mock_round_state(states, tick=0, p0_resource=1, p1_resource=1)
             log = write_match_trace(
                 round_state_dir=states,

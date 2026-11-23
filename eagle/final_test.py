@@ -447,7 +447,6 @@ def _run_final_matrix(
             class_hash=class_hash,
             candidate_player=candidate_player,
             extra_classpath_entries=opponent_classpaths[opponent.opponent_id],
-            artifact_mode="compact",
             map_id=evaluation_map.map_id,
             round_index=game_index,
             match_seed=match_seed,

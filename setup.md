@@ -17,7 +17,7 @@ experiment_env/model/llama.cpp-b10236-win-cuda-12.4-x64/llama-server.exe
 ## 更新已安裝的 MicroRTS
 
 原始碼更新後，等現有實驗結束，再執行 `.\setup.cmd -ToolsOnly` 重編 MicroRTS。
-新版在 `match_artifact_mode: compact` 下每場只用一個逐 tick 暫存檔。
+每場固定使用一個逐 tick 暫存檔，再寫出壓縮的對戰紀錄。
 
 ## 額外下載或搬移
 

@@ -17,6 +17,7 @@ from eagle.candidate import has_completed_evaluation
 from eagle.config import ExperimentConfig
 from eagle.evaluation.opponents import preflight_evaluation_opponents
 from eagle.evaluation.pipeline import evaluate_population
+from eagle.evaluation.round_states import require_buffered_round_states
 from eagle.evolution.loop import SearchResult, continue_search
 from eagle.evolution.runtime import build_search_runtime
 from eagle.generation.backend import InitialJavaSeedBackend
@@ -150,6 +151,8 @@ def _run_search_impl(
     config.validate()
     if config.evaluation_mode == "fixed_roster":
         preflight_evaluation_opponents(config, mock=mock)
+    elif not mock:
+        require_buffered_round_states(config.microrts_dir)
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = _new_run_directory(config, active_run_id, run_id)
     candidates_dir = run_dir / "candidates"

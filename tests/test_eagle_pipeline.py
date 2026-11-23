@@ -369,10 +369,8 @@ class EaglePipelineTests(unittest.TestCase):
                 match_artifacts_dir=relative_artifacts,
                 mock=True,
             )
-        trace_arg = next(arg for arg in result.command if arg.startswith("-Dmicrorts.trace.path="))
         round_state_arg = next(arg for arg in result.command if arg.startswith("-Dmicrorts.round_state_dir="))
         result_json_arg = result.command[result.command.index("--result-json") + 1]
-        self.assertTrue(Path(trace_arg.split("=", 1)[1]).is_absolute())
         self.assertTrue(Path(round_state_arg.split("=", 1)[1]).is_absolute())
         self.assertTrue(Path(result_json_arg).is_absolute())
 
@@ -899,7 +897,7 @@ class EaglePipelineTests(unittest.TestCase):
             ticks = read_tick_telemetry(root, player_index=0, scoring_config=GamePerformanceConfig())
         self.assertEqual([tick.tick for tick in ticks], [0, 3])
 
-    def test_separate_matches_do_not_overwrite_replay_and_telemetry(self) -> None:
+    def test_separate_matches_do_not_overwrite_trace_and_telemetry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             first = run_microrts_match(
@@ -911,7 +909,6 @@ class EaglePipelineTests(unittest.TestCase):
                 match_index=0,
                 match_artifacts_dir=root / "matches",
                 mock=True,
-                artifact_mode="full",
             )
             second = run_microrts_match(
                 microrts_dir=Path("third_party/microrts"),
@@ -922,13 +919,12 @@ class EaglePipelineTests(unittest.TestCase):
                 match_index=1,
                 match_artifacts_dir=root / "matches",
                 mock=True,
-                artifact_mode="full",
             )
-            self.assertNotEqual(first.replay_path, second.replay_path)
+            self.assertNotEqual(first.trace_path, second.trace_path)
             self.assertNotEqual(first.telemetry_path, second.telemetry_path)
-            self.assertTrue((root / first.replay_path).exists())
+            self.assertTrue((root / first.trace_path).exists())
             self.assertTrue((root / first.telemetry_path).exists())
-            self.assertTrue((root / second.replay_path).exists())
+            self.assertTrue((root / second.trace_path).exists())
             self.assertTrue((root / second.telemetry_path).exists())
 
     def test_performance_total_is_sum_of_four_components(self) -> None:

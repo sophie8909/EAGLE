@@ -303,9 +303,8 @@ Snapshot: 2026-10-15. Unless explicitly marked, implementation details below des
   revision/generation and compilation while ready candidates run matches.
   Canonical indices preserve endpoint routes, seeds, ordinals and final result
   order. All roles share two active requests per server origin; different servers
-  proceed independently. AOS choices/rewards stay serial. Compact artifacts skip
-  XML replay and use one buffered round-state stream for scoring and trace
-  production; full artifacts retain replay and individual round-state logs.
+  proceed independently. AOS choices/rewards stay serial. Match artifacts use
+  one buffered round-state stream for scoring and compressed trace production.
 
 - Controllable randomness is always seeded from the EA root `random_seed`.
   Stable task streams cover initialization, selection, operators, crossover,

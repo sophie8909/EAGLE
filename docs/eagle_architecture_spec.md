@@ -627,8 +627,8 @@ fallback result evidence when no round-state file exists, metadata, result, and
 an integrity report. Strategy Reflection consumes this same trace. A second
 `match_log.jsonl.gz` format is prohibited.
 
-Compact mode may remove replay and raw round-state files after canonical
-telemetry and trace persistence. Parent traces remain available until every
+Matches remove the temporary snapshot stream after canonical telemetry and
+trace persistence. Parent traces remain available until every
 same-generation sibling has been constructed. Only after atomic survivor
 persistence may traces for retired parents and discarded offspring be removed;
 survivor traces remain available to the next generation.

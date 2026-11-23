@@ -146,7 +146,6 @@ def evaluate_parent_vs_offspring(
                 generation_index=offspring.generation,
                 source_hash=source_hash,
                 class_hash=offspring_class_hash,
-                artifact_mode=config.match_artifact_mode,
                 map_id=specification.map_id,
                 round_index=specification.round_index,
                 opponent_source_generation=comparison_parent.generation,

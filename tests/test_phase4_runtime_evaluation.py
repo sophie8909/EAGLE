@@ -636,7 +636,6 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 match_index=0,
                 match_artifacts_dir=root / "matches",
                 mock=True,
-                artifact_mode="compact",
             )
             match_dir = root / "matches" / "match_00"
             persisted = json.loads((match_dir / "result.json").read_text(encoding="utf-8"))
@@ -677,7 +676,6 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 match_index=0,
                 match_artifacts_dir=root / "matches",
                 mock=True,
-                artifact_mode="compact",
                 match_seed=123456,
             )
             persisted = json.loads(
@@ -687,30 +685,6 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(result.match_seed, 123456)
         self.assertIn("-Deagle.match.seed=123456", result.command)
         self.assertEqual(persisted["match_seed"], 123456)
-
-    def test_full_artifact_mode_keeps_raw_replay_and_round_states(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            result = run_microrts_match(
-                microrts_dir=root,
-                classes_dir=root / "classes",
-                agent_class="ai.generated.CandidateAgent",
-                opponent="ai.abstraction.LightRush",
-                tick_limit=100,
-                match_index=0,
-                match_artifacts_dir=root / "matches",
-                mock=True,
-                artifact_mode="full",
-            )
-            match_dir = root / "matches" / "match_00"
-            replay_exists = (match_dir / "replay.xml").is_file()
-            rounds_exist = (match_dir / "round_states").is_dir()
-            telemetry_exists = (match_dir / "telemetry.json").is_file()
-
-        self.assertTrue(result.ok)
-        self.assertTrue(replay_exists)
-        self.assertTrue(rounds_exist)
-        self.assertTrue(telemetry_exists)
 
 
 if __name__ == "__main__":

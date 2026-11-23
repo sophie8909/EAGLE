@@ -42,7 +42,8 @@ class ResumeWorkflowTests(unittest.TestCase):
                     with self.assertRaises(type(failure)):
                         run_search(config, mock=True, on_run_created=callback.append)
                 self.assertEqual(callback, [])
-                manifest = json.loads(next((root / "runs").glob("*/manifest.json")).read_text(encoding="utf-8"))
+                manifest_path, = (root / "runs").rglob("manifest.json")
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 self.assertEqual(manifest["status"], status)
 
     def test_legacy_protocol_is_rejected_without_touching_run(self):
@@ -100,6 +101,11 @@ class ResumeWorkflowTests(unittest.TestCase):
             config = replace(config, runs_dir=root / "runs")
             initial = run_search(config, config_path=config_path, mock=True)
             (initial.run_dir / "generations" / "generation_0002.json").unlink()
+            run_config_path = initial.run_dir / "config.yaml"
+            written_config = run_config_path.read_text(encoding="utf-8")
+            self.assertIn("match_artifact_mode: compact", written_config)
+            legacy_config = written_config.replace("match_artifact_mode: compact", "match_artifact_mode: full", 1)
+            run_config_path.write_text(legacy_config, encoding="utf-8")
             manifest_path = initial.run_dir / "manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest.update(status="interrupted", latest_generation=1)
@@ -111,6 +117,9 @@ class ResumeWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(resumed.run_dir, initial.run_dir)
             self.assertEqual(resumed.completed_generation, 2)
+            self.assertEqual(run_config_path.read_text(encoding="utf-8"), legacy_config)
+            self.assertTrue(list(initial.run_dir.rglob("telemetry.json.gz")))
+            self.assertFalse(list(initial.run_dir.rglob("round_*.log")))
             self.assertFalse((initial.run_dir / "generation_metrics.jsonl").exists())
             self.assertTrue((initial.run_dir / "generations" / "generation_0000.json").is_file())
             self.assertTrue((initial.run_dir / "generations" / "generation_0001.json").is_file())

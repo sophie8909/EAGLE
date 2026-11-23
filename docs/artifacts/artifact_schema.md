@@ -83,9 +83,9 @@ requires `candidate_java_mode: generated_phenotype` and
 one-worker match execution. The runtime uses GPU layers `999`, eight model
 threads, two server slots, two LLM workers, and ten match workers by default;
 serial mode uses one. `context_size` remains the per-request limit; the server allocates
-twice that amount for two slots. `match_timeout_seconds` and
-`match_artifact_mode` remain top-level because they describe process limits and
-evidence retention. Every resolved `evaluation.maps` entry is a `{path,
+twice that amount for two slots. `match_timeout_seconds` controls each match
+process limit. Resolved configs record the fixed `match_artifact_mode: compact`
+for compatibility. Every resolved `evaluation.maps` entry is a `{path,
 tick_limit}` mapping, even when the source config used a string map path and
 inherited the top-level fallback. New runs do not write `source_config`,
 `resolved_config.json`, or `prompt_snapshot.json`.
@@ -595,9 +595,17 @@ and `match_metadata.json` `evaluation_configuration.tick_limit` must equal the
 resolved cap of the associated map. Final-test summary map entries likewise
 retain `tick_limit` beside map ID and path.
 
-Compact mode uses one buffered, versioned round-state stream per match. Python reads it once for scoring telemetry and the canonical trace, then removes the temporary input. Real compact benchmarks require a compiled MicroRTS build with the stream writer. Full mode retains the Java XML replay and individual round-state logs. `result.json` owns match timing; there is no `timing.json`. Empty stdout/stderr files are absent and have null references. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
+Matches use one buffered, versioned round-state stream per match. Python reads
+it once for scoring telemetry and the canonical compressed trace, then removes
+the temporary input. Real matches require a compiled MicroRTS build with the
+stream writer. `result.json` stores match timing.
+Empty stdout/stderr files are absent and have null references. `raw_result.json`
+is the unnormalized Java-runner payload and therefore is not a duplicate.
+New writers do not emit `match_result.json`.
 
-Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
+Mock matches synthesize the initial and final snapshots in memory and use the
+same compact artifact writer. Historical match results may still refer to XML
+replays and individual round-state logs.
 
 Match records use `round_index` for repeated games. `result.json` and trace
 metadata always record the stable positive `match_seed` passed to MicroRTS as

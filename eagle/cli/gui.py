@@ -97,7 +97,6 @@ def form_options() -> dict:
             "local", "llm_coach", "option_reflection", "reflection",
         ],
         "execution_mode": ["openai", "mock"],
-        "match_artifact_mode": ["compact", "full"],
         "algorithm": ["lexicase", "game_performance_semantic_tiebreak"],
         "survivor_selection": ["mu_plus_lambda"],
         "application": ["microrts"],
@@ -111,7 +110,7 @@ def form_options() -> dict:
         "parent_evaluation_mode", "reflection_operator_mode", "execution_mode",
         "strategy_reflection_probability", "prompt_reflection_probability",
         "code_reflection_probability", "aos_minimum_probability", "tick_limit",
-        "match_timeout_seconds", "match_artifact_mode", "runs_dir", "microrts_dir",
+        "match_timeout_seconds", "runs_dir", "microrts_dir",
     ]
     defaults = {key: ExperimentConfig.__dataclass_fields__[key].default for key in common}
     defaults.update({
