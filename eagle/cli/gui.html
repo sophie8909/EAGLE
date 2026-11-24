@@ -26,25 +26,25 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
  <div class="toolbar"><button id="validate">驗證設定</button><button id="save">儲存 Config</button></div>
  <details><summary>進階：獨立啟動 LLM server（一般不需要）</summary>
   <p class="hint">一般直接啟動實驗即可自動管理本機模型。若使用這裡獨立啟動的服務，請在啟動實驗時勾選「只連線」。</p>
-  <div class="toolbar"><button id="start-server">啟動 LLM server</button><button id="stop-server" class="danger" disabled>停止 LLM server</button></div>
+  <div class="toolbar"><button id="start-server" disabled>啟動 LLM server</button><button id="stop-server" class="danger" disabled>停止 LLM server</button></div>
   <div id="server-status" class="status">尚未啟動 LLM server</div>
   <pre id="server-log" aria-label="LLM server 輸出"></pre><p id="server-file" class="logfile"></p>
  </details>
  <details open><summary>啟動實驗</summary>
   <p class="hint">以目前編輯內容建立獨立快照後啟動，日後編輯不會改到執行中的實驗。一次執行一個實驗，可包含多個 runs。</p>
-  <p class="hint">關閉瀏覽器或啟動視窗後，實驗會繼續跑。可重新開啟 GUI 查看進度。按「停止實驗」或在 GUI 終端按 Ctrl+C 可中止。</p>
+  <p class="hint">關閉瀏覽器或啟動視窗後，實驗會繼續跑。用相同連接埠重開 GUI，就會顯示執行中的實驗進度與日誌。按「停止實驗」或在 GUI 終端按 Ctrl+C 可中止。</p>
   <p class="hint">預設自動啟動並管理本機 LLM，實驗結束時釋放。Windows 若由其他軟體開好 server，請勾選「只連線」；該服務不會被重啟或關閉。兩台分別設定不同 random_seeds，其他實驗參數保持相同；非空清單會優先於 random_seed。</p>
   <div class="toolbar"><label><input type="checkbox" id="connect-only">只連線（server 已由其他軟體開啟）</label><label><input type="checkbox" id="mock">Mock（不呼叫模型）</label><label><input type="checkbox" id="skip-final">略過 Final Test</label></div>
   <label id="llm-server-address-field" hidden>LLM server 網址
    <input id="llm-server-address" type="text" inputmode="url" spellcheck="false" autocomplete="off"
           placeholder="例如 http://192.168.1.136:1234（留空則沿用實驗設定）">
   </label>
-  <div class="toolbar"><button id="start" class="primary">啟動目前設定</button><button id="stop-experiment" class="danger" disabled>停止實驗</button></div>
+  <div class="toolbar"><button id="start" class="primary" disabled>啟動目前設定</button><button id="stop-experiment" class="danger" disabled>停止實驗</button></div>
   <h3>繼續實驗（Resume）</h3>
   <p class="hint">單一 Run 使用已儲存的設定。批次使用設定資料夾的 experiment.yaml 索引。兩者皆套用上方勾選的執行選項。</p>
   <div class="row"><label>單一 Run<select id="resume-run"></select></label><button id="resume" disabled>繼續此 Run</button></div>
   <div class="row"><label>實驗批次<select id="resume-batch"></select></label><button id="resume-batch-button" disabled>繼續此批次</button><button id="refresh-batches">刷新批次</button></div>
-  <div id="experiment-status" class="status">尚未啟動實驗</div>
+  <div id="experiment-status" class="status" role="status">正在確認實驗狀態…</div>
   <div id="experiment-progress" class="job-progress" hidden>
    <p id="experiment-progress-label" aria-live="polite"></p>
    <progress id="experiment-progress-bar" aria-label="實驗進度"></progress>
@@ -78,7 +78,7 @@ main{max-width:1550px;margin:auto;padding:22px;display:grid;grid-template-column
 const $=id=>document.getElementById(id);
 const csrf='__CSRF_TOKEN__';
 let meta, payload={}, originalText='', editing='form', dirty=false, loaded=false, runData={generations:[],pending:[]}, jobRunning=false, serverRunning=false, matchRunning=false, refreshing=false;
-let fastJobs=true, jobsRefreshing=false, experimentRevision=0, legacyStatus=null;
+let fastJobs=true, jobsRefreshing=false, experimentStatusKnown=false, experimentRevision=0, legacyStatus=null;
 let legacyLog=null, legacyOutput=null, legacyProgress={};
 async function api(path,body,signal){
  const response=await fetch(path,body===undefined?{signal}:{method:'POST',headers:{'Content-Type':'application/json','X-Eagle-Token':csrf},body:JSON.stringify(body)});
@@ -175,9 +175,10 @@ function updateButtons(){
  const selected=candidates().find(item=>item.candidate_id===$('candidates').value);
  $('watch').disabled=matchRunning||!selected?.watchable||!$('opponent').value||!$('map').value;
  $('candidate-status').textContent=selected?(selected.watchable?'Java 原始碼已備妥，可編譯觀戰。':'此個體尚無完整 Java 原始碼，或來源不一致，暫時無法觀戰。'):'';
- $('start-server').disabled=serverRunning||jobRunning||!loaded;$('stop-server').disabled=!serverRunning||jobRunning;
- $('start').disabled=jobRunning||!loaded;$('resume').disabled=jobRunning||!$('resume-run').value;
- $('resume-batch-button').disabled=jobRunning||!$('resume-batch').value;
+ const experimentIdle=experimentStatusKnown&&!jobRunning;
+ $('start-server').disabled=!experimentIdle||serverRunning||!loaded;$('stop-server').disabled=!experimentIdle||!serverRunning;
+ $('start').disabled=!experimentIdle||!loaded;$('resume').disabled=!experimentIdle||!$('resume-run').value;
+ $('resume-batch-button').disabled=!experimentIdle||!$('resume-batch').value;
  $('stop-experiment').disabled=!jobRunning;$('stop-match').disabled=!matchRunning;
 }
 async function refreshRun(){
@@ -187,7 +188,9 @@ async function refreshRun(){
 }
 function renderJob(kind,job){
  const name=kind==='server'?'LLM server':kind==='experiment'?'實驗':'對戰';
- $(kind+'-status').textContent=job.pid===null?'尚未啟動'+name:job.running?(job.stopping?'正在停止，等待清理…':name+'執行中 · PID '+job.pid):name+(job.returncode===0?'已完成':'已結束 · exit '+job.returncode);
+ const status=$(kind+'-status');
+ const text=job.pid===null?'尚未啟動'+name:job.running?(job.stopping?'正在停止，等待清理…':name+'執行中 · PID '+job.pid):name+(job.returncode===0?'已完成':'已結束 · exit '+job.returncode);
+ if(status.textContent!==text)status.textContent=text;
  const log=$(kind+'-log');const previousTop=log.scrollTop;const path=job.log||'';
  const changedJob=log.dataset.path!==path;
  const follow=changedJob||previousTop+log.clientHeight>=log.scrollHeight-30;
@@ -225,7 +228,7 @@ function progressFromLegacyJob(job,runs){
  return legacyProgress;
 }
 function renderExperiment(job,runs=[]){
- jobRunning=job.running;renderJob('experiment',job);
+ experimentStatusKnown=true;jobRunning=job.running;renderJob('experiment',job);
  const strip=$('experiment-progress');strip.hidden=job.pid===null;
  if(strip.hidden)return;
  const progress=job.progress??progressFromLegacyJob(job,runs);
