@@ -4,21 +4,14 @@
 #analysis-workspace{grid-template-columns:minmax(245px,290px) minmax(0,1fr)}
 #analysis-workspace .panel{padding:18px}
 #analysis-workspace aside{position:sticky;top:12px;max-height:calc(100dvh - 24px);overflow:auto}
-#analysis-workspace aside form>label{margin:0 0 12px}
-#analysis-workspace fieldset{border:0;margin:0 0 12px;padding:0;min-width:0}
-#analysis-workspace legend{font-size:12px;color:#47606b;padding:0;margin-bottom:5px}
-.analysis-options{display:grid;gap:4px;max-height:10rem;overflow:auto;border:1px solid #d9e2e5;border-radius:6px;padding:5px}
-.analysis-options label{display:flex;align-items:start;gap:4px;padding:5px;overflow-wrap:anywhere;cursor:pointer}
-.analysis-options input[type=checkbox]{margin-top:2px;flex:none}
-.analysis-options label:has(:checked){background:#edf5f7;border-radius:4px}
-#analysis-components fieldset{margin-bottom:8px}
-#analysis-components legend{font-size:11px;font-weight:600}
-#analysis-components .analysis-options{max-height:7.5rem}
-#analysis-treatment-table{overflow:auto;margin-top:10px;border:1px solid #d9e2e5;border-radius:6px}
-#analysis-treatment-table table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
-#analysis-treatment-table th,#analysis-treatment-table td{border-bottom:1px solid #dfe8eb;padding:6px 7px;text-align:left;vertical-align:top}
-#analysis-treatment-table th{background:#eff5f7;color:#315865;position:sticky;top:0}
-#analysis-treatment-table td.diff{background:#ffe5bd}
+.analysis-options{display:grid;gap:4px}
+.analysis-options label{display:flex;align-items:start;gap:8px;padding:8px;border-radius:5px;cursor:pointer}
+.analysis-options input[type=checkbox]{margin-top:2px;flex:none;accent-color:var(--experiment-color)}
+.analysis-options label:has(:checked){background:#edf5f7}
+.analysis-options input:focus-visible{outline:2px solid #176879;outline-offset:2px}
+#analysis-treatment-table{margin:2px 0 14px}
+#analysis-treatment-table :is(td,th){white-space:normal;vertical-align:top}
+#analysis-treatment-table th{position:static}
 #analysis-workspace h3{margin-top:0}
 .analysis-results{display:grid;gap:16px;min-width:0}
 .analysis-nav{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 14px}
@@ -45,39 +38,22 @@
 </style>
 <main id="analysis-workspace" hidden>
  <aside class="panel" aria-labelledby="analysis-filter-title">
-  <h2 id="analysis-filter-title">篩選條件</h2>
-  <form id="analysis-filters" novalidate>
-  <div id="analysis-components" aria-label="按實驗組成篩選"></div>
-  <label>實驗 / 結果包<select id="analysis-experiment"></select></label>
-  <fieldset id="analysis-treatment-options"><legend>該實驗的版本</legend><div class="analysis-options" id="analysis-treatments"></div></fieldset>
-  <p class="hint">組成可複選。每個版本顯示所有可用 Seed。</p>
-  <label>比較模式<select id="analysis-mode"><option value="explore">探索</option><option value="paired">配對消融</option></select></label>
-  <label id="analysis-baseline-label" hidden>基準版本<select id="analysis-baseline"></select></label>
-  <div class="grid">
-   <label>起始世代<input id="analysis-minimum" type="number" step="1" min="0" placeholder="0"></label>
-   <label>結束世代<input id="analysis-maximum" type="number" step="1" min="0" placeholder="自動"></label>
-  </div>
-  <label><input id="analysis-cohort" type="checkbox">各世代使用固定 Seed 組合</label>
-  <details id="analysis-attempts"><summary>選擇 Run Attempt</summary><div id="analysis-attempt-list"></div></details>
-  <div class="toolbar"><button id="analysis-apply" type="submit" class="primary" disabled>套用篩選</button><button id="analysis-refresh" type="button">重新讀取資料</button></div>
-  <p id="analysis-filter-status" class="hint" role="status"></p>
-  </form>
+  <h2 id="analysis-filter-title">實驗結果</h2>
+  <div class="analysis-options" id="analysis-experiments"></div>
  </aside>
  <div class="analysis-results">
   <section class="panel" aria-labelledby="analysis-title">
    <div class="analysis-header"><div><h2 id="analysis-title">實驗分析</h2><p id="analysis-status" class="hint" role="status"></p></div>
-    <div class="row"><button id="analysis-csv" disabled>下載可見資料 CSV</button><button id="analysis-export" disabled>匯出 Git 結果包</button></div>
+    <button id="analysis-csv" disabled>下載可見資料 CSV</button>
    </div>
+   <div class="analysis-scroll" id="analysis-treatment-table"></div>
    <nav id="analysis-navigation" class="analysis-nav" aria-label="分析結果" hidden>
     <a href="#analysis-self-play-panel">Self-play</a>
     <a href="#analysis-fixed-panel">固定對手</a>
     <a href="#analysis-diversity-panel">多樣性</a>
     <a href="#analysis-final-panel">Final Test</a>
     <a href="#analysis-opponents-panel">逐對手勝負</a>
-    <a id="analysis-paired-link" href="#analysis-paired-panel" hidden>配對差值</a>
    </nav>
-   <div class="analysis-scroll" id="analysis-coverage"></div>
-   <details id="analysis-comparison" hidden><summary>比較版本設定</summary><div id="analysis-treatment-table"></div></details>
    <details id="analysis-evidence" hidden><summary>資料缺口與比較限制</summary><ul class="analysis-issues" id="analysis-issues"></ul></details>
   </section>
   <section class="panel" id="analysis-self-play-panel">
@@ -90,6 +66,7 @@
     <label>候選個體統計<select id="analysis-fixed"><option value="mean">族群平均</option><option value="best">族群最佳</option><option value="representative">代表個體</option></select></label>
     <label>對手<select id="analysis-fixed-opponent"></select></label>
    </div></div>
+   <p class="hint">各實驗依原始評估場次呈現。單一 GPT baseline 只有 G0 評估點。</p>
    <div class="analysis-chart" id="analysis-chart-fixed"></div>
    <details id="analysis-fixed-coverage" hidden><summary>固定評估候選個體涵蓋率</summary><div class="analysis-scroll" id="analysis-fixed-coverage-table"></div></details>
   </section>
@@ -106,10 +83,6 @@
    <p class="hint">合併勝率為 W / (W + D + L)。平均 Seed 勝率為各 Seed 有定義的勝率的算術平均。</p>
    <div class="analysis-scroll" id="analysis-opponents"></div>
   </section>
-  <section class="panel" id="analysis-paired-panel" hidden>
-   <h3>同 Seed 消融差值（版本 − 基準）</h3>
-   <div class="analysis-scroll" id="analysis-pairs"></div>
-  </section>
  </div>
 </main>
 <script>
@@ -118,18 +91,14 @@
  const ui = name => $('analysis-' + name);
  const colors = ['#146d83', '#aa511b', '#7851a0', '#347149', '#aa3f62', '#5e631d', '#4264ad', '#966500'];
  const metrics = ['self_play', 'fixed', 'diversity'];
- const metricLabel = {self_play:'Self-play', fixed:'固定對手', diversity:'多樣性', final:'Final Test'};
+ const metricLabel = {self_play:'Self-play', fixed:'固定對手', diversity:'多樣性'};
  const statisticLabel = {mean:'平均', best:'最佳', median:'中位數', worst:'最低', representative:'代表個體', minimum:'最小', maximum:'最大', min:'最小', max:'最大'};
- let choices = [], catalogIssues = [], model, experimentKey, appliedFilters, loading = false, dirty = false;
- const componentFields = {
-  local_llm_evolution: '本地 LLM 參與演化',
-  initialization_group: '初始化',
-  evolution: '演化方式',
- };
+ let choices = [], catalogIssues = [], catalogRequest, model, revision = 0;
+ const views = new Map();
  const localLLMLabels = {yes:'有',no:'無',unknown:'未記錄'};
- let components = {};
  const list = select => [...select.selectedOptions].map(option => option.value);
- const checked = name => [...ui(name).querySelectorAll('input:checked')].map(input => input.value);
+ const checked = () => [...ui('experiments').querySelectorAll('input:checked')].map(input => input.value);
+ const color = experiment => colors[choices.findIndex(row => row.id === experiment) % colors.length] || colors[0];
  const number = value => Number.isFinite(value) ? Number(value.toPrecision(5)).toString() : '—';
  const rate = value => Number.isFinite(value) ? number(value * 100) + '%' : '—';
  const describe = value => value == null ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -148,215 +117,94 @@
   select.replaceChildren(...options.map(([value, label]) => new Option(label, value, false, preferred.includes(String(value)))));
  }
 
- function fillChecks(target, options, selected) {
-  target.replaceChildren(...options.map(([value, text]) => {
+ async function refreshCatalog() {
+  ui('status').textContent = '讀取最終結果…';
+  const result = await api('/api/analysis?published=1');
+  choices = result.experiments.filter(row => row.bundle).sort((a,b) => a.id.localeCompare(b.id));
+  catalogIssues = result.issues || [];
+  ui('experiments').replaceChildren(...choices.map(experiment => {
    const label = document.createElement('label');
+   label.style.setProperty('--experiment-color',color(experiment.id));
    const input = document.createElement('input');
    input.type = 'checkbox';
-   input.value = value;
-   input.checked = selected.includes(String(value));
-   label.append(input, text);
+   input.value = experiment.id;
+   input.checked = true;
+   label.append(input,experiment.label);
    return label;
   }));
- }
-
- function componentMatch(item) {
-  return Object.entries(components).every(([key, values]) => !values.length || values.includes(item[key]));
- }
-
- function matchingTreatments(experiment) {
-  if (!Object.values(components).some(values => values.length)) return null;
-  return new Set((experiment.components || []).filter(componentMatch).map(item => item.treatment));
- }
-
- function renderComponentOptions() {
-  const all = choices.flatMap(row => row.components || []);
-  const fields = [];
-  for (const [key, title] of Object.entries(componentFields)) {
-   const options = [...new Set(all.map(row => row[key]).filter(Boolean))];
-   if (!options.length) continue;
-   const field = document.createElement('fieldset');
-   field.dataset.component = key;
-   field.append(Object.assign(document.createElement('legend'), {textContent:title}));
-   const items = document.createElement('div');
-   items.className = 'analysis-options';
-   components[key] = (components[key] || []).filter(value => options.includes(value));
-   fillChecks(items, options.map(value => [value, key === 'local_llm_evolution' ? localLLMLabels[value] : value]),
-              components[key]);
-   field.append(items);
-   fields.push(field);
-  }
-  ui('components').replaceChildren(...fields);
- }
-
- function filterExperiments(preferred) {
-  const visible = choices.map((row,index) => [row,index]).filter(([row]) => {
-   const matching = matchingTreatments(row);
-   return matching == null || matching.size > 0;
-  });
-  fill(ui('experiment'), visible.map(([row,index]) => [
-   index, row.label + (row.run_count === 0 ? '（暫無結果）' : ''),
-  ]), [String(preferred)]);
- }
-
- function request() {
-  const experiment = choices[Number(ui('experiment').value)];
-  const filters = {
-   experiment:experiment.id,
-   include_all_seeds:true,
-   attempts:Object.fromEntries([...ui('attempt-list').querySelectorAll('select')].map(select => [select.dataset.key, select.value])),
-   paired:ui('mode').value === 'paired',
-   fixed_cohort:ui('cohort').checked,
-   fixed_opponent:ui('fixed-opponent').value || null,
-  };
-  const allowed = matchingTreatments(experiment);
-  const treatments = checked('treatments').filter(id => allowed == null || allowed.has(id));
-  if (treatments.length || allowed != null) filters.treatments = treatments.length ? treatments : [...allowed];
-  if (experiment.bundle) filters.bundle = experiment.bundle;
-  if (filters.paired && ui('baseline').value && (!filters.treatments || filters.treatments.includes(ui('baseline').value))) {
-   filters.baseline = ui('baseline').value;
-  }
-  for (const name of ['minimum', 'maximum']) {
-   if (ui(name).validity.badInput) throw new Error('請輸入非負整數世代。');
-   if (ui(name).value !== '') filters[name] = ui(name).valueAsNumber;
-  }
-  if (['minimum','maximum'].some(name => name in filters && (!Number.isInteger(filters[name]) || filters[name] < 0))) throw new Error('請輸入非負整數世代。');
-  if (filters.minimum > filters.maximum) throw new Error('起始世代必須小於或等於結束世代。');
-  return filters;
- }
-
- async function refreshCatalog() {
-  const previous = choices[Number(ui('experiment').value)];
-  const result = await api('/api/analysis');
-  choices = result.experiments;
-  catalogIssues = result.issues || [];
-  const retained = choices.findIndex(row => row.id === previous?.id && row.bundle === previous?.bundle);
-  renderComponentOptions();
-  filterExperiments(retained);
   await refreshView();
  }
 
+ function loadExperiment(id, opponent) {
+  const key = JSON.stringify([id,opponent]);
+  if (!views.has(key)) {
+   views.set(key,api('/api/analysis/view',{
+    experiment:id, bundle:true, include_all_seeds:true, fixed_opponent:opponent || null,
+   }).catch(error => {
+    views.delete(key);
+    throw error;
+   }));
+  }
+  return views.get(key);
+ }
+
  async function refreshView() {
-  const experiment = choices[Number(ui('experiment').value)];
-  if (!experiment || !ui('experiment').value) {
-   model = null;
-   experimentKey = null;
-   ui('treatment-options').hidden = true;
-   clearView('沒有符合目前組成的實驗或結果包。');
+  const current = ++revision;
+  const selected = checked();
+  const opponent = ui('fixed-opponent').value;
+  ui('csv').disabled = true;
+  if (!selected.length) {
+   clearView(choices.length ? '請勾選要顯示的實驗結果。' : '目前沒有可用的最終結果。');
    return;
   }
-  const key = JSON.stringify([experiment.id, experiment.bundle]);
-  const changedExperiment = key !== experimentKey;
-  if (changedExperiment) {
-   experimentKey = key;
-   model = null;
-   clearView('讀取實驗結果…');
-   for (const name of ['treatments','baseline','attempt-list','fixed-opponent']) ui(name).replaceChildren();
-   ui('minimum').value = ui('maximum').value = '';
-   ui('mode').value = 'explore';
-   ui('cohort').checked = false;
+  ui('status').textContent = '讀取已勾選的實驗結果…';
+  const responses = await Promise.allSettled(selected.map(id => loadExperiment(id,opponent)));
+  if (current !== revision) return;
+  const loaded = responses.filter(row => row.status === 'fulfilled').map(row => row.value);
+  const errors = responses.flatMap((row,index) => row.status === 'rejected'
+   ? [choices.find(choice => choice.id === selected[index]).label + '：' + row.reason.message] : []);
+  if (!loaded.length) {
+   clearView('無法讀取已勾選的實驗結果。',errors);
+   return;
   }
-  const filters = request();
-  const body = !model && experiment.bundle
-   ? {experiment:experiment.id,bundle:true,include_all_seeds:true,treatments:filters.treatments} : filters;
-  const result = await api('/api/analysis/view', body);
-  model = result;
-  appliedFilters = {...filters,...result.filters};
-  model.paired = appliedFilters.paired;
-  renderControls(appliedFilters);
+  const fields = ['selected','points','aggregates','opponents','fixed_coverage','fixed_opponents','issues','treatments'];
+  model = Object.fromEntries(fields.map(field => [field,loaded.flatMap(result =>
+   (result[field] || []).map(row => typeof row === 'object' ? {experiment:result.experiment,...row} : row)
+  )]));
+  model.issues.push(...errors);
+  const opponents = [...new Set(model.fixed_opponents)];
+  const activeOpponent = opponents.includes(opponent) ? opponent : '';
+  fill(ui('fixed-opponent'),[['','全部對手'],...opponents.map(id => [id,id])],[activeOpponent]);
+  if (activeOpponent !== opponent) {
+   await refreshView();
+   return;
+  }
+  const diversity = new Set(['mean',...model.points.filter(row => row.metric === 'diversity').map(row => row.statistic)]);
+  fill(ui('diversity'),[...diversity].map(stat => [stat,statisticLabel[stat] || stat]));
   render();
-  dirty = false;
+  ui('csv').disabled = false;
  }
 
  function treatmentLabels() {
-  return new Map([...model.runs, ...(model.treatments || [])].map(row => [
-   row.treatment, row.comparison?.short_name || row.label,
-  ]));
+  return new Map(model.treatments.map(row => [row.treatment,row.comparison?.short_name || row.label]));
  }
 
- function renderControls(filters) {
-  const labels = treatmentLabels();
-  const allowed = matchingTreatments(choices[Number(ui('experiment').value)]);
-  const available = [...labels].filter(([id]) => allowed == null || allowed.has(id));
-  const treatmentSelection = filters.treatments?.length ? filters.treatments.map(String) : available.map(([id]) => id);
-  fillChecks(ui('treatments'), available, treatmentSelection);
-  ui('treatment-options').hidden = available.length < 2;
-  renderTreatmentTable(treatmentSelection);
-  ui('mode').value = filters.paired ? 'paired' : 'explore';
-  ui('cohort').checked = Boolean(filters.fixed_cohort);
-  for (const name of ['minimum', 'maximum']) ui(name).value = filters[name] ?? '';
-  updateBaseline();
-  filters.baseline ||= model.baseline;
-  if (filters.baseline && [...ui('baseline').options].some(option => option.value === filters.baseline)) ui('baseline').value = filters.baseline;
-  const selected = new Map(model.selected.map(run => [run.treatment + ':' + run.seed, run.run_id]));
-  const previous = filters.attempts || {};
-  const groups = groupBy(model.runs.filter(run => run.run_id && Number.isInteger(run.seed)), run => run.treatment + ':' + run.seed);
-  const fields = [];
-  for (const [key, runs] of groups) {
-   if (runs.length < 2) continue;
-   const label = document.createElement('label');
-   label.textContent = (labels.get(runs[0].treatment) || runs[0].label) + ' · Seed ' + runs[0].seed;
-   const select = document.createElement('select');
-   select.dataset.key = key;
-   const indexed = runs.find(run => run.indexed) || runs[0];
-   fill(select, runs.map(run => [run.run_id, run.run_id + ' · ' + run.status]), [selected.get(key) || previous[key] || indexed.run_id]);
-   label.append(select);
-   fields.push(label);
-  }
-  ui('attempts').hidden = !fields.length;
-  ui('attempt-list').replaceChildren(...fields);
-  const all = model.points.concat(model.aggregates);
-  const fixedOpponents = [...new Set([...(model.fixed_opponents || []), ...all.filter(row => row.metric === 'fixed').map(row => row.opponent)].filter(Boolean))];
-  fill(ui('fixed-opponent'), [['','全部對手'], ...fixedOpponents.map(id => [id,id])], [filters.fixed_opponent || '']);
-  const diversity = new Set(['mean', ...all.filter(row => row.metric === 'diversity').map(row => row.statistic)]);
-  fill(ui('diversity'), [...diversity].map(stat => [stat, statisticLabel[stat] || stat]));
-  for (const metric of metrics) {
-   const statistic = filters.statistics?.[metric];
-   if ([...ui(metric).options].some(option => option.value === statistic)) ui(metric).value = statistic;
-  }
- }
-
- function renderTreatmentTable(preferred) {
-  const target = ui('treatment-table');
-  const rows = model?.treatments || [];
-  ui('comparison').hidden = !rows.length;
-  if (!rows.length) {
-   target.replaceChildren();
-   return;
-  }
-  const columns = [
-   ['initialization','初始化'], ['evolution','演化方式'], ['local_llm_evolution','本地 LLM 參與演化'],
-   ['framework','Initial framework'], ['parent_selection','Parent selection'],
-   ['survivor_selection','Survivor selection'], ['opponent_refresh','對手池更新'],
-   ['strategy_reflection','Strategy Reflection'], ['prompt_reflection','Prompt Reflection'],
-   ['code_reflection','Code Reflection'],
-  ];
-  const selected = new Set(preferred.map(String));
-  const visible = rows.filter(row => !selected.size || selected.has(row.treatment));
-  const differences = new Set(columns.filter(([key]) => new Set(visible.map(row => row.comparison?.[key] ?? '—')).size > 1).map(([key]) => key));
-  const table = document.createElement('table');
-  const head = table.createTHead().insertRow();
-  head.append(Object.assign(document.createElement('th'),{textContent:'版本'}));
-  for (const [,label] of columns) head.append(Object.assign(document.createElement('th'),{textContent:label}));
-  const body = table.createTBody();
-  for (const row of visible) {
-   const tr = body.insertRow();
-   tr.insertCell().textContent = row.comparison?.short_name || row.label;
-   for (const [key] of columns) {
-    const value = row.comparison?.[key];
-    const td = tr.insertCell();
-    td.textContent = (key === 'local_llm_evolution' ? localLLMLabels[value] : value) ?? '—';
-    if (differences.has(key)) td.className = 'diff';
-   }
-  }
-  target.replaceChildren(table);
- }
-
- function updateBaseline() {
-  if (!model) return;
-  const selected = checked('treatments');
-  fill(ui('baseline'), [...treatmentLabels()].filter(([id]) => !selected.length || selected.includes(id)));
-  ui('baseline-label').hidden = ui('mode').value !== 'paired';
+ function renderTreatmentTable(labels) {
+  const runs = groupBy(model.selected,row => row.treatment);
+  const finals = groupBy(model.points.filter(row => row.metric === 'final'),row => row.treatment);
+  table('treatment-table',['實驗結果','初始化（G0）','演化方式','演化使用本地 LLM','完成世代','Seeds','每候選 Final Test 場次'],
+   model.treatments.map(row => {
+    const selected = runs.get(row.treatment) || [];
+    const settings = row.comparison || {};
+    const generations = [...new Set(selected.map(run => run.latest_generation).filter(Number.isInteger))];
+    const counts = [...new Set((finals.get(row.treatment) || []).map(point => point.coverage?.expected).filter(Number.isInteger))];
+    return [
+     labels.get(row.treatment),settings.initialization,settings.evolution,localLLMLabels[settings.local_llm_evolution],
+     generations.map(generation => 'G' + generation).join('、') || '—',
+     selected.map(run => run.seed).join(', ') || '—',counts.join('、') || '—',
+    ];
+   })
+  );
  }
 
  function table(target, headings, rows, empty = '目前選擇沒有可用資料。') {
@@ -390,19 +238,20 @@
   }));
  }
 
- function clearView(text) {
+ function clearView(text, errors = []) {
+  model = null;
   ui('status').textContent = text;
-  for (const name of ['coverage','final','opponents','pairs',...metrics.map(metric=>'chart-'+metric)]) ui(name).replaceChildren();
-  ui('paired-panel').hidden = ui('paired-link').hidden = ui('fixed-coverage').hidden = ui('comparison').hidden = true;
+  ui('treatment-table').replaceChildren();
   ui('navigation').hidden = true;
-  ui('csv').disabled = ui('export').disabled = true;
-  issues(catalogIssues);
+  ui('csv').disabled = true;
+  for (const panel of [...metrics,'final','opponents']) ui(panel.replace('_','-')+'-panel').hidden = true;
+  issues([...catalogIssues,...errors]);
  }
 
  function metricVisible(row) {
   if (!metrics.includes(row.metric)) return true;
   return row.statistic === ui(row.metric).value
-   && (row.metric !== 'fixed' || (row.opponent || '') === (appliedFilters.fixed_opponent || ''));
+   && (row.metric !== 'fixed' || (row.opponent || '') === ui('fixed-opponent').value);
  }
 
  function svgElement(tag, attributes = {}, content) {
@@ -431,57 +280,47 @@
   const points = model.points.filter(usable);
   const aggregates = model.aggregates.filter(usable);
   const aggregateRows = new Set(aggregates);
-  const pointRows = new Set(points);
   const visible = [...aggregates, ...points];
   target.replaceChildren();
   if (!visible.length) {
    target.textContent = '目前選擇沒有可用資料。';
    return;
   }
-  const labelsByTreatment = [...labels.keys()];
-  const color = id => colors[labelsByTreatment.indexOf(id) % colors.length] || colors[0];
-  const protocolLabel = id => id ? ' · ' + id : '';
-  const protocolGroups = groupBy(visible, row => row.protocol || '未知定義 / ' + row.treatment + (row.run_id ? ' / ' + row.run_id : ''));
-  const chartGroups = [];
-  for (const [protocol, group] of protocolGroups) {
-   const scheduled = new Set(group.map(row=>row.generation));
-   if (metric === 'fixed') {
-    for (const row of model.fixed_coverage || []) {
-     if (metricVisible({...row,metric:'fixed'}) && (row.protocol === protocol || (!row.protocol && group.some(point=>point.run_id === row.run_id && point.treatment === row.treatment)))) {
-      scheduled.add(row.generation);
+  const evidenceByGeneration = groupBy(points,row => JSON.stringify([row.treatment,row.protocol,row.generation]));
+  const width = 900, height = 240, left = 68, right = 24, top = 18, bottom = 44;
+  const low = Math.min(...visible.map(row=>Number.isFinite(row.min) ? row.min : row.value));
+  const high = Math.max(...visible.map(row=>Number.isFinite(row.max) ? row.max : row.value));
+  const spread = high-low || Math.max(Math.abs(low)*0.1,1);
+  const start = low-spread*0.08, end = high+spread*0.08;
+  const x = value => left+(width-left-right)*(bounds[1] === bounds[0] ? 0.5 : (value-bounds[0])/(bounds[1]-bounds[0]));
+  const y = value => top+(height-top-bottom)*(end-value)/(end-start);
+  const svg = svgElement('svg',{viewBox:'0 0 '+width+' '+height,role:'img','aria-label':metricLabel[metric]});
+  for (let i=0;i<=4;i++) {
+   const value = start+(end-start)*i/4;
+   svg.append(svgElement('line',{x1:left,y1:y(value),x2:width-right,y2:y(value),stroke:'#dbe5e8'}));
+   svg.append(svgElement('text',{x:left-9,y:y(value)+4,'text-anchor':'end',fill:'currentColor'},number(value)));
+  }
+  const steps = Math.min(8,bounds[1]-bounds[0]);
+  for (let i=0;i<=steps;i++) {
+   const generation = Math.round(bounds[0]+(bounds[1]-bounds[0])*i/Math.max(1,steps));
+   svg.append(svgElement('text',{x:x(generation),y:height-bottom+17,'text-anchor':'middle',fill:'currentColor'},generation));
+  }
+  svg.append(svgElement('text',{x:width/2,y:height-7,'text-anchor':'middle',fill:'currentColor'},'世代'));
+  const legend = document.createElement('div');
+  legend.className = 'analysis-legend';
+  for (const [treatment, values] of groupBy(visible,row => row.treatment)) {
+   const ink = color(values[0].experiment);
+   for (const [protocol, series] of groupBy(values,row => row.protocol ?? null)) {
+    const scheduled = new Set(series.map(row => row.generation));
+    if (metric === 'fixed') {
+     for (const row of model.fixed_coverage) {
+      if (row.treatment === treatment && (row.protocol ?? null) === protocol && metricVisible({...row,metric:'fixed'})) {
+       scheduled.add(row.generation);
+      }
      }
     }
-   }
-   const schedule = metric === 'fixed' ? new Map([...scheduled].sort((a,b)=>a-b).map((generation,index)=>[generation,index])) : null;
-   const rows = group.filter(row => aggregateRows.has(row));
-   const seeds = group.filter(row => pointRows.has(row));
-   const evidenceByGeneration = groupBy(seeds, row => row.treatment + ':' + row.generation);
-   const samples = [...seeds, ...rows];
-   if (!samples.length) continue;
-   const width = 900, height = 240, left = 68, right = 24, top = 18, bottom = 44;
-   const low = Math.min(...samples.map(row=>Number.isFinite(row.min) ? row.min : row.value));
-   const high = Math.max(...samples.map(row=>Number.isFinite(row.max) ? row.max : row.value));
-   const spread = high-low || Math.max(Math.abs(low)*0.1,1);
-   const start = low-spread*0.08, end = high+spread*0.08;
-   const x = value => left+(width-left-right)*(value-bounds[0])/Math.max(1,bounds[1]-bounds[0]);
-   const y = value => top+(height-top-bottom)*(end-value)/(end-start);
-   const svg = svgElement('svg',{viewBox:'0 0 '+width+' '+height,role:'img','aria-label':metricLabel[metric]+protocolLabel(protocol)});
-   for (let i=0;i<=4;i++) {
-    const value = start+(end-start)*i/4;
-    svg.append(svgElement('line',{x1:left,y1:y(value),x2:width-right,y2:y(value),stroke:'#dbe5e8'}));
-    svg.append(svgElement('text',{x:left-9,y:y(value)+4,'text-anchor':'end',fill:'currentColor'},number(value)));
-   }
-   const steps = Math.min(8,bounds[1]-bounds[0]);
-   for (let i=0;i<=steps;i++) {
-    const generation = Math.round(bounds[0]+(bounds[1]-bounds[0])*i/Math.max(1,steps));
-    svg.append(svgElement('text',{x:x(generation),y:height-bottom+17,'text-anchor':'middle',fill:'currentColor'},generation));
-   }
-   svg.append(svgElement('text',{x:width/2,y:height-7,'text-anchor':'middle',fill:'currentColor'},'世代'));
-   const legend = document.createElement('div');
-   legend.className = 'analysis-legend';
-   for (const [treatment, values] of groupBy(samples,row=>row.treatment)) {
-    const ink = color(treatment);
-    const means = values.filter(row=>aggregateRows.has(row));
+    const schedule = metric === 'fixed' ? new Map([...scheduled].sort((a,b) => a-b).map((generation,index) => [generation,index])) : null;
+    const means = series.filter(row=>aggregateRows.has(row));
     const band = means.filter(row=>row.n >= 2 && Number.isFinite(row.min) && Number.isFinite(row.max));
     for (const segment of consecutive(band, schedule)) {
      if (segment.length === 1) {
@@ -492,16 +331,17 @@
      const polygon = [...segment.map(row=>[x(row.generation),y(row.max)]),...segment.slice().reverse().map(row=>[x(row.generation),y(row.min)])];
      svg.append(svgElement('polygon',{points:polygon.join(' '),fill:ink,'fill-opacity':0.15}));
     }
-    const traces = groupBy(values, row=>aggregateRows.has(row) ? '' : row.seed);
+    const traces = groupBy(series.filter(row => !aggregateRows.has(row) || row.n > 1), row=>aggregateRows.has(row) ? '' : row.seed);
     const dashPatterns = ['3 2','8 3','5 2 1 2','2 4','10 2 2 2'];
     for (const [seed, trace] of traces) {
      const mean = seed === '';
      const dash = mean ? '' : dashPatterns[Math.abs(Number(seed)) % dashPatterns.length];
      for (const segment of consecutive(trace, schedule)) {
+      if (segment.length < 2) continue;
       svg.append(svgElement('polyline',{points:segment.map(row=>[x(row.generation),y(row.value)]).join(' '),fill:'none',stroke:ink,'stroke-width':mean ? 2.6 : 1.2,'stroke-opacity':mean ? 1 : 0.46,'stroke-dasharray':dash}));
      }
      for (const row of trace) {
-      const generationEvidence = mean ? (evidenceByGeneration.get(treatment + ':' + row.generation) || []) : [];
+      const generationEvidence = mean ? (evidenceByGeneration.get(JSON.stringify([treatment,protocol,row.generation])) || []) : [];
       const matchingEvidence = generationEvidence.filter(point => !row.seeds || row.seeds.includes(point.seed));
       const observations = matchingEvidence.map(point => {
        const context = point.context != null ? '對手 ' + describe(point.context) : '';
@@ -518,74 +358,35 @@
        row.coverage != null && '涵蓋 '+describe(row.coverage),
        row.context != null && '對手 '+describe(row.context),
        row.details != null && describe(row.details),
+       protocol && '協定 ' + protocol,
        row.source,
       ].filter(Boolean).join('\n');
-      const dot = svgElement('circle',{cx:x(row.generation),cy:y(row.value),r:mean ? 3 : 2.2,fill:ink,opacity:mean ? 1 : 0.65,tabindex:0,'aria-label':detail});
+      const dot = svgElement('circle',{cx:x(row.generation),cy:y(row.value),r:mean || trace.length === 1 ? 3.5 : 2.2,fill:ink,opacity:mean || trace.length === 1 ? 1 : 0.65,tabindex:0,'aria-label':detail});
       dot.append(svgElement('title',{},detail));
       svg.append(dot);
      }
     }
-    const item = document.createElement('span');
-    const marker = document.createElement('i');
-    marker.style.background = ink;
-    item.append(marker, labels.get(treatment) || treatment);
-    legend.append(item);
    }
-   const section = document.createElement('div');
-   if (protocol) {
-    const caption = document.createElement('p');
-    caption.className = 'hint';
-    caption.textContent = protocol;
-    if (model.protocols?.[protocol]) caption.title = describe(model.protocols[protocol]);
-    section.append(caption);
-   }
-   section.append(svg, legend);
-   chartGroups.push(section);
+   const item = document.createElement('span');
+   const marker = document.createElement('i');
+   marker.style.background = ink;
+   item.append(marker,labels.get(treatment) || treatment);
+   legend.append(item);
   }
-  target.append(...chartGroups);
- }
-
- function visibleBounds() {
-  const max = model.points.reduce((value,row)=>Math.max(value,row.metric === 'final' ? 0 : row.generation || 0),0);
-  const first = appliedFilters.minimum ?? 0;
-  const last = appliedFilters.maximum ?? max;
-  return [first,Math.max(first,last)];
- }
-
- function coverageRows(labels) {
-  const filters = appliedFilters;
-  const treatmentIds = filters.treatments?.length ? filters.treatments : [...labels.keys()];
-  const coverage = model.coverage;
-  return treatmentIds.map(id => {
-   const selected = model.selected.filter(run => run.treatment === id);
-   const counts = coverage?.[id] || {};
-   const count = statuses => selected.filter(run => statuses.includes(run.status)).length;
-   const expected = (model.treatments || []).find(item=>item.treatment===id)?.expected_seeds;
-   const expectedSelected = expected?.length ? expected : selected.map(run => run.seed);
-   const missing = expectedSelected.filter(seed=>!model.runs.some(run=>run.treatment===id && run.seed===seed && run.run_id));
-   return [
-    labels.get(id) || id,
-    counts.selected ?? selected.length,
-    counts.completed ?? count(['completed','complete']),
-    counts.in_progress ?? count(['running','in_progress']),
-    counts.failed ?? count(['failed','interrupted','aborted']),
-    Array.isArray(counts.missing) ? counts.missing.join(', ') || '—' : counts.missing ?? (missing.join(', ') || '—'),
-    selected.map(run=>run.seed).join(', ') || '—',
-   ];
-  });
+  target.append(svg,legend);
  }
 
  function render() {
   if (!model) return;
   ui('navigation').hidden = false;
+  for (const panel of [...metrics,'final','opponents']) ui(panel.replace('_','-')+'-panel').hidden = false;
   const labels = treatmentLabels();
   const label = id => labels.get(id) || id;
-  const bounds = visibleBounds();
-  const horizon = model.horizon || {};
-  ui('status').textContent = model.selected.length+' 個 Run · 規劃共同上限 '+describe(horizon.planned)+' · 已完成共同上限 '+describe(horizon.observed);
-  issues([...new Set(catalogIssues.concat(model.issues || []))]);
-  table('coverage',['版本','已選','完成','執行中','失敗 / 中斷','缺少 Seeds','納入 Seeds'],coverageRows(labels));
-  metrics.forEach(metric=>chart(metric,bounds,labels));
+  const bounds = [0,model.points.reduce((value,row) => row.metric === 'final' ? value : Math.max(value,row.generation),0)];
+  ui('status').textContent = model.treatments.length + ' 個實驗 · ' + model.selected.length + ' 個 Run';
+  issues([...new Set(catalogIssues.concat(model.issues))]);
+  renderTreatmentTable(labels);
+  metrics.forEach(metric => chart(metric,bounds,labels));
   const coverage = (model.fixed_coverage || []).filter(row=>row.generation>=bounds[0] && row.generation<=bounds[1] && metricVisible({...row,metric:'fixed'}));
   ui('fixed-coverage').hidden = !coverage.length;
   table('fixed-coverage-table',['版本','Seed','世代','已評估個體','預期個體','選擇方式','來源'],coverage.map(row=>[
@@ -601,11 +402,6 @@
    label(row.treatment),row.seed ?? '彙總',row.opponent,row.wins,row.draws,row.losses,row.errors,
    row.counted,rate(row.win_rate),rate(row.mean_seed_win_rate),row.faults ?? row.opponent_fault_contained ?? row.opponent_fault_contained_matches,row.protocol,
   ]));
-  ui('paired-panel').hidden = ui('paired-link').hidden = !model.paired;
-  table('pairs',['版本','基準','指標','統計','世代','Seed','差值','配對數','納入 Seeds','缺少 Seeds'],model.deltas.filter(metricVisible).map(row=>[
-   label(row.treatment),label(row.baseline),metricLabel[row.metric],statisticLabel[row.statistic] || row.statistic,
-   row.generation,row.seed ?? '平均',number(row.value),row.n,row.seeds,row.missing_seeds,
-  ]),'目前選擇沒有符合條件的配對。');
  }
 
  function downloadCsv() {
@@ -613,12 +409,10 @@
   const sources = [
    ['seed',model.points.filter(metricVisible)],
    ['aggregate',model.aggregates.filter(metricVisible)],
-   ['delta',model.deltas.filter(metricVisible)],
    ['opponent',model.opponents],
    ['fixed_coverage',(model.fixed_coverage || []).filter(row=>metricVisible({...row,metric:'fixed'}))],
   ];
-  const experiment = choices[Number(ui('experiment').value)].id;
-  const rows = sources.flatMap(([record, values])=>values.map(row=>({experiment,record,...row})));
+  const rows = sources.flatMap(([record, values])=>values.map(row=>({record,...row})));
   if (!rows.length) throw new Error('目前選擇沒有可下載資料。');
   const fields = [...new Set(rows.flatMap(row=>Object.keys(row)))];
   const csvValue = value => {
@@ -630,7 +424,7 @@
   const url = URL.createObjectURL(new Blob(['\uFEFF',contents],{type:'text/csv;charset=utf-8'}));
   const link = document.createElement('a');
   link.href = url;
-  link.download = experiment + '-analysis.csv';
+  link.download = 'experiment-analysis.csv';
   link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
  }
@@ -642,34 +436,6 @@
   });
  }
 
- function updateActions(message) {
-  ui('apply').disabled = loading || (!model && ui('experiment').value === '');
-  ui('csv').disabled = loading || !model;
-  ui('export').disabled = loading || !model || Boolean(choices[Number(ui('experiment').value)]?.bundle);
-  ui('filter-status').textContent = message ?? (dirty ? '篩選條件已變更，套用後會更新結果。' : '');
- }
-
- async function loadResults(action) {
-  if (loading) return;
-  loading = true;
-  ui('filters').inert = true;
-  ui('fixed-opponent').disabled = true;
-  updateActions('正在讀取實驗結果…');
-  let errorMessage;
-  try {
-   await action();
-  } catch (error) {
-   errorMessage = error.message;
-   if (!model) clearView(errorMessage);
-   else if (!dirty) ui('fixed-opponent').value = appliedFilters.fixed_opponent || '';
-  } finally {
-   loading = false;
-   ui('filters').inert = false;
-   ui('fixed-opponent').disabled = !model;
-   updateActions(errorMessage);
-  }
- }
-
  $('workspace-control-tab').addEventListener('click',()=>switchWorkspace(false));
  $('workspace-analysis-tab').addEventListener('click',()=>switchWorkspace(true));
  function switchWorkspace(showAnalysis) {
@@ -677,46 +443,22 @@
   $('analysis-workspace').hidden = !showAnalysis;
   $('workspace-control-tab').setAttribute('aria-pressed',String(!showAnalysis));
   $('workspace-analysis-tab').setAttribute('aria-pressed',String(showAnalysis));
-  if (showAnalysis && !model) loadResults(refreshCatalog);
+  if (showAnalysis && !catalogRequest) {
+   catalogRequest = refreshCatalog().catch(error => {
+    catalogRequest = null;
+    clearView(error.message);
+   });
+  }
+  if (!showAnalysis) {
+   refresh().catch(error=>message(error.message,true));
+   refreshJobs().catch(error=>message(error.message,true));
+  }
  }
 
- bind('refresh','click',() => loadResults(refreshCatalog));
- bind('experiment','change',() => loadResults(refreshView));
- bind('components','change',event => {
-  const field = event.target.closest('[data-component]');
-  if (!field) return;
-  components[field.dataset.component] = [...field.querySelectorAll('input:checked')].map(input => input.value);
-  const previous = ui('experiment').value;
-  filterExperiments(previous);
-  ui('treatments').replaceChildren();
-  return loadResults(refreshView);
- });
- bind('filters','submit',event => {
-  event.preventDefault();
-  return loadResults(refreshView);
- });
- bind('filters','input',event => {
-  if (event.target === ui('experiment') || ui('components').contains(event.target)) return;
-  if (event.target === ui('mode') || ui('treatments').contains(event.target)) updateBaseline();
-  dirty = true;
-  updateActions();
- });
+ clearView('讀取最終結果…');
+ bind('experiments','change',refreshView);
  for (const name of metrics) bind(name,'change',render);
- bind('fixed-opponent','change',() => {
-  if (!dirty) return loadResults(refreshView);
-  updateActions('套用側欄篩選後會更新對手與其他篩選條件。');
- });
+ bind('fixed-opponent','change',refreshView);
  bind('csv','click',downloadCsv);
- bind('export','click',async () => {
-  const button = ui('export');
-  button.disabled = true;
-  try {
-   const statistics = Object.fromEntries(metrics.map(metric=>[metric,ui(metric).value]));
-   const result = await api('/api/analysis/export',{...appliedFilters,statistics});
-   ui('status').textContent = '結果包已匯出：' + describe(result.path || result.manifest || result.message);
-  } finally {
-   updateActions();
-  }
- });
 })();
 </script>

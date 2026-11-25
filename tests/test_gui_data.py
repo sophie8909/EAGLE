@@ -164,6 +164,12 @@ class GuiRunTests(unittest.TestCase):
         self.assertEqual(rows[0]["path"], str(nested.resolve()))
         self.assertEqual(rows[0]["name"], "version_a/seed_8/attempt_0001")
 
+    def test_run_listing_skips_subtrees_inside_canonical_runs(self):
+        nested = self.run / "archives" / "nested-run"
+        nested.mkdir(parents=True)
+        (nested / "manifest.json").write_bytes((self.run / "manifest.json").read_bytes())
+        self.assertEqual([item["name"] for item in list_runs(self.runs)], ["run_a"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,9 @@
+experiment,generation,max,metric,min,missing_seeds,n,opponent,protocol,sd,seeds,statistic,treatment,value
+gpt_baseline_gen0,0,-9.001,self_play,-9.001,[],1,,gpt-once-search-reported,,[8],best,gpt_baseline_gen0,-9.001
+gpt_baseline_gen0,0,-9.001,self_play,-9.001,[],1,,gpt-once-search-reported,,[8],mean,gpt_baseline_gen0,-9.001
+gpt_baseline_gen0,0,-9.001,self_play,-9.001,[],1,,gpt-once-search-reported,,[8],median,gpt_baseline_gen0,-9.001
+gpt_baseline_gen0,0,-9.001,self_play,-9.001,[],1,,gpt-once-search-reported,,[8],worst,gpt_baseline_gen0,-9.001
+gpt_baseline_gen0,0,-9.50516,fixed,-9.50516,[],1,,gpt-once-fixed-600-reported,,[8],mean,gpt_baseline_gen0,-9.50516
+gpt_baseline_gen0,0,-9.50516,fixed,-9.50516,[],1,,gpt-once-fixed-600-reported,,[8],best,gpt_baseline_gen0,-9.50516
+gpt_baseline_gen0,0,-9.50516,fixed,-9.50516,[],1,,gpt-once-fixed-600-reported,,[8],representative,gpt_baseline_gen0,-9.50516
+gpt_baseline_gen0,0,-9.50516,final,-9.50516,[],1,,gpt-once-fixed-600-reported,,[8],score,gpt_baseline_gen0,-9.50516

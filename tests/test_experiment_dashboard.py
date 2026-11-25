@@ -94,6 +94,40 @@ class ExperimentDashboardTests(unittest.TestCase):
         catalog = dashboard.catalog(self.root, [])
         bundle, = [row for row in catalog["experiments"] if row.get("bundle")]
         self.assertEqual((bundle["id"], bundle["label"], bundle["run_count"]), ("exp", "exp", 5))
+        legacy = self.root / "reports" / "experiments" / "old"
+        legacy.mkdir(parents=True)
+        (legacy / "manifest.json").write_bytes((self.root / "results" / "exp" / "manifest.json").read_bytes())
+        with patch.object(dashboard, "discover") as discover:
+            published = dashboard.catalog(self.root, [], published_only=True)
+        discover.assert_not_called()
+        self.assertEqual(published["experiments"], [bundle])
+
+    def test_only_export_loads_all_fixed_opponent_curves(self):
+        def evidence(run, *, fixed_opponent=None):
+            result = self.metrics(run, fixed_opponent=fixed_opponent)
+            result["fixed_opponents"] = ["mayari"]
+            if fixed_opponent:
+                for point in result["points"]:
+                    if point["metric"] == "fixed":
+                        point["opponent"] = fixed_opponent
+            return result
+
+        def details(run, opponents):
+            return [evidence(run, fixed_opponent=opponent) for opponent in opponents]
+
+        with patch.object(dashboard, "read_metrics", side_effect=evidence), patch.object(
+            dashboard, "read_fixed_opponents", side_effect=details,
+        ) as detail_loader:
+            overview = self.view()
+            detail_loader.assert_not_called()
+            self.assertEqual(overview["fixed_opponents"], ["mayari"])
+            dashboard.export(self.root, [], {"experiment": "exp"})
+            self.assertEqual(detail_loader.call_count, len(overview["selected"]))
+
+        overview = self.view(bundle=True)
+        detail = self.view(bundle=True, fixed_opponent="mayari")
+        self.assertEqual({r.get("opponent") for r in overview["points"] if r["metric"] == "fixed"}, {None})
+        self.assertEqual({r.get("opponent") for r in detail["points"] if r["metric"] == "fixed"}, {"mayari"})
 
     def test_unknown_protocol_is_inspectable_without_pooling(self):
         with patch.object(dashboard, "read_metrics", return_value={

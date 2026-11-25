@@ -266,7 +266,9 @@ class GuiApp:
         if path == INSTANCE_PATH:
             return {"root": str(self.root), "token": self.token, "runs_roots": list(map(str, self.runs_roots.copy()))}
         if path == "/api/analysis":
-            return experiment_dashboard.catalog(self.root, self.runs_roots)
+            return experiment_dashboard.catalog(
+                self.root, self.runs_roots, published_only=query.get("published") == ["1"],
+            )
         if path == "/api/meta":
             return self.metadata()
         if path == "/api/config":

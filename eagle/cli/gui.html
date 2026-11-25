@@ -322,9 +322,11 @@ action('watch',async()=>{await api('/api/watch',{run:$('runs').value,candidate:$
 action('refresh-runs',refresh);
 $('runs').onchange=()=>refresh().catch(error=>message(error.message,true));$('generations').onchange=renderCandidates;$('candidates').onchange=updateButtons;$('opponent').onchange=updateButtons;
 window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
-const pollJobs=()=>refreshJobs().catch(error=>message(error.message,true));
+const pollJobs=()=>{
+ if(!$('control-workspace').hidden&&!document.hidden)refreshJobs().catch(error=>message(error.message,true));
+};
 setInterval(pollJobs,1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollJobs();});
+document.addEventListener('visibilitychange',pollJobs);
 pollJobs();
 async function init(){
  meta=await api('/api/meta');setOptions($('configs'),meta.configs.map(path=>({value:path,label:path})),'尚無設定');renderBatches(meta.batches);
@@ -333,7 +335,8 @@ async function init(){
  const preferred=meta.configs.find(path=>path.includes('qwen3_5_9b/'));if(preferred)$('configs').value=preferred;
  setOptions($('opponent'),meta.opponents.map(item=>({value:item.id,label:item.name+(item.available?'':'（缺少依賴）'),disabled:!item.available})));$('opponent').value='lightrush';
  setOptions($('map'),meta.maps.map(path=>({value:path,label:path})));if(meta.maps.includes('maps/8x8/basesWorkers8x8.xml'))$('map').value='maps/8x8/basesWorkers8x8.xml';
- if(meta.configs.length)await loadConfig();else await refresh();setInterval(()=>refresh().catch(error=>message(error.message,true)),3000);
+ if(meta.configs.length)await loadConfig();else await refresh();
+ setInterval(()=>{if(controlVisible())refresh().catch(error=>message(error.message,true));},3000);
 }
 init().catch(error=>message(error.message,true));
 </script>
