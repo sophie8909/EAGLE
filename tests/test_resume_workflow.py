@@ -3,7 +3,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 import json
+from contextlib import redirect_stderr
 from dataclasses import replace
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -45,6 +47,29 @@ class ResumeWorkflowTests(unittest.TestCase):
                 manifest_path, = (root / "runs").rglob("manifest.json")
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 self.assertEqual(manifest["status"], status)
+
+    def test_startup_artifact_write_failures_preserve_the_original_bundle_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = replace(ExperimentConfig.from_mapping({}), runs_dir=Path(directory))
+            run_dir = config.runs_dir / "failed-bootstrap"
+            original_error = FileNotFoundError(2, "No such file or directory", run_dir / "framework/bundle.json")
+            warnings = StringIO()
+
+            def fail_freeze(*args, **kwargs):
+                (run_dir / "manifest.json").unlink()
+                raise original_error
+
+            with (
+                patch("eagle.evolution.search.freeze_framework_bundle", side_effect=fail_freeze),
+                patch("eagle.evolution.search.write_run_config", side_effect=OSError("config write failed")),
+                redirect_stderr(warnings),
+                self.assertRaises(FileNotFoundError) as raised,
+            ):
+                run_search(config, mock=True, run_id=run_dir.name)
+
+            self.assertIs(raised.exception, original_error)
+            self.assertIn("config write failed", warnings.getvalue())
+            self.assertIn("manifest.json", warnings.getvalue())
 
     def test_legacy_protocol_is_rejected_without_touching_run(self):
         from eagle.evolution.resume import load_resume_config

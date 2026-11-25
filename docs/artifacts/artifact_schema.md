@@ -44,8 +44,9 @@ This document owns the LLM-mode `eagle-run-v2`, `eagle-generation-v3`, and `eagl
 
 GUI-facing fresh runs are grouped as `runs/<version>/seed_<seed>/<attempt>/`.
 The version groups resolved initialization, selection, and reflection choices.
-On Windows, long version labels use a short initialization prefix and a digest
-of the full version label, leaving room for nested candidate and Java paths.
+On Windows and on WSL runs stored under `/mnt/<drive>`, long version labels use a
+short initialization prefix and a digest of the full version label, leaving room
+for nested candidate and Java paths.
 Each attempt keeps its own canonical `eagle-run-v2` directory. Explicit
 `run_id` callers may continue to place a run at the supplied legacy root.
 
@@ -136,7 +137,9 @@ initialization, LLM-log, archive, final-test, and run-timing evidence below
 `archives/interrupted_work/startup_attempt_<nnnn>/`, then replays generation
 zero from the frozen framework. Failed bootstrap preserves
 attempts and a failed manifest; pending config cannot resume without a usable
-frozen bundle. Failed replicate startup does not bind a folder-batch index slot.
+frozen bundle. If recording a startup failure also fails, the original error is
+reported and the artifact error is logged as a warning. Failed replicate startup
+does not bind a folder-batch index slot.
 The resolved `framework.evolution_mode` defaults to `local` and must match on
 resume; it does not alter the bundle or materializer version.
 When `framework.initial_genomes` is present, the resolved config records the

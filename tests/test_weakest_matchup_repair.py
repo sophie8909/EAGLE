@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
 from io import StringIO
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -177,7 +177,7 @@ class WeakestMatchupRepairWorkflowTests(unittest.TestCase):
         coach_dir = PureWindowsPath("candidates/gen_0000_d1bf70074e31/initialization/framework_coach")
         evidence = coach_dir / "coach_response_attempt_001.json"
 
-        with patch("eagle.evolution.search._WINDOWS", False):
+        with patch("eagle.evolution.search._WINDOWS", False), patch("eagle.evolution.search._WSL", False):
             original = _new_run_directory(config, attempt, None)
         with patch("eagle.evolution.search._WINDOWS", True):
             compact = _new_run_directory(config, attempt, None)
@@ -191,6 +191,23 @@ class WeakestMatchupRepairWorkflowTests(unittest.TestCase):
         self.assertEqual(compact.parent.parent, next_seed.parent.parent)
         self.assertNotEqual(compact.parent.parent, baseline.parent.parent)
         self.assertEqual(explicit, config.runs_dir / "given-id")
+
+    def test_wsl_shortens_version_folder_only_on_a_windows_drive(self):
+        config = replace(ExperimentConfig.from_file(WMR_CONFIG), runs_dir=Path("runs"), random_seed=10)
+        attempt = "20261125_191102_563480"
+        with patch("eagle.evolution.search._WINDOWS", True):
+            compact = _new_run_directory(config, attempt, None)
+
+        with patch("eagle.evolution.search._WINDOWS", False), patch("eagle.evolution.search._WSL", True):
+            with patch.object(type(config.runs_dir), "resolve", return_value=PurePosixPath(
+                "/mnt/c/Users/mhlab/Documents/GitHub/EAGLE/runs"
+            )):
+                mounted = _new_run_directory(config, attempt, None)
+            with patch.object(type(config.runs_dir), "resolve", return_value=PurePosixPath("/home/lab/EAGLE/runs")):
+                native = _new_run_directory(config, attempt, None)
+
+        self.assertEqual(mounted, compact)
+        self.assertEqual(native, config.runs_dir / _result_version_folder(config) / "seed_10" / attempt)
 
     def test_config_only_opts_in_to_wmr_and_labels_the_treatment(self):
         baseline = ExperimentConfig.from_file(BASELINE_CONFIG)

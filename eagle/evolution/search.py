@@ -7,6 +7,8 @@ iteration and finalization; evaluation owns the child pipeline.
 from __future__ import annotations
 
 import hashlib
+import platform
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +48,7 @@ from eagle.timing import Stopwatch, append_event, build_generation_event
 
 
 _WINDOWS = sys.platform == "win32"
+_WSL = sys.platform == "linux" and "microsoft" in platform.release().lower()
 
 
 def _result_version_folder(config: ExperimentConfig) -> str:
@@ -92,7 +95,9 @@ def _new_run_directory(config: ExperimentConfig, active_run_id: str, run_id: str
     if run_id is not None:
         return config.runs_dir / active_run_id
     version = _result_version_folder(config)
-    if _WINDOWS and len(version) > 38:
+    if len(version) > 38 and (
+        _WINDOWS or (_WSL and re.match(r"^/mnt/[a-z](?:/|$)", config.runs_dir.resolve().as_posix()))
+    ):
         # Leave room for nested candidate and Java artifacts under a Windows checkout.
         initialization = version.split("__", 1)[0][:24].rstrip("_")
         digest = hashlib.sha256(version.encode("utf-8")).hexdigest()[:12]
@@ -104,41 +109,6 @@ def run_search(
     config: ExperimentConfig,
     *,
     config_path: Path | None = None,
-    mock: bool = False,
-    run_id: str | None = None,
-    on_run_created: Callable[[Path], None] | None = None,
-) -> SearchResult:
-    """Run the EA and preserve the last completed generation on Ctrl-C."""
-
-    active_run: list[Path | None] = [None]
-
-    def remember_run(path: Path) -> None:
-        active_run[0] = path
-        if on_run_created is not None:
-            on_run_created(path)
-
-    try:
-        return _run_search_impl(
-            config,
-            config_path=config_path,
-            mock=mock,
-            run_id=run_id,
-            on_run_created=remember_run,
-        )
-    except KeyboardInterrupt:
-        if active_run[0] is not None:
-            mark_run_interrupted(active_run[0])
-        raise
-    except Exception as exc:
-        if active_run[0] is not None:
-            mark_run_failed(active_run[0], exc)
-        raise
-
-
-def _run_search_impl(
-    config: ExperimentConfig,
-    *,
-    config_path: Path | None,
     mock: bool = False,
     run_id: str | None = None,
     on_run_created: Callable[[Path], None] | None = None,
@@ -158,35 +128,32 @@ def _run_search_impl(
         require_buffered_round_states(config.microrts_dir)
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = _new_run_directory(config, active_run_id, run_id)
-    candidates_dir = run_dir / "candidates"
-    generated_agents_dir = run_dir / "generated_agents"
-    classes_dir = run_dir / "classes"
     run_dir.mkdir(parents=True, exist_ok=False)
-    candidates_dir.mkdir()
-    generated_agents_dir.mkdir()
-    classes_dir.mkdir()
     initialize_run_manifest(run_dir, config=config)
     try:
         try:
             config = freeze_framework_bundle(run_dir, config, mock=mock)
-        finally:
-            # On failure retain the requested input; on success freeze the resolved config.
-            write_run_config(run_dir, config, mock=mock)
+        except (Exception, KeyboardInterrupt):
+            try:
+                write_run_config(run_dir, config, mock=mock)
+            except (OSError, ValueError) as config_error:
+                print(f"WARNING: could not retain run config: {config_error}", file=sys.stderr)
+            raise
+        write_run_config(run_dir, config, mock=mock)
         initialize_run_manifest(run_dir, config=config)
-    except KeyboardInterrupt:
-        mark_run_interrupted(run_dir)
-        raise
-    except Exception as exc:
-        mark_run_failed(run_dir, exc)
-        raise
-    if on_run_created is not None:
-        on_run_created(run_dir)
+        if on_run_created is not None:
+            on_run_created(run_dir)
 
-    return run_generation_zero(
-        config,
-        run_dir=run_dir,
-        mock=mock,
-    )
+        return run_generation_zero(config, run_dir=run_dir, mock=mock)
+    except (Exception, KeyboardInterrupt) as exc:
+        try:
+            if isinstance(exc, KeyboardInterrupt):
+                mark_run_interrupted(run_dir)
+            else:
+                mark_run_failed(run_dir, exc)
+        except (OSError, ValueError) as manifest_error:
+            print(f"WARNING: could not update run manifest: {manifest_error}", file=sys.stderr)
+        raise
 
 
 def run_generation_zero(
