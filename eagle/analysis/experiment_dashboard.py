@@ -85,28 +85,36 @@ def _qualify_repeated_labels(entries):
             row["label"] += f" · {suffix}"
 
 
-def catalog(root, runs_roots):
-    local = discover(root, runs_roots)
-    by_experiment = defaultdict(list)
-    for treatment in local["treatments"]:
-        by_experiment[treatment["experiment"]].append(treatment)
-    counts = Counter(row["experiment"] for row in local["runs"])
-    entries = [
-        _catalog_entry(name, by_experiment[name], counts[name])
-        for name in counts.keys() | by_experiment.keys()
-    ]
-    manifests = {path.parent.name: path for path in (root / "reports/experiments").glob("*/manifest.json")}
+def catalog(root, runs_roots, *, published_only=False):
+    entries, issues, manifests = [], [], {}
+    schema_version = BUNDLE_SCHEMA
+    if not published_only:
+        local = discover(root, runs_roots)
+        schema_version = local["schema_version"]
+        by_experiment = defaultdict(list)
+        for treatment in local["treatments"]:
+            by_experiment[treatment["experiment"]].append(treatment)
+        counts = Counter(row["experiment"] for row in local["runs"])
+        entries = [
+            _catalog_entry(name, by_experiment[name], counts[name])
+            for name in counts.keys() | by_experiment.keys()
+        ]
+        issues = _diagnostics(local)
+        manifests.update({path.parent.name: path for path in (root / "reports/experiments").glob("*/manifest.json")})
     manifests.update({path.parent.name: path for path in (root / "results").glob("*/manifest.json")})
-    issues = _diagnostics(local)
     for name, path in manifests.items():
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))["dashboard"]
-            entries.append(_catalog_entry(name, data["treatments"], len(data["selected"]), bundle=True))
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            data = manifest["dashboard"]
+            entry = _catalog_entry(name, data["treatments"], len(data["selected"]), bundle=True)
+            if isinstance(manifest.get("display_name"), str) and manifest["display_name"].strip():
+                entry["label"] = manifest["display_name"]
+            entries.append(entry)
         except (OSError, ValueError, KeyError, TypeError):
             issues.append(f"{name}: unable to read result package metadata")
     _qualify_repeated_labels(entries)
     entries.sort(key=lambda item: (bool(item["run_count"]), item["id"], not item.get("bundle")), reverse=True)
-    return {"schema_version": local["schema_version"], "experiments": entries, "issues": issues}
+    return {"schema_version": schema_version, "experiments": entries, "issues": issues}
 
 
 def _selected(runs, filters):
@@ -251,7 +259,7 @@ def _opponent_totals(rows):
     return result
 
 
-def view(root, runs_roots, filters):
+def view(root, runs_roots, filters, *, include_fixed_opponent_curves=False):
     experiment = filters["experiment"]
     bundle_filters = {}
     fixed_opponent = filters.get("fixed_opponent") or None
@@ -310,7 +318,7 @@ def view(root, runs_roots, filters):
             fixed_opponents.update(evidence.get("fixed_opponents", []))
             # Keep a separate cross-generation curve for every opponent in the
             # portable package, in addition to the all-opponent aggregate.
-            if fixed_opponent is None:
+            if include_fixed_opponent_curves and fixed_opponent is None:
                 for detail in read_fixed_opponents(run, evidence.get("fixed_opponents", [])):
                     source_points.extend(
                         {**row, **identity} for row in detail["points"]
@@ -324,6 +332,13 @@ def view(root, runs_roots, filters):
 
     def included(row):
         return (row["treatment"], row["seed"], row["run_id"]) in selected_ids
+
+    def fixed_opponent_included(row):
+        return (
+            row["metric"] != "fixed"
+            or (include_fixed_opponent_curves and fixed_opponent is None)
+            or row.get("opponent") == fixed_opponent
+        )
 
     observed = [run["latest_generation"] for run in selected]
     planned = [run["planned_generation"] for run in selected]
@@ -339,13 +354,14 @@ def view(root, runs_roots, filters):
     points = [
         row for row in source_points if included(row) and (
             row["metric"] == "final"
-            or (row["metric"] != "fixed" or fixed_opponent is None or row.get("opponent") == fixed_opponent)
+            or fixed_opponent_included(row)
             and (minimum is None or row["generation"] >= minimum)
             and (maximum is None or row["generation"] <= maximum)
         )
     ]
     fixed_coverage = [
         row for row in fixed_coverage if included(row)
+        and ((include_fixed_opponent_curves and fixed_opponent is None) or row.get("opponent") == fixed_opponent)
         and (minimum is None or row["generation"] >= minimum)
         and (maximum is None or row["generation"] <= maximum)
     ]
@@ -383,7 +399,7 @@ def export(root, runs_roots, filters):
     except ImportError as exc:
         raise ValueError("PNG export requires Matplotlib in the GUI's Python environment.") from exc
 
-    data = view(root, runs_roots, filters)
+    data = view(root, runs_roots, filters, include_fixed_opponent_curves=True)
     if not data["selected"]:
         raise ValueError("Select at least one available run to export.")
     destination = _bundle_dir(root, data["experiment"])
@@ -415,10 +431,12 @@ def export(root, runs_roots, filters):
             groups = defaultdict(dict)
             primary = filters.get("statistics", {}).get(metric, "best" if metric == "self_play" else "mean")
             for row in data["aggregates"]:
-                if row["metric"] == metric and row["statistic"] == primary:
+                if (row["metric"] == metric and row["statistic"] == primary
+                        and (metric != "fixed" or row.get("opponent") == filters.get("fixed_opponent"))):
                     groups[row.get("protocol")].setdefault((row["treatment"], None), {})[row["generation"]] = row
             for row in data["points"]:
-                if row["metric"] != metric or row["statistic"] != primary:
+                if (row["metric"] != metric or row["statistic"] != primary
+                        or (metric == "fixed" and row.get("opponent") != filters.get("fixed_opponent"))):
                     continue
                 group = groups[row.get("protocol")]
                 group.setdefault((row["treatment"], row["seed"]), {})[row["generation"]] = row

@@ -1,8 +1,15 @@
 # Committed experiment results
 
+| Published experiment | Completed seeds | Final Test per candidate |
+| --- | --- | ---: |
+| [10 Qwen 初始＋純 EA](1114_qwen_gen0_local_evolution_50x10_seed8_12/) | 8–12, using the Nov 21 WSL rerun for seed 8 | 600 |
+| [1 GPT＋9 Qwen 初始＋純 EA](1122_1gpt_9qwen_gen0_local_evolution_50x10_seed8_12/) | 8–12, using the Nov 23 complete rerun for seed 8 | 300 |
+| [GPT baseline（單一 GPT，無演化）](gpt_baseline_gen0/) | 8, G0 only | 600 |
+
 `runs/` contains the full local experiment evidence and is intentionally ignored
-by Git. Each `results/<experiment-id>/` directory is a portable analysis package
-created by the GUI's **匯出 Git 結果包** action.
+by Git. Each `results/<experiment-id>/` directory is a portable analysis package.
+The single GPT baseline preserves the G0 scores and outcomes from the historical
+report.
 
 | File | Purpose |
 | --- | --- |

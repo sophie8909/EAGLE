@@ -1,0 +1,4 @@
+coverage,experiment,generation,metric,protocol,run_id,seed,source,statistic,treatment
+"{""expected"": 1, ""evaluated"": 1}",gpt_baseline_gen0,0,fixed,gpt-once-fixed-600-reported,20261030_120346_658325,8,configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md,mean,gpt_baseline_gen0
+"{""expected"": 1, ""evaluated"": 1}",gpt_baseline_gen0,0,fixed,gpt-once-fixed-600-reported,20261030_120346_658325,8,configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md,best,gpt_baseline_gen0
+"{""expected"": 1, ""evaluated"": 1}",gpt_baseline_gen0,0,fixed,gpt-once-fixed-600-reported,20261030_120346_658325,8,configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md,representative,gpt_baseline_gen0

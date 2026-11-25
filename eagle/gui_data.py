@@ -106,17 +106,21 @@ def _read_object(path: Path) -> dict:
 def list_runs(runs_root: Path) -> list[dict]:
     runs_root = runs_root.resolve()
     runs = []
-    for path in sorted(runs_root.rglob("manifest.json"), reverse=True):
-        manifest = _read_object(path)
+    for directory, subdirectories, files in os.walk(runs_root):
+        if "manifest.json" not in files:
+            continue
+        path = Path(directory)
+        manifest = _read_object(path / "manifest.json")
         if manifest.get("schema_version") != RUN_SCHEMA_VERSION:
             continue
+        subdirectories.clear()
         runs.append({
-            "path": str(path.parent.resolve()),
-            "name": path.parent.relative_to(runs_root).as_posix(),
+            "path": str(path.resolve()),
+            "name": path.relative_to(runs_root).as_posix(),
             "status": manifest.get("status", "unknown"),
             "latest_generation": manifest.get("latest_generation"),
         })
-    return runs
+    return sorted(runs, key=lambda run: Path(run["path"]), reverse=True)
 
 
 def inspect_run(run_dir: Path) -> dict:

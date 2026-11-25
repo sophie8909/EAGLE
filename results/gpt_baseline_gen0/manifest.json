@@ -1,0 +1,800 @@
+{
+  "schema_version": "eagle-experiment-results-v1",
+  "experiment": "gpt_baseline_gen0",
+  "display_name": "GPT baseline（單一 GPT，無演化）",
+  "files": {
+    "points": "points.csv",
+    "aggregates": "aggregates.csv",
+    "deltas": "deltas.csv",
+    "opponents": "opponents.csv",
+    "fixed_coverage": "fixed_coverage.csv"
+  },
+  "dashboard": {
+    "experiment": "gpt_baseline_gen0",
+    "runs": [
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "label": "GPT baseline（單一 GPT，無演化）",
+        "status": "complete",
+        "latest_generation": 0,
+        "planned_generation": 0,
+        "indexed": false,
+        "replicate_index": null,
+        "availability": {
+          "committed_generation": false,
+          "fixed": true,
+          "final": true
+        }
+      }
+    ],
+    "selected": [
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "label": "GPT baseline（單一 GPT，無演化）",
+        "status": "complete",
+        "latest_generation": 0,
+        "planned_generation": 0,
+        "indexed": false,
+        "replicate_index": null,
+        "availability": {
+          "committed_generation": false,
+          "fixed": true,
+          "final": true
+        }
+      }
+    ],
+    "points": [
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "self_play",
+        "statistic": "best",
+        "value": -9.001,
+        "protocol": "gpt-once-search-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "self_play",
+        "statistic": "mean",
+        "value": -9.001,
+        "protocol": "gpt-once-search-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "self_play",
+        "statistic": "median",
+        "value": -9.001,
+        "protocol": "gpt-once-search-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "self_play",
+        "statistic": "worst",
+        "value": -9.001,
+        "protocol": "gpt-once-search-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "fixed",
+        "statistic": "mean",
+        "value": -9.50516,
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "fixed",
+        "statistic": "best",
+        "value": -9.50516,
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "fixed",
+        "statistic": "representative",
+        "value": -9.50516,
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "metric": "final",
+        "statistic": "score",
+        "value": -9.50516,
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 600,
+          "evaluated": 600
+        },
+        "requested_generation": 0,
+        "fallback": false
+      }
+    ],
+    "aggregates": [
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "self_play",
+        "statistic": "best",
+        "generation": 0,
+        "protocol": "gpt-once-search-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.001,
+        "n": 1,
+        "min": -9.001,
+        "max": -9.001,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "self_play",
+        "statistic": "mean",
+        "generation": 0,
+        "protocol": "gpt-once-search-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.001,
+        "n": 1,
+        "min": -9.001,
+        "max": -9.001,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "self_play",
+        "statistic": "median",
+        "generation": 0,
+        "protocol": "gpt-once-search-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.001,
+        "n": 1,
+        "min": -9.001,
+        "max": -9.001,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "self_play",
+        "statistic": "worst",
+        "generation": 0,
+        "protocol": "gpt-once-search-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.001,
+        "n": 1,
+        "min": -9.001,
+        "max": -9.001,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "fixed",
+        "statistic": "mean",
+        "generation": 0,
+        "protocol": "gpt-once-fixed-600-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.50516,
+        "n": 1,
+        "min": -9.50516,
+        "max": -9.50516,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "fixed",
+        "statistic": "best",
+        "generation": 0,
+        "protocol": "gpt-once-fixed-600-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.50516,
+        "n": 1,
+        "min": -9.50516,
+        "max": -9.50516,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "fixed",
+        "statistic": "representative",
+        "generation": 0,
+        "protocol": "gpt-once-fixed-600-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.50516,
+        "n": 1,
+        "min": -9.50516,
+        "max": -9.50516,
+        "sd": null
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "metric": "final",
+        "statistic": "score",
+        "generation": 0,
+        "protocol": "gpt-once-fixed-600-reported",
+        "opponent": null,
+        "seeds": [
+          8
+        ],
+        "missing_seeds": [],
+        "value": -9.50516,
+        "n": 1,
+        "min": -9.50516,
+        "max": -9.50516,
+        "sd": null
+      }
+    ],
+    "deltas": [],
+    "opponents": [
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "PassiveAI",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 50,
+        "draws": 10,
+        "losses": 0,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.8333333333333334
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "RandomAI",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 60,
+        "draws": 0,
+        "losses": 0,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 1.0
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "RandomBiasedAI",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 60,
+        "draws": 0,
+        "losses": 0,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 1.0
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "LightRush",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 10,
+        "draws": 0,
+        "losses": 50,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.16666666666666666
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "HeavyRush",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 30,
+        "draws": 0,
+        "losses": 30,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.5
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "WorkerRush",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 40,
+        "draws": 0,
+        "losses": 20,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.6666666666666666
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "AllInBot",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 14,
+        "draws": 0,
+        "losses": 46,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.23333333333333334
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "Mayari",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 1,
+        "draws": 0,
+        "losses": 59,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.016666666666666666
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "COAC",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 0,
+        "draws": 0,
+        "losses": 60,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.0
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "candidate_id": "gen_0000_d1bf70074e31",
+        "opponent": "TMA",
+        "protocol": "gpt-once-fixed-600-reported",
+        "wins": 0,
+        "draws": 0,
+        "losses": 60,
+        "errors": 0,
+        "counted": 60,
+        "win_rate": 0.0
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "PassiveAI",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 50,
+        "draws": 10,
+        "losses": 0,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.8333333333333334,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.8333333333333334
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "RandomAI",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 60,
+        "draws": 0,
+        "losses": 0,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 1.0,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 1.0
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "RandomBiasedAI",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 60,
+        "draws": 0,
+        "losses": 0,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 1.0,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 1.0
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "LightRush",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 10,
+        "draws": 0,
+        "losses": 50,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.16666666666666666,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.16666666666666666
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "HeavyRush",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 30,
+        "draws": 0,
+        "losses": 30,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.5,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.5
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "WorkerRush",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 40,
+        "draws": 0,
+        "losses": 20,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.6666666666666666,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.6666666666666666
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "AllInBot",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 14,
+        "draws": 0,
+        "losses": 46,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.23333333333333334,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.23333333333333334
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "Mayari",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 1,
+        "draws": 0,
+        "losses": 59,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.016666666666666666,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.016666666666666666
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "COAC",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 0,
+        "draws": 0,
+        "losses": 60,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.0,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.0
+      },
+      {
+        "treatment": "gpt_baseline_gen0",
+        "opponent": "TMA",
+        "protocol": "gpt-once-fixed-600-reported",
+        "seed": null,
+        "seeds": [
+          8
+        ],
+        "wins": 0,
+        "draws": 0,
+        "losses": 60,
+        "errors": 0,
+        "faults": null,
+        "mean_seed_win_rate": 0.0,
+        "mean_match_score": null,
+        "score_count": 0,
+        "counted": 60,
+        "win_rate": 0.0
+      }
+    ],
+    "protocols": {
+      "gpt-once-search-reported": {
+        "metric": "search Game Performance",
+        "self_play": "tournament-v1",
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md"
+      },
+      "gpt-once-fixed-600-reported": {
+        "metric": "mean match score",
+        "opponents": 10,
+        "maps": 3,
+        "sides": 2,
+        "games_per_side": 10,
+        "matches": 600,
+        "selection": "sole generation-0 genome",
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md"
+      }
+    },
+    "issues": [
+      "單一 GPT baseline 來自方法 1 的歷史報告，只有 seed 8 的 G0 分數及終測勝和敗資料。"
+    ],
+    "horizon": {
+      "observed": 0,
+      "planned": 0
+    },
+    "baseline": "gpt_baseline_gen0",
+    "treatments": [
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "label": "GPT baseline（單一 GPT，無演化）",
+        "expected_seeds": [
+          8
+        ],
+        "comparison": {
+          "name": "GPT baseline（單一 GPT，無演化）",
+          "short_name": "GPT baseline（單一 GPT，無演化）",
+          "chart_name": "Single GPT baseline",
+          "id": "gpt_baseline_gen0",
+          "initialization_group": "單一 GPT",
+          "initialization": "GPT 呼叫一次，選出 1 個 genome",
+          "evolution": "無演化",
+          "local_llm_evolution": "no",
+          "framework": "f674a580f0db088bd3436232d2dd36d071a231c9886f480a7aaed25669203e2b"
+        }
+      }
+    ],
+    "fixed_opponents": [],
+    "fixed_coverage": [
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "metric": "fixed",
+        "statistic": "mean",
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "metric": "fixed",
+        "statistic": "best",
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      },
+      {
+        "experiment": "gpt_baseline_gen0",
+        "treatment": "gpt_baseline_gen0",
+        "seed": 8,
+        "run_id": "20261030_120346_658325",
+        "generation": 0,
+        "source": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+        "metric": "fixed",
+        "statistic": "representative",
+        "protocol": "gpt-once-fixed-600-reported",
+        "coverage": {
+          "expected": 1,
+          "evaluated": 1
+        }
+      }
+    ],
+    "filters": {
+      "include_all_seeds": true
+    }
+  },
+  "definitions": {
+    "generation": "The sole evaluated population is generation 0.",
+    "win_rate": "Wins divided by counted wins, draws and losses.",
+    "provenance": "configs/experiments/1030_gpt_framework_slot_ablation_seed8_10/RESULTS.md",
+    "fixed_score_precision": "docs/implementation/current_status.md"
+  },
+  "filters": {
+    "include_all_seeds": true
+  }
+}

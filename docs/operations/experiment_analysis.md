@@ -1,26 +1,16 @@
 # Experiment Analysis
 
-Open **實驗分析** in the local GUI started by `gui.cmd` through WSL. Use the
-composition checkboxes to find an experiment or result package, choose its short
-display name, select treatments,
-and choose a run attempt where a seed was restarted. Refresh rebuilds the
-catalog from current sources. The dashboard reads committed generation snapshots
-and evaluation summaries. Analysis and export leave the launcher index and run
-artifacts in place.
+Open **實驗分析** in the local GUI started by `gui.cmd` through WSL.
+The sidebar lists the published experiment
+packages from `results/`. Check experiments to add them to the charts and tables
+immediately. The table above the charts shows the selected initialization,
+evolution method, completed generation, seeds, and Final Test match count.
+The fixed benchmark defaults to all opponents. The opponent selector loads
+that opponent's score series where available.
 
-The default hierarchy comes from each batch's `experiment.yaml` and the exact
-config filenames in it. The resolved run config supplies the effective seed.
-The index position is recorded separately as the replicate index. If a run
-has several attempts, the dashboard prefers the indexed attempt and uses only
-one attempt per treatment and seed. The charts and tables include all available
-seeds for the selected treatments. In paired mode, the delta table uses paired
-observations while the other charts and tables retain all seeds.
-
-Composition options distinguish initialization, the evolutionary method, and
-whether a local LLM is configured for evolution after G0. For example, 1114
-uses Qwen to initialize the population at G0, then applies local evolutionary
-operators. An LLM Coach using a local endpoint involves a local LLM during
-evolution. Older packages with no recorded composition show it as unknown.
+The published GPT baseline has one Seed 8 observation at G0. The two local EA
+packages have seeds 8–12 through G50. The plots share axes and retain separate
+seed summaries for each experiment and recorded evaluation protocol.
 
 ## Archive locations and treatment labels
 
@@ -69,14 +59,14 @@ individually.
 
 Each convergence mean gives each contributing seed equal weight at that
 generation. The band is the observed minimum–maximum for two or more seeds.
-The fixed cohort option uses seeds with observations at every observed checkpoint
+The analysis API's fixed cohort option uses seeds with observations at every observed checkpoint
 in the selected range. Changing opponents affect the interpretation of self-play
 scores. The default fixed-benchmark population mean requires complete coverage
 of the committed population at the checkpoint. Representative and population-best
 views use distinct selection rules. Diversity curves require compatible metric
 definitions.
 
-Paired mode uses common seeds and a common observed generation horizon. Deltas
+The analysis API's paired mode uses common seeds and a common observed generation horizon. Deltas
 subtract the baseline value for the same seed and generation. Final-test endpoints
 can come from different generations. Their per-seed rows identify requested and
 evaluated generations, including fallback selection. A same-generation delta
@@ -90,7 +80,8 @@ rate. Errors and contained opponent faults have their own columns.
 
 ## Share results
 
-Use **匯出 Git 結果包** to write the selected results under
+Use **下載可見資料 CSV** to download the checked experiments. The underlying
+`/api/analysis/export` endpoint writes experiment results under
 `results/<experiment-id>/`. This is the portable, committed analysis layer;
 the source `runs/` tree remains local and is ignored by Git. Each result package
 contains a small `manifest.json`, CSV tables (`points`, `aggregates`, `deltas`,
