@@ -191,6 +191,7 @@ distinct generation server and additional endpoints are externally managed.
 GPU preflight and full offload checks apply to EAGLE-managed startup.
 Failure/interruption cancels queued work and drains active producers/workers.
 One candidate match matrix runs at a time, using ten match workers by default.
+`evaluation.parallel_match_workers` sets the parallel limit when specified.
 An explicitly configured `evaluation.match_execution: serial` runs the same
 matrix with one worker to reduce scheduling variance during same-seed audits.
 Self-play
@@ -231,8 +232,8 @@ tie-breaking are independent of scheduling. LLM endpoint assignment is likewise
 derived from canonical input index and the persisted endpoint order, not thread
 or completion order. GPU layers (`999`), model threads (`8`), managed-local
 server slots (`2`), and LLM workers (`2`) are fixed by `eagle/execution.py`;
-match workers remain `10` by default and are reduced to
-`1` by the persisted serial option. CUDA/GPU preflight is required before
+match workers default to `10` in parallel mode and use `1` in serial mode.
+CUDA/GPU preflight is required before
 managed local server startup; unavailable GPU support fails instead of falling
 back to CPU.
 Temperatures remain configurable. New generation checkpoints preserve

@@ -246,7 +246,7 @@ Controller state 使用 `eagle-reflection-operator-v6`。
 兩個 preparation worker 與單一 evaluation consumer 重疊運作：先準備好的個體
 開始 integration、semantic probe 與 match，其他個體仍可交配、變異或生成。
 沒有整批 reflection／generation 屏障。完成順序不改變 candidate 結果順序、
-原始 ordinal、seed、固定對手快照或評分；match 維持最多十個 worker。
+原始 ordinal、seed、固定對手快照或評分；平行對戰的 worker 上限預設為十個。
 同 server origin 的所有功能共用兩個 request 名額，不同 host／port 可獨立並行。
 每個 task 的 endpoint 由 canonical index 固定，相依呼叫與 retry 不改 route。
 初始 policy 的固定 seed snapshot 與重複結果重試順序保持不變。中斷時取消排隊
@@ -272,7 +272,9 @@ replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
 `random_seed` 是整個 EA 的根 seed；初始化、選擇、operator、crossover、mutation、
 reflection sampling、LLM request 與 retry 都依穩定任務身分衍生獨立 seed。
 可控的執行流程永遠採用此規則；一般流程沒有完整的 deterministic/non-deterministic
-切換。`evaluation.match_execution` 預設為 `parallel`，也可設為 `serial`，以單一
+切換。`evaluation.match_execution` 預設為 `parallel`。可在 GUI 評估設定填寫
+「MicroRTS 平行對戰執行緒數」，對應 `evaluation.parallel_match_workers`。
+執行方式也可設為 `serial`，以單一
 worker 按順序執行 match、降低同 seed audit 的排程差異；但它無法控制外部 opponent
 的 wall-clock 預算或私有 RNG，因此不能保證 bitwise 相同的比賽輸出。
 一般評估、父子對戰及 final test 都傳遞並保存每場比賽的 JVM seed；多執行緒依固定

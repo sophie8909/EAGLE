@@ -178,7 +178,8 @@ generation, and additional endpoints are externally started and unmanaged.
 Experiments own no server lifecycle. GPU preflight and full offload checks remain
 with the local server launcher.
 Failure/interruption cancels queued work and drains active producers/workers.
-One candidate match matrix runs at a time, retaining ten match workers. Self-play
+One candidate match matrix runs at a time, using the configured worker limit
+and defaulting to ten workers in parallel mode. Self-play
 opponents remain immutable; an actual dependency on this batch's unprepared
 candidates retains a preparation barrier. Parent fitness refresh precedes
 reproduction because parent selection needs those scores. Rewards, survivor

@@ -82,7 +82,9 @@ requires `candidate_java_mode: generated_phenotype` and
 `gpu_layers`, `threads`, and `parallel` are rejected config keys. The persisted
 `evaluation.match_execution` is `parallel` by default and may be `serial` for
 one-worker match execution. The runtime uses GPU layers `999`, eight model
-threads, two server slots, two LLM workers, and ten match workers by default;
+threads, two server slots, and two LLM workers. The optional
+`evaluation.parallel_match_workers` positive integer is saved in the run config
+when specified. Older configs use the ten-worker default in parallel mode;
 serial mode uses one. `context_size` remains the per-request limit; the server allocates
 twice that amount for two slots. `match_timeout_seconds` controls each match
 process limit. Resolved configs record the fixed `match_artifact_mode: compact`

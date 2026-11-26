@@ -70,8 +70,10 @@ the resolved limit to every match specification, so search, AOS head-to-head,
 and final-test matches use the same cap for a given map.
 
 Normal matrix execution uses ten bounded match workers by default, based on the
-bundled MicroRTS benchmark. Set `evaluation.match_execution: serial` to run one
-worker at a time for same-seed audits and reduced scheduling variance. Match
+bundled MicroRTS benchmark. Set `evaluation.parallel_match_workers` to a
+positive integer to set the maximum number of simultaneous matches. Set
+`evaluation.match_execution: serial` to run one worker at a time for same-seed
+audits and reduced scheduling variance, regardless of the parallel setting. Match
 count is fixed and is not configurable. Each match owns an isolated artifact
 directory, and results return in canonical `match_index` order. Serial execution
 does not control external opponent wall-clock budgets or private RNGs.

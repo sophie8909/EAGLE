@@ -25,6 +25,7 @@ from eagle.config import (
     CANDIDATE_JAVA_MODES, EVALUATION_MODES, INITIAL_POPULATION_MODES,
     PARENT_EVALUATION_MODES, ExperimentConfig, normalize_llm_server_url, validate_llm_server_port,
 )
+from eagle.execution import MATCH_WORKERS
 from eagle.experiment_index import is_experiment_run_index
 from eagle.gui_data import (
     config_choices, inspect_run, list_runs, read_config, save_config, validate_config, write_atomic_text,
@@ -93,6 +94,7 @@ def form_options() -> dict:
         "parent_evaluation_mode": list(PARENT_EVALUATION_MODES),
         "reflection_operator_mode": [item.value for item in ReflectionOperatorMode],
         "evaluation.mode": list(EVALUATION_MODES),
+        "evaluation.match_execution": ["parallel", "serial"],
         "framework.evolution_mode": [
             "local", "llm_coach", "option_reflection", "reflection",
         ],
@@ -115,6 +117,8 @@ def form_options() -> dict:
     defaults = {key: ExperimentConfig.__dataclass_fields__[key].default for key in common}
     defaults.update({
         "evaluation.mode": "fixed_roster", "evaluation.rounds_per_map": 3,
+        "evaluation.match_execution": ExperimentConfig.match_execution,
+        "evaluation.parallel_match_workers": MATCH_WORKERS,
         "evaluation.swap_player_sides": True, "llm.temperature": 0.2,
         "llm.match_commentator.enabled": True,
     })

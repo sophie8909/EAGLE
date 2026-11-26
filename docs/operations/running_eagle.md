@@ -311,8 +311,9 @@ most one unmanaged OpenAI-compatible endpoint expressed as exactly
 `{base_url, model}`. Each functional profile has one or two endpoints. GPU
 layers (`999`), model threads (`8`), managed-local server parallel slots (`2`),
 independent LLM workers (`2`) are fixed by `eagle/execution.py`. Match execution
-uses ten workers by default; set `evaluation.match_execution: serial` to use one
-worker for same-seed audits and reduced scheduling variance. The server allocates
+uses ten workers by default. Set `evaluation.parallel_match_workers` to a
+positive integer to change the parallel limit. Set `evaluation.match_execution: serial`
+to use one worker for same-seed audits and reduced scheduling variance. The server allocates
 `context_size × 2`, while each request keeps the configured context size.
 Before starting llama.cpp, GPU-device preflight must succeed. Every fresh child
 startup must also emit positive full `offloaded N/N layers to GPU` evidence for the
@@ -361,7 +362,7 @@ when starting active LLM work. With one model,
 omit `generation_model`; concurrent roles share two request slots per server.
 Each child's ready work progresses through source gate, crossover, mutation,
 generation/compilation and matches without an all-candidate phase barrier.
-One ten-worker match matrix overlaps preparation of later children.
+One match matrix overlaps preparation of later children.
 
 When a folder contains multiple YAML files, they run in filename order. Each
 direct experiment run, including every `runs` replicate, uses the configured
@@ -400,7 +401,9 @@ EAGLE does not coordinate a start barrier or synchronize the machines; start
 both experiments only after each endpoint is ready.
 
 Match execution uses ten bounded workers by default, with canonical results in
-match_index order. `evaluation.match_execution: serial` switches the matrix to
+match_index order. In the GUI, open the `evaluation` group under 實驗設定 and edit
+**MicroRTS 平行對戰執行緒數** to set the limit for a new run. Leave the field blank
+to use the default. `evaluation.match_execution: serial` switches the matrix to
 one worker while preserving the same match identities and result ordering.
 This reduces scheduling variance but cannot control external opponent wall-clock
 budgets or private RNGs, so it is not a bitwise reproducibility guarantee.

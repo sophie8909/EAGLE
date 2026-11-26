@@ -140,6 +140,9 @@ Connect-only address tests cover full HTTP(S) URLs, local preference reload
 and clearing, compatibility with saved numeric ports, validation, CLI forwarding,
 and fresh, single-run, and batch endpoint overrides without editing the saved
 experiment definition.
+MicroRTS worker tests cover the GUI default, positive integer validation,
+saved and launch-config round trips, serial precedence, and the configured
+parallel executor size with canonical match ordering.
 Platform checks cover POSIX session/stop behavior, Windows owned console group
 creation and Ctrl+Break dispatch, UTF-8 child logs, and portable map paths.
 The launcher reattaches to the same loopback service after closure. Its Ctrl+C

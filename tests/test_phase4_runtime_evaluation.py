@@ -51,7 +51,9 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(config.match_workers, 10)
 
     def test_serial_match_execution_is_persisted_and_uses_one_worker(self):
-        config = ExperimentConfig.from_mapping({"evaluation": {"match_execution": "serial"}})
+        config = ExperimentConfig.from_mapping({
+            "evaluation": {"match_execution": "serial", "parallel_match_workers": 3},
+        })
         config.validate()
 
         self.assertEqual(config.match_execution, "serial")
@@ -61,6 +63,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         restored = ExperimentConfig.from_mapping(config.to_mapping())
         self.assertEqual(restored.match_execution, "serial")
         self.assertEqual(restored.match_workers, 1)
+        self.assertEqual(restored.parallel_match_workers, 3)
 
     def test_unknown_match_execution_is_rejected(self):
         config = ExperimentConfig.from_mapping({"evaluation": {"match_execution": "random"}})

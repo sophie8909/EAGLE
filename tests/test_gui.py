@@ -14,6 +14,7 @@ import yaml
 
 from eagle.cli.gui import IS_WINDOWS, GuiApp, GuiServer, Job, form_options
 from eagle.cli.gui_launcher import INSTANCE_PATH, SHUTDOWN_PATH, _request, supervise_gui
+from eagle.config import ExperimentConfig
 
 
 class GuiAppTests(unittest.TestCase):
@@ -42,6 +43,31 @@ class GuiAppTests(unittest.TestCase):
         self.assertIn("framework_slots", options["choices"]["java_materialization_mode"])
         self.assertEqual(options["choices"]["survivor_selection"], ["mu_plus_lambda"])
         self.assertTrue(options["defaults"]["evaluation.swap_player_sides"])
+        self.assertEqual(options["defaults"]["evaluation.parallel_match_workers"], 10)
+        self.assertEqual(options["choices"]["evaluation.match_execution"], ["parallel", "serial"])
+
+    def test_match_worker_count_is_saved_and_passed_to_the_experiment_snapshot(self):
+        payload = {"evaluation": {"parallel_match_workers": 3}}
+        saved = self.app.post("/api/save", {"path": "configs/example.yaml", "payload": payload})
+        self.assertEqual(saved["payload"], payload)
+
+        with patch("eagle.cli.gui.subprocess.Popen", return_value=self.process) as start:
+            self.app.post("/api/start", {"payload": saved["payload"]})
+
+        snapshot = Path(start.call_args.args[0][6]) / "config.yaml"
+        config = ExperimentConfig.from_file(snapshot)
+        self.assertEqual(config.match_workers, 3)
+        self.assertEqual(ExperimentConfig.from_mapping(config.to_mapping()).match_workers, 3)
+
+    def test_start_rejects_invalid_match_worker_counts(self):
+        with patch.object(self.app.experiment, "start") as start:
+            for workers in (0, -1, 1.5, True, "3"):
+                payload = {"evaluation": {"parallel_match_workers": workers}}
+                with self.subTest(workers=workers), self.assertRaisesRegex(
+                    ValueError, "evaluation.parallel_match_workers must be a positive integer"
+                ):
+                    self.app.post("/api/start", {"payload": payload})
+            start.assert_not_called()
 
     def test_server_start_uses_separate_job_and_snapshot(self):
         text = "model: {name: local, path: model.gguf, llama_server: llama-server}\n"
@@ -241,8 +267,6 @@ use_remote_llm: true
             self.app.post("/api/parse", {"text": "value: ["})
 
     def test_legacy_probabilities_keep_effective_meaning_when_form_is_edited(self):
-        from eagle.config import ExperimentConfig
-
         original = {"strategy_reflection_probability": 0.4, "code_reflection_probability": 0.6}
         parsed = self.app.post("/api/parse", {"text": yaml.safe_dump(original)})["payload"]
         parsed["experiment_name"] = "edited"

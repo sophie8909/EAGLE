@@ -96,7 +96,7 @@ kept as documentation entries.
 | `eagle/evaluation/records.py` | Typed cross-stage evaluation/decoder/opponent records |
 | `eagle/evaluation/decoding.py` | Bounded Java decoding, validation, compilation, diagnostic repair and class promotion |
 | `eagle/evaluation/opponents.py` | Fixed/self-play pools, prerequisite checks and opponent compilation |
-| `eagle/evaluation/matches.py` | Ordered matrix dispatch with the fixed match-worker count |
+| `eagle/evaluation/matches.py` | Ordered matrix dispatch with the configured match-worker limit |
 | `eagle/evaluation/compiler.py` | Isolated javac and diagnostics |
 | `eagle/evaluation/microrts_runner.py` | Standalone seven-check integration probe only |
 | `eagle/evaluation/runtime_evaluation.py` | Sole MicroRTS match process owner |

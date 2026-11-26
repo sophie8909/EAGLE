@@ -246,6 +246,7 @@ class ExperimentConfig:
     parent_evaluation_mode: str = "reuse_cached"
     evaluation_mode: str = "fixed_roster"
     match_execution: str = "parallel"
+    parallel_match_workers: int | None = None
     self_play_refresh_interval: int = 5
     self_play_opponent_library_capacity: int = 50
     self_play_pool_policy: str = "tournament-v1"
@@ -285,7 +286,9 @@ class ExperimentConfig:
 
     @property
     def match_workers(self) -> int:
-        return 1 if self.match_execution == "serial" else MATCH_WORKERS
+        if self.match_execution == "serial":
+            return 1
+        return self.parallel_match_workers if self.parallel_match_workers is not None else MATCH_WORKERS
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ExperimentConfig":
@@ -630,6 +633,7 @@ class ExperimentConfig:
             parent_evaluation_mode=str(payload.get("parent_evaluation_mode", "reuse_cached")),
             evaluation_mode=evaluation_mode,
             match_execution=match_execution,
+            parallel_match_workers=evaluation_settings.get("parallel_match_workers"),
             self_play_refresh_interval=int(
                 evaluation_settings.get("self_play_refresh_interval", 5)
             ),
@@ -957,6 +961,9 @@ class ExperimentConfig:
             raise ValueError("evaluation.mode must be fixed_roster or self_play.")
         if self.match_execution not in {"parallel", "serial"}:
             raise ValueError("evaluation.match_execution must be parallel or serial.")
+        workers = self.parallel_match_workers
+        if workers is not None and (type(workers) is not int or workers < 1):
+            raise ValueError("evaluation.parallel_match_workers must be a positive integer.")
         if self.self_play_refresh_interval < 1:
             raise ValueError("evaluation.self_play_refresh_interval must be at least 1.")
         if self.self_play_opponent_library_capacity < 1:
@@ -1202,6 +1209,10 @@ class ExperimentConfig:
             "evaluation": {
                 "mode": self.evaluation_mode,
                 "match_execution": self.match_execution,
+                **(
+                    {"parallel_match_workers": self.parallel_match_workers}
+                    if self.parallel_match_workers is not None else {}
+                ),
                 "self_play_refresh_interval": self.self_play_refresh_interval,
                 "self_play_opponent_library_capacity": self.self_play_opponent_library_capacity,
                 "self_play_pool_policy": self.self_play_pool_policy,

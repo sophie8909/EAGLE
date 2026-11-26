@@ -58,12 +58,15 @@ class EvaluationReproducibilityTests(unittest.TestCase):
             seeds = []
             with patch("eagle.evaluation.matches.run_microrts_match", side_effect=self._stochastic_match):
                 for workers, seed in ((1, 7), (4, 7), (4, 7), (4, 8)):
-                    config = replace(ExperimentConfig.from_mapping({}), random_seed=seed)
-                    with patch("eagle.config.MATCH_WORKERS", workers):
+                    config = ExperimentConfig.from_mapping({
+                        "random_seed": seed, "evaluation": {"parallel_match_workers": workers},
+                    })
+                    with patch("eagle.evaluation.matches.ThreadPoolExecutor", wraps=ThreadPoolExecutor) as pool:
                         results, error = evaluate_matches(
                             candidate=candidate, agent=agent, config=config, classes_dir=root,
                             match_artifacts_dir=None, mock=True, ordinal=0, opponent_pool=opponents,
                         )
+                    self.assertEqual(pool.call_args.kwargs["max_workers"], workers)
                     self.assertIsNone(error)
                     self.assertEqual([item.match_index for item in results], list(range(36)))
                     seeds.append([item.match_seed for item in results])

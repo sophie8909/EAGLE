@@ -6,12 +6,15 @@ context size, batch size, and startup/health timeouts. `use_remote_llm: true`
 instead selects the required unmanaged `remote_model` profile while retaining
 both definitions in resolved configuration. An optional unmanaged
 `generation_model` selects the materialization-phase model. GPU
-layers (`999`), model threads (`8`), LLM workers (`2`), and match workers (`10`)
+layers (`999`), model threads (`8`), and LLM workers (`2`)
 are fixed constants in `eagle/execution.py`; model parallel slots are fixed at
 `2` (`--parallel 2`, `--n-gpu-layers 999`). These values are not serialized
 config fields. The server receives
 `--ctx-size context_size*2` and `--parallel 2`, providing one configured
 request context to each slot.
+
+Parallel MicroRTS evaluation defaults to ten match workers and can set its
+limit with `evaluation.parallel_match_workers`. Serial evaluation uses one worker.
 
 Before local server startup, GPU-device preflight confirms that the configured runtime
 can use CUDA. Each fresh child startup must also provide positive
